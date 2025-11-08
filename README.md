@@ -327,27 +327,96 @@ Log: "Cleaned up X inactive sessions"
 2. Inactivity timeout triggers cleanup
 3. Admin terminates the session
 
-#### Refresh Tokens
-- **Stored:** NO - Refresh tokens are NOT tracked
-- **Reason:** Strapi v5 handles refresh tokens separately
-- **Impact:** Sessions are tied to Access Tokens only
-- **Recommendation:** Set `inactivityTimeout` < JWT expiration time
+#### Refresh Tokens ⚠️ **Critical Limitation**
 
-**Example:**
+**What are Refresh Tokens?**
+Refresh tokens allow users to get new Access Tokens (JWTs) without re-entering credentials. This enables longer sessions:
+
+```
+Access Token expires after 30 min
+       ↓
+User still has Refresh Token
+       ↓
+User requests new Access Token:
+POST /api/auth/refresh-token
+       ↓
+Strapi issues new JWT
+       ↓
+User continues without re-login
+```
+
+**The Problem:**
+- **Stored:** NO - Refresh tokens are NOT tracked by this plugin
+- **Reason:** Strapi v5 handles refresh tokens in `users-permissions` plugin
+- **Impact:** User can bypass session termination! ⚠️
+
+**Scenario:**
+```
+Admin terminates user's session
+       ↓
+Session Manager: isActive = false ❌
+       ↓
+User's JWT still valid OR
+User has refresh token
+       ↓
+User gets new JWT via refresh token
+       ↓
+Plugin creates NEW session automatically! ⚠️
+       ↓
+User is "logged in" again despite termination
+```
+
+**Current Limitation:**
+This plugin **cannot prevent** users with valid refresh tokens from getting new JWTs. The session termination only affects the current JWT token.
+
+**Workarounds:**
+
+**Option 1: Disable Refresh Tokens (Strict Control)**
 ```typescript
-// If your JWT expires after 30 minutes:
-// Set inactivity timeout to 15 minutes
-{
+// src/config/plugins.ts
+export default () => ({
+  'users-permissions': {
+    config: {
+      jwt: {
+        expiresIn: '30m',
+        // Don't issue refresh tokens
+      },
+    },
+  },
   'magic-sessionmanager': {
     config: {
-      inactivityTimeout: 15 * 60 * 1000 // 15 minutes
-    }
-  }
-}
-
-// This ensures orphaned sessions are cleaned up
-// even if user doesn't explicitly logout
+      inactivityTimeout: 15 * 60 * 1000, // < JWT expiration
+    },
+  },
+});
 ```
+
+**Option 2: Short Refresh Token Expiry**
+```typescript
+'users-permissions': {
+  config: {
+    jwt: {
+      expiresIn: '15m',        // Short Access Token
+      refreshExpiresIn: '30m', // Short Refresh Token
+    },
+  },
+}
+```
+
+**Option 3: Accept the Limitation**
+Understand that:
+- Session termination stops the **current** JWT
+- Users with refresh tokens can get **new** JWTs
+- New JWTs create **new** sessions
+- Use session analytics to detect unusual patterns
+
+**Future Enhancement:**
+To fully block users, the plugin would need to:
+1. Track refresh tokens (complex)
+2. Hook into Strapi's token refresh endpoint
+3. Validate against active sessions before issuing new JWTs
+
+This is planned for a future version.
 
 ### Multi-Login Behavior
 
