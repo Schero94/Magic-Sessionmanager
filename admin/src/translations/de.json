@@ -1,0 +1,20 @@
+{
+  "plugin.name": "Session Manager",
+  "plugin.description": "Verfolgung von Benutzer-Login/Logout und Sitzungsaktivität",
+  "settings.section": "Session Manager",
+  "settings.sessions": "Aktive Sitzungen",
+  "settings.emailTemplates.title": "E-Mail Templates",
+  "settings.emailTemplates.description": "Passe E-Mail-Benachrichtigungen mit dynamischen Variablen an",
+  "settings.emailTemplates.validate": "Validieren",
+  "settings.emailTemplates.loadDefault": "Standard-Template laden",
+  "settings.emailTemplates.subject": "E-Mail Betreff",
+  "settings.emailTemplates.htmlTemplate": "HTML Template",
+  "settings.emailTemplates.textTemplate": "Text Template (Fallback)",
+  "settings.emailTemplates.variables": "Verfügbare Variablen (klicken zum Kopieren)",
+  "settings.emailTemplates.validation.success": "Template gültig! {count} Variablen gefunden.",
+  "settings.emailTemplates.validation.warning": "Keine Variablen im Template gefunden. Füge mindestens eine Variable hinzu.",
+  "settings.emailTemplates.defaultLoaded": "Standard-Template geladen!",
+  "settings.emailTemplates.suspiciousLogin": "Verdächtiger Login",
+  "settings.emailTemplates.newLocation": "Neuer Standort",
+  "settings.emailTemplates.vpnProxy": "VPN/Proxy"
+}

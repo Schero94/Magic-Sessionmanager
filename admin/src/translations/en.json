@@ -1,0 +1,20 @@
+{
+  "plugin.name": "Session Manager",
+  "plugin.description": "Track user login/logout and session activity",
+  "settings.section": "Session Manager",
+  "settings.sessions": "Active Sessions",
+  "settings.emailTemplates.title": "Email Templates",
+  "settings.emailTemplates.description": "Customize email notification templates with dynamic variables",
+  "settings.emailTemplates.validate": "Validate",
+  "settings.emailTemplates.loadDefault": "Load Default Template",
+  "settings.emailTemplates.subject": "Email Subject",
+  "settings.emailTemplates.htmlTemplate": "HTML Template",
+  "settings.emailTemplates.textTemplate": "Text Template (Fallback)",
+  "settings.emailTemplates.variables": "Available Variables (click to copy)",
+  "settings.emailTemplates.validation.success": "Template valid! Found {count} variables.",
+  "settings.emailTemplates.validation.warning": "No variables found in template. Add at least one variable.",
+  "settings.emailTemplates.defaultLoaded": "Default template loaded!",
+  "settings.emailTemplates.suspiciousLogin": "Suspicious Login",
+  "settings.emailTemplates.newLocation": "New Location",
+  "settings.emailTemplates.vpnProxy": "VPN/Proxy"
+}
