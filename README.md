@@ -13,6 +13,7 @@
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [How It Works](#how-it-works)
+- [Strapi Integration](#strapi-integration)
 - [Admin Dashboard](#admin-dashboard)
 - [API Routes](#api-routes)
 - [Configuration](#configuration)
@@ -110,86 +111,269 @@ npm run develop
 
 ## 🔄 How It Works
 
-### Login Flow
+### Architecture Overview
+
+Magic Session Manager works by **intercepting Strapi's native authentication routes** WITHOUT replacing them. It uses middleware to hook into the authentication flow:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Client sends:                                           │
+│ POST /api/auth/local                                    │
+│ { identifier: "user@example.com", password: "pass123" }│
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Strapi's Native Auth (users-permissions plugin)        │
+│ - Validates credentials                                 │
+│ - Creates JWT token                                     │
+│ - Returns: { jwt: "...", user: {...} }                 │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Magic Session Manager Middleware (AFTER auth)          │
+│ - Detects successful login (status 200 + user object)  │
+│ - Extracts: IP, User Agent, JWT Token                  │
+│ - [PREMIUM] Checks IP geolocation & threat level       │
+│ - [PREMIUM] Applies geo-fencing rules                  │
+│ - Creates session record in database                    │
+│ - [PREMIUM] Sends notifications (email/webhook)        │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Response returned to client (unchanged)                 │
+│ { jwt: "...", user: {...} }                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Login Flow (Detailed)
 
 ```
 User Login Request
        ↓
-[/api/auth/local] POST
+[POST /api/auth/local]
+  Body: { identifier, password }
        ↓
-Strapi Auth Service validates credentials
+Strapi Auth validates credentials
        ↓
-✅ Auth Successful → Session Manager intercepts response
+✅ Success → Strapi creates JWT token
        ↓
-Extract: User ID, IP, User Agent, JWT Token
+Strapi prepares response: { jwt, user }
+       ↓
+[Magic Session Manager Middleware INTERCEPTS]
+       ↓
+Extract from response:
+  - user.id
+  - ctx.body.jwt (Access Token)
+  - IP address (from headers/proxies)
+  - User Agent (browser info)
        ↓
 [PREMIUM] Check IP Geolocation:
   - Get country, city, ISP
   - Detect VPN/Proxy/Threat
-  - Calculate security score
+  - Calculate security score (0-100)
   - Apply geo-fencing rules
        ↓
 [PREMIUM] Auto-blocking if:
-  - Known threat IP
-  - VPN detected (if configured)
-  - Country blocked (if configured)
-  - Security score < threshold
+  - Known threat IP (isThreat = true)
+  - VPN detected (isVpn = true)
+  - Country blocked (not in allowlist)
+  - Security score < 50
+       ↓
+Block? NO → Continue ✅
+Block? YES → Return 403 Forbidden ❌
        ↓
 Create api::session.session record:
-  - userId, IP, userAgent
-  - loginTime, token
-  - geoData (if premium)
-  - isActive = true
+  {
+    user: userId,
+    token: jwt,          // Access Token
+    ipAddress: "192.168.1.100",
+    userAgent: "Mozilla/5.0...",
+    loginTime: now,
+    lastActive: now,
+    isActive: true,
+    geoLocation: {...},  // Premium
+    securityScore: 95    // Premium
+  }
        ↓
 [PREMIUM] Send notifications:
-  - Email alerts (suspicious logins)
+  - Email alert (if suspicious)
   - Webhook (Discord/Slack)
        ↓
-Return Login Response (user + jwt)
+Return response to client (unchanged):
+  { jwt: "...", user: {...} }
 ```
 
 ### Logout Flow
 
+Magic Session Manager **replaces** the default `/api/auth/logout` route:
+
 ```
 User Logout Request
        ↓
-[/api/auth/logout] POST with JWT Token
+[POST /api/auth/logout]
+  Headers: { Authorization: "Bearer <JWT>" }
        ↓
-Session Manager finds matching session by token
+Magic Session Manager Handler (NOT Strapi's default)
        ↓
-Update session:
-  - isActive = false
-  - logoutTime = now
+Extract JWT from Authorization header
        ↓
-Return Success Response
+Find matching session:
+  WHERE token = jwt AND isActive = true
+       ↓
+Found? YES → Update session:
+  {
+    isActive: false,
+    logoutTime: now
+  }
+       ↓
+Found? NO → Continue anyway (idempotent)
+       ↓
+Return: { message: "Logged out successfully" }
 ```
 
 ### Activity Tracking
 
+Every authenticated request updates `lastActive`:
+
 ```
 Authenticated API Request
+  (Any route with valid JWT)
        ↓
-[LastSeen Middleware]
+[LastSeen Middleware - BEFORE request]
        ↓
-Check: Is lastSeen > 30 seconds old? (configurable)
+Check: Does user have active session?
+  WHERE user.id = X AND isActive = true
        ↓
-✅ Yes → Update lastSeen timestamp in session
-❌ No → Skip (prevent DB noise)
+NO active sessions?
+  → Reject: 401 Unauthorized
+  → Message: "All sessions terminated. Please login again."
        ↓
-Continue request
+Has active session? Continue ✅
+       ↓
+[Process actual request]
+       ↓
+[LastSeen Middleware - AFTER request]
+       ↓
+Check: Was lastActive updated < 30s ago?
+  (Rate limiting to prevent DB noise)
+       ↓
+YES (recently updated) → Skip ⏭️
+NO (old timestamp) → Update session:
+  {
+    lastActive: now
+  }
+       ↓
+Request complete
 ```
 
 ### Periodic Cleanup
 
+Runs automatically every 30 minutes:
+
 ```
-Every 30 minutes (automatic)
+Cleanup Job (every 30 min)
        ↓
-Find sessions with: lastActive > inactivityTimeout
+Find sessions where:
+  lastActive < (now - inactivityTimeout)
+  AND isActive = true
        ↓
-Mark: isActive = false
+For each inactive session:
+  Update: isActive = false
        ↓
-Log cleanup results
+Log: "Cleaned up X inactive sessions"
 ```
+
+---
+
+## 🔌 Strapi Integration
+
+### Routes Integration
+
+#### Native Strapi Routes (Intercepted)
+
+| Route | Method | Magic Session Manager Action |
+|-------|--------|------------------------------|
+| `/api/auth/local` | `POST` | **Intercepted** - Middleware runs AFTER Strapi auth creates JWT, then creates session |
+| `/api/auth/local/register` | `POST` | **Intercepted** - Same as login (auto-login after registration) |
+
+#### Overridden Routes
+
+| Route | Method | Magic Session Manager Action |
+|-------|--------|------------------------------|
+| `/api/auth/logout` | `POST` | **Replaced** - Custom handler terminates session by JWT token |
+
+#### Plugin Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/magic-sessionmanager/logout` | `POST` | Alternative logout endpoint |
+| `/api/magic-sessionmanager/logout-all` | `POST` | Logout from all devices |
+| `/api/magic-sessionmanager/sessions` | `GET` | Get user's sessions |
+| `/api/magic-sessionmanager/user/:id/sessions` | `GET` | Get sessions for specific user |
+
+### JWT Token Handling
+
+#### Access Tokens (JWT)
+- **Stored:** YES - in `session.token` field
+- **Used for:** Matching sessions during logout
+- **Expiration:** Controlled by Strapi's JWT config
+- **Validation:** Done by Strapi's auth system (not the plugin)
+
+**Important:** When a JWT expires, the session becomes orphaned but remains `isActive = true` until:
+1. User explicitly logs out
+2. Inactivity timeout triggers cleanup
+3. Admin terminates the session
+
+#### Refresh Tokens
+- **Stored:** NO - Refresh tokens are NOT tracked
+- **Reason:** Strapi v5 handles refresh tokens separately
+- **Impact:** Sessions are tied to Access Tokens only
+- **Recommendation:** Set `inactivityTimeout` < JWT expiration time
+
+**Example:**
+```typescript
+// If your JWT expires after 30 minutes:
+// Set inactivity timeout to 15 minutes
+{
+  'magic-sessionmanager': {
+    config: {
+      inactivityTimeout: 15 * 60 * 1000 // 15 minutes
+    }
+  }
+}
+
+// This ensures orphaned sessions are cleaned up
+// even if user doesn't explicitly logout
+```
+
+### Multi-Login Behavior
+
+**Strapi Default:** Allows multiple simultaneous logins
+**Magic Session Manager:** Tracks each login as separate session
+
+```
+User logs in from:
+- Desktop (Chrome) → Session 1
+- Mobile (Safari) → Session 2
+- Laptop (Firefox) → Session 3
+
+All sessions are active simultaneously.
+User can logout from one device without affecting others.
+```
+
+### Magic Link Integration
+
+If you use `strapi-plugin-magic-link`, the session manager automatically detects Magic Link logins:
+
+```javascript
+// bootstrap.js line 140
+const isMagicLink = ctx.path.includes('/magic-link/login') && ctx.method === 'POST';
+```
+
+Sessions are created the same way for Magic Link logins.
 
 ---
 
@@ -258,10 +442,11 @@ Access at **Admin → Sessions** (sidebar plugin)
 
 All require valid JWT authentication (Bearer token).
 
-#### Get Active Sessions
+#### Get User Sessions
 
 ```bash
 GET /api/magic-sessionmanager/sessions
+Authorization: Bearer YOUR_JWT
 
 Response:
 {
@@ -271,52 +456,72 @@ Response:
       "attributes": {
         "loginTime": "2024-01-15T10:30:00Z",
         "lastActive": "2024-01-15T10:35:45Z",
+        "logoutTime": null,
         "isActive": true,
         "ipAddress": "192.168.1.100",
-        "userAgent": "Mozilla/5.0...",
-        "geoLocation": {
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
+        "token": "eyJhbGciOiJIUzI1NiIs...", // JWT Access Token
+        "geoLocation": {  // Premium
           "country": "Germany",
           "city": "Berlin",
-          "country_code": "DE"
-        }
+          "country_code": "DE",
+          "latitude": 52.52,
+          "longitude": 13.41
+        },
+        "securityScore": 95 // Premium
       },
       "relationships": {
         "user": { "id": 1, "username": "john" }
       }
     }
   ],
-  "meta": { "count": 1 }
+  "meta": { "count": 3 }
 }
 ```
 
-#### Get User Sessions
+#### Logout (Method 1 - Strapi Native)
 
 ```bash
-GET /api/magic-sessionmanager/user/:userId/sessions
-
-# Example
-GET /api/magic-sessionmanager/user/1/sessions
-```
-
-#### Logout User
-
-```bash
-POST /api/magic-sessionmanager/logout
-Authorization: Bearer YOUR_JWT_TOKEN
+POST /api/auth/logout
+Authorization: Bearer YOUR_JWT
 
 Response:
 {
   "message": "Logged out successfully"
 }
+
+# This is the REPLACED Strapi route
+# Terminates session matching the JWT token
 ```
 
-#### Terminate Session (Admin)
+#### Logout (Method 2 - Plugin Endpoint)
 
 ```bash
-POST /api/magic-sessionmanager/sessions/:sessionId/terminate
-Authorization: Bearer ADMIN_JWT_TOKEN
+POST /api/magic-sessionmanager/logout
+Authorization: Bearer YOUR_JWT
 
-# Marks session as inactive immediately
+Response:
+{
+  "message": "Session terminated successfully"
+}
+
+# Alternative endpoint with same behavior
+```
+
+#### Logout All Devices
+
+```bash
+POST /api/magic-sessionmanager/logout-all
+Authorization: Bearer YOUR_JWT
+
+Response:
+{
+  "message": "All sessions terminated",
+  "count": 3
+}
+
+# Terminates ALL active sessions for the user
+# Useful for "logout everywhere" feature
 ```
 
 ---
@@ -327,7 +532,7 @@ All require **admin authentication**.
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| `GET` | `/magic-sessionmanager/admin/sessions` | Get all sessions (active + inactive) |
+| `GET` | `/magic-sessionmanager/admin/sessions` | Get all sessions (all users) |
 | `GET` | `/magic-sessionmanager/admin/sessions/active` | Get only active sessions |
 | `GET` | `/magic-sessionmanager/admin/user/:userId/sessions` | Get sessions for a user |
 | `POST` | `/magic-sessionmanager/admin/sessions/:sessionId/terminate` | Mark session inactive |
@@ -344,7 +549,7 @@ All require **admin authentication**.
 
 ## ⚙️ Configuration
 
-### Basic Config (Default)
+### Basic Config
 
 ```typescript
 // src/config/plugins.ts
@@ -353,45 +558,79 @@ export default () => ({
     enabled: true,
     config: {
       // Rate limit for lastSeen updates (milliseconds)
-      lastSeenRateLimit: 30000, // Default: 30 seconds
+      // Prevents excessive DB writes
+      lastSeenRateLimit: 30000, // 30 seconds (default)
       
       // Session inactivity timeout (milliseconds)
-      inactivityTimeout: 15 * 60 * 1000, // Default: 15 minutes
+      // Sessions inactive longer than this are marked inactive
+      inactivityTimeout: 15 * 60 * 1000, // 15 minutes (default)
+      
+      // IMPORTANT: Set this LOWER than your JWT expiration
+      // to prevent orphaned sessions
     },
   },
 });
 ```
 
-### Premium Config (License Required)
+### Relationship with JWT Config
+
+```typescript
+// src/config/plugins.ts
+export default () => ({
+  // Strapi JWT Configuration
+  'users-permissions': {
+    config: {
+      jwt: {
+        expiresIn: '30m', // Access Token expires after 30 minutes
+      },
+    },
+  },
+  
+  // Session Manager Configuration
+  'magic-sessionmanager': {
+    enabled: true,
+    config: {
+      // Set inactivity timeout LOWER than JWT expiration
+      // This prevents orphaned sessions when JWT expires
+      inactivityTimeout: 15 * 60 * 1000, // 15 minutes < 30 minutes JWT
+      
+      // Or match JWT expiration exactly:
+      // inactivityTimeout: 30 * 60 * 1000, // 30 minutes = JWT expiration
+    },
+  },
+});
+```
+
+### Premium Config
 
 Available through Admin UI **Settings → Sessions → Settings**:
 
-#### Geolocation & Security
-- `enableGeolocation` - Fetch IP geolocation data
-- `enableSecurityScoring` - Analyze IP reputation
-- `blockSuspiciousSessions` - Auto-block high-risk logins
-- `alertOnVpnProxy` - Detect VPN/proxy attempts
-
-#### Geo-Fencing
-- `enableGeofencing` - Enable country restrictions
-- `allowedCountries` - Whitelist countries (e.g., `["DE", "AT", "CH"]`)
-- `blockedCountries` - Blacklist countries
-
-#### Notifications
-- `enableEmailAlerts` - Send email on suspicious login
-- `alertOnSuspiciousLogin` - Email trigger for VPN/proxy/threat IPs
-- `enableWebhooks` - Send webhook notifications
-- `discordWebhookUrl` - Discord channel webhook URL
-- `slackWebhookUrl` - Slack channel webhook URL
+```typescript
+// Settings stored in database via Admin UI
+{
+  // Geolocation & Security
+  enableGeolocation: true,
+  enableSecurityScoring: true,
+  blockSuspiciousSessions: true,
+  alertOnVpnProxy: true,
+  
+  // Geo-Fencing
+  enableGeofencing: true,
+  allowedCountries: ["DE", "AT", "CH"], // Germany, Austria, Switzerland
+  blockedCountries: ["RU", "CN"],       // Russia, China
+  
+  // Notifications
+  enableEmailAlerts: true,
+  alertOnSuspiciousLogin: true,
+  enableWebhooks: true,
+  discordWebhookUrl: "https://discord.com/api/webhooks/...",
+  slackWebhookUrl: "https://hooks.slack.com/services/...",
+}
+```
 
 ---
 
 ## 🔒 Premium Features
-
-### Requirements
-- Valid license key from [https://magic-link.schero.dev](https://magic-link.schero.dev)
-- License auto-validated via HTTPS on first login
-- Offline grace period (continues working without internet for 7 days)
 
 ### IP Geolocation & Threat Detection
 
@@ -413,21 +652,36 @@ Uses **ipapi.co** API for accurate IP information:
 }
 ```
 
-### Email Alerts
+### Auto-Blocking Rules
 
-Sent when suspicious login detected:
+```
+Login attempt from IP: 1.2.3.4
+       ↓
+[Geolocation Check]
+       ↓
+isThreat = true → BLOCK ❌
+isVpn = true (if alertOnVpnProxy) → BLOCK ❌
+country = "RU" (if in blockedCountries) → BLOCK ❌
+country ≠ ["DE","AT","CH"] (if allowedCountries set) → BLOCK ❌
+securityScore < 50 → BLOCK ❌
+       ↓
+None of above? → ALLOW ✅
+```
+
+### Email Alerts
 
 ```
 Subject: ⚠️ Unusual Login Activity
 
 Hi John,
 
-A login from a new location was detected on your account:
+A login from a new location was detected:
 
-📍 Location: Berlin, Germany (192.168.1.100)
+📍 Location: Berlin, Germany
+🌐 IP Address: 192.168.1.100
 🔒 Risk Level: Medium (VPN detected)
 ⏰ Time: 2024-01-15 10:30:00 UTC
-🌐 Browser: Chrome on Windows
+💻 Device: Chrome on Windows
 
 If this wasn't you, secure your account immediately.
 
@@ -436,8 +690,7 @@ If this wasn't you, secure your account immediately.
 
 ### Webhook Notifications
 
-**Discord format:**
-
+**Discord:**
 ```
 🔓 NEW LOGIN
 ━━━━━━━━━━━━━━━━━━
@@ -449,100 +702,66 @@ Browser: Chrome / Windows
 Time: 2024-01-15 10:30:00
 ```
 
-**Slack format:**
-
-```
-🔓 *New Login Detected*
-• User: john@example.com
-• Location: Berlin, Germany
-• IP: 192.168.1.100
-• Risk: Medium (VPN detected)
-• Device: Chrome on Windows
-• Time: 2024-01-15 10:30:00 UTC
-```
-
 ---
 
 ## 💡 Use Cases
 
+### Force Logout
+
+```bash
+# Admin terminates specific session
+POST /api/magic-sessionmanager/admin/sessions/123/terminate
+
+# Admin logs out user from all devices
+POST /api/magic-sessionmanager/admin/user/5/terminate-all
+
+# Next API request from that user:
+GET /api/some-endpoint
+Authorization: Bearer <their JWT>
+
+# Response: 401 Unauthorized
+# "All sessions have been terminated. Please login again."
+```
+
 ### Security Monitoring
 
-**Multi-Device Login Detection**
 ```
-User logs in from:
-- Desktop (Germany) ✅
-- Mobile (Germany) ✅
-- Unknown device (Russia) ⚠️ → Email alert
-```
-
-**VPN/Proxy Detection**
-```
-Premium feature detects:
-- VPN usage
-- Proxy servers
-- Tor exits
-- Data center IPs
-→ Optional auto-blocking
+Premium feature: VPN Detection
+       ↓
+User logs in from VPN
+       ↓
+isVpn = true detected
+       ↓
+Email sent: "Suspicious login from VPN"
+       ↓
+Webhook notification to Slack
+       ↓
+Admin reviews in dashboard
+       ↓
+Admin can terminate session if needed
 ```
 
-**Geo-Fencing**
-```
-Allow logins only from:
-- Germany (DE)
-- Austria (AT)
-- Switzerland (CH)
+### Compliance Audit
 
-Block all others → 403 Forbidden
 ```
-
-### User Management
-
-**Force Logout**
-```
-Admin can:
-- Terminate specific session
-- Logout user from all devices
-- Monitor active sessions real-time
-```
-
-**Session Analytics**
-```
-Track:
-- Peak usage times
-- Average session duration
-- Device/browser breakdown
-- Geographic distribution
-```
-
-### Compliance
-
-**Audit Trail**
-```
-Complete session history:
+Export all sessions to CSV:
 - Who logged in
 - When & where (IP, location)
 - Device & browser used
 - Session duration
-→ Export to CSV for compliance
+- Logout time (if any)
+
+Perfect for compliance requirements!
 ```
 
 ---
 
 ## 🧪 Testing
 
-### 1. Register/Login Test
+### 1. Test Login & Session Creation
 
 ```bash
-# Register user
-curl -X POST http://localhost:1337/api/auth/local/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "Test@123"
-  }'
-
-# Login
+# Login via Strapi's native route
 curl -X POST http://localhost:1337/api/auth/local \
   -H "Content-Type: application/json" \
   -d '{
@@ -550,261 +769,237 @@ curl -X POST http://localhost:1337/api/auth/local \
     "password": "Test@123"
   }'
 
-# Copy the JWT token
-export JWT_TOKEN="eyJhbGciOiJIUzI1NiIs..."
-```
+# Response:
+{
+  "jwt": "eyJhbGciOiJIUzI1NiIs...",
+  "user": { "id": 1, "email": "test@example.com", ... }
+}
 
-### 2. Check Session Created
+# Save JWT
+export JWT="eyJhbGciOiJIUzI1NiIs..."
 
-```bash
-# View all active sessions (admin only)
-curl http://localhost:1337/api/magic-sessionmanager/admin/sessions \
-  -H "Authorization: Bearer $ADMIN_JWT_TOKEN"
-
-# View your own sessions
+# Check session was created
 curl http://localhost:1337/api/magic-sessionmanager/sessions \
-  -H "Authorization: Bearer $JWT_TOKEN"
+  -H "Authorization: Bearer $JWT"
+
+# Should show new session with:
+# - loginTime
+# - isActive: true
+# - ipAddress
+# - userAgent
+# - token (matches JWT)
 ```
 
-### 3. Test Activity Tracking
+### 2. Test Activity Tracking
 
 ```bash
-# First request updates lastSeen
+# First request (updates lastActive)
 curl http://localhost:1337/api/users \
-  -H "Authorization: Bearer $JWT_TOKEN"
+  -H "Authorization: Bearer $JWT"
 
-# Wait 5 seconds, try again (should NOT update due to rate limit)
-sleep 5
-curl http://localhost:1337/api/users \
-  -H "Authorization: Bearer $JWT_TOKEN"
+# Check lastActive timestamp
+curl http://localhost:1337/api/magic-sessionmanager/sessions \
+  -H "Authorization: Bearer $JWT"
 
-# Wait 35 seconds, try again (should update now)
+# Wait 35 seconds (> 30s rate limit)
 sleep 35
-curl http://localhost:1337/api/users \
-  -H "Authorization: Bearer $JWT_TOKEN"
 
-# Check: lastActive timestamp should have changed
+# Second request (should update lastActive)
+curl http://localhost:1337/api/users \
+  -H "Authorization: Bearer $JWT"
+
+# Check lastActive changed
+curl http://localhost:1337/api/magic-sessionmanager/sessions \
+  -H "Authorization: Bearer $JWT"
 ```
 
-### 4. Test Logout
+### 3. Test Logout
 
 ```bash
+# Logout via Strapi's route (replaced by plugin)
 curl -X POST http://localhost:1337/api/auth/logout \
-  -H "Authorization: Bearer $JWT_TOKEN"
+  -H "Authorization: Bearer $JWT"
 
 # Response: { "message": "Logged out successfully" }
 
-# Verify session is inactive
+# Check session is inactive
 curl http://localhost:1337/api/magic-sessionmanager/sessions \
-  -H "Authorization: Bearer $JWT_TOKEN"
-# Should show isActive = false
+  -H "Authorization: Bearer $JWT"
+
+# Should show:
+# - isActive: false
+# - logoutTime: (timestamp)
 ```
 
-### 5. Test Premium Features (with license)
+### 4. Test Force Logout
 
 ```bash
-# Login from different IP (use VPN/proxy)
-# Check session for geolocation data
-# Verify email alert sent (if configured)
-# Check webhook notification (Discord/Slack)
+# User A terminates all their sessions
+curl -X POST http://localhost:1337/api/magic-sessionmanager/logout-all \
+  -H "Authorization: Bearer $JWT_A"
+
+# Try to use API with old JWT
+curl http://localhost:1337/api/users \
+  -H "Authorization: Bearer $JWT_A"
+
+# Response: 401 Unauthorized
+# "All sessions have been terminated. Please login again."
 ```
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Sessions Not Creating on Login
+### Sessions Not Creating
 
-**Problem:** Users login but no session record appears.
+**Problem:** Login succeeds but no session record appears.
 
 **Solutions:**
-1. Check Strapi logs for errors:
+1. Check Strapi logs:
    ```bash
-   npm run develop # Look for [magic-sessionmanager] error messages
+   npm run develop
+   # Look for: [magic-sessionmanager] 🔍 Login detected!
+   # Look for: [magic-sessionmanager] ✅ Session X created
    ```
 
-2. Verify plugin is enabled:
+2. Verify middleware is mounted:
    ```bash
-   cat config/plugins.ts | grep magic-sessionmanager
+   # Look for: [magic-sessionmanager] ✅ Login/Logout interceptor middleware mounted
    ```
 
-3. Check if `api::session.session` collection exists:
+3. Check `api::session.session` collection exists:
    - Go to Admin → Content Manager
    - Look for "Session" collection
 
-4. Verify middleware is mounted:
-   ```bash
-   # Check logs for:
-   # [magic-sessionmanager] ✅ Login/Logout interceptor middleware mounted
-   ```
+### JWT Still Works After Logout
+
+**Problem:** After logout, JWT still authenticates API requests.
+
+**Explanation:** This is EXPECTED behavior!
+- JWT tokens are **stateless** - validated by signature alone
+- Plugin marks session `isActive = false`
+- But JWT itself remains valid until expiration
+- Next authenticated request is **blocked** by LastSeen middleware
+
+**Solution:** This is by design. The middleware blocks requests from users with no active sessions.
+
+### Orphaned Sessions
+
+**Problem:** Sessions remain `isActive = true` after JWT expires.
+
+**Cause:** JWT expiration > inactivity timeout
+
+**Solution:**
+```typescript
+// Set inactivity timeout LOWER than JWT expiration
+{
+  'magic-sessionmanager': {
+    config: {
+      inactivityTimeout: 15 * 60 * 1000 // 15 min (if JWT = 30 min)
+    }
+  }
+}
+```
 
 ### LastSeen Not Updating
 
-**Problem:** Session's `lastActive` timestamp doesn't change on API requests.
+**Problem:** `lastActive` timestamp doesn't change.
 
 **Solutions:**
-1. Check rate limit setting:
+1. Check rate limit:
    ```typescript
    config: {
      lastSeenRateLimit: 5000 // Lower for testing
    }
    ```
 
-2. Wait longer than rate limit before next request
+2. Wait longer than rate limit (default 30s)
 
-3. Verify middleware is mounted:
+3. Verify middleware mounted:
    ```bash
-   # Check logs for:
-   # [magic-sessionmanager] ✅ LastSeen middleware mounted
+   # Look for: [magic-sessionmanager] ✅ LastSeen middleware mounted
    ```
-
-### License Shows as Invalid
-
-**Problem:** "No valid license" message appears.
-
-**Solutions:**
-1. Activate license:
-   - Admin → Sessions → License tab
-   - Click "Create License" button
-
-2. Check internet connection (for license validation)
-
-3. Offline grace period:
-   - License remains valid for 7 days without internet
-
-4. View license status in Admin → Sessions → License
-
-### Geolocation Not Working
-
-**Problem:** No location data in sessions.
-
-**Solutions:**
-1. Activate license (Premium feature)
-2. Enable in Settings → Geolocation
-3. Check API rate limits (30,000/month free)
-4. Test with public IP (localhost won't work)
 
 ---
 
 ## 🛠️ Development
 
-### Local Development
-
-```bash
-# Watch mode - rebuilds on file changes
-npm run watch
-
-# Link to local Strapi
-npm run watch:link
-
-# Verify plugin integrity
-npm run verify
-```
-
 ### Plugin Structure
 
 ```
 magic-sessionmanager/
-├── admin/                      # React admin UI
-│   └── src/
-│       ├── pages/
-│       │   ├── HomePage.jsx       # Main dashboard
-│       │   ├── ActiveSessions.jsx # Active sessions tab
-│       │   ├── Analytics.jsx      # Analytics tab
-│       │   ├── Settings.jsx       # Settings tab
-│       │   └── License.jsx        # License tab
-│       ├── components/
-│       │   ├── SessionDetailModal.jsx
-│       │   ├── SessionInfoPanel.jsx
-│       │   └── LicenseGuard.jsx
-│       ├── hooks/
-│       │   └── useLicense.js
-│       └── utils/
+├── server/src/
+│   ├── bootstrap.js           # ⚙️ CORE: Mounts middlewares & intercepts routes
+│   ├── middlewares/
+│   │   └── last-seen.js       # 🔄 Updates lastActive on each request
+│   ├── services/
+│   │   ├── session.js         # 💾 Session CRUD operations
+│   │   ├── geolocation.js     # 🌍 IP geolocation (Premium)
+│   │   ├── notifications.js   # 📧 Email/webhook alerts
+│   │   └── license-guard.js   # 🔑 License validation
+│   ├── controllers/
+│   │   ├── session.js         # 🎮 Session API handlers
+│   │   ├── settings.js        # ⚙️ Settings API
+│   │   └── license.js         # 🔑 License API
+│   ├── routes/
+│   │   ├── content-api.js     # 🌐 User-facing routes
+│   │   └── admin.js           # 👑 Admin-only routes
+│   └── utils/
+│       └── getClientIp.js     # 📍 IP extraction (proxy-aware)
 │
-├── server/                     # Backend logic
-│   └── src/
-│       ├── bootstrap.js        # Initialization & middleware
-│       ├── services/
-│       │   ├── session.js      # Session CRUD & tracking
-│       │   ├── license-guard.js # License validation
-│       │   ├── geolocation.js  # IP geolocation (Premium)
-│       │   └── notifications.js # Email/webhook alerts
-│       ├── controllers/
-│       ├── routes/
-│       ├── middlewares/
-│       │   └── last-seen.js    # Activity tracking
-│       └── utils/
-│           └── getClientIp.js  # IP extraction
+├── admin/src/
+│   ├── pages/
+│   │   ├── HomePage.jsx       # 📊 Main dashboard
+│   │   ├── ActiveSessions.jsx # 👥 Active sessions tab
+│   │   ├── Analytics.jsx      # 📈 Analytics tab
+│   │   ├── Settings.jsx       # ⚙️ Settings tab
+│   │   └── License.jsx        # 🔑 License tab
+│   └── components/
+│       ├── SessionDetailModal.jsx
+│       └── LicenseGuard.jsx
 │
-├── .github/workflows/          # CI/CD
-│   ├── semantic-release.yml
-│   └── test.yml
+├── .github/workflows/
+│   ├── semantic-release.yml   # 🚀 NPM publishing
+│   └── test.yml               # ✅ CI/CD tests
+│
 ├── package.json
-├── .releaserc.json
+├── .releaserc.json            # 📦 semantic-release config
 └── README.md
 ```
 
 ### Build & Release
 
 ```bash
-# Build plugin
+# Build
 npm run build
 
-# Package for NPM
-npm run verify
-
-# Release (automatic via GitHub Actions)
-# Just use conventional commits:
-git commit -m "feat: add new feature"    # → MINOR version
-git commit -m "fix: fix bug"             # → PATCH version
-git commit -m "feat!: breaking change"   # → MAJOR version
+# Release (automatic via semantic commits)
+git commit -m "feat: add new feature"    # → MINOR
+git commit -m "fix: fix bug"             # → PATCH
+git commit -m "feat!: breaking change"   # → MAJOR
 ```
 
 ---
 
 ## 📦 NPM Release Process
 
-This plugin uses **semantic-release** for automated versioning.
+Uses **semantic-release** for automated versioning.
 
-### Commit Message Format
+### Commit Format
 
 ```bash
-# PATCH version (bug fix)
-git commit -m "fix: correct session save issue"
-
-# MINOR version (new feature)
-git commit -m "feat: add geo-fencing support"
-
-# MAJOR version (breaking change)
-git commit -m "feat!: change session API response format"
+feat: add geo-fencing support       # → v1.1.0
+fix: correct session cleanup        # → v1.0.1
+feat!: change API response format   # → v2.0.0
 ```
 
-### Automatic Release
-
-GitHub Actions automatically:
-- Analyzes commits
-- Bumps version
-- Updates CHANGELOG
-- Publishes to NPM
-- Creates GitHub release
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome!
-
-1. Fork: https://github.com/Schero94/Magic-Sessionmanager
-2. Create branch: `git checkout -b feature/amazing`
-3. Commit: `git commit -m "feat: add amazing feature"`
-4. Push: `git push origin feature/amazing`
-5. Open Pull Request
+GitHub Actions automatically publishes to NPM on push to `main`.
 
 ---
 
 ## 📚 Resources
 
-- **NPM Package:** https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager
+- **NPM:** https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager
 - **GitHub:** https://github.com/Schero94/Magic-Sessionmanager
 - **Issues:** https://github.com/Schero94/Magic-Sessionmanager/issues
 
@@ -815,21 +1010,6 @@ Contributions are welcome!
 **MIT License** - Free for personal & commercial use
 
 **Copyright (c) 2025 Schero D.**
-
-See [LICENSE](./LICENSE) for full terms
-
----
-
-## 🎯 Roadmap
-
-- [ ] Redis session store for multi-instance deployments
-- [ ] Session device fingerprinting
-- [ ] Location-based step-up authentication
-- [ ] WebSocket support for real-time updates
-- [ ] API rate limiting per session
-- [ ] GraphQL API endpoints
-- [ ] 2FA integration
-- [ ] Session history analytics
 
 ---
 
