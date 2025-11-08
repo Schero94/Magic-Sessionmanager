@@ -1,0 +1,78 @@
+name: Test & Verify
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test & Verify Build
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify plugin integrity
+        run: npm run verify
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          echo "Checking admin build..."
+          test -f "dist/admin/index.js" && echo "✓ Admin JS built" || exit 1
+          test -f "dist/admin/index.mjs" && echo "✓ Admin MJS built" || exit 1
+          
+          echo "Checking server build..."
+          test -f "dist/server/index.js" && echo "✓ Server JS built" || exit 1
+          test -f "dist/server/index.mjs" && echo "✓ Server MJS built" || exit 1
+          
+          echo "✓ All build artifacts present"
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check file structure
+        run: |
+          echo "Verifying plugin structure..."
+          test -d "admin/src" && echo "✓ Admin src found" || exit 1
+          test -d "server/src" && echo "✓ Server src found" || exit 1
+          test -f "package.json" && echo "✓ package.json found" || exit 1
+          test -f ".releaserc.json" && echo "✓ .releaserc.json found" || exit 1
+          test -f "README.md" && echo "✓ README.md found" || exit 1
+          test -f "LICENSE" && echo "✓ LICENSE found" || exit 1
+          echo "✓ All required files present"
+
