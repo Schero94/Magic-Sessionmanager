@@ -30,11 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify plugin integrity
-        run: npm run verify
-
       - name: Build plugin
         run: npm run build
+
+      - name: Verify plugin integrity
+        run: npm run verify
 
       - name: Verify build output
         run: |
