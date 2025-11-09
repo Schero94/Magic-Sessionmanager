@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.0...v2.0.1) (2025-11-09)
+
+
+### Bug Fixes
+
+* Add missing session content-type schema ([4f8aa30](https://github.com/Schero94/Magic-Sessionmanager/commit/4f8aa309351f7e440e6eb77eab46ea79796025ac))
+
 # [2.0.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v1.0.1...v2.0.0) (2025-11-09)
 
 
