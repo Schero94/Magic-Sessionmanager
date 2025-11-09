@@ -1,6 +1,6 @@
 {
   "kind": "collectionType",
-  "collectionName": "sessions",
+  "collectionName": "magic_sessions",
   "info": {
     "singularName": "session",
     "pluralName": "sessions",
