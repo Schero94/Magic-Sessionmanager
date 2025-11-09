@@ -1,3 +1,10 @@
+## [3.3.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.3.1...v3.3.2) (2025-11-09)
+
+
+### Bug Fixes
+
+* Increase test delays to 8+ seconds before refresh token test ([fbe5dad](https://github.com/Schero94/Magic-Sessionmanager/commit/fbe5dadfc8ec418672c483031199a4e51c895157))
+
 ## [3.3.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.3.0...v3.3.1) (2025-11-09)
 
 
