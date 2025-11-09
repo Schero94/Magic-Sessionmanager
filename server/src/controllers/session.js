@@ -57,16 +57,21 @@ module.exports = {
 
   /**
    * Get user's sessions
-   * GET /magic-sessionmanager/user/:userId/sessions
-   * SECURITY: User can only access their own sessions
+   * GET /magic-sessionmanager/user/:userId/sessions (Admin API)
+   * GET /api/magic-sessionmanager/user/:userId/sessions (Content API)
+   * SECURITY: Admins can view any user, Content API users only their own
    */
   async getUserSessions(ctx) {
     try {
       const { userId } = ctx.params;
+      
+      // Check if this is an admin request
+      const isAdminRequest = ctx.state.userAbility || ctx.state.admin;
       const requestingUserId = ctx.state.user?.id;
 
-      // SECURITY CHECK: User can only see their own sessions
-      if (requestingUserId && String(requestingUserId) !== String(userId)) {
+      // SECURITY CHECK: Content API users can only see their own sessions
+      // Admins can see any user's sessions
+      if (!isAdminRequest && requestingUserId && String(requestingUserId) !== String(userId)) {
         strapi.log.warn(`[magic-sessionmanager] Security: User ${requestingUserId} tried to access sessions of user ${userId}`);
         return ctx.forbidden('You can only access your own sessions');
       }
