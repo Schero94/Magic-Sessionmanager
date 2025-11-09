@@ -488,9 +488,14 @@ No automatic token refresh
 **Logs when refresh tokens disabled:**
 ```
 [magic-sessionmanager] ✅ Session created for user 1 (IP: 192.168.1.1)
-[magic-sessionmanager] ℹ️  No refresh token received (JWT management not enabled)
+[magic-sessionmanager] ℹ️  No refresh token in response (JWT management not enabled)
 [magic-sessionmanager] ✅ Refresh Token interceptor middleware mounted
 ```
+
+**If you try to call `/api/auth/refresh-token` without enabling it:**
+- Endpoint returns **404 Not Found** (Strapi doesn't create the route)
+- Or returns **401 Unauthorized** if route exists but tokens not configured
+- This is expected and correct behavior
 
 **Trade-offs:**
 
