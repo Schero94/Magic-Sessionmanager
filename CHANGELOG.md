@@ -1,3 +1,10 @@
+## [3.3.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.3.0...v3.3.1) (2025-11-09)
+
+
+### Bug Fixes
+
+* Correct Strapi v5 refresh endpoint to /api/auth/refresh ([a4cccbf](https://github.com/Schero94/Magic-Sessionmanager/commit/a4cccbfe5014e05b49080b46d9732bc430bfb031))
+
 # [3.3.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.2.1...v3.3.0) (2025-11-09)
 
 
