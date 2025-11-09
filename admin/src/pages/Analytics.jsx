@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useFetchClient } from '@strapi/strapi/admin';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import {
   Box,
   Typography,
@@ -76,7 +76,7 @@ const growBar = keyframes`
 
 // ================ STYLED COMPONENTS ================
 const Container = styled(Box)`
-  animation: ${fadeIn} 0.6s;
+  ${css`animation: ${fadeIn} 0.6s;`}
   min-height: 100vh;
   max-width: 1440px;
   margin: 0 auto;
@@ -100,7 +100,7 @@ const Header = styled(Box)`
     width: 200%;
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-    animation: ${shimmer} 3s infinite;
+    ${css`animation: ${shimmer} 3s infinite;`}
   }
   
   &::after {
@@ -135,7 +135,7 @@ const Title = styled(Typography)`
   svg {
     width: 32px;
     height: 32px;
-    animation: ${float} 3s ease-in-out infinite;
+    ${css`animation: ${float} 3s ease-in-out infinite;`}
   }
 `;
 
@@ -160,7 +160,7 @@ const StatCard = styled(Box)`
   position: relative;
   overflow: hidden;
   transition: all ${theme.transitions.normal};
-  animation: ${fadeIn} ${theme.transitions.slow} backwards;
+  ${css`animation: ${fadeIn} ${theme.transitions.slow} backwards;`}
   animation-delay: ${props => props.$delay || '0s'};
   box-shadow: ${theme.shadows.sm};
   border: 1px solid ${theme.colors.neutral[200]};
@@ -229,7 +229,7 @@ const ChartCard = styled(Box)`
   box-shadow: ${theme.shadows.md};
   border: 1px solid ${theme.colors.neutral[200]};
   margin-bottom: 28px;
-  animation: ${slideIn} ${theme.transitions.slow};
+  ${css`animation: ${slideIn} ${theme.transitions.slow};`}
   transition: all ${theme.transitions.normal};
   
   &:hover {
@@ -264,7 +264,7 @@ const BarRow = styled.div`
   display: flex;
   align-items: center;
   gap: 20px;
-  animation: ${fadeIn} 0.6s backwards;
+  ${css`animation: ${fadeIn} 0.6s backwards;`}
   animation-delay: ${props => props.$delay || '0s'};
 `;
 
@@ -290,7 +290,7 @@ const BarFill = styled.div`
   background: linear-gradient(90deg, ${props => props.$color1 || theme.colors.primary[500]}, ${props => props.$color2 || theme.colors.primary[600]});
   border-radius: 10px;
   --bar-width: ${props => props.$percentage || 0}%;
-  animation: ${growBar} 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  ${css`animation: ${growBar} 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;`}
   animation-delay: ${props => props.$delay || '0s'};
   display: flex;
   align-items: center;
@@ -315,8 +315,19 @@ const LoadingOverlay = styled.div`
   gap: 24px;
   
   .loader-icon {
-    animation: ${pulse} 2s ease-in-out infinite;
+    ${css`animation: ${pulse} 2s ease-in-out infinite;`}
   }
+`;
+
+const AnimatedIcon = styled.div`
+  ${css`animation: ${float} 3s ease-in-out infinite;`}
+  width: 96px;
+  height: 96px;
+  color: #d97706;
+  margin: 0 auto 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const AnalyticsPage = () => {
@@ -482,14 +493,7 @@ const AnalyticsPage = () => {
             }} />
             
             <div style={{ position: 'relative', zIndex: 1 }}>
-              <Crown style={{ 
-                width: '96px', 
-                height: '96px', 
-                color: '#d97706', 
-                margin: '0 auto 32px',
-                display: 'block',
-                animation: `${float} 3s ease-in-out infinite`,
-              }} />
+              <AnimatedIcon as={Crown} />
               
               <Typography 
                 variant="alpha" 

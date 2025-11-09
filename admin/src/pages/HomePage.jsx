@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import {
   Box,
   Button,
@@ -129,7 +129,7 @@ const FloatingEmoji = styled.div`
   right: 40px;
   font-size: 72px;
   opacity: 0.08;
-  animation: ${float} 4s ease-in-out infinite;
+  ${css`animation: ${float} 4s ease-in-out infinite;`}
 `;
 
 // ================ RESPONSIVE BREAKPOINTS ================
@@ -140,7 +140,7 @@ const breakpoints = {
 
 // ================ STYLED COMPONENTS ================
 const Container = styled(Box)`
-  animation: ${fadeIn} ${theme.transitions.slow};
+  ${css`animation: ${fadeIn} ${theme.transitions.slow};`}
   min-height: 100vh;
   max-width: 1440px;
   margin: 0 auto;
@@ -181,7 +181,7 @@ const Header = styled(Box)`
       rgba(255, 255, 255, 0.15), 
       transparent
     );
-    animation: ${shimmer} 3s infinite;
+    ${css`animation: ${shimmer} 3s infinite;`}
   }
   
   &::after {
@@ -215,7 +215,7 @@ const Title = styled(Typography)`
   svg {
     width: 28px;
     height: 28px;
-    animation: ${float} 3s ease-in-out infinite;
+    ${css`animation: ${float} 3s ease-in-out infinite;`}
   }
   
   @media screen and (max-width: ${breakpoints.mobile}) {
@@ -264,7 +264,7 @@ const StatCard = styled(Box)`
   position: relative;
   overflow: hidden;
   transition: all ${theme.transitions.normal};
-  animation: ${fadeIn} ${theme.transitions.slow} backwards;
+  ${css`animation: ${fadeIn} ${theme.transitions.slow} backwards;`}
   animation-delay: ${props => props.$delay || '0s'};
   box-shadow: ${theme.shadows.sm};
   border: 1px solid ${theme.colors.neutral[200]};
@@ -413,7 +413,7 @@ const OnlineIndicator = styled.div`
   background: ${props => props.$online ? theme.colors.success[500] : theme.colors.neutral[400]};
   display: inline-block;
   margin-right: 8px;
-  animation: ${props => props.$online ? pulse : 'none'} 2s ease-in-out infinite;
+  ${css`animation: ${props => props.$online ? pulse : 'none'} 2s ease-in-out infinite;`}
 `;
 
 const FilterBar = styled(Flex)`

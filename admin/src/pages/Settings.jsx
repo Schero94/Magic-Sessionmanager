@@ -21,7 +21,7 @@ import {
 } from '@strapi/design-system';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import { Check, Information, Duplicate, Trash, Mail, Code, Cog, Shield, Clock } from '@strapi/icons';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import pluginId from '../pluginId';
 import { useLicense } from '../hooks/useLicense';
 
@@ -51,7 +51,7 @@ const shimmer = keyframes`
 
 // ================ STYLED COMPONENTS ================
 const Container = styled(Box)`
-  animation: ${fadeIn} 0.5s;
+  ${css`animation: ${fadeIn} 0.5s;`}
   max-width: 1400px;
   margin: 0 auto;
 `;

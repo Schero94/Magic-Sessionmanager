@@ -20,7 +20,7 @@ import {
   Duplicate,
   Download,
 } from '@strapi/icons';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import pluginId from '../pluginId';
 
 // ================ THEME ================
@@ -49,7 +49,7 @@ const shimmer = keyframes`
 
 // ================ STYLED COMPONENTS ================
 const Container = styled(Box)`
-  animation: ${fadeIn} 0.5s;
+  ${css`animation: ${fadeIn} 0.5s;`}
   max-width: 1400px;
   margin: 0 auto;
 `;
@@ -86,7 +86,7 @@ const LicenseKeyBanner = styled(Box)`
       rgba(255, 255, 255, 0.08),
       transparent
     );
-    animation: ${shimmer} 3s infinite;
+    ${css`animation: ${shimmer} 3s infinite;`}
     pointer-events: none;
     z-index: 0;
   }
