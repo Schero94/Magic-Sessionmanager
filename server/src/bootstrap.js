@@ -2,7 +2,7 @@
 
 /**
  * Bootstrap: Mount middleware for session tracking
- * Sessions are managed via api::session.session content type
+ * Sessions are managed via plugin::magic-sessionmanager.session content type
  *
  * NOTE: For multi-instance deployments, consider Redis locks or session store
  */
@@ -102,7 +102,7 @@ module.exports = async ({ strapi }) => {
           }
 
           // Find and terminate session by token
-          const sessions = await strapi.entityService.findMany('api::session.session', {
+          const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
             filters: {
               token: token,
               isActive: true,
@@ -289,7 +289,7 @@ module.exports = async ({ strapi }) => {
 
     strapi.log.info('[magic-sessionmanager] ✅ LastSeen middleware mounted');
     strapi.log.info('[magic-sessionmanager] ✅ Bootstrap complete');
-    strapi.log.info('[magic-sessionmanager] 🎉 Session Manager ready! Sessions stored in api::session.session');
+    strapi.log.info('[magic-sessionmanager] 🎉 Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
     
   } catch (err) {
     strapi.log.error('[magic-sessionmanager] ❌ Bootstrap error:', err);

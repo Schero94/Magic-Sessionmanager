@@ -13,7 +13,7 @@ module.exports = ({ strapi, sessionService }) => {
         const userId = ctx.state.user.id;
         
         // Check if user has ANY active sessions
-        const activeSessions = await strapi.entityService.findMany('api::session.session', {
+        const activeSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
           filters: {
             user: { id: userId },
             isActive: true,

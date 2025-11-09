@@ -104,7 +104,7 @@ module.exports = {
         .service('session');
 
       // Find current session by token
-      const sessions = await strapi.entityService.findMany('api::session.session', {
+      const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
         filters: {
           user: { id: userId },
           token: token,

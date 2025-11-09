@@ -53,7 +53,7 @@
 ### Non-Invasive Architecture
 ✅ **No Core Modifications** - Pure plugin, zero changes to Strapi core  
 ✅ **Runtime Injection** - Middleware-based architecture  
-✅ **DB-Backed** - Uses `api::session.session` content type  
+✅ **DB-Backed** - Uses `plugin::magic-sessionmanager.session` content type  
 ✅ **License-Based** - Premium features via license key  
 
 ---
@@ -185,7 +185,7 @@ Extract from response:
 Block? NO → Continue ✅
 Block? YES → Return 403 Forbidden ❌
        ↓
-Create api::session.session record:
+Create plugin::magic-sessionmanager.session record:
   {
     user: userId,
     token: jwt,          // Access Token
@@ -936,7 +936,7 @@ curl http://localhost:1337/api/users \
    # Look for: [magic-sessionmanager] ✅ Login/Logout interceptor middleware mounted
    ```
 
-3. Check `api::session.session` collection exists:
+3. Check `plugin::magic-sessionmanager.session` collection exists:
    - Go to Admin → Content Manager
    - Look for "Session" collection
 
