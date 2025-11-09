@@ -1,3 +1,10 @@
+## [2.0.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.2...v2.0.3) (2025-11-09)
+
+
+### Bug Fixes
+
+* Export contentTypes in server index to register session schema ([f87fdf4](https://github.com/Schero94/Magic-Sessionmanager/commit/f87fdf465c5f548a6a1b144dc13e596a47e44b0d))
+
 ## [2.0.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.1...v2.0.2) (2025-11-09)
 
 
