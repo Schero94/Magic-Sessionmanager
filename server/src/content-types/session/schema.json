@@ -43,6 +43,10 @@
       "type": "text",
       "private": true
     },
+    "refreshToken": {
+      "type": "text",
+      "private": true
+    },
     "loginTime": {
       "type": "datetime",
       "required": true

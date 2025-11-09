@@ -17,18 +17,19 @@ const { encryptToken, decryptToken, generateSessionId } = require('../utils/encr
 module.exports = ({ strapi }) => ({
   /**
    * Create a new session record
-   * @param {Object} params - { userId, ip, userAgent, token }
+   * @param {Object} params - { userId, ip, userAgent, token, refreshToken }
    * @returns {Promise<Object>} Created session
    */
-  async createSession({ userId, ip = 'unknown', userAgent = 'unknown', token }) {
+  async createSession({ userId, ip = 'unknown', userAgent = 'unknown', token, refreshToken }) {
     try {
       const now = new Date();
       
       // Generate unique session ID
       const sessionId = generateSessionId(userId);
       
-      // Encrypt JWT token before storing
+      // Encrypt JWT tokens before storing (both access and refresh)
       const encryptedToken = token ? encryptToken(token) : null;
+      const encryptedRefreshToken = refreshToken ? encryptToken(refreshToken) : null;
       
       const session = await strapi.entityService.create('plugin::magic-sessionmanager.session', {
         data: {
@@ -38,8 +39,9 @@ module.exports = ({ strapi }) => ({
           loginTime: now,
           lastActive: now,
           isActive: true,
-          token: encryptedToken, // ✅ Encrypted JWT for security
-          sessionId: sessionId,  // ✅ Unique identifier
+          token: encryptedToken,              // ✅ Encrypted Access Token
+          refreshToken: encryptedRefreshToken, // ✅ Encrypted Refresh Token
+          sessionId: sessionId,                // ✅ Unique identifier
         },
       });
 

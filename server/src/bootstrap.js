@@ -235,7 +235,8 @@ module.exports = async ({ strapi }) => {
             userId: user.id,
             ip,
             userAgent,
-            token: ctx.body.jwt, // Store JWT token reference
+            token: ctx.body.jwt,              // Store Access Token (encrypted)
+            refreshToken: ctx.body.refreshToken, // Store Refresh Token (encrypted) if exists
           });
           
           strapi.log.info(`[magic-sessionmanager] ✅ Session created for user ${user.id} (IP: ${ip})`);
@@ -292,6 +293,107 @@ module.exports = async ({ strapi }) => {
     });
 
     strapi.log.info('[magic-sessionmanager] ✅ Login/Logout interceptor middleware mounted');
+
+    // Middleware to block refresh token requests for terminated sessions
+    strapi.server.use(async (ctx, next) => {
+      // Check if this is a refresh token request
+      const isRefreshToken = ctx.path === '/api/auth/refresh-token' && ctx.method === 'POST';
+      
+      if (isRefreshToken) {
+        try {
+          const refreshToken = ctx.request.body?.refreshToken;
+          
+          if (refreshToken) {
+            // Find session with this refresh token
+            const allSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+              filters: {
+                isActive: true,
+              },
+            });
+
+            // Find matching session by decrypting and comparing refresh tokens
+            const matchingSession = allSessions.find(session => {
+              if (!session.refreshToken) return false;
+              try {
+                const decrypted = decryptToken(session.refreshToken);
+                return decrypted === refreshToken;
+              } catch (err) {
+                return false;
+              }
+            });
+
+            if (!matchingSession) {
+              // No active session with this refresh token → Block!
+              strapi.log.warn('[magic-sessionmanager] 🚫 Blocked refresh token request - no active session');
+              ctx.status = 401;
+              ctx.body = {
+                error: {
+                  status: 401,
+                  message: 'Session terminated. Please login again.',
+                  name: 'UnauthorizedError'
+                }
+              };
+              return; // Don't continue
+            }
+            
+            strapi.log.info(`[magic-sessionmanager] ✅ Refresh token allowed for session ${matchingSession.id}`);
+          }
+        } catch (err) {
+          strapi.log.error('[magic-sessionmanager] Error checking refresh token:', err);
+          // On error, allow request to continue (fail-open for availability)
+        }
+      }
+      
+      // Continue with request
+      await next();
+      
+      // AFTER: If refresh token response was successful, update session with new tokens
+      if (isRefreshToken && ctx.status === 200 && ctx.body && ctx.body.jwt) {
+        try {
+          const oldRefreshToken = ctx.request.body?.refreshToken;
+          const newAccessToken = ctx.body.jwt;
+          const newRefreshToken = ctx.body.refreshToken;
+          
+          if (oldRefreshToken) {
+            // Find session and update with new tokens
+            const allSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+              filters: {
+                isActive: true,
+              },
+            });
+
+            const matchingSession = allSessions.find(session => {
+              if (!session.refreshToken) return false;
+              try {
+                const decrypted = decryptToken(session.refreshToken);
+                return decrypted === oldRefreshToken;
+              } catch (err) {
+                return false;
+              }
+            });
+
+            if (matchingSession) {
+              const encryptedToken = newAccessToken ? encryptToken(newAccessToken) : matchingSession.token;
+              const encryptedRefreshToken = newRefreshToken ? encryptToken(newRefreshToken) : matchingSession.refreshToken;
+              
+              await strapi.entityService.update('plugin::magic-sessionmanager.session', matchingSession.id, {
+                data: {
+                  token: encryptedToken,
+                  refreshToken: encryptedRefreshToken,
+                  lastActive: new Date(),
+                },
+              });
+              
+              strapi.log.info(`[magic-sessionmanager] 🔄 Tokens refreshed for session ${matchingSession.id}`);
+            }
+          }
+        } catch (err) {
+          strapi.log.error('[magic-sessionmanager] Error updating refreshed tokens:', err);
+        }
+      }
+    });
+
+    strapi.log.info('[magic-sessionmanager] ✅ Refresh Token interceptor middleware mounted');
 
     // Mount lastSeen update middleware
     strapi.server.use(

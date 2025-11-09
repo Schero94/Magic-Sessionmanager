@@ -349,7 +349,7 @@ Log: "Cleaned up X inactive sessions"
 2. Inactivity timeout triggers cleanup
 3. Admin terminates the session
 
-#### Refresh Tokens ⚠️ **Critical Limitation**
+#### Refresh Tokens ✅ **SOLVED!**
 
 **What are Refresh Tokens?**
 Refresh tokens allow users to get new Access Tokens (JWTs) without re-entering credentials. This enables longer sessions:
@@ -367,78 +367,100 @@ Strapi issues new JWT
 User continues without re-login
 ```
 
-**The Problem:**
-- **Stored:** NO - Refresh tokens are NOT tracked by this plugin
-- **Reason:** Strapi v5 handles refresh tokens in `users-permissions` plugin
-- **Impact:** User can bypass session termination! ⚠️
+**The Solution (v3.2+):**
+- **Stored:** YES - Refresh tokens are encrypted and stored with sessions ✅
+- **Tracked:** YES - Middleware intercepts `/api/auth/refresh-token` requests ✅
+- **Validated:** YES - Checks if session is still active before issuing new tokens ✅
 
-**Scenario:**
+**How It Works:**
+
 ```
-Admin terminates user's session
+Login: User gets JWT + Refresh Token
        ↓
-Session Manager: isActive = false ❌
+Both tokens encrypted and stored in session
        ↓
-User's JWT still valid OR
-User has refresh token
+Admin terminates session
        ↓
-User gets new JWT via refresh token
+Session: isActive = false ❌
        ↓
-Plugin creates NEW session automatically! ⚠️
+User tries to refresh token:
+POST /api/auth/refresh-token
+{ refreshToken: "..." }
        ↓
-User is "logged in" again despite termination
+[Refresh Token Middleware]
+       ↓
+Decrypt all active session refresh tokens
+       ↓
+Find matching session
+       ↓
+Session found but isActive = false?
+  → BLOCK! Return 401 Unauthorized ❌
+  → Message: "Session terminated. Please login again."
+       ↓
+Session found and isActive = true?
+  → ALLOW! ✅
+  → Strapi issues new tokens
+  → Session updated with new encrypted tokens
 ```
 
-**Current Limitation:**
-This plugin **cannot prevent** users with valid refresh tokens from getting new JWTs. The session termination only affects the current JWT token.
+**Security Benefits:**
 
-**Workarounds:**
+✅ **Session termination is FINAL** - User cannot get new tokens  
+✅ **Refresh tokens tracked** - Encrypted & stored securely  
+✅ **Token rotation** - New tokens automatically updated in session  
+✅ **Admin control** - Force logout works even with refresh tokens  
 
-**Option 1: Disable Refresh Tokens (Strict Control)**
+**Configuration:**
+
+Enable refresh tokens in Strapi:
+
 ```typescript
 // src/config/plugins.ts
 export default () => ({
   'users-permissions': {
     config: {
-      jwt: {
-        expiresIn: '30m',
-        // Don't issue refresh tokens
+      jwtManagement: 'refresh',  // Enable refresh tokens
+      sessions: {
+        accessTokenLifespan: 3600,    // 1 hour (in seconds)
+        maxRefreshTokenLifespan: 2592000,  // 30 days
+        idleRefreshTokenLifespan: 604800,  // 7 days idle
       },
     },
   },
   'magic-sessionmanager': {
+    enabled: true,
     config: {
-      inactivityTimeout: 15 * 60 * 1000, // < JWT expiration
+      inactivityTimeout: 15 * 60 * 1000, // 15 minutes
     },
   },
 });
 ```
 
-**Option 2: Short Refresh Token Expiry**
-```typescript
-'users-permissions': {
-  config: {
-    jwt: {
-      expiresIn: '15m',        // Short Access Token
-      refreshExpiresIn: '30m', // Short Refresh Token
-    },
-  },
-}
+**Testing Refresh Token Blocking:**
+
+```bash
+# 1. Login and get tokens
+curl -X POST http://localhost:1337/api/auth/local \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"user@example.com","password":"pass"}' 
+
+# Save both tokens:
+ACCESS_TOKEN="eyJhbGci..."
+REFRESH_TOKEN="abc123..."
+
+# 2. Admin terminates session
+# Go to Admin → Sessions → Find session → Terminate
+
+# 3. Try to refresh token
+curl -X POST http://localhost:1337/api/auth/refresh-token \
+  -H "Content-Type: application/json" \
+  -d "{\"refreshToken\":\"$REFRESH_TOKEN\"}"
+
+# Expected: 401 Unauthorized
+# "Session terminated. Please login again."
 ```
 
-**Option 3: Accept the Limitation**
-Understand that:
-- Session termination stops the **current** JWT
-- Users with refresh tokens can get **new** JWTs
-- New JWTs create **new** sessions
-- Use session analytics to detect unusual patterns
-
-**Future Enhancement:**
-To fully block users, the plugin would need to:
-1. Track refresh tokens (complex)
-2. Hook into Strapi's token refresh endpoint
-3. Validate against active sessions before issuing new JWTs
-
-This is planned for a future version.
+**This completely solves the refresh token security gap!** 🔒
 
 ### Multi-Login Behavior
 
