@@ -462,6 +462,49 @@ curl -X POST http://localhost:1337/api/auth/refresh-token \
 
 **This completely solves the refresh token security gap!** 🔒
 
+### Without Refresh Tokens (Default Behavior)
+
+If you **don't enable** refresh tokens (`jwtManagement: 'refresh'`):
+
+```
+Login: User gets JWT (no refresh token)
+       ↓
+JWT stored in session (encrypted)
+       ↓
+JWT expires after 30 min (or configured time)
+       ↓
+User must re-login ❌
+       ↓
+No automatic token refresh
+```
+
+**Behavior:**
+- ✅ Session Manager works normally
+- ✅ Sessions tracked, logout works
+- ✅ Force logout works (no refresh token bypass possible)
+- ⚠️ Users must re-login when JWT expires
+- ℹ️ No refresh token middleware runs (skipped)
+
+**Logs when refresh tokens disabled:**
+```
+[magic-sessionmanager] ✅ Session created for user 1 (IP: 192.168.1.1)
+[magic-sessionmanager] ℹ️  No refresh token received (JWT management not enabled)
+[magic-sessionmanager] ✅ Refresh Token interceptor middleware mounted
+```
+
+**Trade-offs:**
+
+| Feature | With Refresh Tokens | Without Refresh Tokens |
+|---------|---------------------|------------------------|
+| User Experience | ✅ Seamless (auto-refresh) | ⚠️ Must re-login |
+| Security | ✅ Tracked & blockable | ✅ No bypass risk |
+| Session Duration | Long (days/weeks) | Short (hours) |
+| Force Logout | ✅ Complete | ✅ Complete |
+
+**Recommendation:**
+
+**Enable refresh tokens** for better UX + use this plugin to secure them! 🔒
+
 **Testing in Postman:**
 
 ```
