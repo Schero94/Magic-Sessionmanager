@@ -484,9 +484,36 @@ A: Not yet, but it's planned for future versions!
 
 ## 📄 License
 
-**MIT License** - Free to use!
+**MIT License** - Free to use for personal and commercial projects!
 
 **Copyright © 2025 Schero D.**
+
+### Important License Restriction
+
+This plugin is **free and open source**, BUT:
+
+⚠️ **You CANNOT modify the license validation system**
+
+This means:
+- ❌ Cannot remove `license-guard.js`
+- ❌ Cannot bypass license activation
+- ❌ Cannot disable license checks
+- ❌ Cannot modify license-related endpoints
+
+**Why?** The license system ensures:
+- Quality and ongoing support
+- Spam prevention
+- Usage analytics for improvements
+- Fair use tracking
+
+**What you CAN do:**
+- ✅ Use freely (personal & commercial)
+- ✅ View and study source code
+- ✅ Report issues and contribute
+- ✅ Deploy in production without fees
+- ✅ Integrate in your projects
+
+See [LICENSE](./LICENSE) and [COPYRIGHT_NOTICE.txt](./COPYRIGHT_NOTICE.txt) for full terms.
 
 ---
 

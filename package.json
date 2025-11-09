@@ -33,6 +33,7 @@
     "strapi-server.js",
     "README.md",
     "LICENSE",
+    "COPYRIGHT_NOTICE.txt",
     "pics"
   ],
   "scripts": {

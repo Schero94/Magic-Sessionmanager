@@ -1,0 +1,20 @@
+/**
+ * Magic Session Manager - Advanced Session Management for Strapi v5
+ * 
+ * Copyright (c) 2025 Schero D.
+ * 
+ * Licensed under the MIT License
+ * 
+ * This plugin is free to use for personal and commercial projects.
+ * 
+ * IMPORTANT RESTRICTION:
+ * The license validation system (license-guard.js and related components)
+ * must remain intact and functional. Removing or bypassing this system
+ * is strictly prohibited.
+ * 
+ * See LICENSE file for full terms.
+ * 
+ * Repository: https://github.com/Schero94/Magic-Sessionmanager
+ * Issues: https://github.com/Schero94/Magic-Sessionmanager/issues
+ */
+
