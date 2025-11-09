@@ -23,8 +23,7 @@
     "user": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "plugin::users-permissions.user",
-      "inversedBy": "sessions"
+      "target": "plugin::users-permissions.user"
     },
     "ipAddress": {
       "type": "string",
