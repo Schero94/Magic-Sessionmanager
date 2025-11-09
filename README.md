@@ -11,6 +11,19 @@ Track logins, monitor active users, and secure your app with one simple plugin. 
 
 ## 📸 What It Looks Like
 
+### Homepage Widget - Quick Stats at a Glance
+
+![Online Users Widget](pics/widget.png)
+
+**On your Strapi homepage:**
+- See online users instantly
+- Active in last 15/30 minutes
+- Total users count
+- Blocked users count
+- No need to navigate anywhere!
+
+---
+
 ### Main Dashboard - See All Active Sessions
 
 ![Dashboard](pics/dashboard.png)
