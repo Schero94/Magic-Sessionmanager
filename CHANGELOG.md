@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v1.0.0...v1.0.1) (2025-11-09)
+
+
+### Bug Fixes
+
+* Fix styled-components v6 keyframes compatibility ([d3cfafc](https://github.com/Schero94/Magic-Sessionmanager/commit/d3cfafc582bee805a0af55ce83f5c37b578d6655))
+
 # 1.0.0 (2025-11-09)
 
 
