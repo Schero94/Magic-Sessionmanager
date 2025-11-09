@@ -1,3 +1,10 @@
+## [3.2.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.2.0...v3.2.1) (2025-11-09)
+
+
+### Bug Fixes
+
+* Allow admin users to view any user's sessions (fixes 403 error) ([87994de](https://github.com/Schero94/Magic-Sessionmanager/commit/87994deac122030dffa306d895081a970d49de3b))
+
 # [3.2.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.1.0...v3.2.0) (2025-11-09)
 
 
