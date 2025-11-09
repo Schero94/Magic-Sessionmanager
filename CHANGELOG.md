@@ -1,3 +1,10 @@
+# [3.1.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.0.2...v3.1.0) (2025-11-09)
+
+
+### Features
+
+* Add JWT encryption and unique session IDs for enhanced security ([9c6e265](https://github.com/Schero94/Magic-Sessionmanager/commit/9c6e265c4f3e0342d9d0929bac320cb812a8aff6))
+
 ## [3.0.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.0.1...v3.0.2) (2025-11-09)
 
 
