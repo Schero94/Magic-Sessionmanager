@@ -1,3 +1,10 @@
+# [3.6.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.5.0...v3.6.0) (2025-11-09)
+
+
+### Features
+
+* Add license protection clause matching MagicMark ([0bc7508](https://github.com/Schero94/Magic-Sessionmanager/commit/0bc7508e5cd0c41286faa681dbe6987b68292539))
+
 # [3.5.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.4.0...v3.5.0) (2025-11-09)
 
 
