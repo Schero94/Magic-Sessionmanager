@@ -3,7 +3,7 @@
 const session = require('./session/schema.json');
 
 module.exports = {
-  'plugin::magic-sessionmanager.session': {
+  session: {
     schema: session,
   },
 };
