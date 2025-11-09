@@ -30,7 +30,7 @@ const SessionInfoCard = ({ id, model }) => {
       }
 
       try {
-        const { data } = await get(`/magic-sessionmanager/admin/user/${id}/sessions`);
+        const { data } = await get(`/magic-sessionmanager/user/${id}/sessions`);
           setSessions(data.data || []);
       } catch (err) {
         console.error('[SessionInfoCard] Error fetching sessions:', err);
