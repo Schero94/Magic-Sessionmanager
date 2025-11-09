@@ -26,7 +26,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
 
     const fetchData = async () => {
       try {
-        const { data } = await get(`/api/magic-sessionmanager/user/${userId}/sessions`);
+        const { data } = await get(`/magic-sessionmanager/admin/user/${userId}/sessions`);
           // Filter by truly active (not just isActive, but also within timeout)
           const activeSessions = (data.data || []).filter(s => s.isTrulyActive);
           setSessions(activeSessions);
