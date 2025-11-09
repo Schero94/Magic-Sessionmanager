@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.1...v2.0.2) (2025-11-09)
+
+
+### Bug Fixes
+
+* Include server and admin source files in NPM package ([8cbe0fd](https://github.com/Schero94/Magic-Sessionmanager/commit/8cbe0fd3e13e126a24d6b6c39e4a2150a136d881))
+
 ## [2.0.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.0...v2.0.1) (2025-11-09)
 
 
