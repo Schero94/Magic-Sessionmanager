@@ -32,7 +32,8 @@
     "strapi-admin.js",
     "strapi-server.js",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "pics"
   ],
   "scripts": {
     "build": "strapi-plugin build",
