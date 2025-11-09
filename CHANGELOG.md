@@ -1,3 +1,10 @@
+# [3.4.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.3.2...v3.4.0) (2025-11-09)
+
+
+### Features
+
+* Add screenshots for README documentation ([3c59705](https://github.com/Schero94/Magic-Sessionmanager/commit/3c597051914f1992d6bc1d0c3294ee010ff53bf6))
+
 ## [3.3.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.3.1...v3.3.2) (2025-11-09)
 
 
