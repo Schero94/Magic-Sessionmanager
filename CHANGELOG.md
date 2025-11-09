@@ -1,3 +1,24 @@
+# [3.0.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.1.0...v3.0.0) (2025-11-09)
+
+
+### Bug Fixes
+
+* Change collectionName to magic_sessions to avoid conflicts ([9fd69e6](https://github.com/Schero94/Magic-Sessionmanager/commit/9fd69e6291e705376bdfbb18fc41d6ca236e7893))
+
+
+### BREAKING CHANGES
+
+* Database table name changed from 'sessions' to 'magic_sessions'
+
+The generic name 'sessions' can conflict with other plugins or Strapi internals.
+Using 'magic_sessions' ensures no naming conflicts.
+
+- Changed: collectionName from 'sessions' to 'magic_sessions'
+- Prevents: 'DB table sessions already exists' error
+- Better namespacing for plugin data
+
+Existing users (if any) will need to migrate data or clear the database.
+
 # [2.1.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.5...v2.1.0) (2025-11-09)
 
 
