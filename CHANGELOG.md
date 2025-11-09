@@ -1,3 +1,10 @@
+## [3.0.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.0.0...v3.0.1) (2025-11-09)
+
+
+### Bug Fixes
+
+* Use admin API routes in admin components (fixes 401 error) ([98e2c88](https://github.com/Schero94/Magic-Sessionmanager/commit/98e2c88f97aaf821ebaf51a5da225ed9df5cf15b))
+
 # [3.0.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.1.0...v3.0.0) (2025-11-09)
 
 
