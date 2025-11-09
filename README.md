@@ -360,7 +360,7 @@ Access Token expires after 30 min
 User still has Refresh Token
        ↓
 User requests new Access Token:
-POST /api/auth/refresh-token
+POST /api/auth/refresh
        ↓
 Strapi issues new JWT
        ↓
@@ -369,7 +369,7 @@ User continues without re-login
 
 **The Solution (v3.2+):**
 - **Stored:** YES - Refresh tokens are encrypted and stored with sessions ✅
-- **Tracked:** YES - Middleware intercepts `/api/auth/refresh-token` requests ✅
+- **Tracked:** YES - Middleware intercepts `/api/auth/refresh` requests ✅
 - **Validated:** YES - Checks if session is still active before issuing new tokens ✅
 
 **How It Works:**
@@ -384,7 +384,7 @@ Admin terminates session
 Session: isActive = false ❌
        ↓
 User tries to refresh token:
-POST /api/auth/refresh-token
+POST /api/auth/refresh
 { refreshToken: "..." }
        ↓
 [Refresh Token Middleware]
@@ -452,7 +452,7 @@ REFRESH_TOKEN="abc123..."
 # Go to Admin → Sessions → Find session → Terminate
 
 # 3. Try to refresh token
-curl -X POST http://localhost:1337/api/auth/refresh-token \
+curl -X POST http://localhost:1337/api/auth/refresh \
   -H "Content-Type: application/json" \
   -d "{\"refreshToken\":\"$REFRESH_TOKEN\"}"
 
@@ -492,7 +492,7 @@ No automatic token refresh
 [magic-sessionmanager] ✅ Refresh Token interceptor middleware mounted
 ```
 
-**If you try to call `/api/auth/refresh-token` without enabling it:**
+**If you try to call `/api/auth/refresh` without enabling it:**
 - Endpoint returns **404 Not Found** (Strapi doesn't create the route)
 - Or returns **401 Unauthorized** if route exists but tokens not configured
 - This is expected and correct behavior
@@ -518,7 +518,7 @@ No automatic token refresh
    → Save: jwt, refreshToken, session_id
 
 2. Refresh Token (should work)
-   POST /api/auth/refresh-token
+   POST /api/auth/refresh
    Body: { "refreshToken": "..." }
    → Returns: New jwt + refreshToken ✅
 
@@ -526,7 +526,7 @@ No automatic token refresh
    POST /magic-sessionmanager/sessions/:id/terminate
    
 4. Try refresh token again
-   POST /api/auth/refresh-token
+   POST /api/auth/refresh
    Body: { "refreshToken": "..." }
    → Returns: 401 Unauthorized ✅
    → Message: "Session terminated. Please login again."

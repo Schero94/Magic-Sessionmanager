@@ -296,8 +296,8 @@ module.exports = async ({ strapi }) => {
 
     // Middleware to block refresh token requests for terminated sessions
     strapi.server.use(async (ctx, next) => {
-      // Check if this is a refresh token request
-      const isRefreshToken = ctx.path === '/api/auth/refresh-token' && ctx.method === 'POST';
+      // Check if this is a refresh token request (Strapi v5: /api/auth/refresh)
+      const isRefreshToken = ctx.path === '/api/auth/refresh' && ctx.method === 'POST';
       
       if (isRefreshToken) {
         try {
