@@ -1,3 +1,10 @@
+## [3.0.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.0.1...v3.0.2) (2025-11-09)
+
+
+### Bug Fixes
+
+* Correct admin API route paths (remove /admin/ prefix) ([b238e85](https://github.com/Schero94/Magic-Sessionmanager/commit/b238e857c0cc5ba54f273eb2abe707af00bccfd1))
+
 ## [3.0.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.0.0...v3.0.1) (2025-11-09)
 
 
