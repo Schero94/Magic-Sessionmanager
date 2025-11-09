@@ -1,3 +1,10 @@
+## [2.0.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.4...v2.0.5) (2025-11-09)
+
+
+### Bug Fixes
+
+* Remove inversedBy from user relation (one-way relation) ([ed1f4f7](https://github.com/Schero94/Magic-Sessionmanager/commit/ed1f4f78d05e750e631a5e9b17442f8bb50060be))
+
 ## [2.0.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.3...v2.0.4) (2025-11-09)
 
 
