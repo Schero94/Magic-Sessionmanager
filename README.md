@@ -462,6 +462,46 @@ curl -X POST http://localhost:1337/api/auth/refresh-token \
 
 **This completely solves the refresh token security gap!** 🔒
 
+**Testing in Postman:**
+
+```
+1. Login (get JWT + refreshToken)
+   POST /api/auth/local
+   → Save: jwt, refreshToken, session_id
+
+2. Refresh Token (should work)
+   POST /api/auth/refresh-token
+   Body: { "refreshToken": "..." }
+   → Returns: New jwt + refreshToken ✅
+
+3. Admin terminates session
+   POST /magic-sessionmanager/sessions/:id/terminate
+   
+4. Try refresh token again
+   POST /api/auth/refresh-token
+   Body: { "refreshToken": "..." }
+   → Returns: 401 Unauthorized ✅
+   → Message: "Session terminated. Please login again."
+```
+
+**Run Automated Test:**
+
+```bash
+cd /path/to/magic-sessionmanager
+
+# Set environment variables
+export TEST_USER_EMAIL=user@example.com
+export TEST_USER_PASSWORD=password123
+export ADMIN_EMAIL=admin@example.com
+export ADMIN_PASSWORD=adminpass
+
+# Run test suite
+node test-session-manager.js
+
+# Look for "USER TEST 5: Blocked Refresh Token Test"
+# Should show: ✅ Refresh token BLOCKED as expected!
+```
+
 ### Multi-Login Behavior
 
 **Strapi Default:** Allows multiple simultaneous logins
