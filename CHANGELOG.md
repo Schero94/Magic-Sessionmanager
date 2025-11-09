@@ -1,3 +1,25 @@
+# [2.0.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v1.0.1...v2.0.0) (2025-11-09)
+
+
+### Bug Fixes
+
+* Correct content-type UID from api:: to plugin:: namespace ([7451136](https://github.com/Schero94/Magic-Sessionmanager/commit/7451136fbaeaf742873dd80a6780ac6dfe27ffb9))
+
+
+### BREAKING CHANGES
+
+* Changed all references from 'api::session.session' to 'plugin::magic-sessionmanager.session'
+
+- Fixed: Cannot destructure property 'kind' runtime error
+- Updated: session.js service with correct UID
+- Updated: session.js controller with correct UID
+- Updated: bootstrap.js middleware with correct UID
+- Updated: last-seen.js middleware with correct UID
+- Updated: README.md documentation with correct UID
+
+This fixes the error when using plugin via NPM:
+'Cannot destructure property kind of strapi.getModel(...) as it is undefined'
+
 ## [1.0.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v1.0.0...v1.0.1) (2025-11-09)
 
 
