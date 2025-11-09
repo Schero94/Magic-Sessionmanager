@@ -8,6 +8,7 @@
  */
 
 const getClientIp = require('./utils/getClientIp');
+const { encryptToken, decryptToken } = require('./utils/encryption');
 
 module.exports = async ({ strapi }) => {
   strapi.log.info('[magic-sessionmanager] 🚀 Bootstrap starting...');
@@ -101,18 +102,28 @@ module.exports = async ({ strapi }) => {
             return;
           }
 
-          // Find and terminate session by token
-          const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+          // Find session by decrypting tokens and matching
+          // Since tokens are encrypted, we need to get all active sessions and check each one
+          const allSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
             filters: {
-              token: token,
               isActive: true,
             },
-            limit: 1,
           });
 
-          if (sessions.length > 0) {
-            await sessionService.terminateSession({ sessionId: sessions[0].id });
-            strapi.log.info(`[magic-sessionmanager] 🚪 Logout via /api/auth/logout - Session ${sessions[0].id} terminated`);
+          // Find matching session by decrypting and comparing tokens
+          const matchingSession = allSessions.find(session => {
+            if (!session.token) return false;
+            try {
+              const decrypted = decryptToken(session.token);
+              return decrypted === token;
+            } catch (err) {
+              return false;
+            }
+          });
+
+          if (matchingSession) {
+            await sessionService.terminateSession({ sessionId: matchingSession.id });
+            strapi.log.info(`[magic-sessionmanager] 🚪 Logout via /api/auth/logout - Session ${matchingSession.id} terminated`);
           }
 
           ctx.status = 200;

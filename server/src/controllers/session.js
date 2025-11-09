@@ -1,5 +1,7 @@
 'use strict';
 
+const { decryptToken } = require('../utils/encryption');
+
 /**
  * Session Controller
  * Handles HTTP requests for session management
@@ -103,19 +105,29 @@ module.exports = {
         .plugin('magic-sessionmanager')
         .service('session');
 
-      // Find current session by token
+      // Find current session by decrypting and comparing tokens
       const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
         filters: {
           user: { id: userId },
-          token: token,
           isActive: true,
         },
       });
 
-      if (sessions.length > 0) {
+      // Find matching session by decrypting tokens
+      const matchingSession = sessions.find(session => {
+        if (!session.token) return false;
+        try {
+          const decrypted = decryptToken(session.token);
+          return decrypted === token;
+        } catch (err) {
+          return false;
+        }
+      });
+
+      if (matchingSession) {
         // Terminate only the current session
-        await sessionService.terminateSession({ sessionId: sessions[0].id });
-        strapi.log.info(`[magic-sessionmanager] User ${userId} logged out (session ${sessions[0].id})`);
+        await sessionService.terminateSession({ sessionId: matchingSession.id });
+        strapi.log.info(`[magic-sessionmanager] User ${userId} logged out (session ${matchingSession.id})`);
       }
 
       ctx.body = {

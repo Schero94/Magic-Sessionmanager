@@ -1,10 +1,14 @@
 'use strict';
 
+const { encryptToken, decryptToken, generateSessionId } = require('../utils/encryption');
+
 /**
  * Session Service
  * Uses plugin::magic-sessionmanager.session content type with relation to users
  * All session tracking happens in the Session collection
  *
+ * SECURITY: JWT tokens are encrypted before storing in database using AES-256-GCM
+ * 
  * TODO: For production multi-instance deployments, use Redis for:
  *   - Session store instead of DB
  *   - Rate limiting locks
@@ -20,6 +24,12 @@ module.exports = ({ strapi }) => ({
     try {
       const now = new Date();
       
+      // Generate unique session ID
+      const sessionId = generateSessionId(userId);
+      
+      // Encrypt JWT token before storing
+      const encryptedToken = token ? encryptToken(token) : null;
+      
       const session = await strapi.entityService.create('plugin::magic-sessionmanager.session', {
         data: {
           user: userId,
@@ -28,11 +38,12 @@ module.exports = ({ strapi }) => ({
           loginTime: now,
           lastActive: now,
           isActive: true,
-          token: token, // Store JWT for logout matching
+          token: encryptedToken, // ✅ Encrypted JWT for security
+          sessionId: sessionId,  // ✅ Unique identifier
         },
       });
 
-      strapi.log.info(`[magic-sessionmanager] ✅ Session ${session.id} created for user ${userId}`);
+      strapi.log.info(`[magic-sessionmanager] ✅ Session ${session.id} (${sessionId}) created for user ${userId}`);
 
       return session;
     } catch (err) {

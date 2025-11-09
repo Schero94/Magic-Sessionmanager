@@ -20,6 +20,11 @@
     }
   },
   "attributes": {
+    "sessionId": {
+      "type": "string",
+      "unique": true,
+      "required": true
+    },
     "user": {
       "type": "relation",
       "relation": "manyToOne",
