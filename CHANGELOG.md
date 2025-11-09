@@ -1,3 +1,10 @@
+## [2.0.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.3...v2.0.4) (2025-11-09)
+
+
+### Bug Fixes
+
+* Use short key 'session' in content-types export (Strapi v5 requirement) ([0b5343c](https://github.com/Schero94/Magic-Sessionmanager/commit/0b5343c60b611fd9b94d13402eb19d90cbc3d718))
+
 ## [2.0.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.2...v2.0.3) (2025-11-09)
 
 
