@@ -1,3 +1,10 @@
+# [3.3.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.2.1...v3.3.0) (2025-11-09)
+
+
+### Features
+
+* Complete Refresh Token tracking and blocking system ([0451590](https://github.com/Schero94/Magic-Sessionmanager/commit/0451590177e610be26f1120d1327f6a5aac2c8a4))
+
 ## [3.2.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.2.0...v3.2.1) (2025-11-09)
 
 
