@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.5...v2.1.0) (2025-11-09)
+
+
+### Features
+
+* Hide session collection from Content Manager ([6a566a9](https://github.com/Schero94/Magic-Sessionmanager/commit/6a566a94b3d7fc6e99d4ea7bd3d85bb75bdbde39))
+
 ## [2.0.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v2.0.4...v2.0.5) (2025-11-09)
 
 
