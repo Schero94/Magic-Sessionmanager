@@ -548,7 +548,18 @@ node test-session-manager.js
 
 # Look for "USER TEST 5: Blocked Refresh Token Test"
 # Should show: ✅ Refresh token BLOCKED as expected!
+
+# Note: Tests include delays to avoid rate limiting
+# Total runtime: ~30-40 seconds
 ```
+
+**Troubleshooting Tests:**
+
+If you get "Too many requests":
+- Tests include 1-3 second delays between requests
+- Strapi may have rate limiting enabled
+- Wait 1-2 minutes and run tests again
+- Or run individual tests instead of full suite
 
 ### Multi-Login Behavior
 
