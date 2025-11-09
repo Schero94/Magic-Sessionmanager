@@ -1,0 +1,76 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sessions",
+  "info": {
+    "singularName": "session",
+    "pluralName": "sessions",
+    "displayName": "Session",
+    "description": "User session tracking with IP, device, and activity information"
+  },
+  "options": {
+    "draftAndPublish": false,
+    "comment": ""
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-type-builder": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "sessions"
+    },
+    "ipAddress": {
+      "type": "string",
+      "maxLength": 45,
+      "required": true
+    },
+    "userAgent": {
+      "type": "text",
+      "maxLength": 500
+    },
+    "token": {
+      "type": "text",
+      "private": true
+    },
+    "loginTime": {
+      "type": "datetime",
+      "required": true
+    },
+    "logoutTime": {
+      "type": "datetime"
+    },
+    "lastActive": {
+      "type": "datetime"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "geoLocation": {
+      "type": "json"
+    },
+    "securityScore": {
+      "type": "integer",
+      "min": 0,
+      "max": 100
+    },
+    "deviceType": {
+      "type": "string"
+    },
+    "browserName": {
+      "type": "string"
+    },
+    "osName": {
+      "type": "string"
+    }
+  }
+}
+
