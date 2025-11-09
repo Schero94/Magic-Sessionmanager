@@ -1,3 +1,10 @@
+# [3.5.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.4.0...v3.5.0) (2025-11-09)
+
+
+### Features
+
+* Add homepage widget screenshot to README ([ee6b7f6](https://github.com/Schero94/Magic-Sessionmanager/commit/ee6b7f631b2ea9b5aa2aabea8be9914ca020ec26))
+
 # [3.4.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.3.2...v3.4.0) (2025-11-09)
 
 
