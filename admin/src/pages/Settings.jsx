@@ -366,6 +366,20 @@ Login Details:
   },
 });
 
+// ================ HELPER FUNCTIONS ================
+const generateSecureKey = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+  let key = '';
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  
+  for (let i = 0; i < 32; i++) {
+    key += chars[array[i] % chars.length];
+  }
+  
+  return key;
+};
+
 const SettingsPage = () => {
   const { get, post, put } = useFetchClient();
   const { toggleNotification } = useNotification();
@@ -375,6 +389,8 @@ const SettingsPage = () => {
   const [hasChanges, setHasChanges] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [activeTemplateTab, setActiveTemplateTab] = useState('suspiciousLogin');
+  const [encryptionKey, setEncryptionKey] = useState('');
+  const [showEncryptionKey, setShowEncryptionKey] = useState(false);
   
   const [settings, setSettings] = useState({
     inactivityTimeout: 15,
@@ -772,6 +788,136 @@ const SettingsPage = () => {
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
                   🔒 SECURITY OPTIONS
                 </Typography>
+
+                {/* Encryption Key Generator */}
+                <Box 
+                  background="neutral0" 
+                  padding={6} 
+                  style={{ 
+                    borderRadius: theme.borderRadius.lg, 
+                    marginBottom: '32px',
+                    border: `2px solid ${theme.colors.primary[100]}`,
+                    background: `linear-gradient(135deg, ${theme.colors.neutral[0]} 0%, ${theme.colors.primary[50]} 100%)`
+                  }}
+                >
+                  <Flex direction="column" gap={4}>
+                    <Flex alignItems="center" gap={3}>
+                      <Shield style={{ width: 24, height: 24, color: theme.colors.primary[600] }} />
+                      <Typography variant="delta" fontWeight="bold">
+                        JWT Encryption Key Generator
+                      </Typography>
+                    </Flex>
+                    
+                    <Typography variant="omega" textColor="neutral600" style={{ lineHeight: 1.6 }}>
+                      Generate a secure 32-character encryption key for JWT token storage.
+                      This key is used to encrypt tokens before saving them to the database.
+                    </Typography>
+
+                    <Alert 
+                      variant="default" 
+                      title="Important"
+                      style={{ marginTop: 8 }}
+                    >
+                      Add this key to your <code>.env</code> file as <strong>SESSION_ENCRYPTION_KEY</strong> for production.
+                    </Alert>
+
+                    <Flex gap={3} alignItems="flex-end">
+                      <Box style={{ flex: 1 }}>
+                        <TextInput
+                          label="Generated Encryption Key"
+                          value={encryptionKey}
+                          onChange={(e) => setEncryptionKey(e.target.value)}
+                          placeholder="Click 'Generate Key' to create a secure key"
+                          type={showEncryptionKey ? 'text' : 'password'}
+                        />
+                      </Box>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setShowEncryptionKey(!showEncryptionKey)}
+                        size="L"
+                      >
+                        {showEncryptionKey ? 'Hide' : 'Show'}
+                      </Button>
+                    </Flex>
+
+                    <Flex gap={3}>
+                      <Button
+                        variant="default"
+                        startIcon={<Code />}
+                        onClick={() => {
+                          const key = generateSecureKey();
+                          setEncryptionKey(key);
+                          setShowEncryptionKey(true);
+                          toggleNotification({
+                            type: 'success',
+                            message: '32-character encryption key generated!'
+                          });
+                        }}
+                        size="L"
+                      >
+                        Generate Key
+                      </Button>
+                      
+                      <Button
+                        variant="tertiary"
+                        startIcon={<Duplicate />}
+                        onClick={() => {
+                          if (encryptionKey) {
+                            navigator.clipboard.writeText(encryptionKey);
+                            toggleNotification({
+                              type: 'success',
+                              message: 'Encryption key copied to clipboard!'
+                            });
+                          }
+                        }}
+                        disabled={!encryptionKey}
+                        size="L"
+                      >
+                        Copy to Clipboard
+                      </Button>
+
+                      <Button
+                        variant="tertiary"
+                        startIcon={<Duplicate />}
+                        onClick={() => {
+                          if (encryptionKey) {
+                            const envLine = `SESSION_ENCRYPTION_KEY=${encryptionKey}`;
+                            navigator.clipboard.writeText(envLine);
+                            toggleNotification({
+                              type: 'success',
+                              message: 'Copied as .env format!'
+                            });
+                          }
+                        }}
+                        disabled={!encryptionKey}
+                        size="L"
+                      >
+                        Copy for .env
+                      </Button>
+                    </Flex>
+
+                    {encryptionKey && (
+                      <Box 
+                        padding={4} 
+                        background="neutral100" 
+                        style={{ 
+                          borderRadius: theme.borderRadius.md,
+                          border: '1px solid ' + theme.colors.neutral[200],
+                          fontFamily: 'monospace',
+                          fontSize: '12px',
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        <Typography variant="omega" fontWeight="bold" style={{ marginBottom: 8, display: 'block' }}>
+                          Add to .env file:
+                        </Typography>
+                        <code style={{ color: theme.colors.primary[700] }}>
+                          SESSION_ENCRYPTION_KEY={encryptionKey}
+                        </code>
+                      </Box>
+                    )}
+                  </Flex>
+                </Box>
                 
                 {/* Feature Toggles */}
                 <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>

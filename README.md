@@ -101,11 +101,33 @@ npm run build
 npm run develop
 ```
 
-### 4. Access Admin Dashboard
+### 4. Configure Encryption (Important!) 🔐
+
+Generate a secure encryption key for JWT token storage:
+
+```bash
+# Option 1: Use Admin Panel
+# Go to Admin → Sessions → Settings → Security Settings
+# Click "Generate Key" and copy to .env
+
+# Option 2: Generate manually
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# Add to .env file:
+SESSION_ENCRYPTION_KEY=your-generated-32-char-key-here
+```
+
+**Why this is important:**
+- JWT tokens are encrypted before storing in database
+- Prevents token exposure if database is compromised
+- Uses AES-256-GCM encryption standard
+
+### 5. Access Admin Dashboard
 
 - Navigate to Strapi Admin: `http://localhost:1337/admin`
 - Find **Sessions** in the left sidebar under plugins
 - Start with the **License** tab to activate your license
+- Go to **Settings → Security** to generate your encryption key
 
 ---
 
@@ -696,6 +718,104 @@ Available through Admin UI **Settings → Sessions → Settings**:
   slackWebhookUrl: "https://hooks.slack.com/services/...",
 }
 ```
+
+---
+
+## 🔐 JWT Token Security
+
+### Encryption
+
+All JWT tokens are **encrypted before storing** in the database using **AES-256-GCM** encryption.
+
+#### Why Encrypt Tokens?
+
+```
+❌ Without Encryption:
+Database compromised → Attacker sees JWTs → Can impersonate users!
+
+✅ With Encryption:
+Database compromised → Attacker sees encrypted data → Useless without key!
+```
+
+#### How It Works
+
+```
+Login: User gets JWT
+       ↓
+JWT: "eyJhbGciOiJIUzI1NiIs..."
+       ↓
+[Encrypt with AES-256-GCM]
+       ↓
+Encrypted: "a3f7b2c1:8c4d9e2a:f2a5b8c3d4e5f6a7..."
+       ↓
+Stored in Database (secure!)
+
+Logout: User sends JWT
+       ↓
+[Fetch all active sessions from DB]
+       ↓
+[Decrypt each token]
+       ↓
+[Compare with user's JWT]
+       ↓
+Match found → Terminate session ✅
+```
+
+#### Configuration
+
+**Generate Encryption Key (Admin Panel):**
+
+1. Go to **Admin → Sessions → Settings**
+2. Open **Security Settings** accordion
+3. Find **JWT Encryption Key Generator**
+4. Click **"Generate Key"**
+5. Copy key with **"Copy for .env"** button
+6. Add to your `.env` file
+
+**Or generate manually:**
+
+```bash
+# Generate secure 32-byte key
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# Add to .env
+SESSION_ENCRYPTION_KEY=aBc123XyZ...your-32-char-key
+```
+
+**Fallback Behavior:**
+
+If `SESSION_ENCRYPTION_KEY` is not set:
+- Plugin uses `APP_KEYS` or `API_TOKEN_SALT` as fallback
+- ⚠️ Warning logged on startup
+- Still encrypted, but key is derived from Strapi's keys
+
+**Production Recommendation:**
+Always use a dedicated `SESSION_ENCRYPTION_KEY` for better security isolation.
+
+#### Security Details
+
+| Feature | Value |
+|---------|-------|
+| Algorithm | AES-256-GCM |
+| Key Size | 256 bits (32 bytes) |
+| IV Length | 128 bits (16 bytes) |
+| Auth Tag | 128 bits (16 bytes) |
+| Format | `iv:authTag:encryptedData` (hex) |
+
+### Unique Session IDs
+
+Each session gets a cryptographically unique identifier:
+
+```javascript
+sessionId: "sess_lx3k7_4f2a8b3c_a1b2c3d4e5f6"
+//          prefix^  ^timestamp  ^user-hash  ^random-bytes
+```
+
+**Benefits:**
+- ✅ No collisions across sessions
+- ✅ Traceable session identifiers
+- ✅ Independent from database IDs
+- ✅ URL-safe for future features
 
 ---
 
