@@ -1,0 +1,21 @@
+{
+  "plugin.name": "Gerenciador de Sessões",
+  "plugin.description": "Rastreamento de login/logout e atividade de usuários",
+  "settings.section": "Gerenciador de Sessões",
+  "settings.sessions": "Sessões Ativas",
+  "settings.emailTemplates.title": "Modelos de Email",
+  "settings.emailTemplates.description": "Personalizar modelos de notificação por email com variáveis dinâmicas",
+  "settings.emailTemplates.validate": "Validar",
+  "settings.emailTemplates.loadDefault": "Carregar Modelo Padrão",
+  "settings.emailTemplates.subject": "Assunto do Email",
+  "settings.emailTemplates.htmlTemplate": "Modelo HTML",
+  "settings.emailTemplates.textTemplate": "Modelo de Texto (Reserva)",
+  "settings.emailTemplates.variables": "Variáveis Disponíveis (clique para copiar)",
+  "settings.emailTemplates.validation.success": "Modelo válido! {count} variáveis encontradas.",
+  "settings.emailTemplates.validation.warning": "Nenhuma variável encontrada no modelo. Adicione pelo menos uma variável.",
+  "settings.emailTemplates.defaultLoaded": "Modelo padrão carregado!",
+  "settings.emailTemplates.suspiciousLogin": "Login Suspeito",
+  "settings.emailTemplates.newLocation": "Nova Localização",
+  "settings.emailTemplates.vpnProxy": "VPN/Proxy"
+}
+

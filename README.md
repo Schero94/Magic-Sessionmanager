@@ -517,4 +517,18 @@ See [LICENSE](./LICENSE) and [COPYRIGHT_NOTICE.txt](./COPYRIGHT_NOTICE.txt) for 
 
 ---
 
+## 🌐 Supported Languages
+
+The admin interface is available in **5 languages:**
+
+- 🇬🇧 **English** - Default
+- 🇩🇪 **Deutsch** - German
+- 🇪🇸 **Español** - Spanish
+- 🇫🇷 **Français** - French
+- 🇵🇹 **Português** - Portuguese
+
+Language automatically follows your Strapi admin interface setting.
+
+---
+
 **Made with ❤️ for Strapi v5**

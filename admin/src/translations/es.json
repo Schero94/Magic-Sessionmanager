@@ -1,0 +1,21 @@
+{
+  "plugin.name": "Gestor de Sesiones",
+  "plugin.description": "Seguimiento de inicio/cierre de sesión y actividad de usuarios",
+  "settings.section": "Gestor de Sesiones",
+  "settings.sessions": "Sesiones Activas",
+  "settings.emailTemplates.title": "Plantillas de Correo",
+  "settings.emailTemplates.description": "Personalizar plantillas de notificación por correo con variables dinámicas",
+  "settings.emailTemplates.validate": "Validar",
+  "settings.emailTemplates.loadDefault": "Cargar Plantilla Predeterminada",
+  "settings.emailTemplates.subject": "Asunto del Correo",
+  "settings.emailTemplates.htmlTemplate": "Plantilla HTML",
+  "settings.emailTemplates.textTemplate": "Plantilla de Texto (Respaldo)",
+  "settings.emailTemplates.variables": "Variables Disponibles (clic para copiar)",
+  "settings.emailTemplates.validation.success": "¡Plantilla válida! Se encontraron {count} variables.",
+  "settings.emailTemplates.validation.warning": "No se encontraron variables en la plantilla. Agregue al menos una variable.",
+  "settings.emailTemplates.defaultLoaded": "¡Plantilla predeterminada cargada!",
+  "settings.emailTemplates.suspiciousLogin": "Inicio de Sesión Sospechoso",
+  "settings.emailTemplates.newLocation": "Nueva Ubicación",
+  "settings.emailTemplates.vpnProxy": "VPN/Proxy"
+}
+

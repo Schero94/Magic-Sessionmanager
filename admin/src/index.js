@@ -112,6 +112,9 @@ export default {
     const importedTrads = {
       en: () => import('./translations/en.json'),
       de: () => import('./translations/de.json'),
+      es: () => import('./translations/es.json'),
+      fr: () => import('./translations/fr.json'),
+      pt: () => import('./translations/pt.json'),
     };
 
     const translatedLanguages = Object.keys(importedTrads).filter((lang) =>

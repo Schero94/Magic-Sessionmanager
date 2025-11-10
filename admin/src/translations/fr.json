@@ -1,0 +1,21 @@
+{
+  "plugin.name": "Gestionnaire de Sessions",
+  "plugin.description": "Suivi des connexions/déconnexions et activité des utilisateurs",
+  "settings.section": "Gestionnaire de Sessions",
+  "settings.sessions": "Sessions Actives",
+  "settings.emailTemplates.title": "Modèles d'Email",
+  "settings.emailTemplates.description": "Personnaliser les modèles de notification par email avec des variables dynamiques",
+  "settings.emailTemplates.validate": "Valider",
+  "settings.emailTemplates.loadDefault": "Charger le Modèle par Défaut",
+  "settings.emailTemplates.subject": "Objet de l'Email",
+  "settings.emailTemplates.htmlTemplate": "Modèle HTML",
+  "settings.emailTemplates.textTemplate": "Modèle Texte (Secours)",
+  "settings.emailTemplates.variables": "Variables Disponibles (cliquez pour copier)",
+  "settings.emailTemplates.validation.success": "Modèle valide! {count} variables trouvées.",
+  "settings.emailTemplates.validation.warning": "Aucune variable trouvée dans le modèle. Ajoutez au moins une variable.",
+  "settings.emailTemplates.defaultLoaded": "Modèle par défaut chargé!",
+  "settings.emailTemplates.suspiciousLogin": "Connexion Suspecte",
+  "settings.emailTemplates.newLocation": "Nouvelle Localisation",
+  "settings.emailTemplates.vpnProxy": "VPN/Proxy"
+}
+
