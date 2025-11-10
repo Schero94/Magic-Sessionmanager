@@ -1,3 +1,10 @@
+# [3.7.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.6.0...v3.7.0) (2025-11-10)
+
+
+### Features
+
+* Add Spanish, French, and Portuguese translations (5 languages total) ([d8bd41d](https://github.com/Schero94/Magic-Sessionmanager/commit/d8bd41d24101f932877cc8edcf1d00c2379ec68a))
+
 # [3.6.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.5.0...v3.6.0) (2025-11-09)
 
 
