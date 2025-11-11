@@ -300,6 +300,96 @@ Add to `config/plugins.ts`:
 
 ---
 
+## 📧 Email Alerts Setup (Premium)
+
+The Session Manager uses **Strapi's Email Plugin** to send notifications. You need to configure an email provider first.
+
+### Step 1: Install Email Provider
+
+Choose one of these providers:
+
+**Option A: Nodemailer (Recommended)**
+```bash
+npm install @strapi/provider-email-nodemailer
+```
+
+**Option B: SendGrid**
+```bash
+npm install @strapi/provider-email-sendgrid
+```
+
+**Option C: Mailgun**
+```bash
+npm install @strapi/provider-email-mailgun
+```
+
+### Step 2: Configure Email Plugin
+
+Add to `config/plugins.ts`:
+
+```typescript
+export default () => ({
+  // Email configuration
+  email: {
+    config: {
+      provider: 'nodemailer',
+      providerOptions: {
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: process.env.SMTP_PORT || 587,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASSWORD,
+        },
+      },
+      settings: {
+        defaultFrom: process.env.SMTP_DEFAULT_FROM || 'noreply@yourapp.com',
+        defaultReplyTo: process.env.SMTP_DEFAULT_REPLY_TO || 'support@yourapp.com',
+      },
+    },
+  },
+  
+  // Session Manager configuration
+  'magic-sessionmanager': {
+    enabled: true,
+  },
+});
+```
+
+### Step 3: Add Environment Variables
+
+Add to your `.env` file:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_DEFAULT_FROM=noreply@yourapp.com
+SMTP_DEFAULT_REPLY_TO=support@yourapp.com
+```
+
+**For Gmail:**
+- Use an [App Password](https://support.google.com/accounts/answer/185833), not your regular password!
+
+### Step 4: Enable in Admin Panel
+
+1. Go to **Sessions → Settings**
+2. Scroll to **"Email Notifications"**
+3. Toggle **"Enable Email Alerts"** to ON
+4. Customize email templates (optional)
+5. Click **Save**
+
+### Step 5: Test It
+
+Trigger a suspicious login (e.g., use a VPN) and check if the email arrives!
+
+**Troubleshooting:**
+- Check Strapi logs for email errors
+- Verify SMTP credentials are correct
+- Test SMTP connection with a tool like [smtp-tester](https://www.npmjs.com/package/smtp-tester)
+
+---
+
 ## 📋 Simple API Guide
 
 ### Get Sessions
