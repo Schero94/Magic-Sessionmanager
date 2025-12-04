@@ -1,3 +1,26 @@
+# [4.0.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.7.0...v4.0.0) (2025-12-04)
+
+
+### Bug Fixes
+
+* migrate to Strapi v5 Document Service API ([6ab18d0](https://github.com/Schero94/Magic-Sessionmanager/commit/6ab18d0577ed5733d6737b79b28b53ef00ba81a5))
+* Strapi v5 compliance - use documentId instead of id ([08a061e](https://github.com/Schero94/Magic-Sessionmanager/commit/08a061ec5348c423e2999c1c15d0b2f5ec7e1682))
+
+
+### BREAKING CHANGES
+
+* Complete migration from Entity Service to Document Service API
+
+- Migrate all strapi.entityService calls to strapi.documents()
+- Fix Deep Filtering: Use { user: { documentId: userId } } syntax
+- Remove all emojis from logs (54 instances)
+- Replace with text prefixes: [SUCCESS], [ERROR], [WARNING]
+- Remove unused Textarea imports (8 files)
+- Add UID constants for better maintainability
+
+This is a critical Strapi v5 compatibility update.
+All session management now uses the modern Document Service API.
+
 # [3.7.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.6.0...v3.7.0) (2025-11-10)
 
 
