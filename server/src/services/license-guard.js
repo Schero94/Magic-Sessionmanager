@@ -243,7 +243,7 @@ module.exports = ({ strapi }) => ({
       const licenseKey = await pluginStore.get({ key: 'licenseKey' });
 
       if (!licenseKey) {
-        strapi.log.info('[magic-sessionmanager] ℹ️ No license found - Running in demo mode');
+        strapi.log.info('[magic-sessionmanager] [INFO] No license found - Running in demo mode');
         return {
           valid: false,
           demo: true,

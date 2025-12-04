@@ -86,7 +86,7 @@ export default {
         id: 'online-users-widget',
         pluginId: pluginId,
       });
-      console.log(`[${pluginId}] ✅ Online Users Widget registered`);
+      console.log(`[${pluginId}] [SUCCESS] Online Users Widget registered`);
     }
   },
 
@@ -99,7 +99,7 @@ export default {
       if (contentManagerPlugin && contentManagerPlugin.apis) {
         console.log(`[${pluginId}] Injecting SessionInfoPanel into edit view sidebar...`);
         contentManagerPlugin.apis.addEditViewSidePanel([SessionInfoPanel]);
-        console.log(`[${pluginId}] ✅ SessionInfoPanel injected successfully`);
+        console.log(`[${pluginId}] [SUCCESS] SessionInfoPanel injected successfully`);
       } else {
         console.warn(`[${pluginId}] Content Manager plugin or APIs not available`);
       }

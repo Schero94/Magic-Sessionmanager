@@ -60,7 +60,7 @@ export const useLicense = () => {
       if ((newIsPremium !== isPremium || !silent) && !silent) {
         console.log(`[magic-sessionmanager/useLicense] Premium Status: ${newIsPremium} (valid: ${isValid}, featurePremium: ${hasPremiumFeature})`);
         if (!newIsPremium && isValid) {
-          console.warn('[magic-sessionmanager/useLicense] ⚠️ License is valid but Premium feature is not enabled!');
+          console.warn('[magic-sessionmanager/useLicense] [WARN] License is valid but Premium feature is not enabled!');
         }
       }
       

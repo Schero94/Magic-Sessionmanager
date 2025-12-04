@@ -2,6 +2,9 @@
 
 const { decryptToken } = require('../utils/encryption');
 
+const SESSION_UID = 'plugin::magic-sessionmanager.session';
+const USER_UID = 'plugin::users-permissions.user';
+
 /**
  * Session Controller
  * Handles HTTP requests for session management
@@ -111,7 +114,7 @@ module.exports = {
         .service('session');
 
       // Find current session by decrypting and comparing tokens
-      const sessions = await strapi.documents(SESSION_UID).findMany( {
+      const sessions = await strapi.documents(SESSION_UID).findMany({
         filters: {
           user: { documentId: userId },
           isActive: true,
@@ -131,8 +134,8 @@ module.exports = {
 
       if (matchingSession) {
         // Terminate only the current session
-        await sessionService.terminateSession({ sessionId: matchingSession.id });
-        strapi.log.info(`[magic-sessionmanager] User ${userId} logged out (session ${matchingSession.id})`);
+        await sessionService.terminateSession({ sessionId: matchingSession.documentId });
+        strapi.log.info(`[magic-sessionmanager] User ${userId} logged out (session ${matchingSession.documentId})`);
       }
 
       ctx.body = {
@@ -352,7 +355,8 @@ module.exports = {
       // Toggle blocked status
       const newBlockedStatus = !user.blocked;
       
-      await strapi.documents(USER_UID).update({ documentId: userId,
+      await strapi.documents(USER_UID).update({
+        documentId: userId,
         data: {
           blocked: newBlockedStatus,
         },

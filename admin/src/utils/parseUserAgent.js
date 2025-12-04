@@ -41,7 +41,7 @@ export const parseUserAgent = (userAgent) => {
     browser = 'Opera';
   } else if (ua.includes('curl/')) {
     browser = 'cURL';
-    deviceIcon = '⚙️';
+    deviceIcon = 'gear';
     device = 'API Client';
   } else if (ua.includes('postman')) {
     browser = 'Postman';

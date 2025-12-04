@@ -289,12 +289,12 @@ module.exports = ({ strapi }) => ({
       const now = new Date();
       const cutoffTime = new Date(now.getTime() - inactivityTimeout);
       
-      strapi.log.info(`[magic-sessionmanager] 🧹 Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
+      strapi.log.info(`[magic-sessionmanager] [CLEANUP] Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
       
       // Find all active sessions
-      const activeSessions = await strapi.documents(SESSION_UID).findMany( {
+      const activeSessions = await strapi.documents(SESSION_UID).findMany({
         filters: { isActive: true },
-        fields: ['id', 'lastActive', 'loginTime'],
+        fields: ['lastActive', 'loginTime'],
       });
       
       // Deactivate old sessions
@@ -303,7 +303,8 @@ module.exports = ({ strapi }) => ({
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
         
         if (lastActiveTime < cutoffTime) {
-          await strapi.documents(SESSION_UID).update({ documentId: session.id,
+          await strapi.documents(SESSION_UID).update({
+            documentId: session.documentId,
             data: { isActive: false },
           });
           deactivatedCount++;
@@ -344,17 +345,16 @@ module.exports = ({ strapi }) => ({
     try {
       strapi.log.info('[magic-sessionmanager] [DELETE] Deleting all inactive sessions...');
       
-      // Find all inactive sessions
-      const inactiveSessions = await strapi.documents(SESSION_UID).findMany( {
+      // Find all inactive sessions (documentId is always included automatically)
+      const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
         filters: { isActive: false },
-        fields: ['id'],
       });
       
       let deletedCount = 0;
       
       // Delete each inactive session
       for (const session of inactiveSessions) {
-        await strapi.documents(SESSION_UID).delete({ documentId: session.id });
+        await strapi.documents(SESSION_UID).delete({ documentId: session.documentId });
         deletedCount++;
       }
       

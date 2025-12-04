@@ -132,9 +132,11 @@ module.exports = ({ strapi }) => ({
 
   /**
    * Get country flag emoji
+   * @param {string} countryCode - ISO 2-letter country code
+   * @returns {string} Flag emoji or empty string
    */
   getCountryFlag(countryCode) {
-    if (!countryCode) return '🏳️';
+    if (!countryCode) return '';
     
     // Convert country code to flag emoji
     const codePoints = countryCode

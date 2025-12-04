@@ -127,8 +127,8 @@ module.exports = async ({ strapi }) => {
           });
 
           if (matchingSession) {
-            await sessionService.terminateSession({ sessionId: matchingSession.id });
-            strapi.log.info(`[magic-sessionmanager] 🚪 Logout via /api/auth/logout - Session ${matchingSession.id} terminated`);
+            await sessionService.terminateSession({ sessionId: matchingSession.documentId });
+            strapi.log.info(`[magic-sessionmanager] [LOGOUT] Logout via /api/auth/logout - Session ${matchingSession.documentId} terminated`);
           }
 
           ctx.status = 200;
@@ -221,7 +221,7 @@ module.exports = async ({ strapi }) => {
           
           // Block if needed
           if (shouldBlock) {
-            strapi.log.warn(`[magic-sessionmanager] 🚫 Blocking login: ${blockReason}`);
+            strapi.log.warn(`[magic-sessionmanager] [BLOCKED] Blocking login: ${blockReason}`);
             
             // Don't create session, return error
             ctx.status = 403;
@@ -328,8 +328,8 @@ module.exports = async ({ strapi }) => {
             });
 
             if (!matchingSession) {
-              // No active session with this refresh token → Block!
-              strapi.log.warn('[magic-sessionmanager] 🚫 Blocked refresh token request - no active session');
+              // No active session with this refresh token - Block!
+              strapi.log.warn('[magic-sessionmanager] [BLOCKED] Blocked refresh token request - no active session');
               ctx.status = 401;
               ctx.body = {
                 error: {
@@ -341,7 +341,7 @@ module.exports = async ({ strapi }) => {
               return; // Don't continue
             }
             
-            strapi.log.info(`[magic-sessionmanager] [SUCCESS] Refresh token allowed for session ${matchingSession.id}`);
+            strapi.log.info(`[magic-sessionmanager] [SUCCESS] Refresh token allowed for session ${matchingSession.documentId}`);
           }
         } catch (err) {
           strapi.log.error('[magic-sessionmanager] Error checking refresh token:', err);
@@ -381,7 +381,8 @@ module.exports = async ({ strapi }) => {
               const encryptedToken = newAccessToken ? encryptToken(newAccessToken) : matchingSession.token;
               const encryptedRefreshToken = newRefreshToken ? encryptToken(newRefreshToken) : matchingSession.refreshToken;
               
-              await strapi.documents(SESSION_UID).update({ documentId: matchingSession.id,
+              await strapi.documents(SESSION_UID).update({
+                documentId: matchingSession.documentId,
                 data: {
                   token: encryptedToken,
                   refreshToken: encryptedRefreshToken,
@@ -389,7 +390,7 @@ module.exports = async ({ strapi }) => {
                 },
               });
               
-              strapi.log.info(`[magic-sessionmanager] [RELOAD] Tokens refreshed for session ${matchingSession.id}`);
+              strapi.log.info(`[magic-sessionmanager] [REFRESH] Tokens refreshed for session ${matchingSession.documentId}`);
             }
           }
         } catch (err) {
@@ -407,7 +408,7 @@ module.exports = async ({ strapi }) => {
 
     strapi.log.info('[magic-sessionmanager] [SUCCESS] LastSeen middleware mounted');
     strapi.log.info('[magic-sessionmanager] [SUCCESS] Bootstrap complete');
-    strapi.log.info('[magic-sessionmanager] 🎉 Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
+    strapi.log.info('[magic-sessionmanager] [READY] Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
     
   } catch (err) {
     strapi.log.error('[magic-sessionmanager] [ERROR] Bootstrap error:', err);
