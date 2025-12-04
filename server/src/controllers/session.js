@@ -111,9 +111,9 @@ module.exports = {
         .service('session');
 
       // Find current session by decrypting and comparing tokens
-      const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+      const sessions = await strapi.documents(SESSION_UID).findMany( {
         filters: {
-          user: { id: userId },
+          user: { documentId: userId },
           isActive: true,
         },
       });
@@ -343,7 +343,7 @@ module.exports = {
       const { userId } = ctx.params;
       
       // Get current user status
-      const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId);
+      const user = await strapi.documents(USER_UID).findOne({ documentId: userId });
       
       if (!user) {
         return ctx.throw(404, 'User not found');
@@ -352,7 +352,7 @@ module.exports = {
       // Toggle blocked status
       const newBlockedStatus = !user.blocked;
       
-      await strapi.entityService.update('plugin::users-permissions.user', userId, {
+      await strapi.documents(USER_UID).update({ documentId: userId,
         data: {
           blocked: newBlockedStatus,
         },

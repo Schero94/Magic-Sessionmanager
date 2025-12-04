@@ -4,14 +4,19 @@
  * Bootstrap: Mount middleware for session tracking
  * Sessions are managed via plugin::magic-sessionmanager.session content type
  *
+ * [SUCCESS] Migrated to strapi.documents() API (Strapi v5 Best Practice)
+ *
  * NOTE: For multi-instance deployments, consider Redis locks or session store
  */
 
 const getClientIp = require('./utils/getClientIp');
 const { encryptToken, decryptToken } = require('./utils/encryption');
 
+const SESSION_UID = 'plugin::magic-sessionmanager.session';
+const USER_UID = 'plugin::users-permissions.user';
+
 module.exports = async ({ strapi }) => {
-  strapi.log.info('[magic-sessionmanager] 🚀 Bootstrap starting...');
+  strapi.log.info('[magic-sessionmanager] [START] Bootstrap starting...');
 
   try {
     // Initialize License Guard
@@ -23,7 +28,7 @@ module.exports = async ({ strapi }) => {
       
       if (!licenseStatus.valid) {
         strapi.log.error('╔════════════════════════════════════════════════════════════════╗');
-        strapi.log.error('║  ❌ SESSION MANAGER - NO VALID LICENSE                         ║');
+        strapi.log.error('║  [ERROR] SESSION MANAGER - NO VALID LICENSE                         ║');
         strapi.log.error('║                                                                ║');
         strapi.log.error('║  This plugin requires a valid license to operate.             ║');
         strapi.log.error('║  Please activate your license via Admin UI:                   ║');
@@ -40,7 +45,7 @@ module.exports = async ({ strapi }) => {
         const storedKey = await pluginStore.get({ key: 'licenseKey' });
         
         strapi.log.info('╔════════════════════════════════════════════════════════════════╗');
-        strapi.log.info('║  ✅ SESSION MANAGER LICENSE ACTIVE                             ║');
+        strapi.log.info('║  [SUCCESS] SESSION MANAGER LICENSE ACTIVE                             ║');
         strapi.log.info('║                                                                ║');
         
         if (licenseStatus.data) {
@@ -53,7 +58,7 @@ module.exports = async ({ strapi }) => {
         }
         
         strapi.log.info('║                                                                ║');
-        strapi.log.info('║  🔄 Auto-pinging every 15 minutes                              ║');
+        strapi.log.info('║  [RELOAD] Auto-pinging every 15 minutes                              ║');
         strapi.log.info('╚════════════════════════════════════════════════════════════════╝');
       }
     }, 3000); // Wait 3 seconds for API to be ready
@@ -80,7 +85,7 @@ module.exports = async ({ strapi }) => {
       }
     }, cleanupInterval);
     
-    strapi.log.info('[magic-sessionmanager] ⏰ Periodic cleanup scheduled (every 30 minutes)');
+    strapi.log.info('[magic-sessionmanager] [TIME] Periodic cleanup scheduled (every 30 minutes)');
     
     // Store interval handle for cleanup on shutdown
     if (!strapi.sessionManagerIntervals) {
@@ -104,7 +109,7 @@ module.exports = async ({ strapi }) => {
 
           // Find session by decrypting tokens and matching
           // Since tokens are encrypted, we need to get all active sessions and check each one
-          const allSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+          const allSessions = await strapi.documents(SESSION_UID).findMany( {
             filters: {
               isActive: true,
             },
@@ -139,7 +144,7 @@ module.exports = async ({ strapi }) => {
       },
     }]);
 
-    strapi.log.info('[magic-sessionmanager] ✅ /api/auth/logout route registered');
+    strapi.log.info('[magic-sessionmanager] [SUCCESS] /api/auth/logout route registered');
 
     // Middleware to intercept logins
     strapi.server.use(async (ctx, next) => {
@@ -158,7 +163,7 @@ module.exports = async ({ strapi }) => {
           const ip = getClientIp(ctx);
           const userAgent = ctx.request.headers?.['user-agent'] || ctx.request.header?.['user-agent'] || 'unknown';
           
-          strapi.log.info(`[magic-sessionmanager] 🔍 Login detected! User: ${user.id} (${user.email || user.username}) from IP: ${ip}`);
+          strapi.log.info(`[magic-sessionmanager] [CHECK] Login detected! User: ${user.id} (${user.email || user.username}) from IP: ${ip}`);
           
           // Get config
           const config = strapi.config.get('plugin::magic-sessionmanager') || {};
@@ -239,7 +244,7 @@ module.exports = async ({ strapi }) => {
             refreshToken: ctx.body.refreshToken, // Store Refresh Token (encrypted) if exists
           });
           
-          strapi.log.info(`[magic-sessionmanager] ✅ Session created for user ${user.id} (IP: ${ip})`);
+          strapi.log.info(`[magic-sessionmanager] [SUCCESS] Session created for user ${user.id} (IP: ${ip})`);
           
           // Advanced: Send notifications
           if (geoData && (config.enableEmailAlerts || config.enableWebhooks)) {
@@ -286,13 +291,13 @@ module.exports = async ({ strapi }) => {
             }
           }
         } catch (err) {
-          strapi.log.error('[magic-sessionmanager] ❌ Error creating session:', err);
+          strapi.log.error('[magic-sessionmanager] [ERROR] Error creating session:', err);
           // Don't throw - login should still succeed even if session creation fails
         }
       }
     });
 
-    strapi.log.info('[magic-sessionmanager] ✅ Login/Logout interceptor middleware mounted');
+    strapi.log.info('[magic-sessionmanager] [SUCCESS] Login/Logout interceptor middleware mounted');
 
     // Middleware to block refresh token requests for terminated sessions
     strapi.server.use(async (ctx, next) => {
@@ -305,7 +310,7 @@ module.exports = async ({ strapi }) => {
           
           if (refreshToken) {
             // Find session with this refresh token
-            const allSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+            const allSessions = await strapi.documents(SESSION_UID).findMany( {
               filters: {
                 isActive: true,
               },
@@ -336,7 +341,7 @@ module.exports = async ({ strapi }) => {
               return; // Don't continue
             }
             
-            strapi.log.info(`[magic-sessionmanager] ✅ Refresh token allowed for session ${matchingSession.id}`);
+            strapi.log.info(`[magic-sessionmanager] [SUCCESS] Refresh token allowed for session ${matchingSession.id}`);
           }
         } catch (err) {
           strapi.log.error('[magic-sessionmanager] Error checking refresh token:', err);
@@ -356,7 +361,7 @@ module.exports = async ({ strapi }) => {
           
           if (oldRefreshToken) {
             // Find session and update with new tokens
-            const allSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+            const allSessions = await strapi.documents(SESSION_UID).findMany( {
               filters: {
                 isActive: true,
               },
@@ -376,7 +381,7 @@ module.exports = async ({ strapi }) => {
               const encryptedToken = newAccessToken ? encryptToken(newAccessToken) : matchingSession.token;
               const encryptedRefreshToken = newRefreshToken ? encryptToken(newRefreshToken) : matchingSession.refreshToken;
               
-              await strapi.entityService.update('plugin::magic-sessionmanager.session', matchingSession.id, {
+              await strapi.documents(SESSION_UID).update({ documentId: matchingSession.id,
                 data: {
                   token: encryptedToken,
                   refreshToken: encryptedRefreshToken,
@@ -384,7 +389,7 @@ module.exports = async ({ strapi }) => {
                 },
               });
               
-              strapi.log.info(`[magic-sessionmanager] 🔄 Tokens refreshed for session ${matchingSession.id}`);
+              strapi.log.info(`[magic-sessionmanager] [RELOAD] Tokens refreshed for session ${matchingSession.id}`);
             }
           }
         } catch (err) {
@@ -393,18 +398,18 @@ module.exports = async ({ strapi }) => {
       }
     });
 
-    strapi.log.info('[magic-sessionmanager] ✅ Refresh Token interceptor middleware mounted');
+    strapi.log.info('[magic-sessionmanager] [SUCCESS] Refresh Token interceptor middleware mounted');
 
     // Mount lastSeen update middleware
     strapi.server.use(
       require('./middlewares/last-seen')({ strapi, sessionService })
     );
 
-    strapi.log.info('[magic-sessionmanager] ✅ LastSeen middleware mounted');
-    strapi.log.info('[magic-sessionmanager] ✅ Bootstrap complete');
+    strapi.log.info('[magic-sessionmanager] [SUCCESS] LastSeen middleware mounted');
+    strapi.log.info('[magic-sessionmanager] [SUCCESS] Bootstrap complete');
     strapi.log.info('[magic-sessionmanager] 🎉 Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
     
   } catch (err) {
-    strapi.log.error('[magic-sessionmanager] ❌ Bootstrap error:', err);
+    strapi.log.error('[magic-sessionmanager] [ERROR] Bootstrap error:', err);
   }
 };

@@ -4,7 +4,12 @@
  * lastSeen Middleware
  * Updates user lastSeen and session lastActive on each authenticated request
  * Rate-limited to prevent DB write noise (default: 30 seconds)
+ * 
+ * [SUCCESS] Migrated to strapi.documents() API (Strapi v5 Best Practice)
  */
+
+const SESSION_UID = 'plugin::magic-sessionmanager.session';
+
 module.exports = ({ strapi, sessionService }) => {
   return async (ctx, next) => {
     // BEFORE processing request: Check if user's sessions are active
@@ -13,9 +18,9 @@ module.exports = ({ strapi, sessionService }) => {
         const userId = ctx.state.user.id;
         
         // Check if user has ANY active sessions
-        const activeSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+        const activeSessions = await strapi.documents(SESSION_UID).findMany( {
           filters: {
-            user: { id: userId },
+            user: { documentId: userId },
             isActive: true,
           },
           limit: 1,
@@ -23,7 +28,7 @@ module.exports = ({ strapi, sessionService }) => {
 
         // If user has NO active sessions, reject the request
         if (!activeSessions || activeSessions.length === 0) {
-          strapi.log.info(`[magic-sessionmanager] 🚫 Blocked request - User ${userId} has no active sessions`);
+          strapi.log.info(`[magic-sessionmanager] [BLOCKED] Blocked request - User ${userId} has no active sessions`);
           return ctx.unauthorized('All sessions have been terminated. Please login again.');
         }
       } catch (err) {

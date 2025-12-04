@@ -10,7 +10,6 @@ import {
   Checkbox,
   Alert,
   TextInput,
-  Textarea,
   Tabs,
   Divider,
   Badge,

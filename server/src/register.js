@@ -6,7 +6,7 @@
  * Sessions are accessed via the Session Manager plugin UI components
  */
 module.exports = async ({ strapi }) => {
-  strapi.log.info('[magic-sessionmanager] 🚀 Plugin registration starting...');
+  strapi.log.info('[magic-sessionmanager] [START] Plugin registration starting...');
 
   try {
     // Get the user content type
@@ -21,12 +21,12 @@ module.exports = async ({ strapi }) => {
     // Sessions are managed through SessionInfoPanel sidebar instead
     if (userCT.attributes && userCT.attributes.sessions) {
       delete userCT.attributes.sessions;
-      strapi.log.info('[magic-sessionmanager] ✅ Removed sessions field from User content type');
+      strapi.log.info('[magic-sessionmanager] [SUCCESS] Removed sessions field from User content type');
     }
 
-    strapi.log.info('[magic-sessionmanager] ✅ Plugin registered successfully');
+    strapi.log.info('[magic-sessionmanager] [SUCCESS] Plugin registered successfully');
     
   } catch (err) {
-    strapi.log.error('[magic-sessionmanager] ❌ Registration error:', err);
+    strapi.log.error('[magic-sessionmanager] [ERROR] Registration error:', err);
   }
 };

@@ -13,6 +13,6 @@ module.exports = async ({ strapi }) => {
     strapi.log.info('[magic-sessionmanager] 🛑 Session cleanup interval stopped');
   }
 
-  strapi.log.info('[magic-sessionmanager] ✅ Plugin cleanup completed');
+  strapi.log.info('[magic-sessionmanager] [SUCCESS] Plugin cleanup completed');
 };
 

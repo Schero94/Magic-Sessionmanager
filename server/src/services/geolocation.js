@@ -153,7 +153,7 @@ module.exports = ({ strapi }) => ({
       ip: ipAddress,
       country: 'Unknown',
       country_code: 'XX',
-      country_flag: '🌍',
+      country_flag: '[GEO]',
       city: 'Unknown',
       region: 'Unknown',
       timezone: 'Unknown',

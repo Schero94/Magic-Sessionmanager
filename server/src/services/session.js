@@ -9,11 +9,17 @@ const { encryptToken, decryptToken, generateSessionId } = require('../utils/encr
  *
  * SECURITY: JWT tokens are encrypted before storing in database using AES-256-GCM
  * 
+ * [SUCCESS] Migrated to strapi.documents() API (Strapi v5 Best Practice)
+ * 
  * TODO: For production multi-instance deployments, use Redis for:
  *   - Session store instead of DB
  *   - Rate limiting locks
  *   - Distributed session state
  */
+
+const SESSION_UID = 'plugin::magic-sessionmanager.session';
+const USER_UID = 'plugin::users-permissions.user';
+
 module.exports = ({ strapi }) => ({
   /**
    * Create a new session record
@@ -31,21 +37,22 @@ module.exports = ({ strapi }) => ({
       const encryptedToken = token ? encryptToken(token) : null;
       const encryptedRefreshToken = refreshToken ? encryptToken(refreshToken) : null;
       
-      const session = await strapi.entityService.create('plugin::magic-sessionmanager.session', {
+      // Using Document Service API (Strapi v5)
+      const session = await strapi.documents(SESSION_UID).create({
         data: {
-          user: userId,
+          user: userId, // userId should be documentId (string)
           ipAddress: ip.substring(0, 45),
           userAgent: userAgent.substring(0, 500),
           loginTime: now,
           lastActive: now,
           isActive: true,
-          token: encryptedToken,              // ✅ Encrypted Access Token
-          refreshToken: encryptedRefreshToken, // ✅ Encrypted Refresh Token
-          sessionId: sessionId,                // ✅ Unique identifier
+          token: encryptedToken,              // [SUCCESS] Encrypted Access Token
+          refreshToken: encryptedRefreshToken, // [SUCCESS] Encrypted Refresh Token
+          sessionId: sessionId,                // [SUCCESS] Unique identifier
         },
       });
 
-      strapi.log.info(`[magic-sessionmanager] ✅ Session ${session.id} (${sessionId}) created for user ${userId}`);
+      strapi.log.info(`[magic-sessionmanager] [SUCCESS] Session ${session.documentId} (${sessionId}) created for user ${userId}`);
 
       return session;
     } catch (err) {
@@ -64,7 +71,9 @@ module.exports = ({ strapi }) => ({
       const now = new Date();
 
       if (sessionId) {
-        await strapi.entityService.update('plugin::magic-sessionmanager.session', sessionId, {
+        // Using Document Service API (Strapi v5)
+        await strapi.documents(SESSION_UID).update({
+          documentId: sessionId,
           data: {
             isActive: false,
             logoutTime: now,
@@ -73,17 +82,18 @@ module.exports = ({ strapi }) => ({
 
         strapi.log.info(`[magic-sessionmanager] Session ${sessionId} terminated`);
       } else if (userId) {
-        // Find all active sessions for user
-        const activeSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+        // Find all active sessions for user - use Deep Filtering (Strapi v5)
+        const activeSessions = await strapi.documents(SESSION_UID).findMany({
           filters: {
-            user: { id: userId },
+            user: { documentId: userId }, // Deep filtering syntax
             isActive: true,
           },
         });
 
         // Terminate all active sessions
         for (const session of activeSessions) {
-          await strapi.entityService.update('plugin::magic-sessionmanager.session', session.id, {
+          await strapi.documents(SESSION_UID).update({
+            documentId: session.documentId,
             data: {
               isActive: false,
               logoutTime: now,
@@ -105,7 +115,7 @@ module.exports = ({ strapi }) => ({
    */
   async getAllSessions() {
     try {
-      const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+      const sessions = await strapi.documents(SESSION_UID).findMany( {
         populate: { user: { fields: ['id', 'email', 'username'] } },
         sort: { loginTime: 'desc' },
         limit: 1000, // Reasonable limit
@@ -147,7 +157,7 @@ module.exports = ({ strapi }) => ({
    */
   async getActiveSessions() {
     try {
-      const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+      const sessions = await strapi.documents(SESSION_UID).findMany( {
         filters: { isActive: true },
         populate: { user: { fields: ['id', 'email', 'username'] } },
         sort: { loginTime: 'desc' },
@@ -191,8 +201,8 @@ module.exports = ({ strapi }) => ({
    */
   async getUserSessions(userId) {
     try {
-      const sessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
-        filters: { user: { id: userId } },
+      const sessions = await strapi.documents(SESSION_UID).findMany( {
+        filters: { user: { documentId: userId } },
         sort: { loginTime: 'desc' },
       });
 
@@ -241,20 +251,20 @@ module.exports = ({ strapi }) => ({
 
       // Update session lastActive only
       if (sessionId) {
-        const session = await strapi.entityService.findOne('plugin::magic-sessionmanager.session', sessionId);
+        const session = await strapi.documents(SESSION_UID).findOne({ documentId: sessionId });
 
         if (session && session.lastActive) {
           const lastActiveTime = new Date(session.lastActive).getTime();
           const currentTime = now.getTime();
 
           if (currentTime - lastActiveTime > rateLimit) {
-            await strapi.entityService.update('plugin::magic-sessionmanager.session', sessionId, {
+            await strapi.documents(SESSION_UID).update({ documentId: sessionId,
               data: { lastActive: now },
             });
           }
         } else if (session) {
           // First time or null
-          await strapi.entityService.update('plugin::magic-sessionmanager.session', sessionId, {
+          await strapi.documents(SESSION_UID).update({ documentId: sessionId,
             data: { lastActive: now },
           });
         }
@@ -282,7 +292,7 @@ module.exports = ({ strapi }) => ({
       strapi.log.info(`[magic-sessionmanager] 🧹 Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
       
       // Find all active sessions
-      const activeSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+      const activeSessions = await strapi.documents(SESSION_UID).findMany( {
         filters: { isActive: true },
         fields: ['id', 'lastActive', 'loginTime'],
       });
@@ -293,14 +303,14 @@ module.exports = ({ strapi }) => ({
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
         
         if (lastActiveTime < cutoffTime) {
-          await strapi.entityService.update('plugin::magic-sessionmanager.session', session.id, {
+          await strapi.documents(SESSION_UID).update({ documentId: session.id,
             data: { isActive: false },
           });
           deactivatedCount++;
         }
       }
       
-      strapi.log.info(`[magic-sessionmanager] ✅ Cleanup complete: ${deactivatedCount} sessions deactivated`);
+      strapi.log.info(`[magic-sessionmanager] [SUCCESS] Cleanup complete: ${deactivatedCount} sessions deactivated`);
       return deactivatedCount;
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error cleaning up inactive sessions:', err);
@@ -316,8 +326,8 @@ module.exports = ({ strapi }) => ({
    */
   async deleteSession(sessionId) {
     try {
-      await strapi.entityService.delete('plugin::magic-sessionmanager.session', sessionId);
-      strapi.log.info(`[magic-sessionmanager] 🗑️ Session ${sessionId} permanently deleted`);
+      await strapi.documents(SESSION_UID).delete({ documentId: sessionId });
+      strapi.log.info(`[magic-sessionmanager] [DELETE] Session ${sessionId} permanently deleted`);
       return true;
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error deleting session:', err);
@@ -332,10 +342,10 @@ module.exports = ({ strapi }) => ({
    */
   async deleteInactiveSessions() {
     try {
-      strapi.log.info('[magic-sessionmanager] 🗑️ Deleting all inactive sessions...');
+      strapi.log.info('[magic-sessionmanager] [DELETE] Deleting all inactive sessions...');
       
       // Find all inactive sessions
-      const inactiveSessions = await strapi.entityService.findMany('plugin::magic-sessionmanager.session', {
+      const inactiveSessions = await strapi.documents(SESSION_UID).findMany( {
         filters: { isActive: false },
         fields: ['id'],
       });
@@ -344,11 +354,11 @@ module.exports = ({ strapi }) => ({
       
       // Delete each inactive session
       for (const session of inactiveSessions) {
-        await strapi.entityService.delete('plugin::magic-sessionmanager.session', session.id);
+        await strapi.documents(SESSION_UID).delete({ documentId: session.id });
         deletedCount++;
       }
       
-      strapi.log.info(`[magic-sessionmanager] ✅ Deleted ${deletedCount} inactive sessions`);
+      strapi.log.info(`[magic-sessionmanager] [SUCCESS] Deleted ${deletedCount} inactive sessions`);
       return deletedCount;
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error deleting inactive sessions:', err);

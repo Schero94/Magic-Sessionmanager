@@ -80,14 +80,14 @@ module.exports = ({ strapi }) => ({
         text: `🚨 Suspicious Login Detected\n\nA potentially suspicious login was detected for your account.\n\nAccount: {{user.email}}\nUsername: {{user.username}}\n\nLogin Details:\n- Time: {{session.loginTime}}\n- IP: {{session.ipAddress}}\n- Location: {{geo.city}}, {{geo.country}}\n\nSecurity: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThreat}}, Score={{reason.securityScore}}/100`,
       },
       newLocation: {
-        subject: '📍 New Location Login Detected',
-        html: `<h2>📍 New Location Login</h2><p>Account: {{user.email}}</p><p>Time: {{session.loginTime}}</p><p>Location: {{geo.city}}, {{geo.country}}</p><p>IP: {{session.ipAddress}}</p>`,
-        text: `📍 New Location Login\n\nAccount: {{user.email}}\nTime: {{session.loginTime}}\nLocation: {{geo.city}}, {{geo.country}}\nIP: {{session.ipAddress}}`,
+        subject: '[LOCATION] New Location Login Detected',
+        html: `<h2>[LOCATION] New Location Login</h2><p>Account: {{user.email}}</p><p>Time: {{session.loginTime}}</p><p>Location: {{geo.city}}, {{geo.country}}</p><p>IP: {{session.ipAddress}}</p>`,
+        text: `[LOCATION] New Location Login\n\nAccount: {{user.email}}\nTime: {{session.loginTime}}\nLocation: {{geo.city}}, {{geo.country}}\nIP: {{session.ipAddress}}`,
       },
       vpnProxy: {
-        subject: '⚠️ VPN/Proxy Login Detected',
-        html: `<h2>⚠️ VPN/Proxy Detected</h2><p>Account: {{user.email}}</p><p>Time: {{session.loginTime}}</p><p>IP: {{session.ipAddress}}</p><p>VPN: {{reason.isVpn}}, Proxy: {{reason.isProxy}}</p>`,
-        text: `⚠️ VPN/Proxy Detected\n\nAccount: {{user.email}}\nTime: {{session.loginTime}}\nIP: {{session.ipAddress}}\nVPN: {{reason.isVpn}}, Proxy: {{reason.isProxy}}`,
+        subject: '[WARNING] VPN/Proxy Login Detected',
+        html: `<h2>[WARNING] VPN/Proxy Detected</h2><p>Account: {{user.email}}</p><p>Time: {{session.loginTime}}</p><p>IP: {{session.ipAddress}}</p><p>VPN: {{reason.isVpn}}, Proxy: {{reason.isProxy}}</p>`,
+        text: `[WARNING] VPN/Proxy Detected\n\nAccount: {{user.email}}\nTime: {{session.loginTime}}\nIP: {{session.ipAddress}}\nVPN: {{reason.isVpn}}, Proxy: {{reason.isProxy}}`,
       },
     };
   },
@@ -272,7 +272,7 @@ module.exports = ({ strapi }) => ({
 
     if (geoData) {
       embed.fields.push({
-        name: '📍 Location',
+        name: '[LOCATION] Location',
         value: `${geoData.country_flag} ${geoData.city}, ${geoData.country}`,
         inline: true,
       });
@@ -284,7 +284,7 @@ module.exports = ({ strapi }) => ({
         if (geoData.isThreat) warnings.push('Threat');
         
         embed.fields.push({
-          name: '⚠️ Security',
+          name: '[WARNING] Security',
           value: `${warnings.join(', ')} detected\nScore: ${geoData.securityScore}/100`,
           inline: true,
         });
@@ -297,12 +297,12 @@ module.exports = ({ strapi }) => ({
   getEventTitle(event) {
     const titles = {
       'login.suspicious': '🚨 Suspicious Login',
-      'login.new_location': '📍 New Location Login',
+      'login.new_location': '[LOCATION] New Location Login',
       'login.vpn': '🔴 VPN Login Detected',
       'login.threat': '⛔ Threat IP Login',
       'session.terminated': '🔴 Session Terminated',
     };
-    return titles[event] || '📊 Session Event';
+    return titles[event] || '[STATS] Session Event';
   },
 
   getEventColor(event) {

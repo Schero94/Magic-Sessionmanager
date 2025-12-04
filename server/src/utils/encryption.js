@@ -31,7 +31,7 @@ function getEncryptionKey() {
   const strapiKeys = process.env.APP_KEYS || process.env.API_TOKEN_SALT || 'default-insecure-key';
   const key = crypto.createHash('sha256').update(strapiKeys).digest();
   
-  console.warn('[magic-sessionmanager/encryption] ⚠️  No SESSION_ENCRYPTION_KEY found. Using fallback (not recommended for production).');
+  console.warn('[magic-sessionmanager/encryption] [WARNING]  No SESSION_ENCRYPTION_KEY found. Using fallback (not recommended for production).');
   console.warn('[magic-sessionmanager/encryption] Set SESSION_ENCRYPTION_KEY in .env for better security.');
   
   return key;
