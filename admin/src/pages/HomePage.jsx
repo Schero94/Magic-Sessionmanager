@@ -531,7 +531,7 @@ const HomePage = () => {
   };
 
   const handleDeleteSession = async (sessionId) => {
-    if (!confirm('⚠️ WARNING: This will PERMANENTLY delete this session from the database!\n\nThis action cannot be undone.\n\nAre you sure?')) {
+    if (!confirm('[WARNING] This will PERMANENTLY delete this session from the database!\n\nThis action cannot be undone.\n\nAre you sure?')) {
       return;
     }
 
@@ -838,7 +838,7 @@ const HomePage = () => {
         <Box>
           <Box style={{ marginBottom: theme.spacing.md }}>
             <Typography variant="delta" style={{ marginBottom: theme.spacing.md, color: theme.colors.neutral[700] }}>
-              📊 All Sessions
+              All Sessions
             </Typography>
           </Box>
           
@@ -864,10 +864,10 @@ const HomePage = () => {
                 size="S"
               >
                 <SingleSelectOption value="all">All Sessions</SingleSelectOption>
-                <SingleSelectOption value="active">🟢 Active (&lt; 15 min)</SingleSelectOption>
-                <SingleSelectOption value="idle">🟡 Idle (&gt; 15 min)</SingleSelectOption>
-                <SingleSelectOption value="loggedout">🔴 Logged Out</SingleSelectOption>
-                <SingleSelectOption value="terminated">⚫ Terminated</SingleSelectOption>
+                <SingleSelectOption value="active">Active (less than 15 min)</SingleSelectOption>
+                <SingleSelectOption value="idle">Idle (more than 15 min)</SingleSelectOption>
+                <SingleSelectOption value="loggedout">Logged Out</SingleSelectOption>
+                <SingleSelectOption value="terminated">Terminated</SingleSelectOption>
               </SingleSelect>
             </Box>
             
@@ -921,26 +921,26 @@ const HomePage = () => {
                     active: { 
                       bg: theme.colors.success[50], 
                       badgeColor: 'success600', 
-                      label: '🟢 Active',
+                      label: 'Active',
                       indicator: true 
                     },
                     idle: { 
                       bg: theme.colors.warning[50], 
                       badgeColor: 'warning600', 
-                      label: '🟡 Idle',
+                      label: 'Idle',
                       indicator: false 
                     },
                     loggedout: { 
                       bg: theme.colors.danger[50], 
                       badgeColor: 'danger600', 
-                      label: '🔴 Logged Out',
+                      label: 'Logged Out',
                       indicator: false,
                       opacity: 0.7 
                     },
                     terminated: { 
                       bg: theme.colors.neutral[100], 
                       badgeColor: 'neutral600', 
-                      label: '⚫ Terminated',
+                      label: 'Terminated',
                       indicator: false,
                       opacity: 0.6 
                     },
@@ -1185,10 +1185,7 @@ const HomePage = () => {
             }}
           />
           
-          {/* Floating Emoji */}
-          <FloatingEmoji>
-            💻
-          </FloatingEmoji>
+          {/* Floating Icon (removed emoji) */}
           
           <Flex direction="column" alignItems="center" gap={6} style={{ position: 'relative', zIndex: 1 }}>
             <Box

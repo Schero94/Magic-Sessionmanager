@@ -7,7 +7,7 @@ export const parseUserAgent = (userAgent) => {
   if (!userAgent) {
     return {
       device: 'Unknown',
-      deviceIcon: '❓',
+      deviceIcon: 'question',
       browser: 'Unknown',
       os: 'Unknown',
     };
@@ -17,14 +17,14 @@ export const parseUserAgent = (userAgent) => {
 
   // Device detection
   let device = 'Desktop';
-  let deviceIcon = '💻';
+  let deviceIcon = 'desktop';
 
   if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(userAgent)) {
     device = 'Tablet';
-    deviceIcon = '📱';
+    deviceIcon = 'tablet';
   } else if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent)) {
     device = 'Mobile';
-    deviceIcon = '📱';
+    deviceIcon = 'mobile';
   }
 
   // Browser detection
@@ -45,11 +45,11 @@ export const parseUserAgent = (userAgent) => {
     device = 'API Client';
   } else if (ua.includes('postman')) {
     browser = 'Postman';
-    deviceIcon = '📮';
+    deviceIcon = 'code';
     device = 'API Client';
   } else if (ua.includes('insomnia')) {
     browser = 'Insomnia';
-    deviceIcon = '🌙';
+    deviceIcon = 'code';
     device = 'API Client';
   }
 

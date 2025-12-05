@@ -82,7 +82,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
       console.error('[SessionDetailModal] Error fetching geolocation:', err);
       // Fallback to mock data if API fails
       setGeoData({
-        country_flag: '🌍',
+        country_flag: '',
         country: 'Unknown',
         city: 'Unknown',
         timezone: 'Unknown',
@@ -98,7 +98,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   
   // Use real data if available, otherwise fallback
   const premiumData = geoData || {
-    country_flag: '🌍',
+    country_flag: '',
     country: 'Loading...',
     city: 'Loading...',
     timezone: 'Loading...',
@@ -207,7 +207,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 size="M"
                 style={{ fontSize: '14px', padding: '8px 20px', fontWeight: '600' }}
               >
-                {isOnline ? '🟢 ONLINE' : '⚫ OFFLINE'}
+                {isOnline ? 'ONLINE' : 'OFFLINE'}
               </Badge>
             </Flex>
 
@@ -220,7 +220,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 {/* User Information */}
                 <Section>
                   <SectionTitle>
-                    👤 User
+                    User
                   </SectionTitle>
                   
                   <DetailRow compact icon={Check} label="Username" value={session.user?.username || 'N/A'} />
@@ -231,7 +231,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 {/* Device Information */}
                 <Section>
                   <SectionTitle>
-                    💻 Device
+                    Device
                   </SectionTitle>
                   
                   <DetailRow compact icon={DeviceIcon} label="Device" value={deviceInfo.device} />
@@ -245,7 +245,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
               <Box>
                 <Section>
                   <SectionTitle>
-                    ⏱️ Timeline
+                    Timeline
                   </SectionTitle>
                 
                 <DetailRow 
@@ -297,7 +297,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
             {isPremium ? (
               <Section>
                 <SectionTitle>
-                  🌍 Location & Security
+                  Location and Security
                 </SectionTitle>
                 
                 {geoLoading ? (
@@ -313,7 +313,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                         compact 
                         icon={Earth} 
                         label="Country" 
-                        value={`${premiumData.country_flag || '🌍'} ${premiumData.country}`} 
+                        value={`${premiumData.country_flag || ''} ${premiumData.country}`.trim()} 
                       />
                       <DetailRow compact icon={Earth} label="City" value={premiumData.city} />
                       <DetailRow compact icon={Clock} label="Timezone" value={premiumData.timezone} />
@@ -329,13 +329,13 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                         compact 
                         icon={Shield} 
                         label="VPN" 
-                        value={premiumData.isVpn ? '⚠️ Yes' : '✅ No'} 
+                        value={premiumData.isVpn ? '[WARNING] Yes' : 'No'} 
                       />
                       <DetailRow 
                         compact 
                         icon={Shield} 
                         label="Proxy" 
-                        value={premiumData.isProxy ? '⚠️ Yes' : '✅ No'} 
+                        value={premiumData.isProxy ? '[WARNING] Yes' : 'No'} 
                       />
                     </Box>
                   </TwoColumnGrid>
@@ -355,7 +355,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   <Flex direction="column" alignItems="center" gap={3}>
                     <Crown style={{ width: '40px', height: '40px', color: '#d97706' }} />
                     <Typography variant="beta" style={{ color: '#92400e', fontWeight: '700' }}>
-                      🌍 Location & Security Analysis
+                      Location and Security Analysis
                     </Typography>
                     <Typography variant="omega" style={{ color: '#78350f', fontSize: '14px', lineHeight: '1.6' }}>
                       Unlock premium features to get IP geolocation, security scoring, and VPN/Proxy detection for every session
@@ -384,7 +384,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
             <Section>
               <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '12px' }}>
                 <SectionTitle style={{ marginBottom: 0, paddingBottom: 0, border: 'none' }}>
-                  🔧 Technical Details
+                  Technical Details
                 </SectionTitle>
                 <Button
                   variant="tertiary"

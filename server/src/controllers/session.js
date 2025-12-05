@@ -59,6 +59,38 @@ module.exports = {
   },
 
   /**
+   * Get own sessions (authenticated user)
+   * GET /api/magic-sessionmanager/my-sessions
+   * Automatically uses the authenticated user's documentId
+   */
+  async getOwnSessions(ctx) {
+    try {
+      // Strapi v5: Use documentId from authenticated user
+      const userId = ctx.state.user?.documentId;
+
+      if (!userId) {
+        return ctx.throw(401, 'Unauthorized');
+      }
+
+      const sessionService = strapi
+        .plugin('magic-sessionmanager')
+        .service('session');
+
+      const sessions = await sessionService.getUserSessions(userId);
+
+      ctx.body = {
+        data: sessions,
+        meta: {
+          count: sessions.length,
+        },
+      };
+    } catch (err) {
+      strapi.log.error('[magic-sessionmanager] Error fetching own sessions:', err);
+      ctx.throw(500, 'Error fetching sessions');
+    }
+  },
+
+  /**
    * Get user's sessions
    * GET /magic-sessionmanager/user/:userId/sessions (Admin API)
    * GET /api/magic-sessionmanager/user/:userId/sessions (Content API)
@@ -70,12 +102,13 @@ module.exports = {
       
       // Check if this is an admin request
       const isAdminRequest = ctx.state.userAbility || ctx.state.admin;
-      const requestingUserId = ctx.state.user?.id;
+      // Strapi v5: Use documentId instead of numeric id
+      const requestingUserDocId = ctx.state.user?.documentId;
 
       // SECURITY CHECK: Content API users can only see their own sessions
       // Admins can see any user's sessions
-      if (!isAdminRequest && requestingUserId && String(requestingUserId) !== String(userId)) {
-        strapi.log.warn(`[magic-sessionmanager] Security: User ${requestingUserId} tried to access sessions of user ${userId}`);
+      if (!isAdminRequest && requestingUserDocId && String(requestingUserDocId) !== String(userId)) {
+        strapi.log.warn(`[magic-sessionmanager] Security: User ${requestingUserDocId} tried to access sessions of user ${userId}`);
         return ctx.forbidden('You can only access your own sessions');
       }
 
@@ -102,7 +135,8 @@ module.exports = {
    */
   async logout(ctx) {
     try {
-      const userId = ctx.state.user?.id;
+      // Strapi v5: Use documentId instead of numeric id
+      const userId = ctx.state.user?.documentId;
       const token = ctx.request.headers.authorization?.replace('Bearer ', '');
 
       if (!userId) {
@@ -153,7 +187,8 @@ module.exports = {
    */
   async logoutAll(ctx) {
     try {
-      const userId = ctx.state.user?.id;
+      // Strapi v5: Use documentId instead of numeric id
+      const userId = ctx.state.user?.documentId;
 
       if (!userId) {
         return ctx.throw(401, 'Unauthorized');
@@ -340,13 +375,28 @@ module.exports = {
   /**
    * Toggle user blocked status
    * POST /magic-sessionmanager/user/:userId/toggle-block
+   * Supports both numeric id (from Content Manager) and documentId
    */
   async toggleUserBlock(ctx) {
     try {
       const { userId } = ctx.params;
       
-      // Get current user status
-      const user = await strapi.documents(USER_UID).findOne({ documentId: userId });
+      // Strapi v5: userId from params could be numeric id or documentId
+      // If numeric, look up the documentId first using entityService (fallback)
+      let userDocumentId = userId;
+      let user = null;
+      
+      // Try to find by documentId first (preferred)
+      user = await strapi.documents(USER_UID).findOne({ documentId: userId });
+      
+      // If not found, try numeric id lookup via entityService (fallback for Content Manager)
+      if (!user && !isNaN(userId)) {
+        const numericUser = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
+        if (numericUser) {
+          userDocumentId = numericUser.documentId;
+          user = numericUser;
+        }
+      }
       
       if (!user) {
         return ctx.throw(404, 'User not found');
@@ -356,7 +406,7 @@ module.exports = {
       const newBlockedStatus = !user.blocked;
       
       await strapi.documents(USER_UID).update({
-        documentId: userId,
+        documentId: userDocumentId,
         data: {
           blocked: newBlockedStatus,
         },
@@ -367,7 +417,7 @@ module.exports = {
         const sessionService = strapi
           .plugin('magic-sessionmanager')
           .service('session');
-        await sessionService.terminateSession({ userId });
+        await sessionService.terminateSession({ userId: userDocumentId });
       }
 
       ctx.body = {

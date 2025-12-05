@@ -37,12 +37,12 @@ module.exports = ({ strapi }) => ({
     strapi.log.debug('[magic-sessionmanager/notifications] Using default fallback templates');
     return {
       suspiciousLogin: {
-        subject: '🚨 Suspicious Login Alert - Session Manager',
+        subject: '[ALERT] Suspicious Login Alert - Session Manager',
         html: `
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 10px;">
-    <h2 style="color: #dc2626;">🚨 Suspicious Login Detected</h2>
+    <h2 style="color: #dc2626;">[ALERT] Suspicious Login Detected</h2>
     <p>A potentially suspicious login was detected for your account.</p>
     
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -77,7 +77,7 @@ module.exports = ({ strapi }) => ({
   </div>
 </body>
 </html>`,
-        text: `🚨 Suspicious Login Detected\n\nA potentially suspicious login was detected for your account.\n\nAccount: {{user.email}}\nUsername: {{user.username}}\n\nLogin Details:\n- Time: {{session.loginTime}}\n- IP: {{session.ipAddress}}\n- Location: {{geo.city}}, {{geo.country}}\n\nSecurity: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThreat}}, Score={{reason.securityScore}}/100`,
+        text: `[ALERT] Suspicious Login Detected\n\nA potentially suspicious login was detected for your account.\n\nAccount: {{user.email}}\nUsername: {{user.username}}\n\nLogin Details:\n- Time: {{session.loginTime}}\n- IP: {{session.ipAddress}}\n- Location: {{geo.city}}, {{geo.country}}\n\nSecurity: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThreat}}, Score={{reason.securityScore}}/100`,
       },
       newLocation: {
         subject: '[LOCATION] New Location Login Detected',
@@ -262,9 +262,9 @@ module.exports = ({ strapi }) => ({
       title: this.getEventTitle(event),
       color: this.getEventColor(event),
       fields: [
-        { name: '👤 User', value: `${user.email}\n${user.username || 'N/A'}`, inline: true },
-        { name: '🌐 IP', value: session.ipAddress, inline: true },
-        { name: '📅 Time', value: new Date(session.loginTime).toLocaleString(), inline: false },
+        { name: 'User', value: `${user.email}\n${user.username || 'N/A'}`, inline: true },
+        { name: 'IP', value: session.ipAddress, inline: true },
+        { name: 'Time', value: new Date(session.loginTime).toLocaleString(), inline: false },
       ],
       timestamp: new Date().toISOString(),
       footer: { text: 'Magic Session Manager' },
@@ -296,11 +296,11 @@ module.exports = ({ strapi }) => ({
 
   getEventTitle(event) {
     const titles = {
-      'login.suspicious': '🚨 Suspicious Login',
+      'login.suspicious': '[ALERT] Suspicious Login',
       'login.new_location': '[LOCATION] New Location Login',
-      'login.vpn': '🔴 VPN Login Detected',
-      'login.threat': '⛔ Threat IP Login',
-      'session.terminated': '🔴 Session Terminated',
+      'login.vpn': '[WARNING] VPN Login Detected',
+      'login.threat': '[THREAT] Threat IP Login',
+      'session.terminated': '[INFO] Session Terminated',
     };
     return titles[event] || '[STATS] Session Event';
   },

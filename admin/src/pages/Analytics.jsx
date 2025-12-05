@@ -506,7 +506,7 @@ const AnalyticsPage = () => {
                   textShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                 }}
               >
-                📊 Analytics Dashboard
+                Analytics Dashboard
               </Typography>
               
               <Typography 
@@ -547,7 +547,7 @@ const AnalyticsPage = () => {
                   e.currentTarget.style.boxShadow = '0 6px 16px rgba(245, 158, 11, 0.4)';
                 }}
               >
-                ✨ Upgrade to Premium
+                Upgrade to Premium
               </button>
             </div>
           </Box>

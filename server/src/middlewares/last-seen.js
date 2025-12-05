@@ -13,9 +13,10 @@ const SESSION_UID = 'plugin::magic-sessionmanager.session';
 module.exports = ({ strapi, sessionService }) => {
   return async (ctx, next) => {
     // BEFORE processing request: Check if user's sessions are active
-    if (ctx.state.user && ctx.state.user.id) {
+    // Strapi v5: Use documentId instead of numeric id for Document Service API
+    if (ctx.state.user && ctx.state.user.documentId) {
       try {
-        const userId = ctx.state.user.id;
+        const userId = ctx.state.user.documentId;
         
         // Check if user has ANY active sessions
         const activeSessions = await strapi.documents(SESSION_UID).findMany( {
@@ -41,9 +42,9 @@ module.exports = ({ strapi, sessionService }) => {
     await next();
 
     // AFTER response: Update activity timestamps if user is authenticated
-    if (ctx.state.user && ctx.state.user.id) {
+    if (ctx.state.user && ctx.state.user.documentId) {
       try {
-        const userId = ctx.state.user.id;
+        const userId = ctx.state.user.documentId;
 
         // Try to find or extract sessionId from context
         const sessionId = ctx.state.sessionId;

@@ -63,6 +63,7 @@ module.exports = ({ strapi }) => ({
 
   /**
    * Terminate a session or all sessions for a user
+   * Supports both numeric id (legacy) and documentId (Strapi v5)
    * @param {Object} params - { sessionId | userId }
    * @returns {Promise<void>}
    */
@@ -82,10 +83,19 @@ module.exports = ({ strapi }) => ({
 
         strapi.log.info(`[magic-sessionmanager] Session ${sessionId} terminated`);
       } else if (userId) {
+        // Strapi v5: If numeric id provided, look up documentId first
+        let userDocumentId = userId;
+        if (!isNaN(userId)) {
+          const user = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
+          if (user) {
+            userDocumentId = user.documentId;
+          }
+        }
+        
         // Find all active sessions for user - use Deep Filtering (Strapi v5)
         const activeSessions = await strapi.documents(SESSION_UID).findMany({
           filters: {
-            user: { documentId: userId }, // Deep filtering syntax
+            user: { documentId: userDocumentId }, // Deep filtering syntax
             isActive: true,
           },
         });
@@ -101,7 +111,7 @@ module.exports = ({ strapi }) => ({
           });
         }
 
-        strapi.log.info(`[magic-sessionmanager] All sessions terminated for user ${userId}`);
+        strapi.log.info(`[magic-sessionmanager] All sessions terminated for user ${userDocumentId}`);
       }
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error terminating session:', err);
@@ -196,13 +206,23 @@ module.exports = ({ strapi }) => ({
 
   /**
    * Get all sessions for a specific user
-   * @param {number} userId
+   * Supports both numeric id (legacy) and documentId (Strapi v5)
+   * @param {string|number} userId - User documentId or numeric id
    * @returns {Promise<Array>} User's sessions with accurate online status
    */
   async getUserSessions(userId) {
     try {
+      // Strapi v5: If numeric id provided, look up documentId first
+      let userDocumentId = userId;
+      if (!isNaN(userId)) {
+        const user = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
+        if (user) {
+          userDocumentId = user.documentId;
+        }
+      }
+      
       const sessions = await strapi.documents(SESSION_UID).findMany( {
-        filters: { user: { documentId: userId } },
+        filters: { user: { documentId: userDocumentId } },
         sort: { loginTime: 'desc' },
       });
 

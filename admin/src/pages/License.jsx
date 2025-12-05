@@ -465,7 +465,7 @@ Generated:   ${new Date().toLocaleString()}
                   {data.features?.premium && (
                     <Box marginBottom={5} padding={5} background="success50" hasRadius style={{ border: '2px solid #dcfce7' }}>
                       <Typography variant="delta" fontWeight="bold" textColor="success700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        ✨ Premium Features Active
+                        Premium Features Active
                       </Typography>
                       <Flex direction="column" gap={2}>
                         <Typography variant="omega" textColor="success700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -494,7 +494,7 @@ Generated:   ${new Date().toLocaleString()}
                   {data.features?.advanced && (
                     <Box marginBottom={5} padding={5} background="primary50" hasRadius style={{ border: '2px solid #bae6fd' }}>
                       <Typography variant="delta" fontWeight="bold" textColor="primary700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        🚀 Advanced Features Active
+                        Advanced Features Active
                       </Typography>
                       <Flex direction="column" gap={2}>
                         <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>

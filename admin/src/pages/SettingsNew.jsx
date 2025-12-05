@@ -206,12 +206,12 @@ const validateTemplate = (template, templateType) => {
 // Get default email templates
 const getDefaultTemplates = () => ({
   suspiciousLogin: {
-    subject: '🚨 Suspicious Login Alert - Session Manager',
+    subject: '[ALERT] Suspicious Login Alert - Session Manager',
     html: `
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 10px;">
-    <h2 style="color: #dc2626;">🚨 Suspicious Login Detected</h2>
+    <h2 style="color: #dc2626;">[ALERT] Suspicious Login Detected</h2>
     <p>A potentially suspicious login was detected for your account.</p>
     
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -246,7 +246,7 @@ const getDefaultTemplates = () => ({
   </div>
 </body>
 </html>`,
-    text: `🚨 Suspicious Login Detected
+    text: `[ALERT] Suspicious Login Detected
 
 A potentially suspicious login was detected for your account.
 
@@ -261,12 +261,12 @@ Login Details:
 Security: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThreat}}, Score={{reason.securityScore}}/100`,
   },
   newLocation: {
-    subject: '📍 New Location Login Detected',
+    subject: '[LOCATION] New Location Login Detected',
     html: `
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f0f9ff; border-radius: 10px;">
-    <h2 style="color: #0284c7;">📍 Login from New Location</h2>
+    <h2 style="color: #0284c7;">[LOCATION] Login from New Location</h2>
     <p>Your account was accessed from a new location.</p>
     
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -289,7 +289,7 @@ Security: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThre
   </div>
 </body>
 </html>`,
-    text: `📍 Login from New Location
+    text: `[LOCATION] Login from New Location
 
 Your account was accessed from a new location.
 
@@ -304,12 +304,12 @@ New Location Details:
 If this was you, no action is needed.`,
   },
   vpnProxy: {
-    subject: '⚠️ VPN/Proxy Login Detected',
+    subject: '[WARNING] VPN/Proxy Login Detected',
     html: `
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fffbeb; border-radius: 10px;">
-    <h2 style="color: #d97706;">⚠️ VPN/Proxy Detected</h2>
+    <h2 style="color: #d97706;">[WARNING] VPN/Proxy Detected</h2>
     <p>A login from a VPN or proxy service was detected on your account.</p>
     
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -334,7 +334,7 @@ If this was you, no action is needed.`,
   </div>
 </body>
 </html>`,
-    text: `⚠️ VPN/Proxy Detected
+    text: `[WARNING] VPN/Proxy Detected
 
 A login from a VPN or proxy service was detected on your account.
 
@@ -444,7 +444,7 @@ const SettingsPage = () => {
   };
 
   const handleCleanInactive = async () => {
-    if (!confirm('⚠️ WARNING: This will permanently delete ALL inactive sessions.\n\nContinue?')) {
+    if (!confirm('[WARNING] This will permanently delete ALL inactive sessions.\n\nContinue?')) {
       return;
     }
 
@@ -553,7 +553,7 @@ const SettingsPage = () => {
                 
                 {/* Session Timeout */}
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
-                  ⏱️ SESSION TIMEOUT
+                  SESSION TIMEOUT
                 </Typography>
                 <Grid.Root gap={6} style={{ marginBottom: '32px' }}>
                   <Grid.Item col={6} s={12}>
@@ -694,7 +694,7 @@ const SettingsPage = () => {
               <Box padding={6}>
                 
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
-                  🔒 SECURITY OPTIONS
+                  SECURITY OPTIONS
                 </Typography>
                 
                 {/* Feature Toggles */}
@@ -866,7 +866,7 @@ const SettingsPage = () => {
                               checked={settings.alertOnSuspiciousLogin}
                               onChange={() => handleChange('alertOnSuspiciousLogin', !settings.alertOnSuspiciousLogin)}
                             >
-                              🚨 Suspicious Login
+                              Suspicious Login
                             </Checkbox>
                           </Box>
                         </Grid.Item>
@@ -876,7 +876,7 @@ const SettingsPage = () => {
                               checked={settings.alertOnNewLocation}
                               onChange={() => handleChange('alertOnNewLocation', !settings.alertOnNewLocation)}
                             >
-                              📍 New Location
+                              New Location
                             </Checkbox>
                           </Box>
                         </Grid.Item>
@@ -886,7 +886,7 @@ const SettingsPage = () => {
                               checked={settings.alertOnVpnProxy}
                               onChange={() => handleChange('alertOnVpnProxy', !settings.alertOnVpnProxy)}
                             >
-                              ⚠️ VPN/Proxy
+                              VPN/Proxy
                             </Checkbox>
                           </Box>
                         </Grid.Item>
@@ -895,7 +895,7 @@ const SettingsPage = () => {
                       {/* Email Templates */}
                       <Divider style={{ marginBottom: '24px' }} />
                       <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: theme.colors.neutral[700] }}>
-                        📝 EMAIL TEMPLATES
+                        EMAIL TEMPLATES
                       </Typography>
                       <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', fontSize: '12px' }}>
                         Customize email notification templates with dynamic variables
@@ -904,9 +904,9 @@ const SettingsPage = () => {
                       {/* Template Tabs */}
                       <Tabs.Root value={activeTemplateTab} onValueChange={setActiveTemplateTab}>
                         <Tabs.List aria-label="Email Templates">
-                          <Tabs.Trigger value="suspiciousLogin">🚨 Suspicious Login</Tabs.Trigger>
-                          <Tabs.Trigger value="newLocation">📍 New Location</Tabs.Trigger>
-                          <Tabs.Trigger value="vpnProxy">⚠️ VPN/Proxy</Tabs.Trigger>
+                          <Tabs.Trigger value="suspiciousLogin">Suspicious Login</Tabs.Trigger>
+                          <Tabs.Trigger value="newLocation">New Location</Tabs.Trigger>
+                          <Tabs.Trigger value="vpnProxy">VPN/Proxy</Tabs.Trigger>
                         </Tabs.List>
                         
                         {Object.keys(settings.emailTemplates).map((templateKey) => (
@@ -915,7 +915,7 @@ const SettingsPage = () => {
                               {/* Subject */}
                               <Box style={{ marginBottom: '24px' }}>
                                 <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                                  ✉️ Email Subject
+                                  Email Subject
                                 </Typography>
                                 <TextInput
                                   value={settings.emailTemplates[templateKey].subject}
@@ -1151,7 +1151,7 @@ const SettingsPage = () => {
             <Information style={{ width: '20px', height: '20px', color: theme.colors.neutral[600], flexShrink: 0, marginTop: '2px' }} />
             <Box style={{ flex: 1 }}>
               <Typography variant="omega" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                💡 How to Apply These Settings
+                How to Apply These Settings
               </Typography>
               <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.8' }}>
                 Settings are saved in your browser. To apply permanently, copy the config below and paste it into{' '}

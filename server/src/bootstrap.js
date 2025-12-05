@@ -163,7 +163,8 @@ module.exports = async ({ strapi }) => {
           const ip = getClientIp(ctx);
           const userAgent = ctx.request.headers?.['user-agent'] || ctx.request.header?.['user-agent'] || 'unknown';
           
-          strapi.log.info(`[magic-sessionmanager] [CHECK] Login detected! User: ${user.id} (${user.email || user.username}) from IP: ${ip}`);
+          // Strapi v5: Use documentId for session creation
+          strapi.log.info(`[magic-sessionmanager] [CHECK] Login detected! User: ${user.documentId || user.id} (${user.email || user.username}) from IP: ${ip}`);
           
           // Get config
           const config = strapi.config.get('plugin::magic-sessionmanager') || {};
@@ -235,16 +236,23 @@ module.exports = async ({ strapi }) => {
             return; // Stop here
           }
           
-          // Create a new session
+          // Create a new session (Strapi v5: Use documentId instead of numeric id)
+          // If login response doesn't include documentId, fetch it from DB
+          let userDocId = user.documentId;
+          if (!userDocId && user.id) {
+            const fullUser = await strapi.entityService.findOne(USER_UID, user.id);
+            userDocId = fullUser?.documentId || user.id;
+          }
+          
           const newSession = await sessionService.createSession({
-            userId: user.id,
+            userId: userDocId,
             ip,
             userAgent,
             token: ctx.body.jwt,              // Store Access Token (encrypted)
             refreshToken: ctx.body.refreshToken, // Store Refresh Token (encrypted) if exists
           });
           
-          strapi.log.info(`[magic-sessionmanager] [SUCCESS] Session created for user ${user.id} (IP: ${ip})`);
+          strapi.log.info(`[magic-sessionmanager] [SUCCESS] Session created for user ${userDocId} (IP: ${ip})`);
           
           // Advanced: Send notifications
           if (geoData && (config.enableEmailAlerts || config.enableWebhooks)) {
@@ -407,6 +415,10 @@ module.exports = async ({ strapi }) => {
     );
 
     strapi.log.info('[magic-sessionmanager] [SUCCESS] LastSeen middleware mounted');
+
+    // Auto-enable Content-API permissions for authenticated users
+    await ensureContentApiPermissions(strapi);
+
     strapi.log.info('[magic-sessionmanager] [SUCCESS] Bootstrap complete');
     strapi.log.info('[magic-sessionmanager] [READY] Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
     
@@ -414,3 +426,63 @@ module.exports = async ({ strapi }) => {
     strapi.log.error('[magic-sessionmanager] [ERROR] Bootstrap error:', err);
   }
 };
+
+/**
+ * Auto-enable Content-API permissions for authenticated users
+ * This ensures plugin endpoints are accessible after installation
+ * @param {object} strapi - Strapi instance
+ */
+async function ensureContentApiPermissions(strapi) {
+  try {
+    // Get the authenticated role
+    const authenticatedRole = await strapi.query('plugin::users-permissions.role').findOne({
+      where: { type: 'authenticated' },
+    });
+
+    if (!authenticatedRole) {
+      strapi.log.warn('[magic-sessionmanager] Authenticated role not found - skipping permission setup');
+      return;
+    }
+
+    // Content-API actions that should be enabled for authenticated users
+    const requiredActions = [
+      'plugin::magic-sessionmanager.session.logout',
+      'plugin::magic-sessionmanager.session.logoutAll',
+      'plugin::magic-sessionmanager.session.getOwnSessions',
+      'plugin::magic-sessionmanager.session.getUserSessions',
+    ];
+
+    // Get existing permissions for this role
+    const existingPermissions = await strapi.query('plugin::users-permissions.permission').findMany({
+      where: {
+        role: authenticatedRole.id,
+        action: { $in: requiredActions },
+      },
+    });
+
+    // Find which actions are missing
+    const existingActions = existingPermissions.map(p => p.action);
+    const missingActions = requiredActions.filter(action => !existingActions.includes(action));
+
+    if (missingActions.length === 0) {
+      strapi.log.debug('[magic-sessionmanager] Content-API permissions already configured');
+      return;
+    }
+
+    // Create missing permissions
+    for (const action of missingActions) {
+      await strapi.query('plugin::users-permissions.permission').create({
+        data: {
+          action,
+          role: authenticatedRole.id,
+        },
+      });
+      strapi.log.info(`[magic-sessionmanager] [PERMISSION] Enabled ${action} for authenticated users`);
+    }
+
+    strapi.log.info('[magic-sessionmanager] [SUCCESS] Content-API permissions configured for authenticated users');
+  } catch (err) {
+    strapi.log.warn('[magic-sessionmanager] Could not auto-configure permissions:', err.message);
+    strapi.log.warn('[magic-sessionmanager] Please manually enable plugin permissions in Settings > Users & Permissions > Roles > Authenticated');
+  }
+}

@@ -16,7 +16,8 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   const { get, post: postRequest } = useFetchClient();
   const { toggleNotification } = useNotification();
 
-  const userId = document?.id || documentId;
+  // Strapi v5: Use documentId (string UUID) instead of numeric id
+  const userId = document?.documentId || documentId;
 
   useEffect(() => {
     if (model !== 'plugin::users-permissions.user' || !userId) {
@@ -144,7 +145,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               size="M"
               style={{ fontSize: '14px', padding: '6px 12px' }}
             >
-              {isOnline ? '🟢 ACTIVE' : '⚫ OFFLINE'}
+              {isOnline ? 'ACTIVE' : 'OFFLINE'}
             </Badge>
             <Typography variant="omega" fontWeight="semiBold" textColor={isOnline ? 'success700' : 'neutral700'}>
               {sessions.length} active session{sessions.length !== 1 ? 's' : ''}

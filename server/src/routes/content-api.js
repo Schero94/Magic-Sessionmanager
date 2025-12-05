@@ -40,12 +40,21 @@ module.exports = {
     
     {
       method: 'GET',
+      path: '/my-sessions',
+      handler: 'session.getOwnSessions',
+      config: {
+        auth: { strategies: ['users-permissions'] },
+        description: 'Get own sessions (automatically uses authenticated user)',
+      },
+    },
+    {
+      method: 'GET',
       path: '/user/:userId/sessions',
       handler: 'session.getUserSessions',
       config: {
         auth: { strategies: ['users-permissions'] },
-        description: 'Get own sessions (controller validates user can only see own sessions)',
+        description: 'Get sessions by userId (validates user can only see own sessions)',
+      },
     },
-  },
   ],
 };

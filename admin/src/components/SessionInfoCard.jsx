@@ -76,11 +76,11 @@ const SessionInfoCard = ({ id, model }) => {
           </Typography>
           {isOnline ? (
             <Badge active backgroundColor="success500">
-              🟢 Online
+              Online
             </Badge>
           ) : (
             <Badge backgroundColor="neutral150">
-              ⚫ Offline
+              Offline
             </Badge>
           )}
         </Flex>
@@ -110,7 +110,7 @@ const SessionInfoCard = ({ id, model }) => {
                 marginBottom={2}
               >
                 <Typography variant="pi" textColor="neutral800">
-                  📱 {session.ipAddress}
+                  IP: {session.ipAddress}
                 </Typography>
                 <Typography variant="pi" textColor="neutral600" fontSize="11px">
                   {new Date(session.loginTime).toLocaleString()}
