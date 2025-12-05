@@ -1,3 +1,10 @@
+## [4.0.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.0.0...v4.0.1) (2025-12-05)
+
+
+### Bug Fixes
+
+* replace emojis with text prefixes for better compatibility ([a8b319e](https://github.com/Schero94/Magic-Sessionmanager/commit/a8b319e0b0cf8b71a4da4aafa454adaf9e60203d))
+
 # [4.0.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v3.7.0...v4.0.0) (2025-12-04)
 
 
