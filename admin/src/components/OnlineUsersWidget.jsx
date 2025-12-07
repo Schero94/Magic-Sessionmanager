@@ -1,14 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useIntl } from 'react-intl';
 import { Box, Typography, Flex, Grid } from '@strapi/design-system';
 import { Check, Cross, Clock, User, Monitor } from '@strapi/icons';
 import { useFetchClient } from '@strapi/strapi/admin';
+import { getTranslation } from '../utils/getTranslation';
 
 /**
  * Online Users Widget - Dashboard widget showing user activity statistics
  * Styled exactly like Project Statistics
  */
 const OnlineUsersWidget = () => {
+  const { formatMessage } = useIntl();
   const { get } = useFetchClient();
+  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [stats, setStats] = useState({
     onlineNow: 0,
     offline: 0,
@@ -137,7 +141,7 @@ const OnlineUsersWidget = () => {
   if (loading) {
     return (
       <Box padding={4}>
-        <Typography variant="pi" textColor="neutral600">Loading...</Typography>
+        <Typography variant="pi" textColor="neutral600">{t('common.loading', 'Loading...')}</Typography>
       </Box>
     );
   }
@@ -149,7 +153,7 @@ const OnlineUsersWidget = () => {
           <Grid.Item col={1}>
             <StatCard 
               icon={Check} 
-              label="Online Now" 
+              label={t('widget.stats.onlineNow', 'Online Now')}
               value={stats.onlineNow}
               color="success"
             />
@@ -158,7 +162,7 @@ const OnlineUsersWidget = () => {
           <Grid.Item col={1}>
             <StatCard 
               icon={Cross} 
-              label="Offline" 
+              label={t('widget.stats.offline', 'Offline')}
               value={stats.offline}
               color="neutral"
             />
@@ -167,7 +171,7 @@ const OnlineUsersWidget = () => {
           <Grid.Item col={1}>
             <StatCard 
               icon={Clock} 
-              label="Last 15 min" 
+              label={t('widget.stats.last15min', 'Last 15 min')}
               value={stats.last15min}
               color="primary"
             />
@@ -176,7 +180,7 @@ const OnlineUsersWidget = () => {
           <Grid.Item col={1}>
             <StatCard 
               icon={Clock} 
-              label="Last 30 min" 
+              label={t('widget.stats.last30min', 'Last 30 min')}
               value={stats.last30min}
               color="secondary"
             />
@@ -185,7 +189,7 @@ const OnlineUsersWidget = () => {
           <Grid.Item col={1}>
             <StatCard 
               icon={User} 
-              label="Total Users" 
+              label={t('widget.stats.totalUsers', 'Total Users')}
               value={stats.totalUsers}
               color="neutral"
             />
@@ -194,7 +198,7 @@ const OnlineUsersWidget = () => {
           <Grid.Item col={1}>
             <StatCard 
               icon={Cross} 
-              label="Blocked" 
+              label={t('widget.stats.blocked', 'Blocked')}
               value={stats.blocked}
               color="danger"
             />

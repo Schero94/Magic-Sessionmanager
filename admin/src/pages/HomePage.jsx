@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useIntl } from 'react-intl';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import styled, { keyframes, css } from 'styled-components';
+import { getTranslation } from '../utils/getTranslation';
+import { theme } from '../utils/theme';
 import {
   Box,
   Button,
@@ -35,72 +38,6 @@ import pluginId from '../pluginId';
 import parseUserAgent from '../utils/parseUserAgent';
 import SessionDetailModal from '../components/SessionDetailModal';
 import { useLicense } from '../hooks/useLicense';
-
-// ================ THEME ================
-const theme = {
-  colors: {
-    primary: {
-      50: '#F0F9FF',
-      100: '#E0F2FE',
-      500: '#0EA5E9',
-      600: '#0284C7',
-      700: '#0369A1',
-    },
-    secondary: {
-      500: '#A855F7',
-      600: '#9333EA',
-    },
-    success: {
-      100: '#DCFCE7',
-      500: '#22C55E',
-      600: '#16A34A',
-      700: '#15803D',
-    },
-    warning: {
-      100: '#FEF3C7',
-      500: '#F59E0B',
-      600: '#D97706',
-    },
-    danger: {
-      100: '#FEE2E2',
-      500: '#EF4444',
-      600: '#DC2626',
-    },
-    neutral: {
-      0: '#FFFFFF',
-      50: '#F9FAFB',
-      100: '#F3F4F6',
-      200: '#E5E7EB',
-      600: '#4B5563',
-      700: '#374151',
-      800: '#1F2937',
-    }
-  },
-  shadows: {
-    sm: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
-    md: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
-    lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
-    xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-  },
-  transitions: {
-    fast: '150ms cubic-bezier(0.4, 0, 0.2, 1)',
-    normal: '300ms cubic-bezier(0.4, 0, 0.2, 1)',
-    slow: '500ms cubic-bezier(0.4, 0, 0.2, 1)',
-  },
-  spacing: {
-    xs: '4px',
-    sm: '8px',
-    md: '16px',
-    lg: '24px',
-    xl: '32px',
-    '2xl': '48px',
-  },
-  borderRadius: {
-    md: '8px',
-    lg: '12px',
-    xl: '16px',
-  }
-};
 
 // ================ ANIMATIONS ================
 const fadeIn = keyframes`
@@ -203,7 +140,7 @@ const HeaderContent = styled(Flex)`
 `;
 
 const Title = styled(Typography)`
-  color: ${theme.colors.neutral[0]};
+  color: white;
   font-size: 2rem;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -258,7 +195,7 @@ const StatsGrid = styled.div`
 `;
 
 const StatCard = styled(Box)`
-  background: ${theme.colors.neutral[0]};
+  background: ${props => props.theme.colors.neutral0};
   border-radius: ${theme.borderRadius.lg};
   padding: 28px ${theme.spacing.lg};
   position: relative;
@@ -267,7 +204,7 @@ const StatCard = styled(Box)`
   ${css`animation: ${fadeIn} ${theme.transitions.slow} backwards;`}
   animation-delay: ${props => props.$delay || '0s'};
   box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${props => props.theme.colors.neutral200};
   min-width: 200px;
   flex: 1;
   text-align: center;
@@ -288,7 +225,7 @@ const StatCard = styled(Box)`
   &:hover {
     transform: translateY(-6px);
     box-shadow: ${theme.shadows.xl};
-    border-color: ${props => props.$color || theme.colors.primary[500]};
+    border-color: ${props => props.$color || props.theme.colors.primary600};
     
     .stat-icon {
       transform: scale(1.15) rotate(5deg);
@@ -296,7 +233,7 @@ const StatCard = styled(Box)`
     
     .stat-value {
       transform: scale(1.08);
-      color: ${props => props.$color || theme.colors.primary[600]};
+      color: ${props => props.$color || props.theme.colors.primary600};
     }
   }
 `;
@@ -308,7 +245,7 @@ const StatIcon = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${props => props.$bg || theme.colors.primary[100]};
+  background: ${props => props.$bg || props.theme.colors.primary100};
   transition: all ${theme.transitions.normal};
   margin: 0 auto 20px;
   box-shadow: ${theme.shadows.sm};
@@ -316,7 +253,7 @@ const StatIcon = styled(Box)`
   svg {
     width: 34px;
     height: 34px;
-    color: ${props => props.$color || theme.colors.primary[600]};
+    color: ${props => props.$color || props.theme.colors.primary600};
   }
   
   @media screen and (max-width: ${breakpoints.mobile}) {
@@ -334,7 +271,7 @@ const StatIcon = styled(Box)`
 const StatValue = styled(Typography)`
   font-size: 2.75rem;
   font-weight: 700;
-  color: ${theme.colors.neutral[800]};
+  color: ${props => props.theme.colors.neutral800};
   line-height: 1;
   margin-bottom: 10px;
   transition: all ${theme.transitions.normal};
@@ -348,7 +285,7 @@ const StatValue = styled(Typography)`
 
 const StatLabel = styled(Typography)`
   font-size: 0.95rem;
-  color: ${theme.colors.neutral[600]};
+  color: ${props => props.theme.colors.neutral600};
   font-weight: 500;
   letter-spacing: 0.025em;
   text-align: center;
@@ -359,22 +296,22 @@ const StatLabel = styled(Typography)`
 `;
 
 const DataTable = styled(Box)`
-  background: ${theme.colors.neutral[0]};
+  background: ${props => props.theme.colors.neutral0};
   border-radius: ${theme.borderRadius.lg};
   overflow: hidden;
   box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${props => props.theme.colors.neutral200};
   margin-bottom: ${theme.spacing.xl};
 `;
 
 const StyledTable = styled(Table)`
   thead {
-    background: ${theme.colors.neutral[50]};
-    border-bottom: 2px solid ${theme.colors.neutral[200]};
+    background: ${props => props.theme.colors.neutral100};
+    border-bottom: 2px solid ${props => props.theme.colors.neutral200};
     
     th {
       font-weight: 600;
-      color: ${theme.colors.neutral[700]};
+      color: ${props => props.theme.colors.neutral800};
       font-size: 0.875rem;
       text-transform: uppercase;
       letter-spacing: 0.025em;
@@ -384,14 +321,14 @@ const StyledTable = styled(Table)`
   
   tbody tr {
     transition: all ${theme.transitions.fast};
-    border-bottom: 1px solid ${theme.colors.neutral[100]};
+    border-bottom: 1px solid ${props => props.theme.colors.neutral150};
     
     &:last-child {
       border-bottom: none;
     }
     
     &:hover {
-      background: ${theme.colors.neutral[50]};
+      background: ${props => props.theme.colors.primary100};
       
       .action-buttons {
         opacity: 1;
@@ -400,7 +337,7 @@ const StyledTable = styled(Table)`
     
     td {
       padding: ${theme.spacing.lg} ${theme.spacing.lg};
-      color: ${theme.colors.neutral[700]};
+      color: ${props => props.theme.colors.neutral800};
       vertical-align: middle;
     }
   }
@@ -410,19 +347,19 @@ const OnlineIndicator = styled.div`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: ${props => props.$online ? theme.colors.success[500] : theme.colors.neutral[400]};
+  background: ${props => props.$online ? theme.colors.success[500] : props.theme.colors.neutral400};
   display: inline-block;
   margin-right: 8px;
   ${css`animation: ${props => props.$online ? pulse : 'none'} 2s ease-in-out infinite;`}
 `;
 
 const FilterBar = styled(Flex)`
-  background: ${theme.colors.neutral[0]};
+  background: ${props => props.theme.colors.neutral0};
   padding: ${theme.spacing.md} ${theme.spacing.lg};
   border-radius: ${theme.borderRadius.lg};
   margin-bottom: ${theme.spacing.lg};
   box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${props => props.theme.colors.neutral200};
   gap: ${theme.spacing.md};
   align-items: center;
 `;
@@ -439,28 +376,28 @@ const SearchIcon = styled(Search)`
   left: 12px;
   width: 16px;
   height: 16px;
-  color: ${theme.colors.neutral[600]};
+  color: ${props => props.theme.colors.neutral600};
   pointer-events: none;
 `;
 
 const StyledSearchInput = styled.input`
   width: 100%;
   padding: ${theme.spacing.sm} ${theme.spacing.sm} ${theme.spacing.sm} 36px;
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${props => props.theme.colors.neutral200};
   border-radius: ${theme.borderRadius.md};
   font-size: 0.875rem;
   transition: all ${theme.transitions.fast};
-  background: ${theme.colors.neutral[0]};
-  color: ${theme.colors.neutral[800]};
+  background: ${props => props.theme.colors.neutral0};
+  color: ${props => props.theme.colors.neutral800};
   
   &:focus {
     outline: none;
-    border-color: ${theme.colors.primary[500]};
-    box-shadow: 0 0 0 3px ${theme.colors.primary[100]};
+    border-color: ${props => props.theme.colors.primary600};
+    box-shadow: 0 0 0 3px ${props => props.theme.colors.primary100};
   }
   
   &::placeholder {
-    color: ${theme.colors.neutral[600]};
+    color: ${props => props.theme.colors.neutral500};
   }
 `;
 
@@ -475,14 +412,42 @@ const ClickableRow = styled(Tr)`
   cursor: pointer;
   
   &:hover {
-    background: ${theme.colors.primary[50]} !important;
+    background: ${props => props.theme.colors.primary100} !important;
   }
 `;
 
+// Empty state background that works in dark mode
+const EmptyStateBox = styled(Box)`
+  background: ${props => props.theme.colors.neutral0};
+  border-radius: ${theme.borderRadius.xl};
+  border: 2px dashed ${props => props.theme.colors.neutral300};
+  padding: 80px 32px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const EmptyStateGradient = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, ${theme.colors.primary[50]} 0%, ${theme.colors.secondary[50]} 100%);
+  opacity: 0.3;
+  z-index: 0;
+`;
+
 const HomePage = () => {
+  const { formatMessage } = useIntl();
   const { get, post, del } = useFetchClient();
   const { toggleNotification } = useNotification();
   const { isPremium } = useLicense();
+  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('active'); // Default: Active Only
@@ -518,7 +483,7 @@ const HomePage = () => {
     };
 
   const handleTerminateSession = async (sessionId) => {
-    if (!confirm('Are you sure you want to terminate this session?\n\nThis will set isActive to false (user will be logged out).')) {
+    if (!confirm(t('homepage.confirm.terminate', 'Are you sure you want to terminate this session?\n\nThis will set isActive to false (user will be logged out).'))) {
       return;
     }
 
@@ -531,7 +496,7 @@ const HomePage = () => {
   };
 
   const handleDeleteSession = async (sessionId) => {
-    if (!confirm('[WARNING] This will PERMANENTLY delete this session from the database!\n\nThis action cannot be undone.\n\nAre you sure?')) {
+    if (!confirm(t('homepage.confirm.delete', '[WARNING] This will PERMANENTLY delete this session from the database!\n\nThis action cannot be undone.\n\nAre you sure?'))) {
       return;
     }
 
@@ -540,13 +505,13 @@ const HomePage = () => {
       fetchSessions();
       toggleNotification({
         type: 'success',
-        message: 'Session permanently deleted',
+        message: t('notifications.success.deleted', 'Session permanently deleted'),
       });
     } catch (err) {
       console.error('[SessionManager] Error deleting session:', err);
       toggleNotification({
         type: 'danger',
-        message: 'Failed to delete session',
+        message: t('notifications.error.delete', 'Failed to delete session'),
       });
     }
   };
@@ -555,7 +520,7 @@ const HomePage = () => {
     if (!isPremium) {
       toggleNotification({
         type: 'warning',
-        message: 'Premium license required for export functionality',
+        message: t('notifications.warning.premiumRequired', 'Premium license required for export functionality'),
       });
       return;
     }
@@ -600,13 +565,13 @@ const HomePage = () => {
       
       toggleNotification({
         type: 'success',
-        message: `Exported ${filteredSessions.length} sessions to CSV`,
+        message: t('notifications.success.exported', 'Exported {count} sessions to {format}', { count: filteredSessions.length, format: 'CSV' }),
       });
     } catch (err) {
       console.error('[SessionManager] Export error:', err);
       toggleNotification({
         type: 'danger',
-        message: 'Failed to export sessions',
+        message: t('notifications.error.export', 'Failed to export sessions'),
       });
     }
   };
@@ -615,7 +580,7 @@ const HomePage = () => {
     if (!isPremium) {
       toggleNotification({
         type: 'warning',
-        message: 'Premium license required for export functionality',
+        message: t('notifications.warning.premiumRequired', 'Premium license required for export functionality'),
       });
       return;
     }
@@ -661,13 +626,13 @@ const HomePage = () => {
       
       toggleNotification({
         type: 'success',
-        message: `Exported ${filteredSessions.length} sessions to JSON`,
+        message: t('notifications.success.exported', 'Exported {count} sessions to {format}', { count: filteredSessions.length, format: 'JSON' }),
       });
     } catch (err) {
       console.error('[SessionManager] Export error:', err);
       toggleNotification({
         type: 'danger',
-        message: 'Failed to export sessions',
+        message: t('notifications.error.export', 'Failed to export sessions'),
       });
     }
   };
@@ -741,10 +706,10 @@ const HomePage = () => {
         <HeaderContent justifyContent="space-between" alignItems="center">
           <Flex direction="column" alignItems="flex-start" gap={2}>
             <Title>
-              <Monitor /> Session Manager
+              <Monitor /> {t('homepage.title', 'Session Manager')}
             </Title>
             <Subtitle>
-              Monitor and manage user sessions in real-time
+              {t('homepage.subtitle', 'Monitor and manage user sessions in real-time')}
             </Subtitle>
           </Flex>
       
@@ -762,7 +727,7 @@ const HomePage = () => {
                   fontWeight: '600',
                 }}
               >
-                Export CSV
+                {t('homepage.export.csv', 'Export CSV')}
               </Button>
               <Button
                 onClick={handleExportJSON}
@@ -776,7 +741,7 @@ const HomePage = () => {
                   fontWeight: '600',
                 }}
               >
-                Export JSON
+                {t('homepage.export.json', 'Export JSON')}
               </Button>
             </Flex>
           )}
@@ -790,7 +755,7 @@ const HomePage = () => {
             <Check />
           </StatIcon>
           <StatValue className="stat-value">{activeSessions.length}</StatValue>
-          <StatLabel>Active</StatLabel>
+          <StatLabel>{t('homepage.stats.active', 'Active')}</StatLabel>
         </StatCard>
 
         <StatCard $delay="0.2s" $color={theme.colors.warning[500]}>
@@ -798,7 +763,7 @@ const HomePage = () => {
             <Clock />
           </StatIcon>
           <StatValue className="stat-value">{idleSessions.length}</StatValue>
-          <StatLabel>Idle</StatLabel>
+          <StatLabel>{t('homepage.stats.idle', 'Idle')}</StatLabel>
         </StatCard>
 
         <StatCard $delay="0.3s" $color={theme.colors.danger[500]}>
@@ -806,30 +771,30 @@ const HomePage = () => {
             <Cross />
           </StatIcon>
           <StatValue className="stat-value">{loggedOutSessions.length}</StatValue>
-          <StatLabel>Logged Out</StatLabel>
+          <StatLabel>{t('homepage.stats.loggedOut', 'Logged Out')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.4s" $color={theme.colors.neutral[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.neutral[100]} $color={theme.colors.neutral[600]}>
+        <StatCard $delay="0.4s" $color="#4B5563">
+          <StatIcon className="stat-icon" $bg="#F3F4F6" $color="#4B5563">
             <Cross />
           </StatIcon>
           <StatValue className="stat-value">{terminatedSessions.length}</StatValue>
-          <StatLabel>Terminated</StatLabel>
+          <StatLabel>{t('homepage.stats.terminated', 'Terminated')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.5s" $color={theme.colors.secondary[500]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.secondary[100]} $color={theme.colors.secondary[600]}>
+        <StatCard $delay="0.5s" $color="#A855F7">
+          <StatIcon className="stat-icon" $bg="#EDE9FE" $color="#9333EA">
             <User />
           </StatIcon>
           <StatValue className="stat-value">{sessions.length}</StatValue>
-          <StatLabel>Total</StatLabel>
+          <StatLabel>{t('homepage.stats.total', 'Total')}</StatLabel>
         </StatCard>
       </StatsGrid>
 
       {/* Loading */}
       {loading && (
         <Flex justifyContent="center" padding={8}>
-          <Loader>Loading sessions...</Loader>
+          <Loader>{t('homepage.loading', 'Loading sessions...')}</Loader>
         </Flex>
       )}
 
@@ -837,8 +802,8 @@ const HomePage = () => {
       {!loading && sessions.length > 0 && (
         <Box>
           <Box style={{ marginBottom: theme.spacing.md }}>
-            <Typography variant="delta" style={{ marginBottom: theme.spacing.md, color: theme.colors.neutral[700] }}>
-              All Sessions
+            <Typography variant="delta" textColor="neutral700" style={{ marginBottom: theme.spacing.md }}>
+              {t('homepage.allSessions', 'All Sessions')}
             </Typography>
           </Box>
           
@@ -850,7 +815,7 @@ const HomePage = () => {
               <StyledSearchInput
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by user, IP address, or device..."
+                placeholder={t('homepage.search.placeholder', 'Search by user, IP address, or device...')}
                 type="text"
               />
             </SearchInputWrapper>
@@ -863,11 +828,11 @@ const HomePage = () => {
                 placeholder="Filter"
                 size="S"
               >
-                <SingleSelectOption value="all">All Sessions</SingleSelectOption>
-                <SingleSelectOption value="active">Active (less than 15 min)</SingleSelectOption>
-                <SingleSelectOption value="idle">Idle (more than 15 min)</SingleSelectOption>
-                <SingleSelectOption value="loggedout">Logged Out</SingleSelectOption>
-                <SingleSelectOption value="terminated">Terminated</SingleSelectOption>
+                <SingleSelectOption value="all">{t('homepage.filter.all', 'All Sessions')}</SingleSelectOption>
+                <SingleSelectOption value="active">{t('homepage.filter.active', 'Active (less than 15 min)')}</SingleSelectOption>
+                <SingleSelectOption value="idle">{t('homepage.filter.idle', 'Idle (more than 15 min)')}</SingleSelectOption>
+                <SingleSelectOption value="loggedout">{t('homepage.filter.loggedout', 'Logged Out')}</SingleSelectOption>
+                <SingleSelectOption value="terminated">{t('homepage.filter.terminated', 'Terminated')}</SingleSelectOption>
               </SingleSelect>
             </Box>
             
@@ -879,10 +844,10 @@ const HomePage = () => {
                 placeholder="Entries"
                 size="S"
               >
-                <SingleSelectOption value="10">10 entries</SingleSelectOption>
-                <SingleSelectOption value="25">25 entries</SingleSelectOption>
-                <SingleSelectOption value="50">50 entries</SingleSelectOption>
-                <SingleSelectOption value="100">100 entries</SingleSelectOption>
+                <SingleSelectOption value="10">{t('homepage.entries.10', '10 entries')}</SingleSelectOption>
+                <SingleSelectOption value="25">{t('homepage.entries.25', '25 entries')}</SingleSelectOption>
+                <SingleSelectOption value="50">{t('homepage.entries.50', '50 entries')}</SingleSelectOption>
+                <SingleSelectOption value="100">{t('homepage.entries.100', '100 entries')}</SingleSelectOption>
               </SingleSelect>
             </Box>
           </FilterBar>
@@ -890,8 +855,10 @@ const HomePage = () => {
           {/* Results count */}
           <Box style={{ marginBottom: theme.spacing.md }}>
             <Typography variant="pi" textColor="neutral600">
-              Showing {filteredSessions.length} of {sessions.length} sessions
-              {searchQuery && ` (filtered by "${searchQuery}")`}
+              {searchQuery 
+                ? t('homepage.showingFiltered', 'Showing {count} of {total} sessions (filtered by "{query}")', { count: filteredSessions.length, total: sessions.length, query: searchQuery })
+                : t('homepage.showing', 'Showing {count} of {total} sessions', { count: filteredSessions.length, total: sessions.length })
+              }
             </Typography>
           </Box>
           
@@ -901,13 +868,13 @@ const HomePage = () => {
             <StyledTable>
               <Thead>
                 <Tr>
-                  <Th>Status</Th>
-                  <Th>User</Th>
-                  <Th>Device</Th>
-                  <Th>IP Address</Th>
-                  <Th>Login Time</Th>
-                  <Th>Last Active</Th>
-                  <Th>Actions</Th>
+                  <Th>{t('homepage.table.status', 'Status')}</Th>
+                  <Th>{t('homepage.table.user', 'User')}</Th>
+                  <Th>{t('homepage.table.device', 'Device')}</Th>
+                  <Th>{t('homepage.table.ipAddress', 'IP Address')}</Th>
+                  <Th>{t('homepage.table.loginTime', 'Login Time')}</Th>
+                  <Th>{t('homepage.table.lastActive', 'Last Active')}</Th>
+                  <Th>{t('homepage.table.actions', 'Actions')}</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -921,26 +888,26 @@ const HomePage = () => {
                     active: { 
                       bg: theme.colors.success[50], 
                       badgeColor: 'success600', 
-                      label: 'Active',
+                      label: t('homepage.status.active', 'Active'),
                       indicator: true 
                     },
                     idle: { 
                       bg: theme.colors.warning[50], 
                       badgeColor: 'warning600', 
-                      label: 'Idle',
+                      label: t('homepage.status.idle', 'Idle'),
                       indicator: false 
                     },
                     loggedout: { 
                       bg: theme.colors.danger[50], 
                       badgeColor: 'danger600', 
-                      label: 'Logged Out',
+                      label: t('homepage.status.loggedOut', 'Logged Out'),
                       indicator: false,
                       opacity: 0.7 
                     },
                     terminated: { 
-                      bg: theme.colors.neutral[100], 
+                      bg: '#F3F4F6', 
                       badgeColor: 'neutral600', 
-                      label: 'Terminated',
+                      label: t('homepage.status.terminated', 'Terminated'),
                       indicator: false,
                       opacity: 0.6 
                     },
@@ -975,7 +942,7 @@ const HomePage = () => {
                       <Td>
                         <Flex direction="column" alignItems="flex-start">
                           <Typography fontWeight="semiBold" ellipsis>
-                            {session.user?.username || session.user?.email || 'Unknown'}
+                            {session.user?.username || session.user?.email || t('homepage.user.unknown', 'Unknown')}
                           </Typography>
                           {session.user?.email && session.user?.username && (
                             <Typography variant="pi" textColor="neutral600" ellipsis>
@@ -1021,7 +988,7 @@ const HomePage = () => {
                             {new Date(session.lastActive || session.loginTime).toLocaleString()}
                           </Typography>
                           <Typography variant="pi" textColor={sessionStatus === 'active' ? 'success600' : 'neutral500'}>
-                            {session.minutesSinceActive} min ago
+                            {t('homepage.time.minAgo', '{minutes} min ago', { minutes: session.minutesSinceActive })}
                           </Typography>
                         </Flex>
                       </Td>
@@ -1036,7 +1003,7 @@ const HomePage = () => {
                               e.stopPropagation();
                               handleSessionClick(session);
                             }}
-                            title="View Details"
+                            title={t('homepage.actions.viewDetails', 'View Details')}
                           >
                             <Eye />
                           </Button>
@@ -1048,7 +1015,7 @@ const HomePage = () => {
                               handleTerminateSession(session.id);
                             }}
                             disabled={sessionStatus !== 'active' && sessionStatus !== 'idle'}
-                            title={session.isActive ? "Terminate (Logout)" : "Already inactive"}
+                            title={session.isActive ? t('homepage.actions.terminate', 'Terminate (Logout)') : t('homepage.actions.alreadyInactive', 'Already inactive')}
                           >
                             <Cross />
                           </Button>
@@ -1059,7 +1026,7 @@ const HomePage = () => {
                               e.stopPropagation();
                               handleDeleteSession(session.id);
                             }}
-                            title="Delete Permanently"
+                            title={t('homepage.actions.deletePermanently', 'Delete Permanently')}
                           >
                             <Trash />
                           </Button>
@@ -1074,10 +1041,10 @@ const HomePage = () => {
           ) : (
             /* No results found */
         <Box
+          background="neutral0"
           style={{
-            background: theme.colors.neutral[0],
             borderRadius: theme.borderRadius.xl,
-            border: `2px dashed ${theme.colors.neutral[200]}`,
+            border: '2px dashed #E5E7EB',
             padding: '60px 32px',
             textAlign: 'center',
             position: 'relative',
@@ -1122,19 +1089,19 @@ const HomePage = () => {
                 boxShadow: theme.shadows.xl,
               }}
             >
-              <Search style={{ width: '50px', height: '50px', color: theme.colors.primary[600] }} />
+              <Search style={{ width: '50px', height: '50px', color: '#0284C7' }} />
             </Box>
             
             <Typography 
               variant="alpha" 
+              textColor="neutral800"
               style={{ 
                 fontSize: '1.5rem',
                 fontWeight: '700',
-                color: theme.colors.neutral[800],
                 marginBottom: '4px',
               }}
             >
-              No sessions found
+              {t('homepage.noResults.title', 'No sessions found')}
             </Typography>
             
             <Typography 
@@ -1146,7 +1113,7 @@ const HomePage = () => {
                 lineHeight: '1.6',
               }}
             >
-              Try adjusting your search query or filters to find sessions
+              {t('homepage.noResults.description', 'Try adjusting your search query or filters to find sessions')}
             </Typography>
           </Flex>
         </Box>
@@ -1157,10 +1124,10 @@ const HomePage = () => {
       {/* Empty State */}
       {!loading && sessions.length === 0 && (
         <Box
+          background="neutral0"
           style={{
-            background: theme.colors.neutral[0],
             borderRadius: theme.borderRadius.xl,
-            border: `2px dashed ${theme.colors.neutral[200]}`,
+            border: '2px dashed #E5E7EB',
             padding: '80px 32px',
             textAlign: 'center',
             position: 'relative',
@@ -1200,19 +1167,19 @@ const HomePage = () => {
                 boxShadow: theme.shadows.xl,
               }}
             >
-              <Monitor style={{ width: '60px', height: '60px', color: theme.colors.primary[600] }} />
+              <Monitor style={{ width: '60px', height: '60px', color: '#0284C7' }} />
             </Box>
             
             <Typography 
               variant="alpha" 
+              textColor="neutral800"
               style={{ 
                 fontSize: '1.75rem',
                 fontWeight: '700',
-                color: theme.colors.neutral[800],
                 marginBottom: '8px',
               }}
             >
-              No sessions yet
+              {t('homepage.empty.title', 'No sessions yet')}
             </Typography>
             
             <Typography 
@@ -1224,7 +1191,7 @@ const HomePage = () => {
                 lineHeight: '1.6',
               }}
             >
-              Sessions will appear here when users log in to your application
+              {t('homepage.empty.description', 'Sessions will appear here when users log in to your application')}
             </Typography>
           </Flex>
         </Box>

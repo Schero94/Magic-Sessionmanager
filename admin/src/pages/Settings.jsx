@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useIntl } from 'react-intl';
 import {
   Box,
   Typography,
@@ -23,6 +24,7 @@ import { Check, Information, Duplicate, Trash, Mail, Code, Cog, Shield, Clock } 
 import styled, { keyframes, css } from 'styled-components';
 import pluginId from '../pluginId';
 import { useLicense } from '../hooks/useLicense';
+import { getTranslation } from '../utils/getTranslation';
 
 // ================ THEME ================
 const theme = {
@@ -59,9 +61,9 @@ const StickySaveBar = styled(Box)`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: white;
-  border-bottom: 1px solid ${theme.colors.neutral[200]};
-  box-shadow: ${theme.shadows.sm};
+  background: ${props => props.theme.colors.neutral0};
+  border-bottom: 1px solid ${props => props.theme.colors.neutral200};
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 `;
 
 const ToggleCard = styled(Box)`
@@ -380,9 +382,11 @@ const generateSecureKey = () => {
 };
 
 const SettingsPage = () => {
+  const { formatMessage } = useIntl();
   const { get, post, put } = useFetchClient();
   const { toggleNotification } = useNotification();
   const { isPremium, isAdvanced, isEnterprise } = useLicense();
+  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -459,7 +463,7 @@ const SettingsPage = () => {
       console.error('[Settings] Error loading from backend:', err);
       toggleNotification({
         type: 'warning',
-        message: 'Could not load settings from server. Using defaults.',
+        message: t('notifications.warning.settingsLoad', 'Could not load settings from server. Using defaults.'),
       });
       // Fallback to default settings
       setSettings(prev => ({ ...prev, emailTemplates: getDefaultTemplates() }));
@@ -486,7 +490,7 @@ const SettingsPage = () => {
       if (response?.data?.success) {
         toggleNotification({
           type: 'success',
-          message: 'Settings saved successfully to database!',
+          message: t('notifications.success.saved', 'Settings saved successfully to database!'),
         });
         
         setHasChanges(false);
@@ -504,7 +508,7 @@ const SettingsPage = () => {
       console.error('[Settings] Error saving:', err);
       toggleNotification({
         type: 'danger',
-        message: 'Failed to save settings to server',
+        message: t('notifications.error.save', 'Failed to save settings to server'),
       });
     } finally {
       setSaving(false);
@@ -517,7 +521,7 @@ const SettingsPage = () => {
   };
 
   const handleCleanInactive = async () => {
-    if (!confirm('[WARNING] This will permanently delete ALL inactive sessions.\n\nContinue?')) {
+    if (!confirm(t('settings.general.danger.confirm', '[WARNING] This will permanently delete ALL inactive sessions.\n\nContinue?'))) {
       return;
     }
 
@@ -527,12 +531,12 @@ const SettingsPage = () => {
       
       toggleNotification({
         type: 'success',
-        message: `Successfully deleted ${data.deletedCount} inactive sessions!`,
+        message: t('notifications.success.cleaned', 'Successfully deleted {count} inactive sessions!', { count: data.deletedCount }),
       });
     } catch (err) {
       toggleNotification({
         type: 'danger',
-        message: 'Failed to delete inactive sessions',
+        message: t('notifications.error.clean', 'Failed to delete inactive sessions'),
       });
     } finally {
       setCleaning(false);
@@ -542,7 +546,7 @@ const SettingsPage = () => {
   if (loading) {
     return (
       <Flex justifyContent="center" padding={8}>
-        <Loader>Loading settings...</Loader>
+        <Loader>{t('common.loading', 'Loading...')}</Loader>
       </Flex>
     );
   }
@@ -554,16 +558,16 @@ const SettingsPage = () => {
         <Flex justifyContent="space-between" alignItems="center">
           <Flex direction="column" gap={1} alignItems="flex-start">
             <Typography variant="alpha" fontWeight="bold" style={{ fontSize: '24px' }}>
-              ⚙️ Session Manager Settings
+              ⚙️ {t('settings.title', 'Session Manager Settings')}
             </Typography>
             <Typography variant="epsilon" textColor="neutral600">
-              Configure session tracking, security, and email notifications
+              {t('settings.subtitle', 'Configure session tracking, security, and email notifications')}
             </Typography>
           </Flex>
           <Flex gap={2}>
             {hasChanges && (
               <Button onClick={handleReset} variant="tertiary" size="L">
-                Reset
+                {t('settings.reset', 'Reset')}
               </Button>
             )}
             <Button
@@ -594,7 +598,7 @@ const SettingsPage = () => {
                 e.currentTarget.style.boxShadow = hasChanges && !saving ? '0 4px 12px rgba(102, 126, 234, 0.4)' : 'none';
               }}
             >
-              {saving ? 'Saving...' : hasChanges ? 'Save Changes' : 'No Changes'}
+              {saving ? t('settings.saving', 'Saving...') : hasChanges ? t('settings.save', 'Save Changes') : t('settings.noChanges', 'No Changes')}
             </Button>
           </Flex>
         </Flex>
@@ -609,17 +613,17 @@ const SettingsPage = () => {
             <Information style={{ width: '20px', height: '20px', color: '#0284C7' }} />
             <Box>
               <Typography variant="omega" fontWeight="bold" textColor="primary700" style={{ marginBottom: '4px' }}>
-                Current License Status
+                {t('settings.license.title', 'Current License Status')}
               </Typography>
               <Flex gap={3}>
                 <Badge backgroundColor={isPremium ? "success100" : "neutral100"} textColor={isPremium ? "success700" : "neutral600"}>
-                  {isPremium ? '✓' : '✗'} Premium
+                  {isPremium ? '✓' : '✗'} {t('settings.license.premium', 'Premium')}
                 </Badge>
                 <Badge backgroundColor={isAdvanced ? "primary100" : "neutral100"} textColor={isAdvanced ? "primary700" : "neutral600"}>
-                  {isAdvanced ? '✓' : '✗'} Advanced
+                  {isAdvanced ? '✓' : '✗'} {t('settings.license.advanced', 'Advanced')}
                 </Badge>
                 <Badge backgroundColor={isEnterprise ? "secondary100" : "neutral100"} textColor={isEnterprise ? "secondary700" : "neutral600"}>
-                  {isEnterprise ? '✓' : '✗'} Enterprise
+                  {isEnterprise ? '✓' : '✗'} {t('settings.license.enterprise', 'Enterprise')}
                 </Badge>
               </Flex>
             </Box>
@@ -634,9 +638,9 @@ const SettingsPage = () => {
             <Accordion.Header>
               <Accordion.Trigger
                 icon={Cog}
-                description="Basic session tracking configuration"
+                description={t('settings.general.description', 'Basic session tracking configuration')}
               >
-                General Settings
+                {t('settings.general.title', 'General Settings')}
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content>
@@ -644,27 +648,27 @@ const SettingsPage = () => {
                 
                 {/* Session Timeout */}
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
-                  SESSION TIMEOUT
+                  {t('settings.general.timeout.title', 'SESSION TIMEOUT')}
                 </Typography>
                 <Grid.Root gap={6} style={{ marginBottom: '32px' }}>
                   <Grid.Item col={6} s={12}>
                     <Box>
                       <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                        Inactivity Timeout
+                        {t('settings.general.timeout.inactivity', 'Inactivity Timeout')}
                       </Typography>
                       <SingleSelect
                         value={String(settings.inactivityTimeout)}
                         onChange={(value) => handleChange('inactivityTimeout', parseInt(value))}
                       >
-                        <SingleSelectOption value="5">5 minutes (Very Strict)</SingleSelectOption>
-                        <SingleSelectOption value="10">10 minutes (Strict)</SingleSelectOption>
-                        <SingleSelectOption value="15">15 minutes (Recommended)</SingleSelectOption>
-                        <SingleSelectOption value="30">30 minutes (Moderate)</SingleSelectOption>
-                        <SingleSelectOption value="60">1 hour (Relaxed)</SingleSelectOption>
-                        <SingleSelectOption value="120">2 hours (Very Relaxed)</SingleSelectOption>
+                        <SingleSelectOption value="5">{t('settings.general.timeout.5min', '5 minutes (Very Strict)')}</SingleSelectOption>
+                        <SingleSelectOption value="10">{t('settings.general.timeout.10min', '10 minutes (Strict)')}</SingleSelectOption>
+                        <SingleSelectOption value="15">{t('settings.general.timeout.15min', '15 minutes (Recommended)')}</SingleSelectOption>
+                        <SingleSelectOption value="30">{t('settings.general.timeout.30min', '30 minutes (Moderate)')}</SingleSelectOption>
+                        <SingleSelectOption value="60">{t('settings.general.timeout.1hour', '1 hour (Relaxed)')}</SingleSelectOption>
+                        <SingleSelectOption value="120">{t('settings.general.timeout.2hours', '2 hours (Very Relaxed)')}</SingleSelectOption>
                       </SingleSelect>
                       <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
-                        Sessions inactive for more than {settings.inactivityTimeout} minutes will be marked as offline
+                        {t('settings.general.timeout.inactivityHint', 'Sessions inactive for more than {minutes} minutes will be marked as offline', { minutes: settings.inactivityTimeout })}
                       </Typography>
                     </Box>
                   </Grid.Item>
@@ -672,20 +676,20 @@ const SettingsPage = () => {
                   <Grid.Item col={6} s={12}>
                     <Box>
                       <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                        Last Seen Rate Limit
+                        {t('settings.general.rateLimit.title', 'Last Seen Rate Limit')}
                       </Typography>
                       <SingleSelect
                         value={String(settings.lastSeenRateLimit)}
                         onChange={(value) => handleChange('lastSeenRateLimit', parseInt(value))}
                       >
-                        <SingleSelectOption value="10">10 seconds</SingleSelectOption>
-                        <SingleSelectOption value="30">30 seconds (Recommended)</SingleSelectOption>
-                        <SingleSelectOption value="60">1 minute</SingleSelectOption>
-                        <SingleSelectOption value="120">2 minutes</SingleSelectOption>
-                        <SingleSelectOption value="300">5 minutes</SingleSelectOption>
+                        <SingleSelectOption value="10">{t('settings.general.rateLimit.10sec', '10 seconds')}</SingleSelectOption>
+                        <SingleSelectOption value="30">{t('settings.general.rateLimit.30sec', '30 seconds (Recommended)')}</SingleSelectOption>
+                        <SingleSelectOption value="60">{t('settings.general.rateLimit.1min', '1 minute')}</SingleSelectOption>
+                        <SingleSelectOption value="120">{t('settings.general.rateLimit.2min', '2 minutes')}</SingleSelectOption>
+                        <SingleSelectOption value="300">{t('settings.general.rateLimit.5min', '5 minutes')}</SingleSelectOption>
                       </SingleSelect>
                       <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
-                        Prevents excessive database writes. Updates throttled to once every {settings.lastSeenRateLimit} seconds
+                        {t('settings.general.rateLimit.hint', 'Prevents excessive database writes. Updates throttled to once every {seconds} seconds', { seconds: settings.lastSeenRateLimit })}
                       </Typography>
                     </Box>
                   </Grid.Item>
@@ -694,25 +698,25 @@ const SettingsPage = () => {
                 {/* Cleanup & Retention */}
                 <Divider style={{ marginBottom: '24px' }} />
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
-                  🧹 AUTO-CLEANUP & RETENTION
+                  🧹 {t('settings.general.cleanup.title', 'AUTO-CLEANUP & RETENTION')}
                 </Typography>
                 <Grid.Root gap={6}>
                   <Grid.Item col={6} s={12}>
                     <Box>
                       <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                        Cleanup Interval
+                        {t('settings.general.cleanup.interval', 'Cleanup Interval')}
                       </Typography>
                       <SingleSelect
                         value={String(settings.cleanupInterval)}
                         onChange={(value) => handleChange('cleanupInterval', parseInt(value))}
                       >
-                        <SingleSelectOption value="15">15 minutes</SingleSelectOption>
-                        <SingleSelectOption value="30">30 minutes (Recommended)</SingleSelectOption>
-                        <SingleSelectOption value="60">1 hour</SingleSelectOption>
-                        <SingleSelectOption value="120">2 hours</SingleSelectOption>
+                        <SingleSelectOption value="15">{t('settings.general.cleanup.15min', '15 minutes')}</SingleSelectOption>
+                        <SingleSelectOption value="30">{t('settings.general.cleanup.30min', '30 minutes (Recommended)')}</SingleSelectOption>
+                        <SingleSelectOption value="60">{t('settings.general.cleanup.1hour', '1 hour')}</SingleSelectOption>
+                        <SingleSelectOption value="120">{t('settings.general.cleanup.2hours', '2 hours')}</SingleSelectOption>
                       </SingleSelect>
                       <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
-                        Inactive sessions are automatically cleaned every {settings.cleanupInterval} minutes
+                        {t('settings.general.cleanup.intervalHint', 'Inactive sessions are automatically cleaned every {minutes} minutes', { minutes: settings.cleanupInterval })}
                       </Typography>
                     </Box>
                   </Grid.Item>
@@ -720,22 +724,25 @@ const SettingsPage = () => {
                   <Grid.Item col={6} s={12}>
                     <Box>
                       <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                        Retention Period
+                        {t('settings.general.retention.title', 'Retention Period')}
                       </Typography>
                       <SingleSelect
                         value={String(settings.retentionDays)}
                         onChange={(value) => handleChange('retentionDays', parseInt(value))}
                       >
-                        <SingleSelectOption value="7">7 days</SingleSelectOption>
-                        <SingleSelectOption value="30">30 days</SingleSelectOption>
-                        <SingleSelectOption value="60">60 days</SingleSelectOption>
-                        <SingleSelectOption value="90">90 days (Recommended)</SingleSelectOption>
-                        <SingleSelectOption value="180">180 days</SingleSelectOption>
-                        <SingleSelectOption value="365">1 year</SingleSelectOption>
-                        <SingleSelectOption value="-1">Forever</SingleSelectOption>
+                        <SingleSelectOption value="7">{t('settings.general.retention.7days', '7 days')}</SingleSelectOption>
+                        <SingleSelectOption value="30">{t('settings.general.retention.30days', '30 days')}</SingleSelectOption>
+                        <SingleSelectOption value="60">{t('settings.general.retention.60days', '60 days')}</SingleSelectOption>
+                        <SingleSelectOption value="90">{t('settings.general.retention.90days', '90 days (Recommended)')}</SingleSelectOption>
+                        <SingleSelectOption value="180">{t('settings.general.retention.180days', '180 days')}</SingleSelectOption>
+                        <SingleSelectOption value="365">{t('settings.general.retention.1year', '1 year')}</SingleSelectOption>
+                        <SingleSelectOption value="-1">{t('settings.general.retention.forever', 'Forever')}</SingleSelectOption>
                       </SingleSelect>
                       <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
-                        Old sessions deleted after {settings.retentionDays === -1 ? 'never' : `${settings.retentionDays} days`}
+                        {settings.retentionDays === -1 
+                          ? t('settings.general.retention.hintNever', 'Old sessions deleted after never')
+                          : t('settings.general.retention.hint', 'Old sessions deleted after {days}', { days: `${settings.retentionDays} days` })
+                        }
                       </Typography>
                     </Box>
                   </Grid.Item>
@@ -746,10 +753,10 @@ const SettingsPage = () => {
                         <Trash style={{ width: '18px', height: '18px', color: theme.colors.danger[600], flexShrink: 0, marginTop: '2px' }} />
                         <Box style={{ flex: 1 }}>
                           <Typography variant="omega" fontWeight="bold" textColor="danger700" style={{ marginBottom: '8px', display: 'block' }}>
-                            Danger Zone
+                            {t('settings.general.danger.title', 'Danger Zone')}
                           </Typography>
                           <Typography variant="pi" textColor="danger600" style={{ fontSize: '13px', lineHeight: '1.7' }}>
-                            <strong>Clean All Inactive:</strong> Permanently deletes all inactive sessions. This cannot be undone.
+                            {t('settings.general.danger.description', 'Clean All Inactive: Permanently deletes all inactive sessions. This cannot be undone.')}
                           </Typography>
                         </Box>
                         <Button
@@ -760,7 +767,7 @@ const SettingsPage = () => {
                           size="S"
                           style={{ flexShrink: 0 }}
                         >
-                          Clean Now
+                          {t('settings.general.danger.cleanNow', 'Clean Now')}
                         </Button>
                       </Flex>
                     </Box>
@@ -776,16 +783,16 @@ const SettingsPage = () => {
             <Accordion.Header>
               <Accordion.Trigger
                 icon={Shield}
-                description="Security policies and threat protection"
+                description={t('settings.security.description', 'Security policies and threat protection')}
               >
-                Security Settings
+                {t('settings.security.title', 'Security Settings')}
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content>
               <Box padding={6}>
                 
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
-                  SECURITY OPTIONS
+                  {t('settings.security.options', 'SECURITY OPTIONS')}
                 </Typography>
 
                 {/* Encryption Key Generator */}
@@ -803,30 +810,29 @@ const SettingsPage = () => {
                     <Flex alignItems="center" gap={3}>
                       <Shield style={{ width: 24, height: 24, color: theme.colors.primary[600] }} />
                       <Typography variant="delta" fontWeight="bold">
-                        JWT Encryption Key Generator
+                        {t('settings.security.encryption.title', 'JWT Encryption Key Generator')}
                       </Typography>
                     </Flex>
                     
                     <Typography variant="omega" textColor="neutral600" style={{ lineHeight: 1.6 }}>
-                      Generate a secure 32-character encryption key for JWT token storage.
-                      This key is used to encrypt tokens before saving them to the database.
+                      {t('settings.security.encryption.description', 'Generate a secure 32-character encryption key for JWT token storage. This key is used to encrypt tokens before saving them to the database.')}
                     </Typography>
 
                     <Alert 
                       variant="default" 
-                      title="Important"
+                      title={t('settings.security.encryption.important', 'Important')}
                       style={{ marginTop: 8 }}
                     >
-                      Add this key to your <code>.env</code> file as <strong>SESSION_ENCRYPTION_KEY</strong> for production.
+                      {t('settings.security.encryption.envHint', 'Add this key to your .env file as SESSION_ENCRYPTION_KEY for production.')}
                     </Alert>
 
                     <Flex gap={3} alignItems="flex-end">
                       <Box style={{ flex: 1 }}>
                         <TextInput
-                          label="Generated Encryption Key"
+                          label={t('settings.security.encryption.label', 'Generated Encryption Key')}
                           value={encryptionKey}
                           onChange={(e) => setEncryptionKey(e.target.value)}
-                          placeholder="Click 'Generate Key' to create a secure key"
+                          placeholder={t('settings.security.encryption.placeholder', "Click 'Generate Key' to create a secure key")}
                           type={showEncryptionKey ? 'text' : 'password'}
                         />
                       </Box>
@@ -835,7 +841,7 @@ const SettingsPage = () => {
                         onClick={() => setShowEncryptionKey(!showEncryptionKey)}
                         size="L"
                       >
-                        {showEncryptionKey ? 'Hide' : 'Show'}
+                        {showEncryptionKey ? t('settings.security.encryption.hide', 'Hide') : t('settings.security.encryption.show', 'Show')}
                       </Button>
                     </Flex>
 
@@ -849,12 +855,12 @@ const SettingsPage = () => {
                           setShowEncryptionKey(true);
                           toggleNotification({
                             type: 'success',
-                            message: '32-character encryption key generated!'
+                            message: t('notifications.success.keyGenerated', '32-character encryption key generated!')
                           });
                         }}
                         size="L"
                       >
-                        Generate Key
+                        {t('settings.security.encryption.generate', 'Generate Key')}
                       </Button>
                       
                       <Button
@@ -865,14 +871,14 @@ const SettingsPage = () => {
                             navigator.clipboard.writeText(encryptionKey);
                             toggleNotification({
                               type: 'success',
-                              message: 'Encryption key copied to clipboard!'
+                              message: t('notifications.success.keyCopied', 'Encryption key copied to clipboard!')
                             });
                           }
                         }}
                         disabled={!encryptionKey}
                         size="L"
                       >
-                        Copy to Clipboard
+                        {t('settings.security.encryption.copy', 'Copy to Clipboard')}
                       </Button>
 
                       <Button
@@ -884,14 +890,14 @@ const SettingsPage = () => {
                             navigator.clipboard.writeText(envLine);
                             toggleNotification({
                               type: 'success',
-                              message: 'Copied as .env format!'
+                              message: t('notifications.success.envCopied', 'Copied as .env format!')
                             });
                           }
                         }}
                         disabled={!encryptionKey}
                         size="L"
                       >
-                        Copy for .env
+                        {t('settings.security.encryption.copyEnv', 'Copy for .env')}
                       </Button>
                     </Flex>
 
@@ -908,7 +914,7 @@ const SettingsPage = () => {
                         }}
                       >
                         <Typography variant="omega" fontWeight="bold" style={{ marginBottom: 8, display: 'block' }}>
-                          Add to .env file:
+                          {t('settings.security.encryption.envLabel', 'Add to .env file:')}
                         </Typography>
                         <code style={{ color: theme.colors.primary[700] }}>
                           SESSION_ENCRYPTION_KEY={encryptionKey}
@@ -940,10 +946,10 @@ const SettingsPage = () => {
                               textColor={settings.blockSuspiciousSessions ? 'success700' : 'neutral800'}
                               style={{ fontSize: '16px' }}
                             >
-                              Block Suspicious Sessions
+                              {t('settings.security.blockSuspicious.title', 'Block Suspicious Sessions')}
                             </Typography>
                             <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                              Automatically block sessions from VPNs, proxies, or threat IPs
+                              {t('settings.security.blockSuspicious.description', 'Automatically block sessions from VPNs, proxies, or threat IPs')}
                             </Typography>
                           </Flex>
                         </Flex>
@@ -971,10 +977,10 @@ const SettingsPage = () => {
                                   textColor={settings.enableGeolocation ? 'success700' : 'neutral800'}
                                   style={{ fontSize: '16px' }}
                                 >
-                                  IP Geolocation
+                                  {t('settings.security.geolocation.title', 'IP Geolocation')}
                                 </Typography>
                                 <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                                  Fetch location data for each session (Premium)
+                                  {t('settings.security.geolocation.description', 'Fetch location data for each session (Premium)')}
                                 </Typography>
                               </Flex>
                             </Flex>
@@ -1000,10 +1006,10 @@ const SettingsPage = () => {
                                   textColor={settings.enableSecurityScoring ? 'success700' : 'neutral800'}
                                   style={{ fontSize: '16px' }}
                                 >
-                                  Security Scoring
+                                  {t('settings.security.scoring.title', 'Security Scoring')}
                                 </Typography>
                                 <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                                  Calculate security scores and detect threats (Premium)
+                                  {t('settings.security.scoring.description', 'Calculate security scores and detect threats (Premium)')}
                                 </Typography>
                               </Flex>
                             </Flex>
@@ -1019,7 +1025,7 @@ const SettingsPage = () => {
                   <Grid.Item col={6} s={12}>
                     <Box>
                       <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                        🚫 Max Failed Login Attempts
+                        🚫 {t('settings.security.maxFailed.title', 'Max Failed Login Attempts')}
                       </Typography>
                       <NumberInput
                         value={settings.maxFailedLogins}
@@ -1029,7 +1035,7 @@ const SettingsPage = () => {
                       />
                       <Box padding={2} background="warning50" style={{ borderRadius: '4px', marginTop: '8px' }}>
                         <Typography variant="pi" textColor="warning700" style={{ fontSize: '11px' }}>
-                          User will be blocked after {settings.maxFailedLogins} failed attempts
+                          {t('settings.security.maxFailed.hint', 'User will be blocked after {count} failed attempts', { count: settings.maxFailedLogins })}
                         </Typography>
                       </Box>
                     </Box>
@@ -1046,9 +1052,9 @@ const SettingsPage = () => {
               <Accordion.Header>
                 <Accordion.Trigger
                   icon={Mail}
-                  description="Email alerts for security events"
+                  description={t('settings.email.description', 'Email alerts for security events')}
                 >
-                  Email Notifications (Advanced)
+                  {t('settings.email.title', 'Email Notifications (Advanced)')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
@@ -1057,10 +1063,10 @@ const SettingsPage = () => {
                   {/* Email Alerts Toggle */}
                   <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>
                     <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', textAlign: 'center', color: theme.colors.neutral[700] }}>
-                      📧 EMAIL ALERTS
+                      📧 {t('settings.email.alerts.title', 'EMAIL ALERTS')}
                     </Typography>
                     <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', textAlign: 'center', fontSize: '12px' }}>
-                      Send security alerts to users via email
+                      {t('settings.email.alerts.subtitle', 'Send security alerts to users via email')}
                     </Typography>
                     <Grid.Root gap={4}>
                       <Grid.Item col={12}>
@@ -1082,10 +1088,10 @@ const SettingsPage = () => {
                                 textColor={settings.enableEmailAlerts ? 'success700' : 'neutral800'}
                                 style={{ fontSize: '16px' }}
                               >
-                                Enable Email Alerts
+                                {t('settings.email.enable.title', 'Enable Email Alerts')}
                               </Typography>
                               <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                                Send security alerts for suspicious logins, new locations, and VPN/Proxy usage
+                                {t('settings.email.enable.description', 'Send security alerts for suspicious logins, new locations, and VPN/Proxy usage')}
                               </Typography>
                             </Flex>
                           </Flex>
@@ -1098,7 +1104,7 @@ const SettingsPage = () => {
                   {settings.enableEmailAlerts && (
                     <>
                       <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
-                        ⚙️ ALERT TYPES
+                        ⚙️ {t('settings.email.types.title', 'ALERT TYPES')}
                       </Typography>
                       <Grid.Root gap={4} style={{ marginBottom: '32px' }}>
                         <Grid.Item col={4} s={12}>
@@ -1118,7 +1124,7 @@ const SettingsPage = () => {
                               onChange={() => handleChange('alertOnSuspiciousLogin', !settings.alertOnSuspiciousLogin)}
                             >
                               <Typography variant="omega" fontWeight="semiBold" style={{ fontSize: '14px' }}>
-                                Suspicious Login
+                                {t('settings.email.types.suspicious', 'Suspicious Login')}
                               </Typography>
                             </Checkbox>
                           </Box>
@@ -1140,7 +1146,7 @@ const SettingsPage = () => {
                               onChange={() => handleChange('alertOnNewLocation', !settings.alertOnNewLocation)}
                             >
                               <Typography variant="omega" fontWeight="semiBold" style={{ fontSize: '14px' }}>
-                                New Location
+                                {t('settings.email.types.newLocation', 'New Location')}
                               </Typography>
                             </Checkbox>
                           </Box>
@@ -1162,7 +1168,7 @@ const SettingsPage = () => {
                               onChange={() => handleChange('alertOnVpnProxy', !settings.alertOnVpnProxy)}
                             >
                               <Typography variant="omega" fontWeight="semiBold" style={{ fontSize: '14px' }}>
-                                VPN/Proxy
+                                {t('settings.email.types.vpnProxy', 'VPN/Proxy')}
                               </Typography>
                             </Checkbox>
                           </Box>
@@ -1172,18 +1178,18 @@ const SettingsPage = () => {
                       {/* Email Templates */}
                       <Divider style={{ marginBottom: '24px' }} />
                       <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: theme.colors.neutral[700] }}>
-                        EMAIL TEMPLATES
+                        {t('settings.email.templates.title', 'EMAIL TEMPLATES')}
                       </Typography>
                       <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', fontSize: '12px' }}>
-                        Customize email notification templates with dynamic variables
+                        {t('settings.email.templates.subtitle', 'Customize email notification templates with dynamic variables')}
                       </Typography>
                       
                       {/* Template Tabs */}
                       <Tabs.Root value={activeTemplateTab} onValueChange={setActiveTemplateTab}>
                         <Tabs.List aria-label="Email Templates">
-                          <Tabs.Trigger value="suspiciousLogin">Suspicious Login</Tabs.Trigger>
-                          <Tabs.Trigger value="newLocation">New Location</Tabs.Trigger>
-                          <Tabs.Trigger value="vpnProxy">VPN/Proxy</Tabs.Trigger>
+                          <Tabs.Trigger value="suspiciousLogin">{t('settings.email.templates.tab.suspicious', 'Suspicious Login')}</Tabs.Trigger>
+                          <Tabs.Trigger value="newLocation">{t('settings.email.templates.tab.newLocation', 'New Location')}</Tabs.Trigger>
+                          <Tabs.Trigger value="vpnProxy">{t('settings.email.templates.tab.vpnProxy', 'VPN/Proxy')}</Tabs.Trigger>
                         </Tabs.List>
                         
                         {Object.keys(settings.emailTemplates).map((templateKey) => (
@@ -1192,7 +1198,7 @@ const SettingsPage = () => {
                               {/* Subject */}
                               <Box style={{ marginBottom: '24px' }}>
                                 <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
-                                  Email Subject
+                                  {t('settings.email.templates.subject', 'Email Subject')}
                                 </Typography>
                                 <TextInput
                                   value={settings.emailTemplates[templateKey].subject}
@@ -1201,7 +1207,7 @@ const SettingsPage = () => {
                                     newTemplates[templateKey].subject = e.target.value;
                                     handleChange('emailTemplates', newTemplates);
                                   }}
-                                  placeholder="Enter email subject..."
+                                  placeholder={t('settings.email.templates.subjectPlaceholder', 'Enter email subject...')}
                                 />
                               </Box>
                               
@@ -1215,7 +1221,7 @@ const SettingsPage = () => {
                                   <Flex alignItems="center" gap={2}>
                                     <Code style={{ width: '16px', height: '16px', color: theme.colors.primary[600] }} />
                                     <Typography variant="omega" fontWeight="bold" textColor="primary600">
-                                      Available Variables (click to copy)
+                                      {t('settings.email.templates.variables', 'Available Variables (click to copy)')}
                                     </Typography>
                                   </Flex>
                                   <Flex gap={2} wrap="wrap">
@@ -1226,7 +1232,7 @@ const SettingsPage = () => {
                                         variant="tertiary"
                                         onClick={() => {
                                           navigator.clipboard.writeText(variable);
-                                          toggleNotification({ type: 'success', message: `${variable} copied!` });
+                                          toggleNotification({ type: 'success', message: t('notifications.success.variableCopied', '{variable} copied!', { variable }) });
                                         }}
                                         style={{ 
                                           fontFamily: 'monospace', 
@@ -1251,9 +1257,9 @@ const SettingsPage = () => {
                                 <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '16px' }}>
                                   <Flex alignItems="center" gap={2}>
                                     <Typography variant="delta" fontWeight="bold" style={{ fontSize: '18px' }}>
-                                      🎨 HTML Template
+                                      🎨 {t('settings.email.templates.html.title', 'HTML Template')}
                                     </Typography>
-                                    <Badge variant="success">Main Template</Badge>
+                                    <Badge variant="success">{t('settings.email.templates.html.badge', 'Main Template')}</Badge>
                                   </Flex>
                                   <Button
                                     variant="tertiary"
@@ -1263,14 +1269,14 @@ const SettingsPage = () => {
                                       const newTemplates = { ...settings.emailTemplates };
                                       newTemplates[templateKey].html = defaultTemplates[templateKey].html;
                                       handleChange('emailTemplates', newTemplates);
-                                      toggleNotification({ type: 'success', message: 'Default HTML template loaded!' });
+                                      toggleNotification({ type: 'success', message: t('notifications.success.defaultLoaded', 'Default template loaded!') });
                                     }}
                                   >
-                                    📋 Load Default
+                                    📋 {t('settings.email.templates.html.loadDefault', 'Load Default')}
                                   </Button>
                                 </Flex>
                                 <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '16px', display: 'block', fontSize: '14px' }}>
-                                  HTML template for email notifications. Use variables like <code>{'{{user.email}}'}</code> for dynamic content.
+                                  {t('settings.email.templates.html.description', 'HTML template for email notifications. Use variables like {{user.email}} for dynamic content.')}
                                 </Typography>
                                 <Box 
                                   style={{ 
@@ -1325,10 +1331,10 @@ const SettingsPage = () => {
                                     size="S"
                                     onClick={() => {
                                       navigator.clipboard.writeText(settings.emailTemplates[templateKey].html);
-                                      toggleNotification({ type: 'success', message: 'HTML template copied!' });
+                                      toggleNotification({ type: 'success', message: t('notifications.success.htmlCopied', 'HTML template copied!') });
                                     }}
                                   >
-                                    📋 Copy Template
+                                    📋 {t('settings.email.templates.html.copy', 'Copy Template')}
                                   </Button>
                                   <Button
                                     variant="tertiary"
@@ -1338,12 +1344,12 @@ const SettingsPage = () => {
                                       toggleNotification({
                                         type: validation.isValid ? 'success' : 'warning',
                                         message: validation.isValid 
-                                          ? `✓ Template valid! Found ${validation.foundVars.length}/${validation.totalAvailable} variables.`
-                                          : '[WARNING] No variables found. Add at least one variable.',
+                                          ? t('notifications.success.validated', 'Template valid! Found {found}/{total} variables.', { found: validation.foundVars.length, total: validation.totalAvailable })
+                                          : t('notifications.warning.noVariables', '[WARNING] No variables found. Add at least one variable.'),
                                       });
                                     }}
                                   >
-                                    ✓ Validate
+                                    ✓ {t('settings.email.templates.html.validate', 'Validate')}
                                   </Button>
                                   <Button
                                     variant="tertiary"
@@ -1353,11 +1359,11 @@ const SettingsPage = () => {
                                       const chars = settings.emailTemplates[templateKey].html.length;
                                       toggleNotification({ 
                                         type: 'info', 
-                                        message: `Template has ${lines} lines and ${chars} characters`
+                                        message: t('notifications.info.templateStats', 'Template has {lines} lines and {chars} characters', { lines, chars })
                                       });
                                     }}
                                   >
-                                    ℹ️ Template Info
+                                    ℹ️ {t('settings.email.templates.html.info', 'Template Info')}
                                   </Button>
                                 </Flex>
                               </Box>
@@ -1371,9 +1377,9 @@ const SettingsPage = () => {
                                 <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '16px' }}>
                                   <Flex alignItems="center" gap={2}>
                                     <Typography variant="delta" fontWeight="bold" style={{ fontSize: '18px' }}>
-                                      📄 Text Template
+                                      📄 {t('settings.email.templates.text.title', 'Text Template')}
                                     </Typography>
-                                    <Badge variant="secondary">Fallback</Badge>
+                                    <Badge variant="secondary">{t('settings.email.templates.text.badge', 'Fallback')}</Badge>
                                   </Flex>
                                   <Button
                                     variant="tertiary"
@@ -1383,14 +1389,14 @@ const SettingsPage = () => {
                                       const newTemplates = { ...settings.emailTemplates };
                                       newTemplates[templateKey].text = defaultTemplates[templateKey].text;
                                       handleChange('emailTemplates', newTemplates);
-                                      toggleNotification({ type: 'success', message: 'Default text template loaded!' });
+                                      toggleNotification({ type: 'success', message: t('notifications.success.defaultLoaded', 'Default template loaded!') });
                                     }}
                                   >
-                                    📋 Load Default
+                                    📋 {t('settings.email.templates.text.loadDefault', 'Load Default')}
                                   </Button>
                                 </Flex>
                                 <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '16px', display: 'block', fontSize: '14px' }}>
-                                  Plain text version (no HTML) as fallback for older email clients
+                                  {t('settings.email.templates.text.description', 'Plain text version (no HTML) as fallback for older email clients')}
                                 </Typography>
                                 <Box 
                                   style={{ 
@@ -1445,10 +1451,10 @@ const SettingsPage = () => {
                                     size="S"
                                     onClick={() => {
                                       navigator.clipboard.writeText(settings.emailTemplates[templateKey].text);
-                                      toggleNotification({ type: 'success', message: 'Text template copied!' });
+                                      toggleNotification({ type: 'success', message: t('notifications.success.textCopied', 'Text template copied!') });
                                     }}
                                   >
-                                    📋 Copy Template
+                                    📋 {t('settings.email.templates.text.copy', 'Copy Template')}
                                   </Button>
                                 </Flex>
                               </Box>
@@ -1470,9 +1476,9 @@ const SettingsPage = () => {
               <Accordion.Header>
                 <Accordion.Trigger
                   icon={Code}
-                  description="Discord & Slack integration"
+                  description={t('settings.webhooks.description', 'Discord & Slack integration')}
                 >
-                  Webhook Integration (Advanced)
+                  {t('settings.webhooks.title', 'Webhook Integration (Advanced)')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
@@ -1500,10 +1506,10 @@ const SettingsPage = () => {
                                 textColor={settings.enableWebhooks ? 'success700' : 'neutral800'}
                                 style={{ fontSize: '16px' }}
                               >
-                                Enable Webhooks
+                                {t('settings.webhooks.enable.title', 'Enable Webhooks')}
                               </Typography>
                               <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                                Send session events to Discord, Slack, or custom endpoints
+                                {t('settings.webhooks.enable.description', 'Send session events to Discord, Slack, or custom endpoints')}
                               </Typography>
                             </Flex>
                           </Flex>
@@ -1518,7 +1524,7 @@ const SettingsPage = () => {
                       <Grid.Item col={12}>
                         <Box>
                           <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '12px', display: 'block' }}>
-                            🔗 Discord Webhook URL
+                            🔗 {t('settings.webhooks.discord.title', 'Discord Webhook URL')}
                           </Typography>
                           <Box 
                             style={{ 
@@ -1529,7 +1535,7 @@ const SettingsPage = () => {
                             }}
                           >
                             <textarea
-                              placeholder="https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz..."
+                              placeholder={t('settings.webhooks.discord.placeholder', 'https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz...')}
                               value={settings.discordWebhookUrl}
                               onChange={(e) => handleChange('discordWebhookUrl', e.target.value)}
                               rows={3}
@@ -1550,11 +1556,11 @@ const SettingsPage = () => {
                           </Box>
                           <Flex justifyContent="space-between" alignItems="center" style={{ marginTop: '10px' }}>
                             <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                              Optional: Post session alerts to your Discord channel
+                              {t('settings.webhooks.discord.hint', 'Optional: Post session alerts to your Discord channel')}
                             </Typography>
                             {settings.discordWebhookUrl && (
                               <Typography variant="pi" textColor="primary600" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                                {settings.discordWebhookUrl.length} characters
+                                {t('settings.webhooks.characters', '{count} characters', { count: settings.discordWebhookUrl.length })}
                               </Typography>
                             )}
                           </Flex>
@@ -1564,7 +1570,7 @@ const SettingsPage = () => {
                       <Grid.Item col={12}>
                         <Box>
                           <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '12px', display: 'block' }}>
-                            💬 Slack Webhook URL
+                            💬 {t('settings.webhooks.slack.title', 'Slack Webhook URL')}
                           </Typography>
                           <Box 
                             style={{ 
@@ -1575,7 +1581,7 @@ const SettingsPage = () => {
                             }}
                           >
                             <textarea
-                              placeholder="https://hooks.slack.com/services/XXXX/XXXX/XXXX"
+                              placeholder={t('settings.webhooks.slack.placeholder', 'https://hooks.slack.com/services/XXXX/XXXX/XXXX')}
                               value={settings.slackWebhookUrl}
                               onChange={(e) => handleChange('slackWebhookUrl', e.target.value)}
                               rows={3}
@@ -1596,11 +1602,11 @@ const SettingsPage = () => {
                           </Box>
                           <Flex justifyContent="space-between" alignItems="center" style={{ marginTop: '10px' }}>
                             <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                              Optional: Post session alerts to your Slack workspace
+                              {t('settings.webhooks.slack.hint', 'Optional: Post session alerts to your Slack workspace')}
                             </Typography>
                             {settings.slackWebhookUrl && (
                               <Typography variant="pi" textColor="primary600" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                                {settings.slackWebhookUrl.length} characters
+                                {t('settings.webhooks.characters', '{count} characters', { count: settings.slackWebhookUrl.length })}
                               </Typography>
                             )}
                           </Flex>
@@ -1622,12 +1628,10 @@ const SettingsPage = () => {
              <Check style={{ width: '20px', height: '20px', color: theme.colors.success[600], flexShrink: 0, marginTop: '2px' }} />
              <Box style={{ flex: 1 }}>
                <Typography variant="omega" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: theme.colors.primary[700] }}>
-                 Database-Backed Settings
+                 {t('settings.footer.title', 'Database-Backed Settings')}
                </Typography>
                <Typography variant="pi" textColor="primary700" style={{ fontSize: '13px', lineHeight: '1.8' }}>
-                 All settings are stored in your Strapi database and shared across all admin users. 
-                 Changes take effect immediately - no server restart required! 
-                 Email templates, webhooks, and security options are all managed from this interface.
+                 {t('settings.footer.description', 'All settings are stored in your Strapi database and shared across all admin users. Changes take effect immediately - no server restart required! Email templates, webhooks, and security options are all managed from this interface.')}
                </Typography>
              </Box>
            </Flex>

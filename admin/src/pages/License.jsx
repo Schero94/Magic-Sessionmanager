@@ -58,9 +58,9 @@ const StickySaveBar = styled(Box)`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: white;
-  border-bottom: 1px solid ${theme.colors.neutral[200]};
-  box-shadow: ${theme.shadows.sm};
+  background: ${props => props.theme.colors.neutral0};
+  border-bottom: 1px solid ${props => props.theme.colors.neutral200};
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 `;
 
 const LicenseKeyBanner = styled(Box)`

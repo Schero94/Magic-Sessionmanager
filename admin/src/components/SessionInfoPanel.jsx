@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react';
+import { useIntl } from 'react-intl';
 import { Box, Typography, Flex, Button, Badge, Divider } from '@strapi/design-system';
 import { Check, Cross, Monitor, Phone, Server, Clock } from '@strapi/icons';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import parseUserAgent from '../utils/parseUserAgent';
+import { getTranslation } from '../utils/getTranslation';
 
 /**
  * Session Info Panel - Native Strapi design
  * Clean, professional sidebar panel for Content Manager
  */
 const SessionInfoPanel = ({ documentId, model, document }) => {
+  const { formatMessage } = useIntl();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const { get, post: postRequest } = useFetchClient();
   const { toggleNotification } = useNotification();
+  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
   // Strapi v5: Use documentId (string UUID) instead of numeric id
   const userId = document?.documentId || documentId;
@@ -53,14 +57,14 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
       if (response.data?.success) {
         toggleNotification({
           type: 'success',
-          message: 'All sessions terminated successfully',
+          message: t('notifications.success.terminatedAll', 'All sessions terminated successfully'),
         });
         setSessions([]);
       }
     } catch (error) {
       toggleNotification({
         type: 'warning',
-        message: 'Failed to terminate sessions',
+        message: t('notifications.error.terminateAll', 'Failed to terminate sessions'),
       });
       console.error('[SessionInfoPanel] Logout all error:', error);
     } finally {
@@ -81,7 +85,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
         
         toggleNotification({
           type: 'success',
-          message: newBlockedStatus ? 'User blocked successfully' : 'User unblocked successfully',
+          message: newBlockedStatus 
+            ? t('notifications.success.blocked', 'User blocked successfully') 
+            : t('notifications.success.unblocked', 'User unblocked successfully'),
         });
         
         if (newBlockedStatus) {
@@ -91,7 +97,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     } catch (error) {
       toggleNotification({
         type: 'warning',
-        message: 'Failed to update user status',
+        message: t('notifications.error.block', 'Failed to update user status'),
       });
       console.error('[SessionInfoPanel] Toggle block error:', error);
     } finally {
@@ -112,10 +118,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
 
   if (loading) {
     return {
-      title: 'Session Info',
+      title: t('panel.title', 'Session Info'),
       content: (
         <Box padding={4} background="neutral0">
-          <Typography variant="pi" textColor="neutral600">Loading...</Typography>
+          <Typography variant="pi" textColor="neutral600">{t('panel.loading', 'Loading...')}</Typography>
         </Box>
       ),
     };
@@ -124,7 +130,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   const isOnline = sessions.length > 0;
 
   return {
-    title: 'Session Info',
+    title: t('panel.title', 'Session Info'),
     content: (
       <Box style={{ width: '100%' }}>
         <Flex direction="column" gap={4} alignItems="stretch">
@@ -145,10 +151,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               size="M"
               style={{ fontSize: '14px', padding: '6px 12px' }}
             >
-              {isOnline ? 'ACTIVE' : 'OFFLINE'}
+              {isOnline ? t('panel.status.active', 'ACTIVE') : t('panel.status.offline', 'OFFLINE')}
             </Badge>
             <Typography variant="omega" fontWeight="semiBold" textColor={isOnline ? 'success700' : 'neutral700'}>
-              {sessions.length} active session{sessions.length !== 1 ? 's' : ''}
+              {t('panel.sessions.count', '{count} active session{count, plural, one {} other {s}}', { count: sessions.length })}
             </Typography>
           </Flex>
         </Box>
@@ -161,10 +167,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
             hasRadius
           >
             <Typography variant="omega" fontWeight="semiBold" textColor="danger700" marginBottom={1}>
-              User is blocked
+              {t('panel.blocked.title', 'User is blocked')}
             </Typography>
             <Typography variant="pi" textColor="danger600">
-              Authentication disabled
+              {t('panel.blocked.description', 'Authentication disabled')}
             </Typography>
           </Box>
         )}
@@ -177,7 +183,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               letterSpacing: '0.5px',
               fontSize: '12px'
             }}>
-              Active Sessions
+              {t('panel.sessions.title', 'Active Sessions')}
             </Typography>
             
             {sessions.slice(0, 5).map((session) => {
@@ -219,7 +225,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                       textColor="neutral0" 
                       size="S"
                     >
-                      Active
+                      {t('panel.sessions.active', 'Active')}
                     </Badge>
                     
                     {/* Browser & OS */}
@@ -253,7 +259,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                       {/* Show minutes since last activity */}
                       {session.minutesSinceActive !== undefined && session.minutesSinceActive < 60 && (
                         <Typography variant="pi" textColor="success600" fontWeight="semiBold">
-                          Active {session.minutesSinceActive === 0 ? 'now' : `${session.minutesSinceActive} min ago`}
+                          {session.minutesSinceActive === 0 
+                            ? t('panel.sessions.activeNow', 'Active now')
+                            : t('panel.sessions.activeAgo', 'Active {minutes} min ago', { minutes: session.minutesSinceActive })
+                          }
                         </Typography>
                       )}
                   </Flex>
@@ -264,7 +273,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
             {sessions.length > 5 && (
               <Box padding={3} background="primary100" hasRadius textAlign="center">
                 <Typography variant="pi" textColor="primary600" fontWeight="semiBold">
-                  +{sessions.length - 5} more session{sessions.length - 5 !== 1 ? 's' : ''}
+                  {t('panel.sessions.more', '+{count} more session{count, plural, one {} other {s}}', { count: sessions.length - 5 })}
                 </Typography>
               </Box>
             )}
@@ -288,10 +297,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                 💤
               </Typography>
               <Typography variant="omega" fontWeight="semiBold" textColor="neutral700">
-              No active sessions
+              {t('panel.empty.title', 'No active sessions')}
             </Typography>
               <Typography variant="pi" textColor="neutral500" style={{ fontSize: '13px' }}>
-              User has not logged in yet
+              {t('panel.empty.description', 'User has not logged in yet')}
             </Typography>
             </Flex>
           </Box>
@@ -306,7 +315,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
             letterSpacing: '0.5px',
             fontSize: '12px'
           }}>
-            Actions
+            {t('panel.actions.title', 'Actions')}
           </Typography>
           
           <Button
@@ -335,7 +344,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               }
             }}
           >
-            Terminate All Sessions
+            {t('panel.actions.terminateAll', 'Terminate All Sessions')}
           </Button>
           
           <Button
@@ -364,7 +373,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               }
             }}
           >
-            {isBlocked ? 'Unblock User' : 'Block User'}
+            {isBlocked ? t('panel.actions.unblockUser', 'Unblock User') : t('panel.actions.blockUser', 'Block User')}
           </Button>
         </Flex>
         </Flex>

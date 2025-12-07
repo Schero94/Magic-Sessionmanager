@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useIntl } from 'react-intl';
 import styled from 'styled-components';
 import {
   Modal,
@@ -25,6 +26,7 @@ import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import parseUserAgent from '../utils/parseUserAgent';
 import pluginId from '../pluginId';
 import { useLicense } from '../hooks/useLicense';
+import { getTranslation } from '../utils/getTranslation';
 
 const TwoColumnGrid = styled.div`
   display: grid;
@@ -53,6 +55,7 @@ const Section = styled(Box)`
 `;
 
 const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
+  const { formatMessage } = useIntl();
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
   const { isPremium, loading: licenseLoading } = useLicense();
@@ -60,6 +63,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   const [showUserAgent, setShowUserAgent] = useState(false);
   const [geoData, setGeoData] = useState(null);
   const [geoLoading, setGeoLoading] = useState(false);
+  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
   if (!session) return null;
 
@@ -117,7 +121,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   const DeviceIcon = getDeviceIcon(deviceInfo.device);
 
   const handleTerminate = async () => {
-    if (!confirm('Are you sure you want to terminate this session?')) {
+    if (!confirm(t('modal.confirm.terminate', 'Are you sure you want to terminate this session?'))) {
       return;
     }
 
@@ -127,7 +131,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
       
       toggleNotification({
         type: 'success',
-        message: 'Session terminated successfully',
+        message: t('notifications.success.terminated', 'Session terminated successfully'),
       });
       
       onSessionTerminated();
@@ -136,7 +140,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
       console.error('[SessionDetailModal] Error:', err);
       toggleNotification({
         type: 'danger',
-        message: 'Failed to terminate session',
+        message: t('notifications.error.terminate', 'Failed to terminate session'),
       });
     } finally {
       setTerminating(false);
@@ -188,10 +192,10 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
             </Box>
             <Flex direction="column" alignItems="flex-start">
               <Typography variant="beta" fontWeight="bold">
-                Session Details
+                {t('modal.title', 'Session Details')}
               </Typography>
               <Typography variant="pi" textColor="neutral600">
-                ID: {session.id}
+                {t('modal.id', 'ID: {id}', { id: session.id })}
               </Typography>
             </Flex>
           </Flex>
@@ -207,7 +211,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 size="M"
                 style={{ fontSize: '14px', padding: '8px 20px', fontWeight: '600' }}
               >
-                {isOnline ? 'ONLINE' : 'OFFLINE'}
+                {isOnline ? t('modal.status.online', 'ONLINE') : t('modal.status.offline', 'OFFLINE')}
               </Badge>
             </Flex>
 
@@ -220,24 +224,24 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 {/* User Information */}
                 <Section>
                   <SectionTitle>
-                    User
+                    {t('modal.section.user', 'User')}
                   </SectionTitle>
                   
-                  <DetailRow compact icon={Check} label="Username" value={session.user?.username || 'N/A'} />
-                  <DetailRow compact icon={Information} label="Email" value={session.user?.email || 'N/A'} />
-                  <DetailRow compact icon={Information} label="User ID" value={session.user?.id || 'N/A'} />
+                  <DetailRow compact icon={Check} label={t('modal.user.username', 'Username')} value={session.user?.username || t('modal.user.na', 'N/A')} />
+                  <DetailRow compact icon={Information} label={t('modal.user.email', 'Email')} value={session.user?.email || t('modal.user.na', 'N/A')} />
+                  <DetailRow compact icon={Information} label={t('modal.user.id', 'User ID')} value={session.user?.id || t('modal.user.na', 'N/A')} />
                 </Section>
 
                 {/* Device Information */}
                 <Section>
                   <SectionTitle>
-                    Device
+                    {t('modal.section.device', 'Device')}
                   </SectionTitle>
                   
-                  <DetailRow compact icon={DeviceIcon} label="Device" value={deviceInfo.device} />
-                  <DetailRow compact icon={Monitor} label="Browser" value={`${deviceInfo.browser} ${deviceInfo.browserVersion || ''}`} />
-                  <DetailRow compact icon={Server} label="OS" value={deviceInfo.os} />
-                  <DetailRow compact icon={Information} label="IP" value={session.ipAddress} />
+                  <DetailRow compact icon={DeviceIcon} label={t('modal.device.device', 'Device')} value={deviceInfo.device} />
+                  <DetailRow compact icon={Monitor} label={t('modal.device.browser', 'Browser')} value={`${deviceInfo.browser} ${deviceInfo.browserVersion || ''}`} />
+                  <DetailRow compact icon={Server} label={t('modal.device.os', 'OS')} value={deviceInfo.os} />
+                  <DetailRow compact icon={Information} label={t('modal.device.ip', 'IP')} value={session.ipAddress} />
                 </Section>
               </Box>
 
@@ -245,13 +249,13 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
               <Box>
                 <Section>
                   <SectionTitle>
-                    Timeline
+                    {t('modal.section.timeline', 'Timeline')}
                   </SectionTitle>
                 
                 <DetailRow 
                   compact 
                   icon={Clock} 
-                  label="Login" 
+                  label={t('modal.timeline.login', 'Login')}
                   value={new Date(session.loginTime).toLocaleString('de-DE', { 
                     day: '2-digit', 
                     month: 'short', 
@@ -262,7 +266,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 <DetailRow 
                   compact 
                   icon={Clock} 
-                  label="Last Active" 
+                  label={t('modal.timeline.lastActive', 'Last Active')}
                   value={new Date(session.lastActive || session.loginTime).toLocaleString('de-DE', { 
                     day: '2-digit', 
                     month: 'short', 
@@ -273,14 +277,14 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 <DetailRow 
                   compact 
                   icon={Clock} 
-                  label="Idle Time" 
-                  value={`${session.minutesSinceActive} min`} 
+                  label={t('modal.timeline.idleTime', 'Idle Time')}
+                  value={t('modal.timeline.minutes', '{minutes} min', { minutes: session.minutesSinceActive })}
                 />
                 {session.logoutTime && (
                   <DetailRow 
                     compact 
                     icon={Cross} 
-                    label="Logout" 
+                    label={t('modal.timeline.logout', 'Logout')}
                     value={new Date(session.logoutTime).toLocaleString('de-DE', { 
                       day: '2-digit', 
                       month: 'short', 
@@ -297,13 +301,13 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
             {isPremium ? (
               <Section>
                 <SectionTitle>
-                  Location and Security
+                  {t('modal.section.security', 'Location and Security')}
                 </SectionTitle>
                 
                 {geoLoading ? (
                   <Box padding={4} style={{ textAlign: 'center' }}>
                     <Typography variant="pi" textColor="neutral600">
-                      Loading location data...
+                      {t('modal.security.loading', 'Loading location data...')}
                     </Typography>
                   </Box>
                 ) : (
@@ -312,30 +316,30 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                       <DetailRow 
                         compact 
                         icon={Earth} 
-                        label="Country" 
+                        label={t('modal.security.country', 'Country')}
                         value={`${premiumData.country_flag || ''} ${premiumData.country}`.trim()} 
                       />
-                      <DetailRow compact icon={Earth} label="City" value={premiumData.city} />
-                      <DetailRow compact icon={Clock} label="Timezone" value={premiumData.timezone} />
+                      <DetailRow compact icon={Earth} label={t('modal.security.city', 'City')} value={premiumData.city} />
+                      <DetailRow compact icon={Clock} label={t('modal.security.timezone', 'Timezone')} value={premiumData.timezone} />
                     </Box>
                     <Box>
                       <DetailRow 
                         compact 
                         icon={Shield} 
-                        label="Security" 
+                        label={t('modal.security.score', 'Security')}
                         value={`${premiumData.securityScore}/100 (${premiumData.riskLevel})`} 
                       />
                       <DetailRow 
                         compact 
                         icon={Shield} 
-                        label="VPN" 
-                        value={premiumData.isVpn ? '[WARNING] Yes' : 'No'} 
+                        label={t('modal.security.vpn', 'VPN')}
+                        value={premiumData.isVpn ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')} 
                       />
                       <DetailRow 
                         compact 
                         icon={Shield} 
-                        label="Proxy" 
-                        value={premiumData.isProxy ? '[WARNING] Yes' : 'No'} 
+                        label={t('modal.security.proxy', 'Proxy')}
+                        value={premiumData.isProxy ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')} 
                       />
                     </Box>
                   </TwoColumnGrid>
@@ -355,10 +359,10 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   <Flex direction="column" alignItems="center" gap={3}>
                     <Crown style={{ width: '40px', height: '40px', color: '#d97706' }} />
                     <Typography variant="beta" style={{ color: '#92400e', fontWeight: '700' }}>
-                      Location and Security Analysis
+                      {t('modal.premium.title', 'Location and Security Analysis')}
                     </Typography>
                     <Typography variant="omega" style={{ color: '#78350f', fontSize: '14px', lineHeight: '1.6' }}>
-                      Unlock premium features to get IP geolocation, security scoring, and VPN/Proxy detection for every session
+                      {t('modal.premium.description', 'Unlock premium features to get IP geolocation, security scoring, and VPN/Proxy detection for every session')}
                     </Typography>
                     <Button
                       variant="secondary"
@@ -373,7 +377,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                         boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
                       }}
                     >
-                      Upgrade to Premium
+                      {t('modal.premium.upgrade', 'Upgrade to Premium')}
                     </Button>
                   </Flex>
                 </Box>
@@ -384,7 +388,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
             <Section>
               <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '12px' }}>
                 <SectionTitle style={{ marginBottom: 0, paddingBottom: 0, border: 'none' }}>
-                  Technical Details
+                  {t('modal.section.technical', 'Technical Details')}
                 </SectionTitle>
                 <Button
                   variant="tertiary"
@@ -392,7 +396,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   onClick={() => setShowUserAgent(!showUserAgent)}
                   style={{ fontSize: '12px' }}
                 >
-                  {showUserAgent ? '▲ Hide Details' : '▼ Show Details'}
+                  {showUserAgent ? `▲ ${t('modal.technical.hide', 'Hide Details')}` : `▼ ${t('modal.technical.show', 'Show Details')}`}
                 </Button>
               </Flex>
               
@@ -423,7 +427,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
         <Modal.Footer>
           <Flex justifyContent="space-between" style={{ width: '100%' }}>
             <Button onClick={onClose} variant="tertiary">
-              Close
+              {t('modal.actions.close', 'Close')}
             </Button>
             <Button 
               onClick={handleTerminate}
@@ -432,7 +436,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
               loading={terminating}
               startIcon={<Cross />}
             >
-              Terminate Session
+              {t('modal.actions.terminate', 'Terminate Session')}
             </Button>
           </Flex>
         </Modal.Footer>

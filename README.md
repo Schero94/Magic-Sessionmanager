@@ -136,7 +136,7 @@ npm run develop
 3. Click it!
 4. You'll see the dashboard (like the screenshot above)
 
-**That's it! You're done!** 🎉
+**That's it! You're done!**
 
 ---
 
@@ -621,4 +621,4 @@ Language automatically follows your Strapi admin interface setting.
 
 ---
 
-**Made with ❤️ for Strapi v5**
+**Made for Strapi v5**
