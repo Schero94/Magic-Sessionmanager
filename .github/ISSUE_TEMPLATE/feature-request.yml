@@ -1,0 +1,64 @@
+name: 💡 Feature Request
+description: Suggest a new feature or enhancement for Magic Sessionmanager
+title: '[Feature]: '
+labels: ['enhancement', 'needs-triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thanks for suggesting a feature!
+        
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: 📦 Feature Area
+      options:
+        - Session Tracking
+        - Analytics & Reports
+        - Security Features
+        - Geolocation Services
+        - Notifications
+        - Admin Dashboard
+        - Widget Customization
+        - Session Policies
+        - API / Backend
+        - Documentation
+        - Other
+    validations:
+      required: true
+      
+  - type: textarea
+    id: problem
+    attributes:
+      label: 🤔 Problem / Use Case
+    validations:
+      required: true
+      
+  - type: textarea
+    id: solution
+    attributes:
+      label: 💡 Proposed Solution
+    validations:
+      required: true
+      
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternatives Considered
+    validations:
+      required: false
+      
+  - type: textarea
+    id: example
+    attributes:
+      label: 📝 Example
+    validations:
+      required: false
+      
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: ✔️ Checklist
+      options:
+        - label: I have searched for similar feature requests
+          required: true

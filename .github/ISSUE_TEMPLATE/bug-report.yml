@@ -1,39 +1,138 @@
-name: Bug Report
-description: File a bug report
+name: 🐛 Bug Report
+description: Report a bug or issue with Magic Sessionmanager
 title: '[Bug]: '
+labels: ['bug', 'needs-triage']
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report!
+        ## Thanks for taking the time to report a bug!
+        
   - type: textarea
-    id: issue-experiencing
+    id: bug-description
     attributes:
-      label: What issue are you experiencing?
-      description: A detailed explanation of the issue
+      label: 🐛 Bug Description
     validations:
       required: true
+      
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: ✅ Expected Behavior
+    validations:
+      required: true
+      
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: ❌ Actual Behavior
+    validations:
+      required: true
+      
   - type: textarea
     id: reproduction-steps
     attributes:
-      label: Steps To Reproduce
-      description: Steps to reproduce the behavior.
+      label: 🔄 Steps To Reproduce
       placeholder: |
-        1. In this environment...
-        2. With this config...
-        3. Run '...'
+        1. User logs in...
+        2. Navigate to sessions...
+        3. Perform action...
         4. See error...
     validations:
+      required: true
+      
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: 📦 Feature Area
+      options:
+        - Session Tracking
+        - Active Sessions Dashboard
+        - Session Analytics
+        - IP Geolocation
+        - Security Scoring
+        - Session Termination
+        - Online Users Widget
+        - Notifications
+        - Settings/Configuration
+        - Admin UI
+        - Other
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: user-provider
+    attributes:
+      label: 👤 User Provider
+      description: Which authentication provider are you using?
+      options:
+        - Strapi Native (Users & Permissions)
+        - Custom User Model
+        - SSO/OAuth
+        - Other
+    validations:
       required: false
+      
   - type: input
     id: plugin-version
     attributes:
-      label: What version of the plugin are you using?
+      label: 📦 Plugin Version
+      placeholder: e.g. 4.0.2
     validations:
       required: true
+      
   - type: input
     id: strapi-version
     attributes:
-      label: What strapi version are you using?
+      label: 🚀 Strapi Version
+      placeholder: e.g. 5.30.0
     validations:
       required: true
+      
+  - type: input
+    id: node-version
+    attributes:
+      label: 🟢 Node Version
+      placeholder: e.g. 20.19.4
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: database
+    attributes:
+      label: 🗄️ Database
+      options:
+        - PostgreSQL
+        - MySQL
+        - MariaDB
+        - SQLite
+        - Other
+    validations:
+      required: false
+      
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: 📋 Error Logs
+      render: shell
+    validations:
+      required: false
+      
+  - type: textarea
+    id: session-config
+    attributes:
+      label: ⚙️ Session Configuration
+      description: Your session configuration (remove sensitive data!)
+      render: javascript
+    validations:
+      required: false
+      
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: ✔️ Checklist
+      options:
+        - label: I have searched for similar issues
+          required: true
+        - label: I have removed sensitive information
+          required: true
