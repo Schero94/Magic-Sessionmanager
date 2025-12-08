@@ -1,3 +1,10 @@
+# [4.1.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.0.3...v4.1.0) (2025-12-08)
+
+
+### Features
+
+* enhance GitHub issue templates with session management specific fields and feature request template ([78188de](https://github.com/Schero94/Magic-Sessionmanager/commit/78188dee1711ecd82ce548faceb34917bd907246))
+
 ## [4.0.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.0.2...v4.0.3) (2025-12-08)
 
 
