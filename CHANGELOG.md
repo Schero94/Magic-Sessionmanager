@@ -1,3 +1,10 @@
+# [4.2.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.1.0...v4.2.0) (2025-12-08)
+
+
+### Features
+
+* enhance pull request template with session management specific sections and security checklist ([bcf9782](https://github.com/Schero94/Magic-Sessionmanager/commit/bcf9782068808d955dbcced2801d3e6eecbe9f31))
+
 # [4.1.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.0.3...v4.1.0) (2025-12-08)
 
 
