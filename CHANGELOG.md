@@ -1,3 +1,10 @@
+## [4.0.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.0.2...v4.0.3) (2025-12-08)
+
+
+### Bug Fixes
+
+* update CI workflow to use Node.js 22 for compatibility with dependencies ([113e02e](https://github.com/Schero94/Magic-Sessionmanager/commit/113e02e1991bbd296eed2a30dfb4ee42e6dc4718))
+
 ## [4.0.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.0.1...v4.0.2) (2025-12-08)
 
 
