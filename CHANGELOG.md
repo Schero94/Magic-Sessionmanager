@@ -1,3 +1,10 @@
+## [4.2.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.1...v4.2.2) (2025-12-14)
+
+
+### Bug Fixes
+
+* add debug mode documentation to README ([f675180](https://github.com/Schero94/Magic-Sessionmanager/commit/f675180890dffb40c933e80917d9806da07b6d8d))
+
 ## [4.2.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.0...v4.2.1) (2025-12-14)
 
 
