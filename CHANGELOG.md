@@ -1,3 +1,10 @@
+## [4.2.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.0...v4.2.1) (2025-12-14)
+
+
+### Bug Fixes
+
+* add debug mode for plugin logging ([1eff03a](https://github.com/Schero94/Magic-Sessionmanager/commit/1eff03af93a1905d52044467d697d965d564860e))
+
 # [4.2.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.1.0...v4.2.0) (2025-12-08)
 
 
