@@ -1,3 +1,10 @@
+## [4.2.6](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.5...v4.2.6) (2025-12-14)
+
+
+### Bug Fixes
+
+* clean up README formatting ([d2082bd](https://github.com/Schero94/Magic-Sessionmanager/commit/d2082bd5387f644970eae83b8cb2b8aa938df2dd))
+
 ## [4.2.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.4...v4.2.5) (2025-12-14)
 
 
