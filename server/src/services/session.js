@@ -1,6 +1,7 @@
 'use strict';
 
 const { encryptToken, decryptToken, generateSessionId } = require('../utils/encryption');
+const { createLogger } = require('../utils/logger');
 
 /**
  * Session Service
@@ -20,7 +21,10 @@ const { encryptToken, decryptToken, generateSessionId } = require('../utils/encr
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
 
-module.exports = ({ strapi }) => ({
+module.exports = ({ strapi }) => {
+  const log = createLogger(strapi);
+  
+  return {
   /**
    * Create a new session record
    * @param {Object} params - { userId, ip, userAgent, token, refreshToken }
@@ -52,11 +56,11 @@ module.exports = ({ strapi }) => ({
         },
       });
 
-      strapi.log.info(`[magic-sessionmanager] [SUCCESS] Session ${session.documentId} (${sessionId}) created for user ${userId}`);
+      log.info(`[SUCCESS] Session ${session.documentId} (${sessionId}) created for user ${userId}`);
 
       return session;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error creating session:', err);
+      log.error('Error creating session:', err);
       throw err;
     }
   },
@@ -81,7 +85,7 @@ module.exports = ({ strapi }) => ({
           },
         });
 
-        strapi.log.info(`[magic-sessionmanager] Session ${sessionId} terminated`);
+        log.info(`Session ${sessionId} terminated`);
       } else if (userId) {
         // Strapi v5: If numeric id provided, look up documentId first
         let userDocumentId = userId;
@@ -111,10 +115,10 @@ module.exports = ({ strapi }) => ({
           });
         }
 
-        strapi.log.info(`[magic-sessionmanager] All sessions terminated for user ${userDocumentId}`);
+        log.info(`All sessions terminated for user ${userDocumentId}`);
       }
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error terminating session:', err);
+      log.error('Error terminating session:', err);
       throw err;
     }
   },
@@ -156,7 +160,7 @@ module.exports = ({ strapi }) => ({
 
       return enhancedSessions;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error getting all sessions:', err);
+      log.error('Error getting all sessions:', err);
       throw err;
     }
   },
@@ -199,7 +203,7 @@ module.exports = ({ strapi }) => ({
       // Only return truly active sessions
       return enhancedSessions.filter(s => s.isTrulyActive);
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error getting active sessions:', err);
+      log.error('Error getting active sessions:', err);
       throw err;
     }
   },
@@ -253,7 +257,7 @@ module.exports = ({ strapi }) => ({
 
       return enhancedSessions;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error getting user sessions:', err);
+      log.error('Error getting user sessions:', err);
       throw err;
     }
   },
@@ -290,7 +294,7 @@ module.exports = ({ strapi }) => ({
         }
       }
     } catch (err) {
-      strapi.log.debug('[magic-sessionmanager] Error touching session:', err.message);
+      log.debug('Error touching session:', err.message);
       // Don't throw - this is a non-critical operation
     }
   },
@@ -309,7 +313,7 @@ module.exports = ({ strapi }) => ({
       const now = new Date();
       const cutoffTime = new Date(now.getTime() - inactivityTimeout);
       
-      strapi.log.info(`[magic-sessionmanager] [CLEANUP] Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
+      log.info(`[CLEANUP] Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
       
       // Find all active sessions
       const activeSessions = await strapi.documents(SESSION_UID).findMany({
@@ -331,10 +335,10 @@ module.exports = ({ strapi }) => ({
         }
       }
       
-      strapi.log.info(`[magic-sessionmanager] [SUCCESS] Cleanup complete: ${deactivatedCount} sessions deactivated`);
+      log.info(`[SUCCESS] Cleanup complete: ${deactivatedCount} sessions deactivated`);
       return deactivatedCount;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error cleaning up inactive sessions:', err);
+      log.error('Error cleaning up inactive sessions:', err);
       throw err;
     }
   },
@@ -348,10 +352,10 @@ module.exports = ({ strapi }) => ({
   async deleteSession(sessionId) {
     try {
       await strapi.documents(SESSION_UID).delete({ documentId: sessionId });
-      strapi.log.info(`[magic-sessionmanager] [DELETE] Session ${sessionId} permanently deleted`);
+      log.info(`[DELETE] Session ${sessionId} permanently deleted`);
       return true;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error deleting session:', err);
+      log.error('Error deleting session:', err);
       throw err;
     }
   },
@@ -363,7 +367,7 @@ module.exports = ({ strapi }) => ({
    */
   async deleteInactiveSessions() {
     try {
-      strapi.log.info('[magic-sessionmanager] [DELETE] Deleting all inactive sessions...');
+      log.info('[DELETE] Deleting all inactive sessions...');
       
       // Find all inactive sessions (documentId is always included automatically)
       const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
@@ -378,11 +382,12 @@ module.exports = ({ strapi }) => ({
         deletedCount++;
       }
       
-      strapi.log.info(`[magic-sessionmanager] [SUCCESS] Deleted ${deletedCount} inactive sessions`);
+      log.info(`[SUCCESS] Deleted ${deletedCount} inactive sessions`);
       return deletedCount;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error deleting inactive sessions:', err);
+      log.error('Error deleting inactive sessions:', err);
       throw err;
     }
   },
-});
+};
+};

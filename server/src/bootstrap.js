@@ -11,12 +11,15 @@
 
 const getClientIp = require('./utils/getClientIp');
 const { encryptToken, decryptToken } = require('./utils/encryption');
+const { createLogger } = require('./utils/logger');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
 
 module.exports = async ({ strapi }) => {
-  strapi.log.info('[magic-sessionmanager] [START] Bootstrap starting...');
+  const log = createLogger(strapi);
+  
+  log.info('[START] Bootstrap starting...');
 
   try {
     // Initialize License Guard
@@ -27,16 +30,16 @@ module.exports = async ({ strapi }) => {
       const licenseStatus = await licenseGuardService.initialize();
       
       if (!licenseStatus.valid) {
-        strapi.log.error('╔════════════════════════════════════════════════════════════════╗');
-        strapi.log.error('║  [ERROR] SESSION MANAGER - NO VALID LICENSE                         ║');
-        strapi.log.error('║                                                                ║');
-        strapi.log.error('║  This plugin requires a valid license to operate.             ║');
-        strapi.log.error('║  Please activate your license via Admin UI:                   ║');
-        strapi.log.error('║  Go to Settings → Sessions → License                          ║');
-        strapi.log.error('║                                                                ║');
-        strapi.log.error('║  The plugin will run with limited functionality until         ║');
-        strapi.log.error('║  a valid license is activated.                                ║');
-        strapi.log.error('╚════════════════════════════════════════════════════════════════╝');
+        log.error('╔════════════════════════════════════════════════════════════════╗');
+        log.error('║  [ERROR] SESSION MANAGER - NO VALID LICENSE                         ║');
+        log.error('║                                                                ║');
+        log.error('║  This plugin requires a valid license to operate.             ║');
+        log.error('║  Please activate your license via Admin UI:                   ║');
+        log.error('║  Go to Settings → Sessions → License                          ║');
+        log.error('║                                                                ║');
+        log.error('║  The plugin will run with limited functionality until         ║');
+        log.error('║  a valid license is activated.                                ║');
+        log.error('╚════════════════════════════════════════════════════════════════╝');
       } else if (licenseStatus.valid) {
         const pluginStore = strapi.store({
           type: 'plugin',
@@ -44,22 +47,22 @@ module.exports = async ({ strapi }) => {
         });
         const storedKey = await pluginStore.get({ key: 'licenseKey' });
         
-        strapi.log.info('╔════════════════════════════════════════════════════════════════╗');
-        strapi.log.info('║  [SUCCESS] SESSION MANAGER LICENSE ACTIVE                             ║');
-        strapi.log.info('║                                                                ║');
+        log.info('╔════════════════════════════════════════════════════════════════╗');
+        log.info('║  [SUCCESS] SESSION MANAGER LICENSE ACTIVE                             ║');
+        log.info('║                                                                ║');
         
         if (licenseStatus.data) {
-          strapi.log.info(`║  License: ${licenseStatus.data.licenseKey}`.padEnd(66) + '║');
-          strapi.log.info(`║  User: ${licenseStatus.data.firstName} ${licenseStatus.data.lastName}`.padEnd(66) + '║');
-          strapi.log.info(`║  Email: ${licenseStatus.data.email}`.padEnd(66) + '║');
+          log.info(`║  License: ${licenseStatus.data.licenseKey}`.padEnd(66) + '║');
+          log.info(`║  User: ${licenseStatus.data.firstName} ${licenseStatus.data.lastName}`.padEnd(66) + '║');
+          log.info(`║  Email: ${licenseStatus.data.email}`.padEnd(66) + '║');
         } else if (storedKey) {
-          strapi.log.info(`║  License: ${storedKey} (Offline Mode)`.padEnd(66) + '║');
-          strapi.log.info(`║  Status: Grace Period Active`.padEnd(66) + '║');
+          log.info(`║  License: ${storedKey} (Offline Mode)`.padEnd(66) + '║');
+          log.info(`║  Status: Grace Period Active`.padEnd(66) + '║');
         }
         
-        strapi.log.info('║                                                                ║');
-        strapi.log.info('║  [RELOAD] Auto-pinging every 15 minutes                              ║');
-        strapi.log.info('╚════════════════════════════════════════════════════════════════╝');
+        log.info('║                                                                ║');
+        log.info('║  [RELOAD] Auto-pinging every 15 minutes                              ║');
+        log.info('╚════════════════════════════════════════════════════════════════╝');
       }
     }, 3000); // Wait 3 seconds for API to be ready
 
@@ -69,7 +72,7 @@ module.exports = async ({ strapi }) => {
       .service('session');
 
     // Cleanup inactive sessions on startup
-    strapi.log.info('[magic-sessionmanager] Running initial session cleanup...');
+    log.info('Running initial session cleanup...');
     await sessionService.cleanupInactiveSessions();
 
     // Schedule periodic cleanup every 30 minutes
@@ -81,11 +84,11 @@ module.exports = async ({ strapi }) => {
         const service = strapi.plugin('magic-sessionmanager').service('session');
         await service.cleanupInactiveSessions();
       } catch (err) {
-        strapi.log.error('[magic-sessionmanager] Periodic cleanup error:', err);
+        log.error('Periodic cleanup error:', err);
       }
     }, cleanupInterval);
     
-    strapi.log.info('[magic-sessionmanager] [TIME] Periodic cleanup scheduled (every 30 minutes)');
+    log.info('[TIME] Periodic cleanup scheduled (every 30 minutes)');
     
     // Store interval handle for cleanup on shutdown
     if (!strapi.sessionManagerIntervals) {
@@ -128,13 +131,13 @@ module.exports = async ({ strapi }) => {
 
           if (matchingSession) {
             await sessionService.terminateSession({ sessionId: matchingSession.documentId });
-            strapi.log.info(`[magic-sessionmanager] [LOGOUT] Logout via /api/auth/logout - Session ${matchingSession.documentId} terminated`);
+            log.info(`[LOGOUT] Logout via /api/auth/logout - Session ${matchingSession.documentId} terminated`);
           }
 
           ctx.status = 200;
           ctx.body = { message: 'Logged out successfully' };
         } catch (err) {
-          strapi.log.error('[magic-sessionmanager] Logout error:', err);
+          log.error('Logout error:', err);
           ctx.status = 200;
           ctx.body = { message: 'Logged out successfully' };
         }
@@ -144,7 +147,7 @@ module.exports = async ({ strapi }) => {
       },
     }]);
 
-    strapi.log.info('[magic-sessionmanager] [SUCCESS] /api/auth/logout route registered');
+    log.info('[SUCCESS] /api/auth/logout route registered');
 
     // Middleware to intercept logins
     strapi.server.use(async (ctx, next) => {
@@ -164,7 +167,7 @@ module.exports = async ({ strapi }) => {
           const userAgent = ctx.request.headers?.['user-agent'] || ctx.request.header?.['user-agent'] || 'unknown';
           
           // Strapi v5: Use documentId for session creation
-          strapi.log.info(`[magic-sessionmanager] [CHECK] Login detected! User: ${user.documentId || user.id} (${user.email || user.username}) from IP: ${ip}`);
+          log.info(`[CHECK] Login detected! User: ${user.documentId || user.id} (${user.email || user.username}) from IP: ${ip}`);
           
           // Get config
           const config = strapi.config.get('plugin::magic-sessionmanager') || {};
@@ -216,13 +219,13 @@ module.exports = async ({ strapi }) => {
                 }
               }
             } catch (geoErr) {
-              strapi.log.warn('[magic-sessionmanager] Geolocation check failed:', geoErr.message);
+              log.warn('Geolocation check failed:', geoErr.message);
             }
           }
           
           // Block if needed
           if (shouldBlock) {
-            strapi.log.warn(`[magic-sessionmanager] [BLOCKED] Blocking login: ${blockReason}`);
+            log.warn(`[BLOCKED] Blocking login: ${blockReason}`);
             
             // Don't create session, return error
             ctx.status = 403;
@@ -252,7 +255,7 @@ module.exports = async ({ strapi }) => {
             refreshToken: ctx.body.refreshToken, // Store Refresh Token (encrypted) if exists
           });
           
-          strapi.log.info(`[magic-sessionmanager] [SUCCESS] Session created for user ${userDocId} (IP: ${ip})`);
+          log.info(`[SUCCESS] Session created for user ${userDocId} (IP: ${ip})`);
           
           // Advanced: Send notifications
           if (geoData && (config.enableEmailAlerts || config.enableWebhooks)) {
@@ -295,17 +298,17 @@ module.exports = async ({ strapi }) => {
                 }
               }
             } catch (notifErr) {
-              strapi.log.warn('[magic-sessionmanager] Notification failed:', notifErr.message);
+              log.warn('Notification failed:', notifErr.message);
             }
           }
         } catch (err) {
-          strapi.log.error('[magic-sessionmanager] [ERROR] Error creating session:', err);
+          log.error('[ERROR] Error creating session:', err);
           // Don't throw - login should still succeed even if session creation fails
         }
       }
     });
 
-    strapi.log.info('[magic-sessionmanager] [SUCCESS] Login/Logout interceptor middleware mounted');
+    log.info('[SUCCESS] Login/Logout interceptor middleware mounted');
 
     // Middleware to block refresh token requests for terminated sessions
     strapi.server.use(async (ctx, next) => {
@@ -337,7 +340,7 @@ module.exports = async ({ strapi }) => {
 
             if (!matchingSession) {
               // No active session with this refresh token - Block!
-              strapi.log.warn('[magic-sessionmanager] [BLOCKED] Blocked refresh token request - no active session');
+              log.warn('[BLOCKED] Blocked refresh token request - no active session');
               ctx.status = 401;
               ctx.body = {
                 error: {
@@ -349,10 +352,10 @@ module.exports = async ({ strapi }) => {
               return; // Don't continue
             }
             
-            strapi.log.info(`[magic-sessionmanager] [SUCCESS] Refresh token allowed for session ${matchingSession.documentId}`);
+            log.info(`[SUCCESS] Refresh token allowed for session ${matchingSession.documentId}`);
           }
         } catch (err) {
-          strapi.log.error('[magic-sessionmanager] Error checking refresh token:', err);
+          log.error('Error checking refresh token:', err);
           // On error, allow request to continue (fail-open for availability)
         }
       }
@@ -398,32 +401,32 @@ module.exports = async ({ strapi }) => {
                 },
               });
               
-              strapi.log.info(`[magic-sessionmanager] [REFRESH] Tokens refreshed for session ${matchingSession.documentId}`);
+              log.info(`[REFRESH] Tokens refreshed for session ${matchingSession.documentId}`);
             }
           }
         } catch (err) {
-          strapi.log.error('[magic-sessionmanager] Error updating refreshed tokens:', err);
+          log.error('Error updating refreshed tokens:', err);
         }
       }
     });
 
-    strapi.log.info('[magic-sessionmanager] [SUCCESS] Refresh Token interceptor middleware mounted');
+    log.info('[SUCCESS] Refresh Token interceptor middleware mounted');
 
     // Mount lastSeen update middleware
     strapi.server.use(
       require('./middlewares/last-seen')({ strapi, sessionService })
     );
 
-    strapi.log.info('[magic-sessionmanager] [SUCCESS] LastSeen middleware mounted');
+    log.info('[SUCCESS] LastSeen middleware mounted');
 
     // Auto-enable Content-API permissions for authenticated users
-    await ensureContentApiPermissions(strapi);
+    await ensureContentApiPermissions(strapi, log);
 
-    strapi.log.info('[magic-sessionmanager] [SUCCESS] Bootstrap complete');
-    strapi.log.info('[magic-sessionmanager] [READY] Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
+    log.info('[SUCCESS] Bootstrap complete');
+    log.info('[READY] Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
     
   } catch (err) {
-    strapi.log.error('[magic-sessionmanager] [ERROR] Bootstrap error:', err);
+    log.error('[ERROR] Bootstrap error:', err);
   }
 };
 
@@ -431,8 +434,9 @@ module.exports = async ({ strapi }) => {
  * Auto-enable Content-API permissions for authenticated users
  * This ensures plugin endpoints are accessible after installation
  * @param {object} strapi - Strapi instance
+ * @param {object} log - Logger instance
  */
-async function ensureContentApiPermissions(strapi) {
+async function ensureContentApiPermissions(strapi, log) {
   try {
     // Get the authenticated role
     const authenticatedRole = await strapi.query('plugin::users-permissions.role').findOne({
@@ -440,7 +444,7 @@ async function ensureContentApiPermissions(strapi) {
     });
 
     if (!authenticatedRole) {
-      strapi.log.warn('[magic-sessionmanager] Authenticated role not found - skipping permission setup');
+      log.warn('Authenticated role not found - skipping permission setup');
       return;
     }
 
@@ -465,7 +469,7 @@ async function ensureContentApiPermissions(strapi) {
     const missingActions = requiredActions.filter(action => !existingActions.includes(action));
 
     if (missingActions.length === 0) {
-      strapi.log.debug('[magic-sessionmanager] Content-API permissions already configured');
+      log.debug('Content-API permissions already configured');
       return;
     }
 
@@ -477,12 +481,12 @@ async function ensureContentApiPermissions(strapi) {
           role: authenticatedRole.id,
         },
       });
-      strapi.log.info(`[magic-sessionmanager] [PERMISSION] Enabled ${action} for authenticated users`);
+      log.info(`[PERMISSION] Enabled ${action} for authenticated users`);
     }
 
-    strapi.log.info('[magic-sessionmanager] [SUCCESS] Content-API permissions configured for authenticated users');
+    log.info('[SUCCESS] Content-API permissions configured for authenticated users');
   } catch (err) {
-    strapi.log.warn('[magic-sessionmanager] Could not auto-configure permissions:', err.message);
-    strapi.log.warn('[magic-sessionmanager] Please manually enable plugin permissions in Settings > Users & Permissions > Roles > Authenticated');
+    log.warn('Could not auto-configure permissions:', err.message);
+    log.warn('Please manually enable plugin permissions in Settings > Users & Permissions > Roles > Authenticated');
   }
 }

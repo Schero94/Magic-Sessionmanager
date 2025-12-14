@@ -6,11 +6,15 @@
 const crypto = require('crypto');
 const os = require('os');
 const pluginPkg = require('../../../package.json');
+const { createLogger } = require('../utils/logger');
 
 // FIXED LICENSE SERVER URL
 const LICENSE_SERVER_URL = 'https://magicapi.fitlex.me';
 
-module.exports = ({ strapi }) => ({
+module.exports = ({ strapi }) => {
+  const log = createLogger(strapi);
+  
+  return {
   /**
    * Get license server URL
    */
@@ -101,14 +105,14 @@ module.exports = ({ strapi }) => ({
       const data = await response.json();
 
       if (data.success) {
-        strapi.log.info('[magic-sessionmanager] [SUCCESS] License created:', data.data.licenseKey);
+        log.info('[SUCCESS] License created:', data.data.licenseKey);
         return data.data;
       } else {
-        strapi.log.error('[magic-sessionmanager] [ERROR] License creation failed:', data);
+        log.error('[ERROR] License creation failed:', data);
         return null;
       }
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager] [ERROR] Error creating license:', error);
+      log.error('[ERROR] Error creating license:', error);
       return null;
     }
   },
@@ -151,7 +155,7 @@ module.exports = ({ strapi }) => ({
       const licenseServerUrl = this.getLicenseServerUrl();
       const url = `${licenseServerUrl}/api/licenses/key/${licenseKey}`;
       
-      strapi.log.debug(`[magic-sessionmanager/license-guard] Fetching license from: ${url}`);
+      log.debug(`[magic-sessionmanager/license-guard] Fetching license from: ${url}`);
       
       const response = await fetch(url, {
         method: 'GET',
@@ -161,14 +165,14 @@ module.exports = ({ strapi }) => ({
       const data = await response.json();
 
       if (data.success && data.data) {
-        strapi.log.debug(`[magic-sessionmanager/license-guard] License fetched: ${data.data.email}, featurePremium: ${data.data.featurePremium}`);
+        log.debug(`[magic-sessionmanager/license-guard] License fetched: ${data.data.email}, featurePremium: ${data.data.featurePremium}`);
         return data.data;
       }
       
-      strapi.log.warn(`[magic-sessionmanager/license-guard] License API returned no data`);
+      log.warn(`[magic-sessionmanager/license-guard] License API returned no data`);
       return null;
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/license-guard] Error fetching license by key:', error);
+      log.error('[magic-sessionmanager/license-guard] Error fetching license by key:', error);
       return null;
     }
   },
@@ -207,11 +211,11 @@ module.exports = ({ strapi }) => ({
       name: 'magic-sessionmanager' 
     });
     await pluginStore.set({ key: 'licenseKey', value: licenseKey });
-    strapi.log.info(`[magic-sessionmanager] [SUCCESS] License key stored: ${licenseKey.substring(0, 8)}...`);
+    log.info(`[SUCCESS] License key stored: ${licenseKey.substring(0, 8)}...`);
   },
 
   startPinging(licenseKey, intervalMinutes = 15) {
-    strapi.log.info(`[magic-sessionmanager] [TIME] Starting license pings every ${intervalMinutes} minutes`);
+    log.info(`[TIME] Starting license pings every ${intervalMinutes} minutes`);
     
     // Immediate ping
     this.pingLicense(licenseKey);
@@ -220,7 +224,7 @@ module.exports = ({ strapi }) => ({
       try {
         await this.pingLicense(licenseKey);
       } catch (error) {
-        strapi.log.error('[magic-sessionmanager] Ping error:', error);
+        log.error('Ping error:', error);
       }
     }, intervalMinutes * 60 * 1000);
 
@@ -233,7 +237,7 @@ module.exports = ({ strapi }) => ({
    */
   async initialize() {
     try {
-      strapi.log.info('[magic-sessionmanager] [SECURE] Initializing License Guard...');
+      log.info('[SECURE] Initializing License Guard...');
 
       // Check if license key exists in plugin store
       const pluginStore = strapi.store({ 
@@ -243,7 +247,7 @@ module.exports = ({ strapi }) => ({
       const licenseKey = await pluginStore.get({ key: 'licenseKey' });
 
       if (!licenseKey) {
-        strapi.log.info('[magic-sessionmanager] [INFO] No license found - Running in demo mode');
+        log.info('[INFO] No license found - Running in demo mode');
         return {
           valid: false,
           demo: true,
@@ -290,7 +294,7 @@ module.exports = ({ strapi }) => ({
           gracePeriod: verification.gracePeriod || false,
         };
       } else {
-        strapi.log.error('[magic-sessionmanager] [ERROR] License validation failed');
+        log.error('[ERROR] License validation failed');
         return {
           valid: false,
           demo: true,
@@ -299,7 +303,7 @@ module.exports = ({ strapi }) => ({
         };
       }
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager] [ERROR] Error initializing License Guard:', error);
+      log.error('[ERROR] Error initializing License Guard:', error);
       return {
         valid: false,
         demo: true,
@@ -308,4 +312,5 @@ module.exports = ({ strapi }) => ({
       };
     }
   },
-});
+};
+};

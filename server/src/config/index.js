@@ -2,6 +2,9 @@
 
 module.exports = {
   default: {
+    // Enable debug logging (set to true to see all plugin logs)
+    debug: false,
+
     // Rate limit for lastSeen updates (in milliseconds)
     lastSeenRateLimit: 30000, // 30 seconds
 
