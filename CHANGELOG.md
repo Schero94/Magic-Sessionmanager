@@ -1,3 +1,10 @@
+## [4.2.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.3...v4.2.4) (2025-12-14)
+
+
+### Bug Fixes
+
+* enable npm provenance with OIDC trusted publishing ([f66106c](https://github.com/Schero94/Magic-Sessionmanager/commit/f66106ccdb716fd8be25d462c1b25bc51d4ba3a8))
+
 ## [4.2.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.2...v4.2.3) (2025-12-14)
 
 
