@@ -7,6 +7,8 @@ Track logins, monitor active users, and secure your app with one simple plugin. 
 [![NPM](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+> 💡 **Tip:** Set `debug: true` in plugin config to enable detailed logging
+
 ---
 
 ## 📸 What It Looks Like
