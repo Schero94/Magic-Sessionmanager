@@ -1,3 +1,10 @@
+## [4.2.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.2...v4.2.3) (2025-12-14)
+
+
+### Bug Fixes
+
+* update release workflow for new npm token requirements ([88b70ff](https://github.com/Schero94/Magic-Sessionmanager/commit/88b70ffd9e697085ce99f6e89ea971b78caa1c92))
+
 ## [4.2.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.1...v4.2.2) (2025-12-14)
 
 
