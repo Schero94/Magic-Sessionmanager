@@ -1,3 +1,10 @@
+## [4.2.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.4...v4.2.5) (2025-12-14)
+
+
+### Bug Fixes
+
+* remove source folders from npm package ([d64f279](https://github.com/Schero94/Magic-Sessionmanager/commit/d64f279015fe1ada50e580e6a02eca2ed1b3b227))
+
 ## [4.2.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.3...v4.2.4) (2025-12-14)
 
 
