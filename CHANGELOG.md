@@ -1,3 +1,11 @@
+## [4.2.7](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.6...v4.2.7) (2025-12-28)
+
+
+### Bug Fixes
+
+* bump version to 4.2.7 ([c6c86a6](https://github.com/Schero94/Magic-Sessionmanager/commit/c6c86a620c1e99b895de6de8ffe221751ad489a6))
+* validate specific JWT session on each request, add enduser session management endpoints ([c07a5a1](https://github.com/Schero94/Magic-Sessionmanager/commit/c07a5a149f91140c189eb16498395fd5d8905105))
+
 ## [4.2.6](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.5...v4.2.6) (2025-12-14)
 
 
