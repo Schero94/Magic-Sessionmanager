@@ -19,7 +19,7 @@ module.exports = {
       method: 'POST',
       path: '/logout',
       handler: 'session.logout',
-    config: {
+      config: {
         auth: { strategies: ['users-permissions'] },
         description: 'Logout current session (requires JWT)',
       },
@@ -49,11 +49,34 @@ module.exports = {
     },
     {
       method: 'GET',
+      path: '/current-session',
+      handler: 'session.getCurrentSession',
+      config: {
+        auth: { strategies: ['users-permissions'] },
+        description: 'Get current session info based on JWT token',
+      },
+    },
+    {
+      method: 'GET',
       path: '/user/:userId/sessions',
       handler: 'session.getUserSessions',
       config: {
         auth: { strategies: ['users-permissions'] },
         description: 'Get sessions by userId (validates user can only see own sessions)',
+      },
+    },
+    
+    // ============================================================
+    // SESSION MANAGEMENT (for own sessions only)
+    // ============================================================
+    
+    {
+      method: 'DELETE',
+      path: '/my-sessions/:sessionId',
+      handler: 'session.terminateOwnSession',
+      config: {
+        auth: { strategies: ['users-permissions'] },
+        description: 'Terminate a specific own session (not current)',
       },
     },
   ],

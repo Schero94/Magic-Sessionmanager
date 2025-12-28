@@ -433,15 +433,22 @@ module.exports = async ({ strapi }) => {
 /**
  * Auto-enable Content-API permissions for authenticated users
  * This ensures plugin endpoints are accessible after installation
+ * NOTE: Uses entityService as users-permissions plugin doesn't have documentId support
  * @param {object} strapi - Strapi instance
  * @param {object} log - Logger instance
  */
 async function ensureContentApiPermissions(strapi, log) {
   try {
-    // Get the authenticated role
-    const authenticatedRole = await strapi.query('plugin::users-permissions.role').findOne({
-      where: { type: 'authenticated' },
+    const ROLE_UID = 'plugin::users-permissions.role';
+    const PERMISSION_UID = 'plugin::users-permissions.permission';
+
+    // Get the authenticated role using entityService (users-permissions uses numeric IDs)
+    const roles = await strapi.entityService.findMany(ROLE_UID, {
+      filters: { type: 'authenticated' },
+      limit: 1,
     });
+
+    const authenticatedRole = roles?.[0];
 
     if (!authenticatedRole) {
       log.warn('Authenticated role not found - skipping permission setup');
@@ -454,11 +461,13 @@ async function ensureContentApiPermissions(strapi, log) {
       'plugin::magic-sessionmanager.session.logoutAll',
       'plugin::magic-sessionmanager.session.getOwnSessions',
       'plugin::magic-sessionmanager.session.getUserSessions',
+      'plugin::magic-sessionmanager.session.getCurrentSession',
+      'plugin::magic-sessionmanager.session.terminateOwnSession',
     ];
 
-    // Get existing permissions for this role
-    const existingPermissions = await strapi.query('plugin::users-permissions.permission').findMany({
-      where: {
+    // Get existing permissions for this role using entityService
+    const existingPermissions = await strapi.entityService.findMany(PERMISSION_UID, {
+      filters: {
         role: authenticatedRole.id,
         action: { $in: requiredActions },
       },
@@ -473,9 +482,9 @@ async function ensureContentApiPermissions(strapi, log) {
       return;
     }
 
-    // Create missing permissions
+    // Create missing permissions using entityService
     for (const action of missingActions) {
-      await strapi.query('plugin::users-permissions.permission').create({
+      await strapi.entityService.create(PERMISSION_UID, {
         data: {
           action,
           role: authenticatedRole.id,

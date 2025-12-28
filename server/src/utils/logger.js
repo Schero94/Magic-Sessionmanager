@@ -11,6 +11,9 @@ const PREFIX = '[magic-sessionmanager]';
 
 /**
  * Format message with prefix - returns a formatted string
+ * @param {string} prefix - Prefix to prepend to message
+ * @param {Array} args - Array of arguments to format
+ * @returns {string} Formatted message string
  */
 function formatMessage(prefix, args) {
   if (args.length === 0) return prefix;

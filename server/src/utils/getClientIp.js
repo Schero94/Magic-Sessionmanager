@@ -76,6 +76,8 @@ const getClientIp = (ctx) => {
 
 /**
  * Clean IP address (remove IPv6 prefix, port, etc.)
+ * @param {string} ip - Raw IP address to clean
+ * @returns {string} Cleaned IP address or 'unknown'
  */
 const cleanIp = (ip) => {
   if (!ip) return 'unknown';
@@ -95,7 +97,9 @@ const cleanIp = (ip) => {
 };
 
 /**
- * Check if IP is private/local
+ * Check if IP is private/local (RFC 1918, loopback, link-local)
+ * @param {string} ip - IP address to check
+ * @returns {boolean} True if IP is private/local
  */
 const isPrivateIp = (ip) => {
   if (!ip) return true;

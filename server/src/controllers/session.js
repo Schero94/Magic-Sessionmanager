@@ -62,26 +62,69 @@ module.exports = {
    * Get own sessions (authenticated user)
    * GET /api/magic-sessionmanager/my-sessions
    * Automatically uses the authenticated user's documentId
+   * Marks which session is the current one (based on JWT token)
    */
   async getOwnSessions(ctx) {
     try {
       // Strapi v5: Use documentId from authenticated user
       const userId = ctx.state.user?.documentId;
+      const currentToken = ctx.request.headers.authorization?.replace('Bearer ', '');
 
       if (!userId) {
         return ctx.throw(401, 'Unauthorized');
       }
 
-      const sessionService = strapi
-        .plugin('magic-sessionmanager')
-        .service('session');
+      // Get all sessions for the user (with encrypted tokens)
+      const allSessions = await strapi.documents(SESSION_UID).findMany({
+        filters: { user: { documentId: userId } },
+        sort: { loginTime: 'desc' },
+      });
 
-      const sessions = await sessionService.getUserSessions(userId);
+      // Get config for inactivity timeout
+      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
+      const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000;
+      const now = new Date();
+
+      // Enhance sessions with isCurrentSession flag
+      const sessionsWithCurrent = allSessions.map(session => {
+        const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
+        const timeSinceActive = now - lastActiveTime;
+        const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
+
+        // Check if this is the current session
+        let isCurrentSession = false;
+        if (session.token && currentToken) {
+          try {
+            const decrypted = decryptToken(session.token);
+            isCurrentSession = decrypted === currentToken;
+          } catch (err) {
+            // Ignore decryption errors
+          }
+        }
+
+        // Remove sensitive token fields
+        const { token, refreshToken, ...sessionWithoutTokens } = session;
+
+        return {
+          ...sessionWithoutTokens,
+          isCurrentSession,
+          isTrulyActive,
+          minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
+        };
+      });
+
+      // Sort: current session first, then by loginTime
+      sessionsWithCurrent.sort((a, b) => {
+        if (a.isCurrentSession) return -1;
+        if (b.isCurrentSession) return 1;
+        return new Date(b.loginTime) - new Date(a.loginTime);
+      });
 
       ctx.body = {
-        data: sessions,
+        data: sessionsWithCurrent,
         meta: {
-          count: sessions.length,
+          count: sessionsWithCurrent.length,
+          active: sessionsWithCurrent.filter(s => s.isTrulyActive).length,
         },
       };
     } catch (err) {
@@ -209,6 +252,134 @@ module.exports = {
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Logout-all error:', err);
       ctx.throw(500, 'Error during logout');
+    }
+  },
+
+  /**
+   * Get current session info based on JWT token
+   * GET /api/magic-sessionmanager/current-session
+   * Returns the session associated with the current JWT token
+   */
+  async getCurrentSession(ctx) {
+    try {
+      const userId = ctx.state.user?.documentId;
+      const token = ctx.request.headers.authorization?.replace('Bearer ', '');
+
+      if (!userId || !token) {
+        return ctx.throw(401, 'Unauthorized');
+      }
+
+      // Find session by decrypting and comparing tokens
+      const sessions = await strapi.documents(SESSION_UID).findMany({
+        filters: {
+          user: { documentId: userId },
+          isActive: true,
+        },
+      });
+
+      // Find matching session by decrypting tokens
+      const currentSession = sessions.find(session => {
+        if (!session.token) return false;
+        try {
+          const decrypted = decryptToken(session.token);
+          return decrypted === token;
+        } catch (err) {
+          return false;
+        }
+      });
+
+      if (!currentSession) {
+        return ctx.notFound('Current session not found');
+      }
+
+      // Get config for inactivity timeout
+      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
+      const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000;
+      const now = new Date();
+      const lastActiveTime = currentSession.lastActive ? new Date(currentSession.lastActive) : new Date(currentSession.loginTime);
+      const timeSinceActive = now - lastActiveTime;
+
+      // Remove sensitive token fields
+      const { token: _, refreshToken: __, ...sessionWithoutTokens } = currentSession;
+
+      ctx.body = {
+        data: {
+          ...sessionWithoutTokens,
+          isCurrentSession: true,
+          isTrulyActive: timeSinceActive < inactivityTimeout,
+          minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
+        },
+      };
+    } catch (err) {
+      strapi.log.error('[magic-sessionmanager] Error getting current session:', err);
+      ctx.throw(500, 'Error fetching current session');
+    }
+  },
+
+  /**
+   * Terminate a specific own session (not the current one)
+   * DELETE /api/magic-sessionmanager/my-sessions/:sessionId
+   * SECURITY: User can only terminate their OWN sessions
+   */
+  async terminateOwnSession(ctx) {
+    try {
+      const userId = ctx.state.user?.documentId;
+      const { sessionId } = ctx.params;
+      const currentToken = ctx.request.headers.authorization?.replace('Bearer ', '');
+
+      if (!userId) {
+        return ctx.throw(401, 'Unauthorized');
+      }
+
+      if (!sessionId) {
+        return ctx.badRequest('Session ID is required');
+      }
+
+      // Find the session to terminate
+      const sessionToTerminate = await strapi.documents(SESSION_UID).findOne({
+        documentId: sessionId,
+        populate: { user: { fields: ['documentId'] } },
+      });
+
+      if (!sessionToTerminate) {
+        return ctx.notFound('Session not found');
+      }
+
+      // SECURITY CHECK: Verify session belongs to current user
+      const sessionUserId = sessionToTerminate.user?.documentId;
+      if (sessionUserId !== userId) {
+        strapi.log.warn(`[magic-sessionmanager] Security: User ${userId} tried to terminate session ${sessionId} of user ${sessionUserId}`);
+        return ctx.forbidden('You can only terminate your own sessions');
+      }
+
+      // Check if this is the current session (cannot terminate current session via this endpoint)
+      if (sessionToTerminate.token && currentToken) {
+        try {
+          const decrypted = decryptToken(sessionToTerminate.token);
+          if (decrypted === currentToken) {
+            return ctx.badRequest('Cannot terminate current session. Use /logout instead.');
+          }
+        } catch (err) {
+          // Ignore decryption errors
+        }
+      }
+
+      // Terminate the session
+      const sessionService = strapi
+        .plugin('magic-sessionmanager')
+        .service('session');
+
+      await sessionService.terminateSession({ sessionId });
+
+      strapi.log.info(`[magic-sessionmanager] User ${userId} terminated own session ${sessionId}`);
+
+      ctx.body = {
+        message: `Session ${sessionId} terminated successfully`,
+        success: true,
+      };
+    } catch (err) {
+      strapi.log.error('[magic-sessionmanager] Error terminating own session:', err);
+      ctx.throw(500, 'Error terminating session');
     }
   },
 
