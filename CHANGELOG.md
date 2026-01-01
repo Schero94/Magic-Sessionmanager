@@ -1,3 +1,10 @@
+## [4.2.9](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.8...v4.2.9) (2026-01-01)
+
+
+### Performance Improvements
+
+* O(1) session lookup via tokenHash instead of O(n) decrypt loop ([1d68fa0](https://github.com/Schero94/Magic-Sessionmanager/commit/1d68fa0b29e89945eeabf57e54b2c438cb6bda76))
+
 ## [4.2.8](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.7...v4.2.8) (2026-01-01)
 
 
