@@ -1,3 +1,10 @@
+## [4.2.8](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.7...v4.2.8) (2026-01-01)
+
+
+### Bug Fixes
+
+* update session activity on ALL requests with valid JWT ([702d3ad](https://github.com/Schero94/Magic-Sessionmanager/commit/702d3ad3442520cf9a1865d8b6164ef87d1c73b6))
+
 ## [4.2.7](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.6...v4.2.7) (2025-12-28)
 
 
