@@ -1,3 +1,10 @@
+## [4.2.10](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.9...v4.2.10) (2026-01-01)
+
+
+### Performance Improvements
+
+* add database index on tokenHash for true O(1) lookup ([f923b06](https://github.com/Schero94/Magic-Sessionmanager/commit/f923b0632823903d1a45b5b306403b44de3b4627))
+
 ## [4.2.9](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.8...v4.2.9) (2026-01-01)
 
 
