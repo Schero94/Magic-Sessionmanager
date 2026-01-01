@@ -10,16 +10,16 @@
  * even though JWT tokens are stateless and cannot be invalidated directly.
  * 
  * [SUCCESS] Migrated to strapi.documents() API (Strapi v5 Best Practice)
- * [FIX] Now updates activity on ALL requests with valid JWT, not just when ctx.state.user is set
+ * [OPTIMIZED] Uses tokenHash for O(1) session lookup instead of decrypting all tokens
  */
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
-const { decryptToken } = require('../utils/encryption');
+const { hashToken } = require('../utils/encryption');
 
-// In-memory cache for rate limiting (per session)
+// In-memory cache for rate limiting (per session documentId)
 const lastTouchCache = new Map();
 
-module.exports = ({ strapi, sessionService }) => {
+module.exports = ({ strapi }) => {
   return async (ctx, next) => {
     // Get JWT token from Authorization header
     const currentToken = ctx.request.headers.authorization?.replace('Bearer ', '');
@@ -38,75 +38,39 @@ module.exports = ({ strapi, sessionService }) => {
     }
 
     let matchingSession = null;
-    let userId = null;
 
     // BEFORE processing request: Validate the SPECIFIC session is still active
     try {
-      // Try to get userId from ctx.state.user first (if already authenticated)
-      if (ctx.state.user && ctx.state.user.documentId) {
-        userId = ctx.state.user.documentId;
-        
-        // Get all active sessions for this user
-        const activeSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: {
-            user: { documentId: userId },
-            isActive: true,
-          },
-        });
+      // Generate hash of current token for O(1) lookup
+      const currentTokenHash = hashToken(currentToken);
+      
+      // Find session by tokenHash - O(1) DB lookup instead of O(n) decrypt loop!
+      matchingSession = await strapi.documents(SESSION_UID).findFirst({
+        filters: {
+          tokenHash: currentTokenHash,
+          isActive: true,
+        },
+        populate: { user: { fields: ['documentId'] } },
+      });
 
-        // If user has NO active sessions at all, reject immediately
-        if (!activeSessions || activeSessions.length === 0) {
-          strapi.log.info(`[magic-sessionmanager] [BLOCKED] User ${userId} has no active sessions`);
-          return ctx.unauthorized('All sessions have been terminated. Please login again.');
-        }
-
-        // Find the session that matches this specific JWT token
-        for (const session of activeSessions) {
-          if (!session.token) continue;
-          try {
-            const decrypted = decryptToken(session.token);
-            if (decrypted === currentToken) {
-              matchingSession = session;
-              break;
-            }
-          } catch (err) {
-            // Ignore decryption errors, continue checking other sessions
-          }
-        }
-
-        // If THIS specific session is not found or not active -> BLOCK!
-        if (!matchingSession) {
-          strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session for user ${userId} has been terminated`);
-          return ctx.unauthorized('This session has been terminated. Please login again.');
-        }
-      } else {
-        // User not yet authenticated by Strapi - find session directly by token
-        // This handles cases where JWT is valid but ctx.state.user isn't set yet
-        const allActiveSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: { isActive: true },
-          populate: { user: { fields: ['documentId'] } },
-          limit: 500, // Reasonable limit for performance
-        });
-
-        for (const session of allActiveSessions) {
-          if (!session.token) continue;
-          try {
-            const decrypted = decryptToken(session.token);
-            if (decrypted === currentToken) {
-              matchingSession = session;
-              userId = session.user?.documentId;
-              break;
-            }
-          } catch (err) {
-            // Ignore decryption errors
-          }
-        }
-      }
-
-      // Store the matching session for later use
       if (matchingSession) {
+        // Store session info for use in request handlers
         ctx.state.sessionId = matchingSession.documentId;
         ctx.state.currentSession = matchingSession;
+        
+        // Also set userId if available
+        if (matchingSession.user?.documentId) {
+          ctx.state.sessionUserId = matchingSession.user.documentId;
+        }
+      } else {
+        // Token exists but no active session found - check if user is authenticated
+        // Only block if we know this is an authenticated request
+        if (ctx.state.user && ctx.state.user.documentId) {
+          strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session terminated for user ${ctx.state.user.documentId}`);
+          return ctx.unauthorized('This session has been terminated. Please login again.');
+        }
+        // If ctx.state.user not set, this might be a public route or JWT validation hasn't run yet
+        // Let the request continue - Strapi's auth will handle it
       }
         
     } catch (err) {

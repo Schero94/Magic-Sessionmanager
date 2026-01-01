@@ -1,6 +1,6 @@
 'use strict';
 
-const { encryptToken, decryptToken, generateSessionId } = require('../utils/encryption');
+const { encryptToken, decryptToken, generateSessionId, hashToken } = require('../utils/encryption');
 const { createLogger } = require('../utils/logger');
 
 /**
@@ -41,6 +41,10 @@ module.exports = ({ strapi }) => {
       const encryptedToken = token ? encryptToken(token) : null;
       const encryptedRefreshToken = refreshToken ? encryptToken(refreshToken) : null;
       
+      // Generate token hashes for O(1) lookups (no need to decrypt all tokens)
+      const tokenHashValue = token ? hashToken(token) : null;
+      const refreshTokenHashValue = refreshToken ? hashToken(refreshToken) : null;
+      
       // Using Document Service API (Strapi v5)
       const session = await strapi.documents(SESSION_UID).create({
         data: {
@@ -50,9 +54,11 @@ module.exports = ({ strapi }) => {
           loginTime: now,
           lastActive: now,
           isActive: true,
-          token: encryptedToken,              // [SUCCESS] Encrypted Access Token
-          refreshToken: encryptedRefreshToken, // [SUCCESS] Encrypted Refresh Token
-          sessionId: sessionId,                // [SUCCESS] Unique identifier
+          token: encryptedToken,              // Encrypted Access Token
+          tokenHash: tokenHashValue,           // SHA-256 hash for fast lookup
+          refreshToken: encryptedRefreshToken, // Encrypted Refresh Token
+          refreshTokenHash: refreshTokenHashValue, // SHA-256 hash for fast lookup
+          sessionId: sessionId,                // Unique identifier
         },
       });
 
@@ -148,11 +154,11 @@ module.exports = ({ strapi }) => {
         // Session is "truly active" if within timeout window AND isActive is true
         const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
         
-        // Remove sensitive token field for security
-        const { token, ...sessionWithoutToken } = session;
+        // Remove sensitive fields for security
+        const { token, tokenHash, refreshToken, refreshTokenHash, ...safeSession } = session;
         
         return {
-          ...sessionWithoutToken,
+          ...safeSession,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
@@ -190,11 +196,11 @@ module.exports = ({ strapi }) => {
         // Session is "truly active" if within timeout window
         const isTrulyActive = timeSinceActive < inactivityTimeout;
         
-        // Remove sensitive token field for security
-        const { token, ...sessionWithoutToken } = session;
+        // Remove sensitive fields for security
+        const { token, tokenHash, refreshToken, refreshTokenHash, ...safeSession } = session;
         
         return {
-          ...sessionWithoutToken,
+          ...safeSession,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
@@ -245,11 +251,11 @@ module.exports = ({ strapi }) => {
         // 2. lastActive is within timeout window
         const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
         
-        // Remove sensitive token field for security
-        const { token, ...sessionWithoutToken } = session;
+        // Remove sensitive fields for security
+        const { token, tokenHash, refreshToken, refreshTokenHash, ...safeSession } = session;
         
         return {
-          ...sessionWithoutToken,
+          ...safeSession,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };

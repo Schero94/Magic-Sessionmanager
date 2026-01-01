@@ -43,9 +43,17 @@
       "type": "text",
       "private": true
     },
+    "tokenHash": {
+      "type": "string",
+      "configurable": false
+    },
     "refreshToken": {
       "type": "text",
       "private": true
+    },
+    "refreshTokenHash": {
+      "type": "string",
+      "configurable": false
     },
     "loginTime": {
       "type": "datetime",

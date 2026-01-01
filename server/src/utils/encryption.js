@@ -113,9 +113,21 @@ function generateSessionId(userId) {
   return `sess_${timestamp}_${userHash}_${randomBytes}`;
 }
 
+/**
+ * Create a SHA-256 hash of a token for fast DB lookups
+ * This allows O(1) session lookup without decrypting all tokens
+ * @param {string} token - JWT token to hash
+ * @returns {string} SHA-256 hash (64 hex chars)
+ */
+function hashToken(token) {
+  if (!token) return null;
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 module.exports = {
   encryptToken,
   decryptToken,
   generateSessionId,
+  hashToken,
 };
 

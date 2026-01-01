@@ -10,7 +10,7 @@
  */
 
 const getClientIp = require('./utils/getClientIp');
-const { encryptToken, decryptToken } = require('./utils/encryption');
+const { encryptToken, decryptToken, hashToken } = require('./utils/encryption');
 const { createLogger } = require('./utils/logger');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
@@ -392,11 +392,17 @@ module.exports = async ({ strapi }) => {
               const encryptedToken = newAccessToken ? encryptToken(newAccessToken) : matchingSession.token;
               const encryptedRefreshToken = newRefreshToken ? encryptToken(newRefreshToken) : matchingSession.refreshToken;
               
+              // Generate new hashes for fast lookup
+              const newTokenHash = newAccessToken ? hashToken(newAccessToken) : matchingSession.tokenHash;
+              const newRefreshTokenHash = newRefreshToken ? hashToken(newRefreshToken) : matchingSession.refreshTokenHash;
+              
               await strapi.documents(SESSION_UID).update({
                 documentId: matchingSession.documentId,
                 data: {
                   token: encryptedToken,
+                  tokenHash: newTokenHash,
                   refreshToken: encryptedRefreshToken,
+                  refreshTokenHash: newRefreshTokenHash,
                   lastActive: new Date(),
                 },
               });
@@ -412,9 +418,9 @@ module.exports = async ({ strapi }) => {
 
     log.info('[SUCCESS] Refresh Token interceptor middleware mounted');
 
-    // Mount lastSeen update middleware
+    // Mount lastSeen update middleware (uses tokenHash for O(1) lookup)
     strapi.server.use(
-      require('./middlewares/last-seen')({ strapi, sessionService })
+      require('./middlewares/last-seen')({ strapi })
     );
 
     log.info('[SUCCESS] LastSeen middleware mounted');
