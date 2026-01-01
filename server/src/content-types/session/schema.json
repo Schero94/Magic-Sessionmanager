@@ -45,7 +45,8 @@
     },
     "tokenHash": {
       "type": "string",
-      "configurable": false
+      "configurable": false,
+      "unique": false
     },
     "refreshToken": {
       "type": "text",

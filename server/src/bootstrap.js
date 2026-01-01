@@ -22,6 +22,9 @@ module.exports = async ({ strapi }) => {
   log.info('[START] Bootstrap starting...');
 
   try {
+    // Create index on tokenHash for O(1) session lookup performance
+    await ensureTokenHashIndex(strapi, log);
+    
     // Initialize License Guard
     const licenseGuardService = strapi.plugin('magic-sessionmanager').service('license-guard');
     
@@ -503,5 +506,64 @@ async function ensureContentApiPermissions(strapi, log) {
   } catch (err) {
     log.warn('Could not auto-configure permissions:', err.message);
     log.warn('Please manually enable plugin permissions in Settings > Users & Permissions > Roles > Authenticated');
+  }
+}
+
+/**
+ * Create database index on tokenHash for O(1) session lookup
+ * This is critical for performance - without index, DB does full table scan
+ * @param {object} strapi - Strapi instance
+ * @param {object} log - Logger instance
+ */
+async function ensureTokenHashIndex(strapi, log) {
+  try {
+    const knex = strapi.db.connection;
+    const tableName = 'magic_sessions';
+    const indexName = 'idx_magic_sessions_token_hash';
+    
+    // Check if index already exists
+    const hasIndex = await knex.schema.hasTable(tableName).then(async (exists) => {
+      if (!exists) return false;
+      
+      // Check for existing index (PostgreSQL and MySQL compatible)
+      const dialect = strapi.db.dialect.client;
+      
+      if (dialect === 'postgres') {
+        const result = await knex.raw(`
+          SELECT indexname FROM pg_indexes 
+          WHERE tablename = ? AND indexname = ?
+        `, [tableName, indexName]);
+        return result.rows.length > 0;
+      } else if (dialect === 'mysql' || dialect === 'mysql2') {
+        const result = await knex.raw(`
+          SHOW INDEX FROM ${tableName} WHERE Key_name = ?
+        `, [indexName]);
+        return result[0].length > 0;
+      } else if (dialect === 'sqlite' || dialect === 'better-sqlite3') {
+        const result = await knex.raw(`
+          SELECT name FROM sqlite_master 
+          WHERE type='index' AND name = ?
+        `, [indexName]);
+        return result.length > 0;
+      }
+      
+      return false;
+    });
+    
+    if (hasIndex) {
+      log.debug('[INDEX] tokenHash index already exists');
+      return;
+    }
+    
+    // Create composite index on tokenHash + isActive for optimal lookup
+    await knex.schema.alterTable(tableName, (table) => {
+      table.index(['token_hash', 'is_active'], indexName);
+    });
+    
+    log.info('[INDEX] Created tokenHash index for O(1) session lookup');
+  } catch (err) {
+    // Index creation might fail if columns don't exist yet (first run)
+    // This is fine - it will be created on next restart after schema sync
+    log.debug('[INDEX] Could not create tokenHash index (will retry on next startup):', err.message);
   }
 }
