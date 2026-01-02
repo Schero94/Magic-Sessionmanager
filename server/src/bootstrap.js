@@ -256,6 +256,7 @@ module.exports = async ({ strapi }) => {
             userAgent,
             token: ctx.body.jwt,              // Store Access Token (encrypted)
             refreshToken: ctx.body.refreshToken, // Store Refresh Token (encrypted) if exists
+            geoData,                           // Store geolocation data if available
           });
           
           log.info(`[SUCCESS] Session created for user ${userDocId} (IP: ${ip})`);

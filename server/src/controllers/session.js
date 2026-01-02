@@ -106,10 +106,21 @@ module.exports = {
           ? `${parsedUA.osName} ${parsedUA.osVersion}` 
           : parsedUA.osName);
 
+        // Parse geoLocation JSON if stored as string
+        let geoLocation = session.geoLocation;
+        if (typeof geoLocation === 'string') {
+          try {
+            geoLocation = JSON.parse(geoLocation);
+          } catch (e) {
+            geoLocation = null;
+          }
+        }
+
         // Remove sensitive token fields and internal fields
         const { 
           token, tokenHash, refreshToken, refreshTokenHash,
           locale, publishedAt, // Remove Strapi internal fields
+          geoLocation: _geo, // Remove raw geoLocation
           ...sessionWithoutTokens 
         } = session;
 
@@ -118,6 +129,7 @@ module.exports = {
           deviceType,
           browserName,
           osName,
+          geoLocation, // Parsed object or null
           isCurrentSession,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
@@ -302,10 +314,20 @@ module.exports = {
         ? `${parsedUA.osName} ${parsedUA.osVersion}` 
         : parsedUA.osName);
 
+      // Parse geoLocation JSON if stored as string
+      let geoLocation = currentSession.geoLocation;
+      if (typeof geoLocation === 'string') {
+        try {
+          geoLocation = JSON.parse(geoLocation);
+        } catch (e) {
+          geoLocation = null;
+        }
+      }
+
       // Remove sensitive token fields and internal fields
       const { 
         token: _, tokenHash: _th, refreshToken: __, refreshTokenHash: _rth,
-        locale: _l, publishedAt: _p,
+        locale: _l, publishedAt: _p, geoLocation: _geo,
         ...sessionWithoutTokens 
       } = currentSession;
 
@@ -315,6 +337,7 @@ module.exports = {
           deviceType,
           browserName,
           osName,
+          geoLocation, // Parsed object or null
           isCurrentSession: true,
           isTrulyActive: timeSinceActive < inactivityTimeout,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),

@@ -28,10 +28,10 @@ module.exports = ({ strapi }) => {
   return {
   /**
    * Create a new session record
-   * @param {Object} params - { userId, ip, userAgent, token, refreshToken }
+   * @param {Object} params - { userId, ip, userAgent, token, refreshToken, geoData }
    * @returns {Promise<Object>} Created session
    */
-  async createSession({ userId, ip = 'unknown', userAgent = 'unknown', token, refreshToken }) {
+  async createSession({ userId, ip = 'unknown', userAgent = 'unknown', token, refreshToken, geoData }) {
     try {
       const now = new Date();
       
@@ -45,6 +45,9 @@ module.exports = ({ strapi }) => {
       // Generate token hashes for O(1) lookups (no need to decrypt all tokens)
       const tokenHashValue = token ? hashToken(token) : null;
       const refreshTokenHashValue = refreshToken ? hashToken(refreshToken) : null;
+      
+      // Parse user agent for device info
+      const parsedUA = parseUserAgent(userAgent);
       
       // Using Document Service API (Strapi v5)
       const session = await strapi.documents(SESSION_UID).create({
@@ -60,6 +63,24 @@ module.exports = ({ strapi }) => {
           refreshToken: encryptedRefreshToken, // Encrypted Refresh Token
           refreshTokenHash: refreshTokenHashValue, // SHA-256 hash for fast lookup
           sessionId: sessionId,                // Unique identifier
+          // Device info from User-Agent
+          deviceType: parsedUA.deviceType,
+          browserName: parsedUA.browserVersion 
+            ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
+            : parsedUA.browserName,
+          osName: parsedUA.osVersion 
+            ? `${parsedUA.osName} ${parsedUA.osVersion}` 
+            : parsedUA.osName,
+          // Geolocation data (if available from Premium features)
+          geoLocation: geoData ? JSON.stringify({
+            country: geoData.country,
+            country_code: geoData.country_code,
+            country_flag: geoData.country_flag,
+            city: geoData.city,
+            region: geoData.region,
+            timezone: geoData.timezone,
+          }) : null,
+          securityScore: geoData?.securityScore || null,
         },
       });
 
@@ -165,10 +186,21 @@ module.exports = ({ strapi }) => {
           ? `${parsedUA.osName} ${parsedUA.osVersion}` 
           : parsedUA.osName);
         
+        // Parse geoLocation JSON if stored as string
+        let geoLocation = session.geoLocation;
+        if (typeof geoLocation === 'string') {
+          try {
+            geoLocation = JSON.parse(geoLocation);
+          } catch (e) {
+            geoLocation = null;
+          }
+        }
+        
         // Remove sensitive fields and internal Strapi fields
         const { 
           token, tokenHash, refreshToken, refreshTokenHash,
           locale, publishedAt,
+          geoLocation: _geo, // Remove raw geoLocation, we use parsed version
           ...safeSession 
         } = session;
         
@@ -177,6 +209,7 @@ module.exports = ({ strapi }) => {
           deviceType,
           browserName,
           osName,
+          geoLocation, // Parsed object or null
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
@@ -224,10 +257,21 @@ module.exports = ({ strapi }) => {
           ? `${parsedUA.osName} ${parsedUA.osVersion}` 
           : parsedUA.osName);
         
+        // Parse geoLocation JSON if stored as string
+        let geoLocation = session.geoLocation;
+        if (typeof geoLocation === 'string') {
+          try {
+            geoLocation = JSON.parse(geoLocation);
+          } catch (e) {
+            geoLocation = null;
+          }
+        }
+        
         // Remove sensitive fields and internal Strapi fields
         const { 
           token, tokenHash, refreshToken, refreshTokenHash,
           locale, publishedAt,
+          geoLocation: _geo,
           ...safeSession 
         } = session;
         
@@ -236,6 +280,7 @@ module.exports = ({ strapi }) => {
           deviceType,
           browserName,
           osName,
+          geoLocation,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
@@ -296,10 +341,21 @@ module.exports = ({ strapi }) => {
           ? `${parsedUA.osName} ${parsedUA.osVersion}` 
           : parsedUA.osName);
         
+        // Parse geoLocation JSON if stored as string
+        let geoLocation = session.geoLocation;
+        if (typeof geoLocation === 'string') {
+          try {
+            geoLocation = JSON.parse(geoLocation);
+          } catch (e) {
+            geoLocation = null;
+          }
+        }
+        
         // Remove sensitive fields and internal Strapi fields
         const { 
           token, tokenHash, refreshToken, refreshTokenHash,
           locale, publishedAt,
+          geoLocation: _geo,
           ...safeSession 
         } = session;
         
@@ -308,6 +364,7 @@ module.exports = ({ strapi }) => {
           deviceType,
           browserName,
           osName,
+          geoLocation,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
