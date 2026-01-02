@@ -2,6 +2,7 @@
 
 const { encryptToken, decryptToken, generateSessionId, hashToken } = require('../utils/encryption');
 const { createLogger } = require('../utils/logger');
+const { parseUserAgent } = require('../utils/user-agent-parser');
 
 /**
  * Session Service
@@ -145,7 +146,7 @@ module.exports = ({ strapi }) => {
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
 
-      // Enhance sessions with accurate online status
+      // Enhance sessions with accurate online status and device info
       const now = new Date();
       const enhancedSessions = sessions.map(session => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
@@ -154,11 +155,28 @@ module.exports = ({ strapi }) => {
         // Session is "truly active" if within timeout window AND isActive is true
         const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
         
-        // Remove sensitive fields for security
-        const { token, tokenHash, refreshToken, refreshTokenHash, ...safeSession } = session;
+        // Parse user agent to get device info (if not already stored)
+        const parsedUA = parseUserAgent(session.userAgent);
+        const deviceType = session.deviceType || parsedUA.deviceType;
+        const browserName = session.browserName || (parsedUA.browserVersion 
+          ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
+          : parsedUA.browserName);
+        const osName = session.osName || (parsedUA.osVersion 
+          ? `${parsedUA.osName} ${parsedUA.osVersion}` 
+          : parsedUA.osName);
+        
+        // Remove sensitive fields and internal Strapi fields
+        const { 
+          token, tokenHash, refreshToken, refreshTokenHash,
+          locale, publishedAt,
+          ...safeSession 
+        } = session;
         
         return {
           ...safeSession,
+          deviceType,
+          browserName,
+          osName,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
@@ -187,7 +205,7 @@ module.exports = ({ strapi }) => {
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
 
-      // Enhance sessions with accurate online status
+      // Enhance sessions with accurate online status and device info
       const now = new Date();
       const enhancedSessions = sessions.map(session => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
@@ -196,11 +214,28 @@ module.exports = ({ strapi }) => {
         // Session is "truly active" if within timeout window
         const isTrulyActive = timeSinceActive < inactivityTimeout;
         
-        // Remove sensitive fields for security
-        const { token, tokenHash, refreshToken, refreshTokenHash, ...safeSession } = session;
+        // Parse user agent to get device info (if not already stored)
+        const parsedUA = parseUserAgent(session.userAgent);
+        const deviceType = session.deviceType || parsedUA.deviceType;
+        const browserName = session.browserName || (parsedUA.browserVersion 
+          ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
+          : parsedUA.browserName);
+        const osName = session.osName || (parsedUA.osVersion 
+          ? `${parsedUA.osName} ${parsedUA.osVersion}` 
+          : parsedUA.osName);
+        
+        // Remove sensitive fields and internal Strapi fields
+        const { 
+          token, tokenHash, refreshToken, refreshTokenHash,
+          locale, publishedAt,
+          ...safeSession 
+        } = session;
         
         return {
           ...safeSession,
+          deviceType,
+          browserName,
+          osName,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
@@ -240,7 +275,7 @@ module.exports = ({ strapi }) => {
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
 
-      // Enhance sessions with accurate online status
+      // Enhance sessions with accurate online status and device info
       const now = new Date();
       const enhancedSessions = sessions.map(session => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
@@ -251,11 +286,28 @@ module.exports = ({ strapi }) => {
         // 2. lastActive is within timeout window
         const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
         
-        // Remove sensitive fields for security
-        const { token, tokenHash, refreshToken, refreshTokenHash, ...safeSession } = session;
+        // Parse user agent to get device info (if not already stored)
+        const parsedUA = parseUserAgent(session.userAgent);
+        const deviceType = session.deviceType || parsedUA.deviceType;
+        const browserName = session.browserName || (parsedUA.browserVersion 
+          ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
+          : parsedUA.browserName);
+        const osName = session.osName || (parsedUA.osVersion 
+          ? `${parsedUA.osName} ${parsedUA.osVersion}` 
+          : parsedUA.osName);
+        
+        // Remove sensitive fields and internal Strapi fields
+        const { 
+          token, tokenHash, refreshToken, refreshTokenHash,
+          locale, publishedAt,
+          ...safeSession 
+        } = session;
         
         return {
           ...safeSession,
+          deviceType,
+          browserName,
+          osName,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };

@@ -390,30 +390,204 @@ Trigger a suspicious login (e.g., use a VPN) and check if the email arrives!
 
 ---
 
-## 📋 Simple API Guide
+## 📋 Content-API Endpoints (For Frontend/Apps)
 
-### Get Sessions
+All Content-API endpoints require a valid JWT token in the `Authorization` header.
+Users can only access their **own** sessions.
+
+### Get My Sessions
+
+Returns all sessions for the authenticated user.
 
 ```bash
-# Get all active sessions
+GET /api/magic-sessionmanager/my-sessions
+Authorization: Bearer <JWT>
+```
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 41,
+      "documentId": "abc123xyz",
+      "sessionId": "sess_m5k2h_8a3b1c2d_f9e8d7c6",
+      "ipAddress": "192.168.1.100",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36...",
+      "loginTime": "2026-01-02T10:30:00.000Z",
+      "lastActive": "2026-01-02T13:45:00.000Z",
+      "logoutTime": null,
+      "isActive": true,
+      "deviceType": "desktop",
+      "browserName": "Chrome 143",
+      "osName": "macOS 10.15.7",
+      "geoLocation": null,
+      "securityScore": null,
+      "isCurrentSession": true,
+      "isTrulyActive": true,
+      "minutesSinceActive": 2
+    },
+    {
+      "id": 40,
+      "documentId": "def456uvw",
+      "sessionId": "sess_m5k1g_7b2a0c1d_e8d7c6b5",
+      "ipAddress": "10.0.0.50",
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)...",
+      "loginTime": "2026-01-01T08:15:00.000Z",
+      "lastActive": "2026-01-01T12:00:00.000Z",
+      "logoutTime": null,
+      "isActive": true,
+      "deviceType": "mobile",
+      "browserName": "Safari",
+      "osName": "iOS 17",
+      "geoLocation": null,
+      "securityScore": null,
+      "isCurrentSession": false,
+      "isTrulyActive": false,
+      "minutesSinceActive": 1545
+    }
+  ],
+  "meta": {
+    "count": 2,
+    "active": 1
+  }
+}
+```
+
+### Get Current Session
+
+Returns only the session associated with the current JWT token.
+
+```bash
+GET /api/magic-sessionmanager/current-session
+Authorization: Bearer <JWT>
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "id": 41,
+    "documentId": "abc123xyz",
+    "sessionId": "sess_m5k2h_8a3b1c2d_f9e8d7c6",
+    "ipAddress": "192.168.1.100",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36...",
+    "loginTime": "2026-01-02T10:30:00.000Z",
+    "lastActive": "2026-01-02T13:45:00.000Z",
+    "logoutTime": null,
+    "isActive": true,
+    "deviceType": "desktop",
+    "browserName": "Chrome 143",
+    "osName": "macOS 10.15.7",
+    "geoLocation": null,
+    "securityScore": null,
+    "isCurrentSession": true,
+    "isTrulyActive": true,
+    "minutesSinceActive": 2
+  }
+}
+```
+
+### Logout (Current Session)
+
+Terminates only the current session.
+
+```bash
+POST /api/magic-sessionmanager/logout
+Authorization: Bearer <JWT>
+```
+
+**Response:**
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+### Logout All Devices
+
+Terminates ALL sessions for the authenticated user (logs out everywhere).
+
+```bash
+POST /api/magic-sessionmanager/logout-all
+Authorization: Bearer <JWT>
+```
+
+**Response:**
+```json
+{
+  "message": "Logged out from all devices successfully"
+}
+```
+
+### Terminate Specific Session
+
+Terminates a specific session (not the current one). Useful for "Log out other devices".
+
+```bash
+DELETE /api/magic-sessionmanager/my-sessions/:sessionId
+Authorization: Bearer <JWT>
+```
+
+**Response:**
+```json
+{
+  "message": "Session abc123xyz terminated successfully",
+  "success": true
+}
+```
+
+**Error (trying to terminate current session):**
+```json
+{
+  "error": {
+    "status": 400,
+    "message": "Cannot terminate current session. Use /logout instead."
+  }
+}
+```
+
+---
+
+## 📋 Admin-API Endpoints (For Admin Panel)
+
+These endpoints require admin authentication.
+
+### Get All Sessions
+
+```bash
 GET /magic-sessionmanager/sessions
 ```
 
-### Logout
+### Get Active Sessions Only
 
 ```bash
-# Logout current user
-POST /api/auth/logout
+GET /magic-sessionmanager/sessions/active
 ```
 
-### Force Logout
+### Force Terminate Session
 
 ```bash
-# Admin force-logout a session
 POST /magic-sessionmanager/sessions/:sessionId/terminate
 ```
 
-**That's all you need to know!**
+### Terminate All User Sessions
+
+```bash
+POST /magic-sessionmanager/user/:userId/terminate-all
+```
+
+### Block/Unblock User
+
+```bash
+POST /magic-sessionmanager/user/:userId/toggle-block
+```
+
+### Clean Inactive Sessions
+
+```bash
+POST /magic-sessionmanager/sessions/clean-inactive
+```
 
 ---
 

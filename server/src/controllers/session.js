@@ -1,6 +1,7 @@
 'use strict';
 
-const { decryptToken } = require('../utils/encryption');
+const { decryptToken, hashToken } = require('../utils/encryption');
+const { parseUserAgent } = require('../utils/user-agent-parser');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
@@ -62,19 +63,20 @@ module.exports = {
    * Get own sessions (authenticated user)
    * GET /api/magic-sessionmanager/my-sessions
    * Automatically uses the authenticated user's documentId
-   * Marks which session is the current one (based on JWT token)
+   * Marks which session is the current one (based on JWT token hash)
    */
   async getOwnSessions(ctx) {
     try {
       // Strapi v5: Use documentId from authenticated user
       const userId = ctx.state.user?.documentId;
       const currentToken = ctx.request.headers.authorization?.replace('Bearer ', '');
+      const currentTokenHash = currentToken ? hashToken(currentToken) : null;
 
       if (!userId) {
         return ctx.throw(401, 'Unauthorized');
       }
 
-      // Get all sessions for the user (with encrypted tokens)
+      // Get all sessions for the user
       const allSessions = await strapi.documents(SESSION_UID).findMany({
         filters: { user: { documentId: userId } },
         sort: { loginTime: 'desc' },
@@ -85,28 +87,37 @@ module.exports = {
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000;
       const now = new Date();
 
-      // Enhance sessions with isCurrentSession flag
+      // Enhance sessions with isCurrentSession flag and parsed device info
       const sessionsWithCurrent = allSessions.map(session => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
         const timeSinceActive = now - lastActiveTime;
         const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
 
-        // Check if this is the current session
-        let isCurrentSession = false;
-        if (session.token && currentToken) {
-          try {
-            const decrypted = decryptToken(session.token);
-            isCurrentSession = decrypted === currentToken;
-          } catch (err) {
-            // Ignore decryption errors
-          }
-        }
+        // Check if this is the current session using tokenHash (no decryption needed!)
+        const isCurrentSession = currentTokenHash && session.tokenHash === currentTokenHash;
 
-        // Remove sensitive token fields
-        const { token, refreshToken, ...sessionWithoutTokens } = session;
+        // Parse user agent to get device info (if not already stored)
+        const parsedUA = parseUserAgent(session.userAgent);
+        const deviceType = session.deviceType || parsedUA.deviceType;
+        const browserName = session.browserName || (parsedUA.browserVersion 
+          ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
+          : parsedUA.browserName);
+        const osName = session.osName || (parsedUA.osVersion 
+          ? `${parsedUA.osName} ${parsedUA.osVersion}` 
+          : parsedUA.osName);
+
+        // Remove sensitive token fields and internal fields
+        const { 
+          token, tokenHash, refreshToken, refreshTokenHash,
+          locale, publishedAt, // Remove Strapi internal fields
+          ...sessionWithoutTokens 
+        } = session;
 
         return {
           ...sessionWithoutTokens,
+          deviceType,
+          browserName,
+          osName,
           isCurrentSession,
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
@@ -190,23 +201,14 @@ module.exports = {
         .plugin('magic-sessionmanager')
         .service('session');
 
-      // Find current session by decrypting and comparing tokens
-      const sessions = await strapi.documents(SESSION_UID).findMany({
+      // Find current session by tokenHash (O(1) lookup, no decryption needed!)
+      const currentTokenHash = hashToken(token);
+      const matchingSession = await strapi.documents(SESSION_UID).findFirst({
         filters: {
           user: { documentId: userId },
+          tokenHash: currentTokenHash,
           isActive: true,
         },
-      });
-
-      // Find matching session by decrypting tokens
-      const matchingSession = sessions.find(session => {
-        if (!session.token) return false;
-        try {
-          const decrypted = decryptToken(session.token);
-          return decrypted === token;
-        } catch (err) {
-          return false;
-        }
       });
 
       if (matchingSession) {
@@ -256,7 +258,7 @@ module.exports = {
   },
 
   /**
-   * Get current session info based on JWT token
+   * Get current session info based on JWT token hash
    * GET /api/magic-sessionmanager/current-session
    * Returns the session associated with the current JWT token
    */
@@ -269,23 +271,14 @@ module.exports = {
         return ctx.throw(401, 'Unauthorized');
       }
 
-      // Find session by decrypting and comparing tokens
-      const sessions = await strapi.documents(SESSION_UID).findMany({
+      // Find session by tokenHash (O(1) lookup, no decryption needed!)
+      const currentTokenHash = hashToken(token);
+      const currentSession = await strapi.documents(SESSION_UID).findFirst({
         filters: {
           user: { documentId: userId },
+          tokenHash: currentTokenHash,
           isActive: true,
         },
-      });
-
-      // Find matching session by decrypting tokens
-      const currentSession = sessions.find(session => {
-        if (!session.token) return false;
-        try {
-          const decrypted = decryptToken(session.token);
-          return decrypted === token;
-        } catch (err) {
-          return false;
-        }
       });
 
       if (!currentSession) {
@@ -299,12 +292,29 @@ module.exports = {
       const lastActiveTime = currentSession.lastActive ? new Date(currentSession.lastActive) : new Date(currentSession.loginTime);
       const timeSinceActive = now - lastActiveTime;
 
-      // Remove sensitive token fields
-      const { token: _, refreshToken: __, ...sessionWithoutTokens } = currentSession;
+      // Parse user agent to get device info (if not already stored)
+      const parsedUA = parseUserAgent(currentSession.userAgent);
+      const deviceType = currentSession.deviceType || parsedUA.deviceType;
+      const browserName = currentSession.browserName || (parsedUA.browserVersion 
+        ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
+        : parsedUA.browserName);
+      const osName = currentSession.osName || (parsedUA.osVersion 
+        ? `${parsedUA.osName} ${parsedUA.osVersion}` 
+        : parsedUA.osName);
+
+      // Remove sensitive token fields and internal fields
+      const { 
+        token: _, tokenHash: _th, refreshToken: __, refreshTokenHash: _rth,
+        locale: _l, publishedAt: _p,
+        ...sessionWithoutTokens 
+      } = currentSession;
 
       ctx.body = {
         data: {
           ...sessionWithoutTokens,
+          deviceType,
+          browserName,
+          osName,
           isCurrentSession: true,
           isTrulyActive: timeSinceActive < inactivityTimeout,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
@@ -326,6 +336,7 @@ module.exports = {
       const userId = ctx.state.user?.documentId;
       const { sessionId } = ctx.params;
       const currentToken = ctx.request.headers.authorization?.replace('Bearer ', '');
+      const currentTokenHash = currentToken ? hashToken(currentToken) : null;
 
       if (!userId) {
         return ctx.throw(401, 'Unauthorized');
@@ -352,16 +363,9 @@ module.exports = {
         return ctx.forbidden('You can only terminate your own sessions');
       }
 
-      // Check if this is the current session (cannot terminate current session via this endpoint)
-      if (sessionToTerminate.token && currentToken) {
-        try {
-          const decrypted = decryptToken(sessionToTerminate.token);
-          if (decrypted === currentToken) {
-            return ctx.badRequest('Cannot terminate current session. Use /logout instead.');
-          }
-        } catch (err) {
-          // Ignore decryption errors
-        }
+      // Check if this is the current session using tokenHash (cannot terminate current session via this endpoint)
+      if (currentTokenHash && sessionToTerminate.tokenHash === currentTokenHash) {
+        return ctx.badRequest('Cannot terminate current session. Use /logout instead.');
       }
 
       // Terminate the session
