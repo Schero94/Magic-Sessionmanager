@@ -1,3 +1,10 @@
+## [4.2.12](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.11...v4.2.12) (2026-01-02)
+
+
+### Bug Fixes
+
+* store geoLocation and device info on session creation ([64ca261](https://github.com/Schero94/Magic-Sessionmanager/commit/64ca26112fa459e11d833770d01cbceee868151f))
+
 ## [4.2.11](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.10...v4.2.11) (2026-01-02)
 
 
