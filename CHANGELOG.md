@@ -1,3 +1,10 @@
+## [4.2.11](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.10...v4.2.11) (2026-01-02)
+
+
+### Bug Fixes
+
+* use tokenHash for O(1) session lookup, add UA parser for device info ([34787ae](https://github.com/Schero94/Magic-Sessionmanager/commit/34787aeb228ea3091bd1f7ecb4ab8a6ab3cdcecf))
+
 ## [4.2.10](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.9...v4.2.10) (2026-01-01)
 
 
