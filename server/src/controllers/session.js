@@ -64,6 +64,7 @@ module.exports = {
    * GET /api/magic-sessionmanager/my-sessions
    * Automatically uses the authenticated user's documentId
    * Marks which session is the current one (based on JWT token hash)
+   * Fetches geolocation data on-demand if not already stored
    */
   async getOwnSessions(ctx) {
     try {
@@ -86,9 +87,12 @@ module.exports = {
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000;
       const now = new Date();
+      
+      // Get geolocation service for on-demand lookups
+      const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
 
       // Enhance sessions with isCurrentSession flag and parsed device info
-      const sessionsWithCurrent = allSessions.map(session => {
+      const sessionsWithCurrent = await Promise.all(allSessions.map(async (session) => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
         const timeSinceActive = now - lastActiveTime;
         const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
@@ -115,6 +119,34 @@ module.exports = {
             geoLocation = null;
           }
         }
+        
+        // On-demand geolocation lookup if not already stored
+        if (!geoLocation && session.ipAddress) {
+          try {
+            const geoData = await geolocationService.getIpInfo(session.ipAddress);
+            if (geoData && geoData.country !== 'Unknown') {
+              geoLocation = {
+                country: geoData.country,
+                country_code: geoData.country_code,
+                country_flag: geoData.country_flag,
+                city: geoData.city,
+                region: geoData.region,
+                timezone: geoData.timezone,
+              };
+              
+              // Persist to database for future requests (fire-and-forget)
+              strapi.documents(SESSION_UID).update({
+                documentId: session.documentId,
+                data: { 
+                  geoLocation: JSON.stringify(geoLocation),
+                  securityScore: geoData.securityScore || null,
+                },
+              }).catch(() => {}); // Ignore update errors
+            }
+          } catch (geoErr) {
+            strapi.log.debug('[magic-sessionmanager] Geolocation lookup failed:', geoErr.message);
+          }
+        }
 
         // Remove sensitive token fields and internal fields
         const { 
@@ -134,7 +166,7 @@ module.exports = {
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
-      });
+      }));
 
       // Sort: current session first, then by loginTime
       sessionsWithCurrent.sort((a, b) => {
@@ -273,6 +305,7 @@ module.exports = {
    * Get current session info based on JWT token hash
    * GET /api/magic-sessionmanager/current-session
    * Returns the session associated with the current JWT token
+   * Fetches geolocation on-demand if not already stored
    */
   async getCurrentSession(ctx) {
     try {
@@ -321,6 +354,35 @@ module.exports = {
           geoLocation = JSON.parse(geoLocation);
         } catch (e) {
           geoLocation = null;
+        }
+      }
+      
+      // On-demand geolocation lookup if not already stored
+      if (!geoLocation && currentSession.ipAddress) {
+        try {
+          const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
+          const geoData = await geolocationService.getIpInfo(currentSession.ipAddress);
+          if (geoData && geoData.country !== 'Unknown') {
+            geoLocation = {
+              country: geoData.country,
+              country_code: geoData.country_code,
+              country_flag: geoData.country_flag,
+              city: geoData.city,
+              region: geoData.region,
+              timezone: geoData.timezone,
+            };
+            
+            // Persist to database for future requests (fire-and-forget)
+            strapi.documents(SESSION_UID).update({
+              documentId: currentSession.documentId,
+              data: { 
+                geoLocation: JSON.stringify(geoLocation),
+                securityScore: geoData.securityScore || null,
+              },
+            }).catch(() => {}); // Ignore update errors
+          }
+        } catch (geoErr) {
+          strapi.log.debug('[magic-sessionmanager] Geolocation lookup failed:', geoErr.message);
         }
       }
 

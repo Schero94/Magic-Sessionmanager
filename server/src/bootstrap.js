@@ -113,23 +113,13 @@ module.exports = async ({ strapi }) => {
             return;
           }
 
-          // Find session by decrypting tokens and matching
-          // Since tokens are encrypted, we need to get all active sessions and check each one
-          const allSessions = await strapi.documents(SESSION_UID).findMany( {
+          // Find session by tokenHash - O(1) DB lookup instead of O(n) decrypt loop!
+          const tokenHashValue = hashToken(token);
+          const matchingSession = await strapi.documents(SESSION_UID).findFirst({
             filters: {
+              tokenHash: tokenHashValue,
               isActive: true,
             },
-          });
-
-          // Find matching session by decrypting and comparing tokens
-          const matchingSession = allSessions.find(session => {
-            if (!session.token) return false;
-            try {
-              const decrypted = decryptToken(session.token);
-              return decrypted === token;
-            } catch (err) {
-              return false;
-            }
           });
 
           if (matchingSession) {
@@ -324,22 +314,13 @@ module.exports = async ({ strapi }) => {
           const refreshToken = ctx.request.body?.refreshToken;
           
           if (refreshToken) {
-            // Find session with this refresh token
-            const allSessions = await strapi.documents(SESSION_UID).findMany( {
+            // Find session by refreshTokenHash - O(1) DB lookup instead of O(n) decrypt loop!
+            const refreshTokenHashValue = hashToken(refreshToken);
+            const matchingSession = await strapi.documents(SESSION_UID).findFirst({
               filters: {
+                refreshTokenHash: refreshTokenHashValue,
                 isActive: true,
               },
-            });
-
-            // Find matching session by decrypting and comparing refresh tokens
-            const matchingSession = allSessions.find(session => {
-              if (!session.refreshToken) return false;
-              try {
-                const decrypted = decryptToken(session.refreshToken);
-                return decrypted === refreshToken;
-              } catch (err) {
-                return false;
-              }
             });
 
             if (!matchingSession) {
@@ -375,21 +356,13 @@ module.exports = async ({ strapi }) => {
           const newRefreshToken = ctx.body.refreshToken;
           
           if (oldRefreshToken) {
-            // Find session and update with new tokens
-            const allSessions = await strapi.documents(SESSION_UID).findMany( {
+            // Find session by refreshTokenHash - O(1) DB lookup instead of O(n) decrypt loop!
+            const oldRefreshTokenHash = hashToken(oldRefreshToken);
+            const matchingSession = await strapi.documents(SESSION_UID).findFirst({
               filters: {
+                refreshTokenHash: oldRefreshTokenHash,
                 isActive: true,
               },
-            });
-
-            const matchingSession = allSessions.find(session => {
-              if (!session.refreshToken) return false;
-              try {
-                const decrypted = decryptToken(session.refreshToken);
-                return decrypted === oldRefreshToken;
-              } catch (err) {
-                return false;
-              }
             });
 
             if (matchingSession) {

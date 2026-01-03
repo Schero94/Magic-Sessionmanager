@@ -153,6 +153,7 @@ module.exports = ({ strapi }) => {
 
   /**
    * Get ALL sessions (active + inactive) with accurate online status
+   * Fetches geolocation on-demand for sessions without it (limited to prevent API abuse)
    * @returns {Promise<Array>} All sessions with enhanced data
    */
   async getAllSessions() {
@@ -166,10 +167,16 @@ module.exports = ({ strapi }) => {
       // Get inactivity timeout from config (default: 15 minutes)
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
+      
+      // Get geolocation service
+      const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
+      
+      // Track how many geolocation lookups we do (limit to prevent API abuse)
+      let geoLookupsRemaining = 20; // Max 20 lookups per request
 
       // Enhance sessions with accurate online status and device info
       const now = new Date();
-      const enhancedSessions = sessions.map(session => {
+      const enhancedSessions = await Promise.all(sessions.map(async (session) => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
         const timeSinceActive = now - lastActiveTime;
         
@@ -196,6 +203,35 @@ module.exports = ({ strapi }) => {
           }
         }
         
+        // On-demand geolocation lookup if not already stored (with limit)
+        if (!geoLocation && session.ipAddress && geoLookupsRemaining > 0) {
+          geoLookupsRemaining--;
+          try {
+            const geoData = await geolocationService.getIpInfo(session.ipAddress);
+            if (geoData && geoData.country !== 'Unknown') {
+              geoLocation = {
+                country: geoData.country,
+                country_code: geoData.country_code,
+                country_flag: geoData.country_flag,
+                city: geoData.city,
+                region: geoData.region,
+                timezone: geoData.timezone,
+              };
+              
+              // Persist to database for future requests (fire-and-forget)
+              strapi.documents(SESSION_UID).update({
+                documentId: session.documentId,
+                data: { 
+                  geoLocation: JSON.stringify(geoLocation),
+                  securityScore: geoData.securityScore || null,
+                },
+              }).catch(() => {}); // Ignore update errors
+            }
+          } catch (geoErr) {
+            log.debug('Geolocation lookup failed:', geoErr.message);
+          }
+        }
+        
         // Remove sensitive fields and internal Strapi fields
         const { 
           token, tokenHash, refreshToken, refreshTokenHash,
@@ -213,7 +249,7 @@ module.exports = ({ strapi }) => {
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
-      });
+      }));
 
       return enhancedSessions;
     } catch (err) {
@@ -224,6 +260,7 @@ module.exports = ({ strapi }) => {
 
   /**
    * Get all active sessions with accurate online status
+   * Fetches geolocation on-demand for sessions without it
    * @returns {Promise<Array>} Active sessions with user data and online status
    */
   async getActiveSessions() {
@@ -237,10 +274,13 @@ module.exports = ({ strapi }) => {
       // Get inactivity timeout from config (default: 15 minutes)
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
+      
+      // Get geolocation service
+      const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
 
       // Enhance sessions with accurate online status and device info
       const now = new Date();
-      const enhancedSessions = sessions.map(session => {
+      const enhancedSessions = await Promise.all(sessions.map(async (session) => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
         const timeSinceActive = now - lastActiveTime;
         
@@ -267,6 +307,34 @@ module.exports = ({ strapi }) => {
           }
         }
         
+        // On-demand geolocation lookup if not already stored
+        if (!geoLocation && session.ipAddress) {
+          try {
+            const geoData = await geolocationService.getIpInfo(session.ipAddress);
+            if (geoData && geoData.country !== 'Unknown') {
+              geoLocation = {
+                country: geoData.country,
+                country_code: geoData.country_code,
+                country_flag: geoData.country_flag,
+                city: geoData.city,
+                region: geoData.region,
+                timezone: geoData.timezone,
+              };
+              
+              // Persist to database (fire-and-forget)
+              strapi.documents(SESSION_UID).update({
+                documentId: session.documentId,
+                data: { 
+                  geoLocation: JSON.stringify(geoLocation),
+                  securityScore: geoData.securityScore || null,
+                },
+              }).catch(() => {});
+            }
+          } catch (geoErr) {
+            log.debug('Geolocation lookup failed:', geoErr.message);
+          }
+        }
+        
         // Remove sensitive fields and internal Strapi fields
         const { 
           token, tokenHash, refreshToken, refreshTokenHash,
@@ -284,7 +352,7 @@ module.exports = ({ strapi }) => {
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
-      });
+      }));
 
       // Only return truly active sessions
       return enhancedSessions.filter(s => s.isTrulyActive);
@@ -297,6 +365,7 @@ module.exports = ({ strapi }) => {
   /**
    * Get all sessions for a specific user
    * Supports both numeric id (legacy) and documentId (Strapi v5)
+   * Fetches geolocation on-demand for sessions without it
    * @param {string|number} userId - User documentId or numeric id
    * @returns {Promise<Array>} User's sessions with accurate online status
    */
@@ -319,10 +388,13 @@ module.exports = ({ strapi }) => {
       // Get inactivity timeout from config (default: 15 minutes)
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
+      
+      // Get geolocation service
+      const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
 
       // Enhance sessions with accurate online status and device info
       const now = new Date();
-      const enhancedSessions = sessions.map(session => {
+      const enhancedSessions = await Promise.all(sessions.map(async (session) => {
         const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
         const timeSinceActive = now - lastActiveTime;
         
@@ -351,6 +423,34 @@ module.exports = ({ strapi }) => {
           }
         }
         
+        // On-demand geolocation lookup if not already stored
+        if (!geoLocation && session.ipAddress) {
+          try {
+            const geoData = await geolocationService.getIpInfo(session.ipAddress);
+            if (geoData && geoData.country !== 'Unknown') {
+              geoLocation = {
+                country: geoData.country,
+                country_code: geoData.country_code,
+                country_flag: geoData.country_flag,
+                city: geoData.city,
+                region: geoData.region,
+                timezone: geoData.timezone,
+              };
+              
+              // Persist to database (fire-and-forget)
+              strapi.documents(SESSION_UID).update({
+                documentId: session.documentId,
+                data: { 
+                  geoLocation: JSON.stringify(geoLocation),
+                  securityScore: geoData.securityScore || null,
+                },
+              }).catch(() => {});
+            }
+          } catch (geoErr) {
+            log.debug('Geolocation lookup failed:', geoErr.message);
+          }
+        }
+        
         // Remove sensitive fields and internal Strapi fields
         const { 
           token, tokenHash, refreshToken, refreshTokenHash,
@@ -368,7 +468,7 @@ module.exports = ({ strapi }) => {
           isTrulyActive,
           minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
         };
-      });
+      }));
 
       return enhancedSessions;
     } catch (err) {

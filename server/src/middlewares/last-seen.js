@@ -19,6 +19,27 @@ const { hashToken } = require('../utils/encryption');
 // In-memory cache for rate limiting (per session documentId)
 const lastTouchCache = new Map();
 
+// Cache cleanup settings
+const CACHE_MAX_SIZE = 10000; // Max entries before cleanup
+const CACHE_CLEANUP_AGE = 60 * 60 * 1000; // Remove entries older than 1 hour
+
+/**
+ * Periodically clean up old cache entries to prevent memory leaks
+ * Called lazily when cache grows too large
+ */
+function cleanupOldCacheEntries() {
+  if (lastTouchCache.size < CACHE_MAX_SIZE) return;
+  
+  const now = Date.now();
+  const cutoff = now - CACHE_CLEANUP_AGE;
+  
+  for (const [key, timestamp] of lastTouchCache.entries()) {
+    if (timestamp < cutoff) {
+      lastTouchCache.delete(key);
+    }
+  }
+}
+
 module.exports = ({ strapi }) => {
   return async (ctx, next) => {
     // Get JWT token from Authorization header
@@ -30,8 +51,20 @@ module.exports = ({ strapi }) => {
       return;
     }
     
-    // Skip internal/admin routes that don't need session tracking
-    const skipPaths = ['/admin', '/_health', '/favicon.ico'];
+    // Skip routes that don't need session validation
+    const skipPaths = [
+      '/admin',           // Admin panel routes (have their own auth)
+      '/_health',         // Health check
+      '/favicon.ico',     // Static assets
+      '/api/auth/local',  // Login endpoint
+      '/api/auth/register', // Registration endpoint
+      '/api/auth/forgot-password', // Password reset
+      '/api/auth/reset-password',  // Password reset
+      '/api/auth/logout', // Logout endpoint (handled separately)
+      '/api/auth/refresh', // Refresh token (has own validation in bootstrap.js)
+      '/api/connect',     // OAuth providers
+      '/api/magic-link',  // Magic link auth (if using magic-link plugin)
+    ];
     if (skipPaths.some(p => ctx.path.startsWith(p))) {
       await next();
       return;
@@ -63,14 +96,18 @@ module.exports = ({ strapi }) => {
           ctx.state.sessionUserId = matchingSession.user.documentId;
         }
       } else {
-        // Token exists but no active session found - check if user is authenticated
-        // Only block if we know this is an authenticated request
-        if (ctx.state.user && ctx.state.user.documentId) {
-          strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session terminated for user ${ctx.state.user.documentId}`);
-          return ctx.unauthorized('This session has been terminated. Please login again.');
-        }
-        // If ctx.state.user not set, this might be a public route or JWT validation hasn't run yet
-        // Let the request continue - Strapi's auth will handle it
+        // Token exists but no active session found
+        // CRITICAL: We have a valid-looking JWT token but NO active session
+        // This means the session was terminated - MUST block the request!
+        // 
+        // Note: We cannot rely on ctx.state.user here because Strapi's JWT
+        // middleware runs AFTER our plugin middleware. So ctx.state.user
+        // is not yet set at this point.
+        //
+        // Since we have a Bearer token but no matching active session,
+        // this is definitely a terminated session - block it!
+        strapi.log.info(`[magic-sessionmanager] [BLOCKED] Request blocked - session terminated or invalid (token hash: ${currentTokenHash.substring(0, 8)}...)`);
+        return ctx.unauthorized('This session has been terminated. Please login again.');
       }
         
     } catch (err) {
@@ -93,6 +130,9 @@ module.exports = ({ strapi }) => {
         if (now - lastTouch > rateLimit) {
           // Update cache
           lastTouchCache.set(matchingSession.documentId, now);
+          
+          // Lazy cleanup: Remove old entries if cache grows too large
+          cleanupOldCacheEntries();
           
           // Update database
           await strapi.documents(SESSION_UID).update({
