@@ -1,3 +1,10 @@
+## [4.2.13](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.12...v4.2.13) (2026-01-03)
+
+
+### Bug Fixes
+
+* optimize session lookups and add geolocation on-demand ([bfaa693](https://github.com/Schero94/Magic-Sessionmanager/commit/bfaa6930678e4047df0a6b3ff6f822ac1aa212dd))
+
 ## [4.2.12](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.11...v4.2.12) (2026-01-02)
 
 
