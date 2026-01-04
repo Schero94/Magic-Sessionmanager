@@ -1,3 +1,10 @@
+## [4.2.15](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.14...v4.2.15) (2026-01-04)
+
+
+### Bug Fixes
+
+* use relative paths for menu and settings links ([667020c](https://github.com/Schero94/Magic-Sessionmanager/commit/667020c045e7ad5afe0f7156a9f8d88570507a2f))
+
 ## [4.2.14](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.13...v4.2.14) (2026-01-04)
 
 
