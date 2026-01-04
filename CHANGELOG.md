@@ -1,3 +1,10 @@
+## [4.2.14](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.13...v4.2.14) (2026-01-04)
+
+
+### Bug Fixes
+
+* exclude admin panel routes from session validation ([82e37b2](https://github.com/Schero94/Magic-Sessionmanager/commit/82e37b2508ff3d8aebc2230902ce4f739d8a4b6b))
+
 ## [4.2.13](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.12...v4.2.13) (2026-01-03)
 
 
