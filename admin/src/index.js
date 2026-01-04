@@ -17,8 +17,9 @@ const name = pluginPkg.strapi.name;
 
 export default {
   register(app) {
+    // Menu link - path should be relative to root (no leading slash)
     app.addMenuLink({
-      to: `/plugins/${pluginId}`,
+      to: `plugins/${pluginId}`,
       icon: PluginIcon,
       intlLabel: {
         id: `${pluginId}.plugin.name`,
@@ -27,11 +28,12 @@ export default {
       Component: () => import('./pages/App'),
     });
 
+    // Settings section - paths should be relative to /settings (no /settings/ prefix)
     app.createSettingSection(
       {
         intlLabel: { id: `${pluginId}.settings.section`, defaultMessage: 'Sessions' },
         id: pluginId,
-        to: `/settings/${pluginId}`,
+        to: pluginId,
       },
       [
         {
@@ -40,7 +42,7 @@ export default {
             defaultMessage: 'Upgrade',
           },
           id: 'upgrade',
-          to: `/settings/${pluginId}/upgrade`,
+          to: `${pluginId}/upgrade`,
           Component: () => import('./pages/UpgradePage'),
         },
         {
@@ -49,7 +51,7 @@ export default {
             defaultMessage: 'General',
           },
           id: 'general',
-          to: `/settings/${pluginId}/general`,
+          to: `${pluginId}/general`,
           Component: () => import('./pages/Settings'),
         },
         {
@@ -58,16 +60,16 @@ export default {
             defaultMessage: 'Analytics',
           },
           id: 'analytics',
-          to: `/settings/${pluginId}/analytics`,
+          to: `${pluginId}/analytics`,
           Component: () => import('./pages/Analytics'),
-          },
+        },
         {
           intlLabel: {
             id: `${pluginId}.settings.license`,
             defaultMessage: 'License',
           },
           id: 'license',
-          to: `/settings/${pluginId}/license`,
+          to: `${pluginId}/license`,
           Component: () => import('./pages/License'),
         },
       ]
