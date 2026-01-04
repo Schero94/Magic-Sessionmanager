@@ -52,20 +52,35 @@ module.exports = ({ strapi }) => {
     }
     
     // Skip routes that don't need session validation
+    // This middleware is ONLY for Content-API (/api/*) routes
+    // Admin panel routes have their own authentication system
     const skipPaths = [
-      '/admin',           // Admin panel routes (have their own auth)
-      '/_health',         // Health check
-      '/favicon.ico',     // Static assets
-      '/api/auth/local',  // Login endpoint
-      '/api/auth/register', // Registration endpoint
+      '/admin',              // Admin panel UI
+      '/content-manager',    // Content Manager
+      '/content-type-builder', // Content-Type Builder
+      '/upload',             // Media Library
+      '/i18n',               // Internationalization
+      '/users-permissions',  // Users & Permissions settings
+      '/email',              // Email plugin
+      '/_health',            // Health check
+      '/favicon.ico',        // Static assets
+      '/api/auth/local',     // Login endpoint
+      '/api/auth/register',  // Registration endpoint
       '/api/auth/forgot-password', // Password reset
       '/api/auth/reset-password',  // Password reset
-      '/api/auth/logout', // Logout endpoint (handled separately)
-      '/api/auth/refresh', // Refresh token (has own validation in bootstrap.js)
-      '/api/connect',     // OAuth providers
-      '/api/magic-link',  // Magic link auth (if using magic-link plugin)
+      '/api/auth/logout',    // Logout endpoint (handled separately)
+      '/api/auth/refresh',   // Refresh token (has own validation in bootstrap.js)
+      '/api/connect',        // OAuth providers
+      '/api/magic-link',     // Magic link auth (if using magic-link plugin)
     ];
     if (skipPaths.some(p => ctx.path.startsWith(p))) {
+      await next();
+      return;
+    }
+    
+    // Also skip if NOT a Content-API route (extra safety for admin plugins)
+    // Content-API routes always start with /api/
+    if (!ctx.path.startsWith('/api/')) {
       await next();
       return;
     }
