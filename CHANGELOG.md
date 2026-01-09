@@ -1,3 +1,10 @@
+## [4.2.16](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.15...v4.2.16) (2026-01-09)
+
+
+### Bug Fixes
+
+* **middleware:** exclude auth endpoints from session validation ([830bec4](https://github.com/Schero94/Magic-Sessionmanager/commit/830bec4a9c52958883452b22d6aab6b294d50b5d))
+
 ## [4.2.15](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.14...v4.2.15) (2026-01-04)
 
 
