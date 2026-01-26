@@ -25,6 +25,14 @@ import styled, { keyframes, css } from 'styled-components';
 import pluginId from '../pluginId';
 import { useLicense } from '../hooks/useLicense';
 import { getTranslation } from '../utils/getTranslation';
+import { 
+  GradientButton, 
+  SecondaryButton, 
+  TertiaryButton, 
+  DangerButton,
+  ShowHideButton,
+  CopyButton 
+} from '../components/StyledButtons';
 
 // ================ THEME ================
 const theme = {
@@ -759,16 +767,15 @@ const SettingsPage = () => {
                             {t('settings.general.danger.description', 'Clean All Inactive: Permanently deletes all inactive sessions. This cannot be undone.')}
                           </Typography>
                         </Box>
-                        <Button
+                        <DangerButton
                           onClick={handleCleanInactive}
                           loading={cleaning}
                           startIcon={<Trash />}
-                          variant="danger"
                           size="S"
                           style={{ flexShrink: 0 }}
                         >
                           {t('settings.general.danger.cleanNow', 'Clean Now')}
-                        </Button>
+                        </DangerButton>
                       </Flex>
                     </Box>
                   </Grid.Item>
@@ -836,18 +843,16 @@ const SettingsPage = () => {
                           type={showEncryptionKey ? 'text' : 'password'}
                         />
                       </Box>
-                      <Button
-                        variant="secondary"
+                      <ShowHideButton
                         onClick={() => setShowEncryptionKey(!showEncryptionKey)}
                         size="L"
                       >
                         {showEncryptionKey ? t('settings.security.encryption.hide', 'Hide') : t('settings.security.encryption.show', 'Show')}
-                      </Button>
+                      </ShowHideButton>
                     </Flex>
 
                     <Flex gap={3}>
-                      <Button
-                        variant="default"
+                      <GradientButton
                         startIcon={<Code />}
                         onClick={() => {
                           const key = generateSecureKey();
@@ -861,10 +866,9 @@ const SettingsPage = () => {
                         size="L"
                       >
                         {t('settings.security.encryption.generate', 'Generate Key')}
-                      </Button>
+                      </GradientButton>
                       
-                      <Button
-                        variant="tertiary"
+                      <CopyButton
                         startIcon={<Duplicate />}
                         onClick={() => {
                           if (encryptionKey) {
@@ -879,10 +883,9 @@ const SettingsPage = () => {
                         size="L"
                       >
                         {t('settings.security.encryption.copy', 'Copy to Clipboard')}
-                      </Button>
+                      </CopyButton>
 
-                      <Button
-                        variant="tertiary"
+                      <CopyButton
                         startIcon={<Duplicate />}
                         onClick={() => {
                           if (encryptionKey) {
@@ -898,7 +901,7 @@ const SettingsPage = () => {
                         size="L"
                       >
                         {t('settings.security.encryption.copyEnv', 'Copy for .env')}
-                      </Button>
+                      </CopyButton>
                     </Flex>
 
                     {encryptionKey && (
@@ -1261,8 +1264,7 @@ const SettingsPage = () => {
                                     </Typography>
                                     <Badge variant="success">{t('settings.email.templates.html.badge', 'Main Template')}</Badge>
                                   </Flex>
-                                  <Button
-                                    variant="tertiary"
+                                  <TertiaryButton
                                     size="S"
                                     onClick={() => {
                                       const defaultTemplates = getDefaultTemplates();
@@ -1272,8 +1274,8 @@ const SettingsPage = () => {
                                       toggleNotification({ type: 'success', message: t('notifications.success.defaultLoaded', 'Default template loaded!') });
                                     }}
                                   >
-                                    📋 {t('settings.email.templates.html.loadDefault', 'Load Default')}
-                                  </Button>
+                                    {t('settings.email.templates.html.loadDefault', 'Load Default')}
+                                  </TertiaryButton>
                                 </Flex>
                                 <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '16px', display: 'block', fontSize: '14px' }}>
                                   {t('settings.email.templates.html.description', 'HTML template for email notifications. Use variables like {{user.email}} for dynamic content.')}
@@ -1326,18 +1328,16 @@ const SettingsPage = () => {
                                   />
                                 </Box>
                                 <Flex gap={2} style={{ marginTop: '12px' }} wrap="wrap">
-                                  <Button
-                                    variant="secondary"
+                                  <CopyButton
                                     size="S"
                                     onClick={() => {
                                       navigator.clipboard.writeText(settings.emailTemplates[templateKey].html);
                                       toggleNotification({ type: 'success', message: t('notifications.success.htmlCopied', 'HTML template copied!') });
                                     }}
                                   >
-                                    📋 {t('settings.email.templates.html.copy', 'Copy Template')}
-                                  </Button>
-                                  <Button
-                                    variant="tertiary"
+                                    {t('settings.email.templates.html.copy', 'Copy Template')}
+                                  </CopyButton>
+                                  <SecondaryButton
                                     size="S"
                                     onClick={() => {
                                       const validation = validateTemplate(settings.emailTemplates[templateKey].html, templateKey);
@@ -1349,10 +1349,9 @@ const SettingsPage = () => {
                                       });
                                     }}
                                   >
-                                    ✓ {t('settings.email.templates.html.validate', 'Validate')}
-                                  </Button>
-                                  <Button
-                                    variant="tertiary"
+                                    {t('settings.email.templates.html.validate', 'Validate')}
+                                  </SecondaryButton>
+                                  <TertiaryButton
                                     size="S"
                                     onClick={() => {
                                       const lines = settings.emailTemplates[templateKey].html.split('\n').length;
@@ -1363,8 +1362,8 @@ const SettingsPage = () => {
                                       });
                                     }}
                                   >
-                                    ℹ️ {t('settings.email.templates.html.info', 'Template Info')}
-                                  </Button>
+                                    {t('settings.email.templates.html.info', 'Template Info')}
+                                  </TertiaryButton>
                                 </Flex>
                               </Box>
                               
@@ -1381,8 +1380,7 @@ const SettingsPage = () => {
                                     </Typography>
                                     <Badge variant="secondary">{t('settings.email.templates.text.badge', 'Fallback')}</Badge>
                                   </Flex>
-                                  <Button
-                                    variant="tertiary"
+                                  <TertiaryButton
                                     size="S"
                                     onClick={() => {
                                       const defaultTemplates = getDefaultTemplates();
@@ -1392,8 +1390,8 @@ const SettingsPage = () => {
                                       toggleNotification({ type: 'success', message: t('notifications.success.defaultLoaded', 'Default template loaded!') });
                                     }}
                                   >
-                                    📋 {t('settings.email.templates.text.loadDefault', 'Load Default')}
-                                  </Button>
+                                    {t('settings.email.templates.text.loadDefault', 'Load Default')}
+                                  </TertiaryButton>
                                 </Flex>
                                 <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '16px', display: 'block', fontSize: '14px' }}>
                                   {t('settings.email.templates.text.description', 'Plain text version (no HTML) as fallback for older email clients')}
@@ -1446,16 +1444,15 @@ const SettingsPage = () => {
                                   />
                                 </Box>
                                 <Flex gap={2} style={{ marginTop: '12px' }} wrap="wrap">
-                                  <Button
-                                    variant="secondary"
+                                  <CopyButton
                                     size="S"
                                     onClick={() => {
                                       navigator.clipboard.writeText(settings.emailTemplates[templateKey].text);
                                       toggleNotification({ type: 'success', message: t('notifications.success.textCopied', 'Text template copied!') });
                                     }}
                                   >
-                                    📋 {t('settings.email.templates.text.copy', 'Copy Template')}
-                                  </Button>
+                                    {t('settings.email.templates.text.copy', 'Copy Template')}
+                                  </CopyButton>
                                 </Flex>
                               </Box>
                             </Box>
