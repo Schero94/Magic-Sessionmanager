@@ -1,14 +1,145 @@
 import { useState, useEffect } from 'react';
 import { useIntl } from 'react-intl';
-import { Box, Typography, Flex, Button, Badge, Divider } from '@strapi/design-system';
-import { Check, Cross, Monitor, Phone, Server, Clock } from '@strapi/icons';
+import styled from 'styled-components';
+import { Box, Typography, Flex, Badge, Divider } from '@strapi/design-system';
+import { Check, Cross, Monitor, Phone, Server, Clock, User } from '@strapi/icons';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import parseUserAgent from '../utils/parseUserAgent';
 import { getTranslation } from '../utils/getTranslation';
 
+// ================ STYLED COMPONENTS ================
+
+const PanelContainer = styled(Box)`
+  width: 100%;
+`;
+
+const StatusCard = styled(Box)`
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid ${props => props.$isOnline ? '#BBF7D0' : '#E5E7EB'};
+  background: ${props => props.$isOnline 
+    ? 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)' 
+    : 'linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%)'};
+  transition: all 0.2s ease;
+`;
+
+const BlockedWarning = styled(Box)`
+  padding: 16px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
+  border: 1px solid #FECACA;
+`;
+
+const SessionCard = styled(Box)`
+  padding: 16px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border-color: #0EA5E9;
+  }
+`;
+
+const EmptyState = styled(Box)`
+  padding: 32px;
+  background: #F9FAFB;
+  border-radius: 12px;
+  border: 2px dashed #E5E7EB;
+  text-align: center;
+`;
+
+const EmptyIcon = styled(Box)`
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #E5E7EB;
+  border-radius: 50%;
+  color: #9CA3AF;
+`;
+
+const SectionLabel = styled(Typography)`
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #6B7280;
+  margin-bottom: 12px;
+  display: block;
+`;
+
+const ActionButton = styled.button`
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  
+  ${props => props.$variant === 'danger' && `
+    background: white;
+    color: #DC2626;
+    border: 2px solid #DC2626;
+    
+    &:hover:not(:disabled) {
+      background: #DC2626;
+      color: white;
+    }
+  `}
+  
+  ${props => props.$variant === 'success' && `
+    background: white;
+    color: #16A34A;
+    border: 2px solid #16A34A;
+    
+    &:hover:not(:disabled) {
+      background: #16A34A;
+      color: white;
+    }
+  `}
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const IconWrapper = styled(Box)`
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F3F4F6;
+  border-radius: 8px;
+  flex-shrink: 0;
+  
+  svg {
+    width: 16px;
+    height: 16px;
+    color: #6B7280;
+  }
+`;
+
 /**
- * Session Info Panel - Native Strapi design
- * Clean, professional sidebar panel for Content Manager
+ * Session Info Panel - Styled Components Version
+ * Clean sidebar panel for Content Manager user edit page
  */
 const SessionInfoPanel = ({ documentId, model, document }) => {
   const { formatMessage } = useIntl();
@@ -20,7 +151,6 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   const { toggleNotification } = useNotification();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
-  // Strapi v5: Use documentId (string UUID) instead of numeric id
   const userId = document?.documentId || documentId;
 
   useEffect(() => {
@@ -32,10 +162,8 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     const fetchData = async () => {
       try {
         const { data } = await get(`/magic-sessionmanager/user/${userId}/sessions`);
-          // Filter by truly active (not just isActive, but also within timeout)
-          const activeSessions = (data.data || []).filter(s => s.isTrulyActive);
-          setSessions(activeSessions);
-
+        const activeSessions = (data.data || []).filter(s => s.isTrulyActive);
+        setSessions(activeSessions);
         setIsBlocked(document?.blocked || false);
       } catch (err) {
         console.error('[SessionInfoPanel] Error:', err);
@@ -47,6 +175,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     fetchData();
   }, [userId, model, document, get]);
 
+  /**
+   * Handles terminating all user sessions
+   */
   const handleLogoutAll = async () => {
     if (!userId) return;
     
@@ -72,6 +203,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     }
   };
 
+  /**
+   * Handles toggling user block status
+   */
   const handleToggleBlock = async () => {
     if (!userId) return;
     
@@ -105,13 +239,16 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     }
   };
 
+  /**
+   * Returns the appropriate device icon component
+   */
   const getDeviceIcon = (deviceType) => {
     if (deviceType === 'Mobile' || deviceType === 'Tablet') return Phone;
     if (deviceType === 'Desktop' || deviceType === 'Laptop') return Monitor;
     return Server;
   };
 
-  // ONLY show for User content type - hide completely for others
+  // Only show for User content type
   if (model !== 'plugin::users-permissions.user') {
     return null;
   }
@@ -121,7 +258,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
       title: t('panel.title', 'Session Info'),
       content: (
         <Box padding={4} background="neutral0">
-          <Typography variant="pi" textColor="neutral600">{t('panel.loading', 'Loading...')}</Typography>
+          <Typography variant="pi" textColor="neutral600">
+            {t('panel.loading', 'Loading...')}
+          </Typography>
         </Box>
       ),
     };
@@ -132,120 +271,84 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   return {
     title: t('panel.title', 'Session Info'),
     content: (
-      <Box style={{ width: '100%' }}>
+      <PanelContainer>
         <Flex direction="column" gap={4} alignItems="stretch">
-        {/* Status Bar */}
-        <Box 
-          padding={5} 
-          background={isOnline ? 'success100' : 'neutral150'}
-          hasRadius
-          style={{ 
-            border: isOnline ? '1px solid #c6f6d5' : '1px solid #eaeaef',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <Flex direction="column" gap={3} alignItems="center">
-            <Badge 
-              backgroundColor={isOnline ? 'success600' : 'neutral600'}
-              textColor="neutral0"
-              size="M"
-              style={{ fontSize: '14px', padding: '6px 12px' }}
-            >
-              {isOnline ? t('panel.status.active', 'ACTIVE') : t('panel.status.offline', 'OFFLINE')}
-            </Badge>
-            <Typography variant="omega" fontWeight="semiBold" textColor={isOnline ? 'success700' : 'neutral700'}>
-              {t('panel.sessions.count', '{count} active session{count, plural, one {} other {s}}', { count: sessions.length })}
-            </Typography>
-          </Flex>
-        </Box>
+          
+          {/* Status Card */}
+          <StatusCard $isOnline={isOnline}>
+            <Flex direction="column" gap={3} alignItems="center">
+              <Badge 
+                backgroundColor={isOnline ? 'success600' : 'neutral600'}
+                textColor="neutral0"
+                size="M"
+                style={{ fontSize: '12px', padding: '6px 14px', fontWeight: '700' }}
+              >
+                {isOnline ? t('panel.status.active', 'ONLINE') : t('panel.status.offline', 'OFFLINE')}
+              </Badge>
+              <Typography 
+                variant="omega" 
+                fontWeight="semiBold" 
+                textColor={isOnline ? 'success700' : 'neutral700'}
+              >
+                {sessions.length} {t('panel.sessions.label', 'active session')}{sessions.length !== 1 ? 's' : ''}
+              </Typography>
+            </Flex>
+          </StatusCard>
 
-        {/* User Blocked Warning */}
-        {isBlocked && (
-          <Box
-            padding={4}
-            background="danger100"
-            hasRadius
-          >
-            <Typography variant="omega" fontWeight="semiBold" textColor="danger700" marginBottom={1}>
-              {t('panel.blocked.title', 'User is blocked')}
-            </Typography>
-            <Typography variant="pi" textColor="danger600">
-              {t('panel.blocked.description', 'Authentication disabled')}
-            </Typography>
-          </Box>
-        )}
+          {/* User Blocked Warning */}
+          {isBlocked && (
+            <BlockedWarning>
+              <Typography variant="omega" fontWeight="bold" textColor="danger700">
+                {t('panel.blocked.title', 'User is blocked')}
+              </Typography>
+              <Typography variant="pi" textColor="danger600" style={{ marginTop: '4px' }}>
+                {t('panel.blocked.description', 'Authentication disabled')}
+              </Typography>
+            </BlockedWarning>
+          )}
 
-        {/* Active Sessions List */}
-        {sessions.length > 0 ? (
-          <Flex direction="column" gap={3} alignItems="stretch">
-            <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ 
-              textAlign: 'left',
-              letterSpacing: '0.5px',
-              fontSize: '12px'
-            }}>
-              {t('panel.sessions.title', 'Active Sessions')}
-            </Typography>
-            
-            {sessions.slice(0, 5).map((session) => {
-              const deviceInfo = parseUserAgent(session.userAgent);
-              const DeviceIcon = getDeviceIcon(deviceInfo.device);
+          {/* Active Sessions List */}
+          {sessions.length > 0 ? (
+            <Flex direction="column" gap={3} alignItems="stretch">
+              <SectionLabel>
+                {t('panel.sessions.title', 'Active Sessions')}
+              </SectionLabel>
               
-              return (
-                <Box 
-                  key={session.id}
-                  padding={4}
-                  background="neutral0"
-                  hasRadius
-                  style={{ 
-                    border: '1px solid #e3e8ef',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.08)';
-                    e.currentTarget.style.borderColor = '#4945FF';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.04)';
-                    e.currentTarget.style.borderColor = '#e3e8ef';
-                  }}
-                >
-                  <Flex direction="column" gap={2} alignItems="flex-start">
-                    {/* Device Name with Icon */}
-                    <Flex gap={2} alignItems="center">
-                      <DeviceIcon width="20px" height="20px" />
-                      <Typography variant="omega" fontWeight="bold" textColor="neutral800">
-                        {deviceInfo.device}
-                      </Typography>
-                    </Flex>
-                    
-                    {/* Status Badge */}
-                    <Badge 
-                      backgroundColor="success600" 
-                      textColor="neutral0" 
-                      size="S"
-                    >
-                      {t('panel.sessions.active', 'Active')}
-                    </Badge>
-                    
-                    {/* Browser & OS */}
-                    <Typography variant="pi" textColor="neutral600">
-                      {deviceInfo.browser} on {deviceInfo.os}
-                    </Typography>
-                    
-                    <Divider />
-                    
-                    {/* IP Address */}
-                    <Flex gap={2} alignItems="center">
-                      <Server width="14px" height="14px" />
-                      <Typography variant="pi" textColor="neutral600">
-                        {session.ipAddress}
-                      </Typography>
-                    </Flex>
-                    
-                    {/* Login Time */}
+              {sessions.slice(0, 5).map((session) => {
+                const deviceInfo = parseUserAgent(session.userAgent);
+                const DeviceIcon = getDeviceIcon(deviceInfo.device);
+                
+                return (
+                  <SessionCard key={session.id}>
+                    <Flex direction="column" gap={2} alignItems="flex-start">
                       <Flex gap={2} alignItems="center">
-                        <Clock width="14px" height="14px" />
+                        <IconWrapper>
+                          <DeviceIcon />
+                        </IconWrapper>
+                        <Typography variant="omega" fontWeight="bold" textColor="neutral800">
+                          {deviceInfo.device}
+                        </Typography>
+                      </Flex>
+                      
+                      <Badge backgroundColor="success600" textColor="neutral0" size="S">
+                        {t('panel.sessions.active', 'Active')}
+                      </Badge>
+                      
+                      <Typography variant="pi" textColor="neutral600">
+                        {deviceInfo.browser} on {deviceInfo.os}
+                      </Typography>
+                      
+                      <Divider />
+                      
+                      <Flex gap={2} alignItems="center">
+                        <Server width="14px" height="14px" style={{ color: '#9CA3AF' }} />
+                        <Typography variant="pi" textColor="neutral600">
+                          {session.ipAddress}
+                        </Typography>
+                      </Flex>
+                      
+                      <Flex gap={2} alignItems="center">
+                        <Clock width="14px" height="14px" style={{ color: '#9CA3AF' }} />
                         <Typography variant="pi" textColor="neutral600">
                           {new Date(session.loginTime).toLocaleString('en-US', {
                             month: 'short',
@@ -256,7 +359,6 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                         </Typography>
                       </Flex>
                       
-                      {/* Show minutes since last activity */}
                       {session.minutesSinceActive !== undefined && session.minutesSinceActive < 60 && (
                         <Typography variant="pi" textColor="success600" fontWeight="semiBold">
                           {session.minutesSinceActive === 0 
@@ -265,119 +367,66 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                           }
                         </Typography>
                       )}
-                  </Flex>
+                    </Flex>
+                  </SessionCard>
+                );
+              })}
+              
+              {sessions.length > 5 && (
+                <Box padding={3} background="primary100" hasRadius style={{ textAlign: 'center' }}>
+                  <Typography variant="pi" textColor="primary600" fontWeight="semiBold">
+                    +{sessions.length - 5} {t('panel.sessions.more', 'more session')}{sessions.length - 5 !== 1 ? 's' : ''}
+                  </Typography>
                 </Box>
-              );
-            })}
-            
-            {sessions.length > 5 && (
-              <Box padding={3} background="primary100" hasRadius textAlign="center">
-                <Typography variant="pi" textColor="primary600" fontWeight="semiBold">
-                  {t('panel.sessions.more', '+{count} more session{count, plural, one {} other {s}}', { count: sessions.length - 5 })}
-                </Typography>
-              </Box>
-            )}
-          </Flex>
-        ) : (
-          <Box 
-            padding={6}
-            background="neutral100"
-            hasRadius
-            style={{ 
-              border: '1px dashed #dcdce4',
-              textAlign: 'center'
-            }}
-          >
-            <Flex direction="column" alignItems="center" gap={2}>
-              <Typography 
-                variant="pi" 
-                textColor="neutral600"
-                style={{ fontSize: '32px', marginBottom: '8px' }}
-              >
-                💤
-              </Typography>
-              <Typography variant="omega" fontWeight="semiBold" textColor="neutral700">
-              {t('panel.empty.title', 'No active sessions')}
-            </Typography>
-              <Typography variant="pi" textColor="neutral500" style={{ fontSize: '13px' }}>
-              {t('panel.empty.description', 'User has not logged in yet')}
-            </Typography>
+              )}
             </Flex>
-          </Box>
-        )}
+          ) : (
+            <EmptyState>
+              <EmptyIcon>
+                <User width="24px" height="24px" />
+              </EmptyIcon>
+              <Typography variant="omega" fontWeight="semiBold" textColor="neutral700">
+                {t('panel.empty.title', 'No active sessions')}
+              </Typography>
+              <Typography variant="pi" textColor="neutral500" style={{ marginTop: '4px' }}>
+                {t('panel.empty.description', 'User has not logged in yet')}
+              </Typography>
+            </EmptyState>
+          )}
 
-        {/* Action Buttons - Always at the bottom */}
-        <Divider />
-        
-        <Flex direction="column" gap={3} alignItems="stretch">
-          <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ 
-            textAlign: 'left',
-            letterSpacing: '0.5px',
-            fontSize: '12px'
-          }}>
-            {t('panel.actions.title', 'Actions')}
-          </Typography>
+          {/* Action Buttons */}
+          <Divider />
           
-          <Button
-            variant="secondary"
-            size="M"
-            fullWidth
-            onClick={handleLogoutAll}
-            disabled={actionLoading || sessions.length === 0}
-            startIcon={<Cross />}
-            style={{
-              border: '1px solid #dc2626',
-              color: '#dc2626',
-              backgroundColor: 'transparent',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              if (!actionLoading && sessions.length > 0) {
-                e.currentTarget.style.backgroundColor = '#dc2626';
-                e.currentTarget.style.color = 'white';
+          <Flex direction="column" gap={3} alignItems="stretch">
+            <SectionLabel>
+              {t('panel.actions.title', 'Actions')}
+            </SectionLabel>
+            
+            <ActionButton
+              $variant="danger"
+              onClick={handleLogoutAll}
+              disabled={actionLoading || sessions.length === 0}
+              type="button"
+            >
+              <Cross />
+              {t('panel.actions.terminateAll', 'Terminate All Sessions')}
+            </ActionButton>
+            
+            <ActionButton
+              $variant={isBlocked ? 'success' : 'danger'}
+              onClick={handleToggleBlock}
+              disabled={actionLoading}
+              type="button"
+            >
+              {isBlocked ? <Check /> : <Cross />}
+              {isBlocked 
+                ? t('panel.actions.unblockUser', 'Unblock User') 
+                : t('panel.actions.blockUser', 'Block User')
               }
-            }}
-            onMouseLeave={(e) => {
-              if (!actionLoading && sessions.length > 0) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#dc2626';
-              }
-            }}
-          >
-            {t('panel.actions.terminateAll', 'Terminate All Sessions')}
-          </Button>
-          
-          <Button
-            variant="secondary"
-            size="M"
-            fullWidth
-            onClick={handleToggleBlock}
-            disabled={actionLoading}
-            startIcon={isBlocked ? <Check /> : <Cross />}
-            style={{
-              border: isBlocked ? '1px solid #16a34a' : '1px solid #dc2626',
-              color: isBlocked ? '#16a34a' : '#dc2626',
-              backgroundColor: 'transparent',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              if (!actionLoading) {
-                e.currentTarget.style.backgroundColor = isBlocked ? '#16a34a' : '#dc2626';
-                e.currentTarget.style.color = 'white';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!actionLoading) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = isBlocked ? '#16a34a' : '#dc2626';
-              }
-            }}
-          >
-            {isBlocked ? t('panel.actions.unblockUser', 'Unblock User') : t('panel.actions.blockUser', 'Block User')}
-          </Button>
+            </ActionButton>
+          </Flex>
         </Flex>
-        </Flex>
-      </Box>
+      </PanelContainer>
     ),
   };
 };
