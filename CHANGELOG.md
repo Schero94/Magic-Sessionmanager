@@ -1,3 +1,10 @@
+# [4.3.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.16...v4.3.0) (2026-01-26)
+
+
+### Features
+
+* **admin:** add styled buttons and session heartbeat ([789a967](https://github.com/Schero94/Magic-Sessionmanager/commit/789a9671ce26bd8827b961df891fbc23cdac3ff2))
+
 ## [4.2.16](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.15...v4.2.16) (2026-01-09)
 
 
