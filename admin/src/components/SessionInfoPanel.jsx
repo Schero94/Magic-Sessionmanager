@@ -385,10 +385,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               <EmptyIcon>
                 <User width="24px" height="24px" />
               </EmptyIcon>
-              <Typography variant="omega" fontWeight="semiBold" textColor="neutral700">
+              <Typography variant="omega" fontWeight="semiBold" textColor="neutral700" style={{ display: 'block' }}>
                 {t('panel.empty.title', 'No active sessions')}
               </Typography>
-              <Typography variant="pi" textColor="neutral500" style={{ marginTop: '4px' }}>
+              <Typography variant="pi" textColor="neutral500" style={{ display: 'block', marginTop: '4px' }}>
                 {t('panel.empty.description', 'User has not logged in yet')}
               </Typography>
             </EmptyState>

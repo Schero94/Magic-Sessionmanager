@@ -25,6 +25,10 @@ module.exports = async ({ strapi }) => {
     // Create index on tokenHash for O(1) session lookup performance
     await ensureTokenHashIndex(strapi, log);
     
+    // CRITICAL: Replace the users-permissions auth strategy with our session-aware version
+    // This ensures ALL authenticated requests (including /api/users/me) check for active sessions
+    await registerSessionAwareAuthStrategy(strapi, log);
+    
     // Initialize License Guard
     const licenseGuardService = strapi.plugin('magic-sessionmanager').service('license-guard');
     
@@ -234,6 +238,7 @@ module.exports = async ({ strapi }) => {
           
           // Create a new session (Strapi v5: Use documentId instead of numeric id)
           // If login response doesn't include documentId, fetch it from DB
+          // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
           let userDocId = user.documentId;
           if (!userDocId && user.id) {
             const fullUser = await strapi.entityService.findOne(USER_UID, user.id);
@@ -396,8 +401,9 @@ module.exports = async ({ strapi }) => {
     log.info('[SUCCESS] Refresh Token interceptor middleware mounted');
 
     // Mount lastSeen update middleware (uses tokenHash for O(1) lookup)
+    // IMPORTANT: Pass sessionService for touch() functionality
     strapi.server.use(
-      require('./middlewares/last-seen')({ strapi })
+      require('./middlewares/last-seen')({ strapi, sessionService })
     );
 
     log.info('[SUCCESS] LastSeen middleware mounted');
@@ -539,5 +545,98 @@ async function ensureTokenHashIndex(strapi, log) {
     // Index creation might fail if columns don't exist yet (first run)
     // This is fine - it will be created on next restart after schema sync
     log.debug('[INDEX] Could not create tokenHash index (will retry on next startup):', err.message);
+  }
+}
+
+/**
+ * Register session-aware auth strategy that wraps users-permissions JWT strategy
+ * This ensures ALL authenticated requests check for active sessions
+ * @param {object} strapi - Strapi instance
+ * @param {object} log - Logger instance
+ */
+async function registerSessionAwareAuthStrategy(strapi, log) {
+  try {
+    // In Strapi v5, we need to wrap the users-permissions authenticate function
+    // The strategy is stored in the plugin's services
+    const usersPermissionsPlugin = strapi.plugin('users-permissions');
+    
+    if (!usersPermissionsPlugin) {
+      strapi.log.warn('[magic-sessionmanager] [AUTH] users-permissions plugin not found');
+      return;
+    }
+    
+    // Try to get the JWT service
+    const jwtService = usersPermissionsPlugin.service('jwt');
+    
+    if (!jwtService || !jwtService.verify) {
+      strapi.log.warn('[magic-sessionmanager] [AUTH] JWT service not found or no verify method');
+      return;
+    }
+    
+    // Store original verify function
+    const originalVerify = jwtService.verify.bind(jwtService);
+    
+    strapi.log.info('[magic-sessionmanager] [AUTH] Wrapping JWT verify function...');
+    
+    // Wrap the verify function to add session checking
+    jwtService.verify = async function(token) {
+      // First, verify the JWT normally
+      const decoded = await originalVerify(token);
+      
+      // If verification failed, return the result
+      if (!decoded || !decoded.id) {
+        return decoded;
+      }
+      
+      // Now check if user has active session
+      try {
+        // Get user documentId
+        let userDocId = null;
+        
+        // decoded.id is numeric, we need documentId
+        const user = await strapi.entityService.findOne(
+          'plugin::users-permissions.user',
+          decoded.id,
+          { fields: ['documentId'] }
+        );
+        
+        userDocId = user?.documentId;
+        
+        if (!userDocId) {
+          return decoded; // Can't check session, allow through
+        }
+        
+        // Check for active sessions
+        const activeSessions = await strapi.documents(SESSION_UID).findMany({
+          filters: {
+            user: { documentId: userDocId },
+            isActive: true,
+          },
+          limit: 1,
+        });
+        
+        // If NO active sessions, return null (invalid token)
+        if (!activeSessions || activeSessions.length === 0) {
+          strapi.log.info(
+            `[magic-sessionmanager] [JWT-BLOCKED] Valid JWT but no active session (user: ${userDocId.substring(0, 8)}...)`
+          );
+          return null; // This will cause auth to fail
+        }
+        
+        // Session exists - return decoded token
+        return decoded;
+        
+      } catch (err) {
+        strapi.log.debug('[magic-sessionmanager] [AUTH] Session check error:', err.message);
+        // On error, allow through
+        return decoded;
+      }
+    };
+    
+    strapi.log.info('[magic-sessionmanager] [AUTH] [SUCCESS] JWT verify wrapped with session validation');
+    
+  } catch (err) {
+    strapi.log.warn('[magic-sessionmanager] [AUTH] Could not wrap JWT verify:', err.message);
+    strapi.log.warn('[magic-sessionmanager] [AUTH] Session validation will only work via middleware (plugin endpoints)');
   }
 }

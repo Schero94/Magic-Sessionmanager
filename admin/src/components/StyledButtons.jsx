@@ -290,6 +290,47 @@ export const IconButtonSuccess = styled(Button)`
   }
 `;
 
+// ================ ICON BUTTON WARNING (for terminate/logout) ================
+export const IconButtonWarning = styled(Button)`
+  && {
+    background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+    color: #D97706;
+    border: 1px solid #FDE68A;
+    padding: 8px;
+    min-width: 38px;
+    min-height: 38px;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+    
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+      border-color: #F59E0B;
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #F3F4F6;
+      border-color: #E5E7EB;
+      color: #9CA3AF;
+    }
+  }
+`;
+
 // ================ LARGE CTA BUTTON ================
 export const CTAButton = styled(Button)`
   && {

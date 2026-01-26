@@ -6,7 +6,6 @@ import {
   Box,
   Flex,
   Typography,
-  Button,
   Badge,
   Divider,
 } from '@strapi/design-system';
@@ -27,6 +26,12 @@ import parseUserAgent from '../utils/parseUserAgent';
 import pluginId from '../pluginId';
 import { useLicense } from '../hooks/useLicense';
 import { getTranslation } from '../utils/getTranslation';
+import { 
+  TertiaryButton, 
+  DangerButton, 
+  GradientButton,
+  ShowHideButton,
+} from './StyledButtons';
 
 const TwoColumnGrid = styled.div`
   display: grid;
@@ -52,6 +57,79 @@ const SectionTitle = styled(Typography)`
 
 const Section = styled(Box)`
   margin-bottom: 24px;
+`;
+
+// Status Badge - pill-shaped with gradient
+const ModalStatusBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  
+  ${props => props.$online && `
+    background: linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%);
+    color: #166534;
+    border: 2px solid #86EFAC;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+  `}
+  
+  ${props => !props.$online && `
+    background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+    color: #4B5563;
+    border: 2px solid #D1D5DB;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  `}
+`;
+
+const StatusDot = styled.span`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  
+  ${props => props.$online && `
+    background: #22C55E;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+    animation: pulse-green 2s ease-in-out infinite;
+  `}
+  
+  ${props => !props.$online && `
+    background: #9CA3AF;
+  `}
+  
+  @keyframes pulse-green {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.15); }
+  }
+`;
+
+// Premium Upgrade Button
+const PremiumButton = styled.button`
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+  margin-top: 8px;
+  
+  &:hover {
+    background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
 `;
 
 const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
@@ -205,14 +283,10 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
           <Box padding={6}>
             {/* Status Badge */}
             <Flex justifyContent="center" style={{ marginBottom: '24px' }}>
-              <Badge 
-                backgroundColor={isOnline ? 'success600' : 'neutral600'}
-                textColor="neutral0"
-                size="M"
-                style={{ fontSize: '14px', padding: '8px 20px', fontWeight: '600' }}
-              >
+              <ModalStatusBadge $online={isOnline}>
+                <StatusDot $online={isOnline} />
                 {isOnline ? t('modal.status.online', 'ONLINE') : t('modal.status.offline', 'OFFLINE')}
-              </Badge>
+              </ModalStatusBadge>
             </Flex>
 
             <Divider style={{ marginBottom: '24px' }} />
@@ -364,21 +438,11 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                     <Typography variant="omega" style={{ color: '#78350f', fontSize: '14px', lineHeight: '1.6' }}>
                       {t('modal.premium.description', 'Unlock premium features to get IP geolocation, security scoring, and VPN/Proxy detection for every session')}
                     </Typography>
-                    <Button
-                      variant="secondary"
-                      size="M"
+                    <PremiumButton
                       onClick={() => window.open('https://magicapi.fitlex.me', '_blank')}
-                      style={{
-                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                        color: 'white',
-                        border: 'none',
-                        fontWeight: '600',
-                        marginTop: '8px',
-                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-                      }}
                     >
                       {t('modal.premium.upgrade', 'Upgrade to Premium')}
-                    </Button>
+                    </PremiumButton>
                   </Flex>
                 </Box>
               </Section>
@@ -390,14 +454,12 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 <SectionTitle style={{ marginBottom: 0, paddingBottom: 0, border: 'none' }}>
                   {t('modal.section.technical', 'Technical Details')}
                 </SectionTitle>
-                <Button
-                  variant="tertiary"
+                <ShowHideButton
                   size="S"
                   onClick={() => setShowUserAgent(!showUserAgent)}
-                  style={{ fontSize: '12px' }}
                 >
-                  {showUserAgent ? `▲ ${t('modal.technical.hide', 'Hide Details')}` : `▼ ${t('modal.technical.show', 'Show Details')}`}
-                </Button>
+                  {showUserAgent ? t('modal.technical.hide', 'Hide Details') : t('modal.technical.show', 'Show Details')}
+                </ShowHideButton>
               </Flex>
               
               {showUserAgent && (
@@ -426,18 +488,17 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
 
         <Modal.Footer>
           <Flex justifyContent="space-between" style={{ width: '100%' }}>
-            <Button onClick={onClose} variant="tertiary">
+            <TertiaryButton onClick={onClose}>
               {t('modal.actions.close', 'Close')}
-            </Button>
-            <Button 
+            </TertiaryButton>
+            <DangerButton 
               onClick={handleTerminate}
-              variant="danger"
               disabled={!session.isActive || terminating}
               loading={terminating}
               startIcon={<Cross />}
             >
               {t('modal.actions.terminate', 'Terminate Session')}
-            </Button>
+            </DangerButton>
           </Flex>
         </Modal.Footer>
       </Modal.Content>

@@ -650,6 +650,7 @@ module.exports = {
       user = await strapi.documents(USER_UID).findOne({ documentId: userId });
       
       // If not found, try numeric id lookup via entityService (fallback for Content Manager)
+      // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
       if (!user && !isNaN(userId)) {
         const numericUser = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
         if (numericUser) {

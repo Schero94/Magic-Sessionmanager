@@ -38,6 +38,11 @@ import pluginId from '../pluginId';
 import parseUserAgent from '../utils/parseUserAgent';
 import SessionDetailModal from '../components/SessionDetailModal';
 import { useLicense } from '../hooks/useLicense';
+import { 
+  IconButtonPrimary, 
+  IconButtonWarning, 
+  IconButtonDanger 
+} from '../components/StyledButtons';
 
 // ================ ANIMATIONS ================
 const fadeIn = keyframes`
@@ -402,10 +407,78 @@ const StyledSearchInput = styled.input`
 `;
 
 const ActionButtons = styled(Flex)`
-  opacity: 0.7;
+  opacity: 0.85;
   transition: all ${theme.transitions.fast};
-  gap: ${theme.spacing.xs};
+  gap: 8px;
   justify-content: flex-end;
+`;
+
+// Status Badge - pill-shaped with subtle gradient
+const StatusBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+  
+  ${props => props.$status === 'active' && `
+    background: linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%);
+    color: #15803D;
+    border: 1px solid #86EFAC;
+  `}
+  
+  ${props => props.$status === 'idle' && `
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    color: #A16207;
+    border: 1px solid #FCD34D;
+  `}
+  
+  ${props => props.$status === 'loggedout' && `
+    background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%);
+    color: #B91C1C;
+    border: 1px solid #FCA5A5;
+  `}
+  
+  ${props => props.$status === 'terminated' && `
+    background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+    color: #4B5563;
+    border: 1px solid #D1D5DB;
+  `}
+`;
+
+const StatusDot = styled.span`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  
+  ${props => props.$status === 'active' && `
+    background: #22C55E;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+    animation: pulse-green 2s ease-in-out infinite;
+  `}
+  
+  ${props => props.$status === 'idle' && `
+    background: #F59E0B;
+  `}
+  
+  ${props => props.$status === 'loggedout' && `
+    background: #EF4444;
+  `}
+  
+  ${props => props.$status === 'terminated' && `
+    background: #9CA3AF;
+  `}
+  
+  @keyframes pulse-green {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+  }
 `;
 
 const ClickableRow = styled(Tr)`
@@ -926,16 +999,10 @@ const HomePage = () => {
                     >
                       {/* Status */}
                       <Td>
-                        <Flex alignItems="center" gap={2}>
-                          <OnlineIndicator $online={config.indicator} />
-                          <Badge 
-                            backgroundColor={config.badgeColor}
-                            textColor="neutral0"
-                            size="S"
-                          >
-                            {config.label}
-                          </Badge>
-                        </Flex>
+                        <StatusBadge $status={sessionStatus}>
+                          <StatusDot $status={sessionStatus} />
+                          {config.label}
+                        </StatusBadge>
                       </Td>
                       
                       {/* User */}
@@ -996,9 +1063,7 @@ const HomePage = () => {
                       {/* Actions */}
                       <Td onClick={(e) => e.stopPropagation()}>
                         <ActionButtons className="action-buttons">
-                          <Button
-                            variant="secondary"
-                            size="S"
+                          <IconButtonPrimary
                             onClick={(e) => {
                               e.stopPropagation();
                               handleSessionClick(session);
@@ -1006,10 +1071,8 @@ const HomePage = () => {
                             title={t('homepage.actions.viewDetails', 'View Details')}
                           >
                             <Eye />
-                          </Button>
-                          <Button
-                            variant="danger-light"
-                            size="S"
+                          </IconButtonPrimary>
+                          <IconButtonWarning
                             onClick={(e) => {
                               e.stopPropagation();
                               handleTerminateSession(session.id);
@@ -1018,10 +1081,8 @@ const HomePage = () => {
                             title={session.isActive ? t('homepage.actions.terminate', 'Terminate (Logout)') : t('homepage.actions.alreadyInactive', 'Already inactive')}
                           >
                             <Cross />
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="S"
+                          </IconButtonWarning>
+                          <IconButtonDanger
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteSession(session.id);
@@ -1029,7 +1090,7 @@ const HomePage = () => {
                             title={t('homepage.actions.deletePermanently', 'Delete Permanently')}
                           >
                             <Trash />
-                          </Button>
+                          </IconButtonDanger>
                         </ActionButtons>
                       </Td>
                     </ClickableRow>

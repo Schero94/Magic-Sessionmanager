@@ -116,6 +116,7 @@ module.exports = ({ strapi }) => {
         log.info(`Session ${sessionId} terminated`);
       } else if (userId) {
         // Strapi v5: If numeric id provided, look up documentId first
+        // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
         let userDocumentId = userId;
         if (!isNaN(userId)) {
           const user = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
@@ -159,7 +160,7 @@ module.exports = ({ strapi }) => {
   async getAllSessions() {
     try {
       const sessions = await strapi.documents(SESSION_UID).findMany( {
-        populate: { user: { fields: ['id', 'email', 'username'] } },
+        populate: { user: { fields: ['documentId', 'email', 'username'] } },
         sort: { loginTime: 'desc' },
         limit: 1000, // Reasonable limit
       });
@@ -242,6 +243,7 @@ module.exports = ({ strapi }) => {
         
         return {
           ...safeSession,
+          id: session.documentId, // Alias for frontend compatibility
           deviceType,
           browserName,
           osName,
@@ -267,7 +269,7 @@ module.exports = ({ strapi }) => {
     try {
       const sessions = await strapi.documents(SESSION_UID).findMany( {
         filters: { isActive: true },
-        populate: { user: { fields: ['id', 'email', 'username'] } },
+        populate: { user: { fields: ['documentId', 'email', 'username'] } },
         sort: { loginTime: 'desc' },
       });
 
@@ -345,6 +347,7 @@ module.exports = ({ strapi }) => {
         
         return {
           ...safeSession,
+          id: session.documentId, // Alias for frontend compatibility
           deviceType,
           browserName,
           osName,
@@ -372,6 +375,7 @@ module.exports = ({ strapi }) => {
   async getUserSessions(userId) {
     try {
       // Strapi v5: If numeric id provided, look up documentId first
+      // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
       let userDocumentId = userId;
       if (!isNaN(userId)) {
         const user = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
@@ -461,6 +465,7 @@ module.exports = ({ strapi }) => {
         
         return {
           ...safeSession,
+          id: session.documentId, // Alias for frontend compatibility
           deviceType,
           browserName,
           osName,
@@ -482,30 +487,49 @@ module.exports = ({ strapi }) => {
    * @param {Object} params - { userId, sessionId }
    * @returns {Promise<void>}
    */
-  async touch({ userId, sessionId }) {
+  async touch({ userId, sessionId, token }) {
     try {
       const now = new Date();
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-      const rateLimit = config.lastSeenRateLimit || 30000;
+      const rateLimit = config.lastSeenRateLimit || 30000; // Default: 30 seconds
 
-      // Update session lastActive only
+      let session = null;
+      let sessionDocId = sessionId;
+
+      // Find session by sessionId OR by tokenHash
       if (sessionId) {
-        const session = await strapi.documents(SESSION_UID).findOne({ documentId: sessionId });
+        session = await strapi.documents(SESSION_UID).findOne({ documentId: sessionId });
+        sessionDocId = sessionId;
+      } else if (token && userId) {
+        // Find session by tokenHash - O(1) lookup instead of iterating all sessions
+        const tokenHash = hashToken(token);
+        const sessions = await strapi.documents(SESSION_UID).findMany({
+          filters: {
+            user: { documentId: userId },
+            tokenHash: tokenHash,
+            isActive: true,
+          },
+          limit: 1,
+        });
+        
+        if (sessions && sessions.length > 0) {
+          session = sessions[0];
+          sessionDocId = session.documentId;
+        }
+      }
 
-        if (session && session.lastActive) {
-          const lastActiveTime = new Date(session.lastActive).getTime();
-          const currentTime = now.getTime();
+      // Update session lastActive if found
+      if (session && sessionDocId) {
+        const lastActiveTime = session.lastActive ? new Date(session.lastActive).getTime() : 0;
+        const currentTime = now.getTime();
 
-          if (currentTime - lastActiveTime > rateLimit) {
-            await strapi.documents(SESSION_UID).update({ documentId: sessionId,
-              data: { lastActive: now },
-            });
-          }
-        } else if (session) {
-          // First time or null
-          await strapi.documents(SESSION_UID).update({ documentId: sessionId,
+        // Rate limit: only update if more than rateLimit ms since last update
+        if (currentTime - lastActiveTime > rateLimit) {
+          await strapi.documents(SESSION_UID).update({ 
+            documentId: sessionDocId,
             data: { lastActive: now },
           });
+          log.debug(`[TOUCH] Session ${sessionDocId.substring(0, 8)}... lastActive updated`);
         }
       }
     } catch (err) {
