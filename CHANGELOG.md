@@ -1,3 +1,10 @@
+## [4.3.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.0...v4.3.1) (2026-01-26)
+
+
+### Bug Fixes
+
+* Session tracking and UI improvements ([d7ec24c](https://github.com/Schero94/Magic-Sessionmanager/commit/d7ec24cd2063a7e3f4b5065094feb5848d10aaea))
+
 # [4.3.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.2.16...v4.3.0) (2026-01-26)
 
 
