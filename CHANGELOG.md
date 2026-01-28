@@ -1,3 +1,10 @@
+## [4.3.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.1...v4.3.2) (2026-01-28)
+
+
+### Bug Fixes
+
+* prevent numeric ID fallback in session creation ([370fb57](https://github.com/Schero94/Magic-Sessionmanager/commit/370fb578a5da2748b8a46c5dbdbdf789031434d9))
+
 ## [4.3.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.0...v4.3.1) (2026-01-26)
 
 
