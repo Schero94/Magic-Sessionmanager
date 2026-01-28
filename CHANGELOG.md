@@ -1,3 +1,10 @@
+## [4.3.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.2...v4.3.3) (2026-01-28)
+
+
+### Bug Fixes
+
+* make session blocking opt-in with strictSessionEnforcement ([b089c2b](https://github.com/Schero94/Magic-Sessionmanager/commit/b089c2b0e43f5e80a3fe3784b67b8dcccc138343))
+
 ## [4.3.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.1...v4.3.2) (2026-01-28)
 
 
