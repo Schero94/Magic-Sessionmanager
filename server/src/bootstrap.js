@@ -241,9 +241,24 @@ module.exports = async ({ strapi }) => {
           // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
           let userDocId = user.documentId;
           if (!userDocId && user.id) {
-            const fullUser = await strapi.entityService.findOne(USER_UID, user.id);
-            userDocId = fullUser?.documentId || user.id;
+            const fullUser = await strapi.entityService.findOne(USER_UID, user.id, {
+              fields: ['documentId'],
+            });
+            userDocId = fullUser?.documentId;
+            
+            if (!userDocId) {
+              log.error(`[ERROR] Could not get documentId for user ${user.id} - session NOT created!`);
+              // Continue without creating session - user will need to login again
+              return;
+            }
           }
+          
+          if (!userDocId) {
+            log.error('[ERROR] No user documentId available - cannot create session');
+            return;
+          }
+          
+          log.debug(`[SESSION] Creating session for user documentId: ${userDocId}`);
           
           const newSession = await sessionService.createSession({
             userId: userDocId,
@@ -254,7 +269,11 @@ module.exports = async ({ strapi }) => {
             geoData,                           // Store geolocation data if available
           });
           
-          log.info(`[SUCCESS] Session created for user ${userDocId} (IP: ${ip})`);
+          if (newSession?.documentId) {
+            log.info(`[SUCCESS] Session ${newSession.documentId} created for user ${userDocId} (IP: ${ip})`);
+          } else {
+            log.error(`[ERROR] Session creation returned no documentId for user ${userDocId}`);
+          }
           
           // Advanced: Send notifications
           if (geoData && (config.enableEmailAlerts || config.enableWebhooks)) {
@@ -607,18 +626,28 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
         }
         
         // Check for active sessions
+        strapi.log.debug(`[magic-sessionmanager] [JWT] Checking sessions for user: ${userDocId}`);
+        
         const activeSessions = await strapi.documents(SESSION_UID).findMany({
           filters: {
             user: { documentId: userDocId },
             isActive: true,
           },
           limit: 1,
+          populate: { user: { fields: ['documentId'] } },
         });
+        
+        strapi.log.debug(`[magic-sessionmanager] [JWT] Found ${activeSessions?.length || 0} active sessions`);
         
         // If NO active sessions, return null (invalid token)
         if (!activeSessions || activeSessions.length === 0) {
+          // Debug: Check if ANY sessions exist for this user (including inactive)
+          const allSessions = await strapi.documents(SESSION_UID).findMany({
+            filters: { user: { documentId: userDocId } },
+            limit: 5,
+          });
           strapi.log.info(
-            `[magic-sessionmanager] [JWT-BLOCKED] Valid JWT but no active session (user: ${userDocId.substring(0, 8)}...)`
+            `[magic-sessionmanager] [JWT-BLOCKED] Valid JWT but no active session (user: ${userDocId.substring(0, 8)}..., total sessions: ${allSessions?.length || 0})`
           );
           return null; // This will cause auth to fail
         }
