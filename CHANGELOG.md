@@ -1,3 +1,10 @@
+## [4.3.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.3...v4.3.4) (2026-01-28)
+
+
+### Bug Fixes
+
+* always block explicitly logged out users ([3397e10](https://github.com/Schero94/Magic-Sessionmanager/commit/3397e10a03ecfbe80193c2bddaf5e1db8c008472))
+
 ## [4.3.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.2...v4.3.3) (2026-01-28)
 
 
