@@ -656,39 +656,32 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
         const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
         
         // DECISION LOGIC:
-        // 1. If user has inactive sessions = they were explicitly logged out → BLOCK (if strict)
-        // 2. If user has NO sessions at all = session never created (bug/race condition) → ALLOW
-        // 3. If strictMode is off → always ALLOW but log warning
-        
-        if (!strictMode) {
-          // Non-strict mode: Log warning but allow through
-          if (totalSessions === 0) {
-            strapi.log.warn(
-              `[magic-sessionmanager] [JWT-WARN] No session found for user ${userDocId.substring(0, 8)}... (allowing - session may not have been created)`
-            );
-          } else if (hasInactiveSessions) {
-            strapi.log.warn(
-              `[magic-sessionmanager] [JWT-WARN] User ${userDocId.substring(0, 8)}... has ${totalSessions} inactive sessions but no active ones (allowing - strictMode off)`
-            );
-          }
-          return decoded; // Allow through in non-strict mode
-        }
-        
-        // Strict mode enabled - more careful about blocking
-        if (totalSessions === 0) {
-          // No sessions at all - likely a bug or race condition, allow through
-          strapi.log.warn(
-            `[magic-sessionmanager] [JWT-ALLOW] No sessions exist for user ${userDocId.substring(0, 8)}... (allowing - possible race condition)`
-          );
-          return decoded;
-        }
+        // 1. User has inactive sessions = explicitly logged out → ALWAYS BLOCK
+        // 2. No sessions exist at all = session never created (bug/race condition) → ALLOW
+        // 3. strictMode controls whether missing sessions block or just warn
         
         if (hasInactiveSessions) {
-          // User has inactive sessions = explicitly logged out → BLOCK
+          // User was explicitly logged out → ALWAYS BLOCK (this is intentional!)
           strapi.log.info(
             `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... was logged out (${totalSessions} inactive sessions)`
           );
           return null; // Block - user was explicitly logged out
+        }
+        
+        // No sessions exist at all - session was never created (bug/race condition)
+        if (totalSessions === 0) {
+          if (strictMode) {
+            // Strict mode: Block even if no sessions (could be security risk)
+            strapi.log.info(
+              `[magic-sessionmanager] [JWT-BLOCKED] No sessions exist for user ${userDocId.substring(0, 8)}... (strictMode enabled)`
+            );
+            return null;
+          }
+          // Non-strict mode: Allow through but warn
+          strapi.log.warn(
+            `[magic-sessionmanager] [JWT-WARN] No session found for user ${userDocId.substring(0, 8)}... (allowing - session may not have been created)`
+          );
+          return decoded;
         }
         
         // Edge case: sessions exist but none are active or inactive (shouldn't happen)

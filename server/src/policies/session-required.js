@@ -66,17 +66,25 @@ module.exports = async (policyContext, config, { strapi }) => {
     
     const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
     
-    // Only block if strict mode AND user was explicitly logged out
-    if (strictMode && hasInactiveSessions) {
+    if (hasInactiveSessions) {
+      // User was explicitly logged out → ALWAYS BLOCK
       strapi.log.info(
         `[magic-sessionmanager] [POLICY-BLOCKED] Session terminated (user: ${userDocId.substring(0, 8)}...)`
       );
       throw new errors.UnauthorizedError('Session terminated. Please login again.');
     }
     
-    // Non-strict mode or no sessions exist → Allow but log
-    strapi.log.debug(
-      `[magic-sessionmanager] [POLICY-WARN] No active session for user ${userDocId.substring(0, 8)}... (allowing)`
+    // No sessions exist at all - session was never created
+    if (strictMode) {
+      strapi.log.info(
+        `[magic-sessionmanager] [POLICY-BLOCKED] No session exists (user: ${userDocId.substring(0, 8)}..., strictMode)`
+      );
+      throw new errors.UnauthorizedError('No valid session. Please login again.');
+    }
+    
+    // Non-strict mode: Allow but log warning
+    strapi.log.warn(
+      `[magic-sessionmanager] [POLICY-WARN] No session for user ${userDocId.substring(0, 8)}... (allowing)`
     );
     return true;
 
