@@ -98,6 +98,10 @@ module.exports = ({ strapi, sessionService }) => {
         }
         
         if (userDocId) {
+          // Get config - strictSessionEnforcement must be explicitly enabled to block
+          const config = strapi.config.get('plugin::magic-sessionmanager') || {};
+          const strictMode = config.strictSessionEnforcement === true;
+          
           // Check if user has ANY active sessions
           const activeSessions = await strapi.documents(SESSION_UID).findMany({
             filters: {
@@ -107,10 +111,25 @@ module.exports = ({ strapi, sessionService }) => {
             limit: 1,
           });
 
-          // If user has NO active sessions, reject the request
+          // If user has NO active sessions
           if (!activeSessions || activeSessions.length === 0) {
-            strapi.log.info(`[magic-sessionmanager] [BLOCKED] Request blocked - session terminated or invalid (user: ${userDocId.substring(0, 8)}...)`);
-            return ctx.unauthorized('All sessions have been terminated. Please login again.');
+            // Check if user has ANY sessions at all
+            const allSessions = await strapi.documents(SESSION_UID).findMany({
+              filters: { user: { documentId: userDocId } },
+              limit: 1,
+              fields: ['isActive'],
+            });
+            
+            const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
+            
+            if (strictMode && hasInactiveSessions) {
+              // Strict mode + user was explicitly logged out → BLOCK
+              strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session terminated (user: ${userDocId.substring(0, 8)}...)`);
+              return ctx.unauthorized('Session has been terminated. Please login again.');
+            }
+            
+            // Non-strict mode or no sessions exist → Allow but log
+            strapi.log.debug(`[magic-sessionmanager] [WARN] No active session for user ${userDocId.substring(0, 8)}... (allowing)`);
           }
           
           // Store documentId for later use

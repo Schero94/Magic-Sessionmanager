@@ -607,6 +607,10 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
         return decoded;
       }
       
+      // Get config - strictSessionEnforcement must be explicitly enabled to block
+      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
+      const strictMode = config.strictSessionEnforcement === true;
+      
       // Now check if user has active session
       try {
         // Get user documentId
@@ -622,42 +626,80 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
         userDocId = user?.documentId;
         
         if (!userDocId) {
-          return decoded; // Can't check session, allow through
+          // Can't determine user - allow through (fail-open)
+          strapi.log.debug('[magic-sessionmanager] [JWT] No documentId found, allowing through');
+          return decoded;
         }
         
         // Check for active sessions
-        strapi.log.debug(`[magic-sessionmanager] [JWT] Checking sessions for user: ${userDocId}`);
-        
         const activeSessions = await strapi.documents(SESSION_UID).findMany({
           filters: {
             user: { documentId: userDocId },
             isActive: true,
           },
           limit: 1,
-          populate: { user: { fields: ['documentId'] } },
         });
         
-        strapi.log.debug(`[magic-sessionmanager] [JWT] Found ${activeSessions?.length || 0} active sessions`);
-        
-        // If NO active sessions, return null (invalid token)
-        if (!activeSessions || activeSessions.length === 0) {
-          // Debug: Check if ANY sessions exist for this user (including inactive)
-          const allSessions = await strapi.documents(SESSION_UID).findMany({
-            filters: { user: { documentId: userDocId } },
-            limit: 5,
-          });
-          strapi.log.info(
-            `[magic-sessionmanager] [JWT-BLOCKED] Valid JWT but no active session (user: ${userDocId.substring(0, 8)}..., total sessions: ${allSessions?.length || 0})`
-          );
-          return null; // This will cause auth to fail
+        // If active session exists, all good
+        if (activeSessions && activeSessions.length > 0) {
+          return decoded;
         }
         
-        // Session exists - return decoded token
+        // No active session found - check if ANY sessions exist (including inactive)
+        const allSessions = await strapi.documents(SESSION_UID).findMany({
+          filters: { user: { documentId: userDocId } },
+          limit: 5,
+          fields: ['isActive', 'lastActive'],
+        });
+        
+        const totalSessions = allSessions?.length || 0;
+        const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
+        
+        // DECISION LOGIC:
+        // 1. If user has inactive sessions = they were explicitly logged out → BLOCK (if strict)
+        // 2. If user has NO sessions at all = session never created (bug/race condition) → ALLOW
+        // 3. If strictMode is off → always ALLOW but log warning
+        
+        if (!strictMode) {
+          // Non-strict mode: Log warning but allow through
+          if (totalSessions === 0) {
+            strapi.log.warn(
+              `[magic-sessionmanager] [JWT-WARN] No session found for user ${userDocId.substring(0, 8)}... (allowing - session may not have been created)`
+            );
+          } else if (hasInactiveSessions) {
+            strapi.log.warn(
+              `[magic-sessionmanager] [JWT-WARN] User ${userDocId.substring(0, 8)}... has ${totalSessions} inactive sessions but no active ones (allowing - strictMode off)`
+            );
+          }
+          return decoded; // Allow through in non-strict mode
+        }
+        
+        // Strict mode enabled - more careful about blocking
+        if (totalSessions === 0) {
+          // No sessions at all - likely a bug or race condition, allow through
+          strapi.log.warn(
+            `[magic-sessionmanager] [JWT-ALLOW] No sessions exist for user ${userDocId.substring(0, 8)}... (allowing - possible race condition)`
+          );
+          return decoded;
+        }
+        
+        if (hasInactiveSessions) {
+          // User has inactive sessions = explicitly logged out → BLOCK
+          strapi.log.info(
+            `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... was logged out (${totalSessions} inactive sessions)`
+          );
+          return null; // Block - user was explicitly logged out
+        }
+        
+        // Edge case: sessions exist but none are active or inactive (shouldn't happen)
+        strapi.log.warn(
+          `[magic-sessionmanager] [JWT-ALLOW] Unexpected session state for user ${userDocId.substring(0, 8)}... (allowing)`
+        );
         return decoded;
         
       } catch (err) {
-        strapi.log.debug('[magic-sessionmanager] [AUTH] Session check error:', err.message);
-        // On error, allow through
+        // On ANY error, allow through (fail-open for availability)
+        strapi.log.warn('[magic-sessionmanager] [JWT] Session check error (allowing):', err.message);
         return decoded;
       }
     };

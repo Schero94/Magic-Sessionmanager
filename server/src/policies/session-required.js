@@ -39,6 +39,10 @@ module.exports = async (policyContext, config, { strapi }) => {
       return true;
     }
 
+    // Get config - strictSessionEnforcement must be explicitly enabled to block
+    const config = strapi.config.get('plugin::magic-sessionmanager') || {};
+    const strictMode = config.strictSessionEnforcement === true;
+    
     // Check if user has ANY active session
     const activeSessions = await strapi.documents(SESSION_UID).findMany({
       filters: {
@@ -48,16 +52,32 @@ module.exports = async (policyContext, config, { strapi }) => {
       limit: 1,
     });
 
-    // If NO active sessions, reject the request
-    if (!activeSessions || activeSessions.length === 0) {
+    // If active session exists, allow through
+    if (activeSessions && activeSessions.length > 0) {
+      return true;
+    }
+    
+    // No active session - check if user was explicitly logged out
+    const allSessions = await strapi.documents(SESSION_UID).findMany({
+      filters: { user: { documentId: userDocId } },
+      limit: 1,
+      fields: ['isActive'],
+    });
+    
+    const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
+    
+    // Only block if strict mode AND user was explicitly logged out
+    if (strictMode && hasInactiveSessions) {
       strapi.log.info(
-        `[magic-sessionmanager] [POLICY-BLOCKED] JWT valid but no active session (user: ${userDocId.substring(0, 8)}...)`
+        `[magic-sessionmanager] [POLICY-BLOCKED] Session terminated (user: ${userDocId.substring(0, 8)}...)`
       );
-      
       throw new errors.UnauthorizedError('Session terminated. Please login again.');
     }
-
-    // Session exists - allow through
+    
+    // Non-strict mode or no sessions exist → Allow but log
+    strapi.log.debug(
+      `[magic-sessionmanager] [POLICY-WARN] No active session for user ${userDocId.substring(0, 8)}... (allowing)`
+    );
     return true;
 
   } catch (err) {
