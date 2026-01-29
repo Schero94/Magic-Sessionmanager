@@ -57,21 +57,42 @@ module.exports = async (policyContext, config, { strapi }) => {
       return true;
     }
     
-    // No active session - check if user was explicitly logged out
-    const allSessions = await strapi.documents(SESSION_UID).findMany({
-      filters: { user: { documentId: userDocId } },
-      limit: 1,
-      fields: ['isActive'],
+    // No active session - check for inactive sessions
+    const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
+      filters: { 
+        user: { documentId: userDocId },
+        isActive: false,
+      },
+      limit: 5,
+      fields: ['documentId', 'terminatedManually', 'lastActive'],
+      sort: [{ lastActive: 'desc' }],
     });
     
-    const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
-    
-    if (hasInactiveSessions) {
-      // User was explicitly logged out → ALWAYS BLOCK
+    if (inactiveSessions && inactiveSessions.length > 0) {
+      // Check if ANY session was manually terminated
+      const manuallyTerminated = inactiveSessions.find(s => s.terminatedManually === true);
+      
+      if (manuallyTerminated) {
+        // User was explicitly logged out → BLOCK
+        strapi.log.info(
+          `[magic-sessionmanager] [POLICY-BLOCKED] User ${userDocId.substring(0, 8)}... was manually logged out`
+        );
+        throw new errors.UnauthorizedError('Session terminated. Please login again.');
+      }
+      
+      // Session was deactivated by timeout → REACTIVATE most recent one
+      const sessionToReactivate = inactiveSessions[0];
+      await strapi.documents(SESSION_UID).update({
+        documentId: sessionToReactivate.documentId,
+        data: {
+          isActive: true,
+          lastActive: new Date(),
+        },
+      });
       strapi.log.info(
-        `[magic-sessionmanager] [POLICY-BLOCKED] Session terminated (user: ${userDocId.substring(0, 8)}...)`
+        `[magic-sessionmanager] [POLICY-REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`
       );
-      throw new errors.UnauthorizedError('Session terminated. Please login again.');
+      return true;
     }
     
     // No sessions exist at all - session was never created

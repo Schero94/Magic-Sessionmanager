@@ -109,11 +109,12 @@ module.exports = ({ strapi }) => {
           documentId: sessionId,
           data: {
             isActive: false,
+            terminatedManually: true,
             logoutTime: now,
           },
         });
 
-        log.info(`Session ${sessionId} terminated`);
+        log.info(`Session ${sessionId} terminated (manual)`);
       } else if (userId) {
         // Strapi v5: If numeric id provided, look up documentId first
         // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
@@ -133,18 +134,19 @@ module.exports = ({ strapi }) => {
           },
         });
 
-        // Terminate all active sessions
+        // Terminate all active sessions (manual logout)
         for (const session of activeSessions) {
           await strapi.documents(SESSION_UID).update({
             documentId: session.documentId,
             data: {
               isActive: false,
+              terminatedManually: true,
               logoutTime: now,
             },
           });
         }
 
-        log.info(`All sessions terminated for user ${userDocumentId}`);
+        log.info(`All sessions terminated (manual) for user ${userDocumentId}`);
       }
     } catch (err) {
       log.error('Error terminating session:', err);
@@ -568,7 +570,10 @@ module.exports = ({ strapi }) => {
         if (lastActiveTime < cutoffTime) {
           await strapi.documents(SESSION_UID).update({
             documentId: session.documentId,
-            data: { isActive: false },
+            data: { 
+              isActive: false,
+              terminatedManually: false,  // Timeout, not manual - can be reactivated
+            },
           });
           deactivatedCount++;
         }

@@ -631,7 +631,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           return decoded;
         }
         
-        // Check for active sessions
+        // Check for active sessions first
         const activeSessions = await strapi.documents(SESSION_UID).findMany({
           filters: {
             user: { documentId: userDocId },
@@ -645,48 +645,55 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           return decoded;
         }
         
-        // No active session found - check if ANY sessions exist (including inactive)
-        const allSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: { user: { documentId: userDocId } },
+        // No active session - check for inactive sessions
+        const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
+          filters: { 
+            user: { documentId: userDocId },
+            isActive: false,
+          },
           limit: 5,
-          fields: ['isActive', 'lastActive'],
+          fields: ['documentId', 'terminatedManually', 'lastActive'],
+          sort: [{ lastActive: 'desc' }],
         });
         
-        const totalSessions = allSessions?.length || 0;
-        const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
-        
-        // DECISION LOGIC:
-        // 1. User has inactive sessions = explicitly logged out → ALWAYS BLOCK
-        // 2. No sessions exist at all = session never created (bug/race condition) → ALLOW
-        // 3. strictMode controls whether missing sessions block or just warn
-        
-        if (hasInactiveSessions) {
-          // User was explicitly logged out → ALWAYS BLOCK (this is intentional!)
-          strapi.log.info(
-            `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... was logged out (${totalSessions} inactive sessions)`
-          );
-          return null; // Block - user was explicitly logged out
-        }
-        
-        // No sessions exist at all - session was never created (bug/race condition)
-        if (totalSessions === 0) {
-          if (strictMode) {
-            // Strict mode: Block even if no sessions (could be security risk)
+        if (inactiveSessions && inactiveSessions.length > 0) {
+          // Check if ANY session was manually terminated
+          const manuallyTerminated = inactiveSessions.find(s => s.terminatedManually === true);
+          
+          if (manuallyTerminated) {
+            // User was explicitly logged out → BLOCK
             strapi.log.info(
-              `[magic-sessionmanager] [JWT-BLOCKED] No sessions exist for user ${userDocId.substring(0, 8)}... (strictMode enabled)`
+              `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... was manually logged out`
             );
             return null;
           }
-          // Non-strict mode: Allow through but warn
-          strapi.log.warn(
-            `[magic-sessionmanager] [JWT-WARN] No session found for user ${userDocId.substring(0, 8)}... (allowing - session may not have been created)`
+          
+          // Session was deactivated by timeout → REACTIVATE most recent one
+          const sessionToReactivate = inactiveSessions[0];
+          await strapi.documents(SESSION_UID).update({
+            documentId: sessionToReactivate.documentId,
+            data: {
+              isActive: true,
+              lastActive: new Date(),
+            },
+          });
+          strapi.log.info(
+            `[magic-sessionmanager] [JWT-REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`
           );
           return decoded;
         }
         
-        // Edge case: sessions exist but none are active or inactive (shouldn't happen)
+        // No sessions exist at all - session was never created (bug/race condition)
+        if (strictMode) {
+          strapi.log.info(
+            `[magic-sessionmanager] [JWT-BLOCKED] No sessions exist for user ${userDocId.substring(0, 8)}... (strictMode)`
+          );
+          return null;
+        }
+        
+        // Non-strict mode: Allow through but warn
         strapi.log.warn(
-          `[magic-sessionmanager] [JWT-ALLOW] Unexpected session state for user ${userDocId.substring(0, 8)}... (allowing)`
+          `[magic-sessionmanager] [JWT-WARN] No session for user ${userDocId.substring(0, 8)}... (allowing)`
         );
         return decoded;
         

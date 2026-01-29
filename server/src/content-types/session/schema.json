@@ -71,6 +71,11 @@
       "default": true,
       "required": true
     },
+    "terminatedManually": {
+      "type": "boolean",
+      "default": false,
+      "required": false
+    },
     "geoLocation": {
       "type": "json"
     },

@@ -113,29 +113,48 @@ module.exports = ({ strapi, sessionService }) => {
 
           // If user has NO active sessions
           if (!activeSessions || activeSessions.length === 0) {
-            // Check if user has ANY sessions at all
-            const allSessions = await strapi.documents(SESSION_UID).findMany({
-              filters: { user: { documentId: userDocId } },
-              limit: 1,
-              fields: ['isActive'],
+            // Check for inactive sessions
+            const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
+              filters: { 
+                user: { documentId: userDocId },
+                isActive: false,
+              },
+              limit: 5,
+              fields: ['documentId', 'terminatedManually', 'lastActive'],
+              sort: [{ lastActive: 'desc' }],
             });
             
-            const hasInactiveSessions = allSessions?.some(s => s.isActive === false);
-            
-            if (hasInactiveSessions) {
-              // User was explicitly logged out → ALWAYS BLOCK
-              strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session terminated (user: ${userDocId.substring(0, 8)}...)`);
-              return ctx.unauthorized('Session has been terminated. Please login again.');
+            if (inactiveSessions && inactiveSessions.length > 0) {
+              // Check if ANY session was manually terminated
+              const manuallyTerminated = inactiveSessions.find(s => s.terminatedManually === true);
+              
+              if (manuallyTerminated) {
+                // User was explicitly logged out → BLOCK
+                strapi.log.info(`[magic-sessionmanager] [BLOCKED] User ${userDocId.substring(0, 8)}... was manually logged out`);
+                return ctx.unauthorized('Session has been terminated. Please login again.');
+              }
+              
+              // Session was deactivated by timeout → REACTIVATE most recent one
+              const sessionToReactivate = inactiveSessions[0];
+              await strapi.documents(SESSION_UID).update({
+                documentId: sessionToReactivate.documentId,
+                data: {
+                  isActive: true,
+                  lastActive: new Date(),
+                },
+              });
+              strapi.log.info(`[magic-sessionmanager] [REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`);
+              // Continue - session is now active
+            } else {
+              // No sessions exist at all - session was never created
+              if (strictMode) {
+                strapi.log.info(`[magic-sessionmanager] [BLOCKED] No session exists (user: ${userDocId.substring(0, 8)}..., strictMode)`);
+                return ctx.unauthorized('No valid session. Please login again.');
+              }
+              
+              // Non-strict mode: Allow but log warning
+              strapi.log.warn(`[magic-sessionmanager] [WARN] No session for user ${userDocId.substring(0, 8)}... (allowing)`);
             }
-            
-            // No sessions exist at all - session was never created
-            if (strictMode) {
-              strapi.log.info(`[magic-sessionmanager] [BLOCKED] No session exists (user: ${userDocId.substring(0, 8)}..., strictMode)`);
-              return ctx.unauthorized('No valid session. Please login again.');
-            }
-            
-            // Non-strict mode: Allow but log warning
-            strapi.log.warn(`[magic-sessionmanager] [WARN] No session for user ${userDocId.substring(0, 8)}... (allowing)`);
           }
           
           // Store documentId for later use
