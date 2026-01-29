@@ -1,3 +1,10 @@
+# [4.4.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.4...v4.4.0) (2026-01-29)
+
+
+### Features
+
+* add terminatedManually field for session reactivation ([8887500](https://github.com/Schero94/Magic-Sessionmanager/commit/88875009ff00477253acb7f6cefba25d2c2f4a4f))
+
 ## [4.3.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.3...v4.3.4) (2026-01-28)
 
 
