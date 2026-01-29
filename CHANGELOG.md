@@ -1,3 +1,10 @@
+## [4.4.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.0...v4.4.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* check specific session by token hash instead of any user session ([c8950d8](https://github.com/Schero94/Magic-Sessionmanager/commit/c8950d8131472f6c29dc8667d35603651900133b))
+
 # [4.4.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.3.4...v4.4.0) (2026-01-29)
 
 
