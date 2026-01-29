@@ -611,8 +611,11 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const strictMode = config.strictSessionEnforcement === true;
       
-      // Now check if user has active session
+      // Now check if THIS SPECIFIC session (by token hash) is valid
       try {
+        // Hash the token to find the specific session
+        const tokenHashValue = hashToken(token);
+        
         // Get user documentId
         let userDocId = null;
         
@@ -631,47 +634,34 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           return decoded;
         }
         
-        // Check for active sessions first
-        const activeSessions = await strapi.documents(SESSION_UID).findMany({
+        // Find THIS SPECIFIC session by token hash
+        const thisSession = await strapi.documents(SESSION_UID).findFirst({
           filters: {
             user: { documentId: userDocId },
-            isActive: true,
+            tokenHash: tokenHashValue,
           },
-          limit: 1,
+          fields: ['documentId', 'isActive', 'terminatedManually', 'lastActive'],
         });
         
-        // If active session exists, all good
-        if (activeSessions && activeSessions.length > 0) {
-          return decoded;
-        }
-        
-        // No active session - check for inactive sessions
-        const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: { 
-            user: { documentId: userDocId },
-            isActive: false,
-          },
-          limit: 5,
-          fields: ['documentId', 'terminatedManually', 'lastActive'],
-          sort: [{ lastActive: 'desc' }],
-        });
-        
-        if (inactiveSessions && inactiveSessions.length > 0) {
-          // Check if ANY session was manually terminated
-          const manuallyTerminated = inactiveSessions.find(s => s.terminatedManually === true);
+        if (thisSession) {
+          // Found the specific session for this token
           
-          if (manuallyTerminated) {
-            // User was explicitly logged out → BLOCK
+          if (thisSession.terminatedManually === true) {
+            // This specific session was manually terminated → BLOCK
             strapi.log.info(
-              `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... was manually logged out`
+              `[magic-sessionmanager] [JWT-BLOCKED] Session was manually terminated (user: ${userDocId.substring(0, 8)}...)`
             );
             return null;
           }
           
-          // Session was deactivated by timeout → REACTIVATE most recent one
-          const sessionToReactivate = inactiveSessions[0];
+          if (thisSession.isActive) {
+            // Session is active → allow
+            return decoded;
+          }
+          
+          // Session is inactive but NOT manually terminated → reactivate
           await strapi.documents(SESSION_UID).update({
-            documentId: sessionToReactivate.documentId,
+            documentId: thisSession.documentId,
             data: {
               isActive: true,
               lastActive: new Date(),
@@ -683,7 +673,42 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           return decoded;
         }
         
-        // No sessions exist at all - session was never created (bug/race condition)
+        // No session found for this specific token - check if user has ANY sessions
+        // This handles tokens issued before session manager was installed
+        const anyActiveSessions = await strapi.documents(SESSION_UID).findMany({
+          filters: {
+            user: { documentId: userDocId },
+            isActive: true,
+          },
+          limit: 1,
+        });
+        
+        if (anyActiveSessions && anyActiveSessions.length > 0) {
+          // User has other active sessions - allow this token (backward compatibility)
+          strapi.log.debug(
+            `[magic-sessionmanager] [JWT] No session for token but user has other active sessions (allowing)`
+          );
+          return decoded;
+        }
+        
+        // Check for any manually terminated sessions
+        const terminatedSessions = await strapi.documents(SESSION_UID).findMany({
+          filters: {
+            user: { documentId: userDocId },
+            terminatedManually: true,
+          },
+          limit: 1,
+        });
+        
+        if (terminatedSessions && terminatedSessions.length > 0) {
+          // User was logged out (all sessions terminated) → BLOCK
+          strapi.log.info(
+            `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... has terminated sessions`
+          );
+          return null;
+        }
+        
+        // No sessions at all - session was never created
         if (strictMode) {
           strapi.log.info(
             `[magic-sessionmanager] [JWT-BLOCKED] No sessions exist for user ${userDocId.substring(0, 8)}... (strictMode)`
