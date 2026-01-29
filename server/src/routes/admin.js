@@ -40,6 +40,15 @@ module.exports = {
       },
     },
     {
+      method: 'POST',
+      path: '/sessions/:sessionId/simulate-timeout',
+      handler: 'session.simulateTimeout',
+      config: {
+        policies: ['admin::isAuthenticatedAdmin'],
+        description: 'Simulate session timeout for testing (sets isActive: false, terminatedManually: false)',
+      },
+    },
+    {
       method: 'DELETE',
       path: '/sessions/:sessionId',
       handler: 'session.deleteSession',

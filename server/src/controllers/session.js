@@ -494,6 +494,47 @@ module.exports = {
   },
 
   /**
+   * Simulate session timeout for testing (Admin action)
+   * POST /magic-sessionmanager/sessions/:sessionId/simulate-timeout
+   * Sets isActive: false, terminatedManually: false (as if cleanup job ran)
+   * This allows testing session reactivation behavior
+   */
+  async simulateTimeout(ctx) {
+    try {
+      const { sessionId } = ctx.params;
+      
+      // Find the session first
+      const session = await strapi.documents(SESSION_UID).findOne({
+        documentId: sessionId,
+      });
+      
+      if (!session) {
+        return ctx.notFound('Session not found');
+      }
+      
+      // Simulate timeout: set isActive false but terminatedManually false
+      await strapi.documents(SESSION_UID).update({
+        documentId: sessionId,
+        data: {
+          isActive: false,
+          terminatedManually: false, // This allows reactivation!
+        },
+      });
+      
+      strapi.log.info(`[magic-sessionmanager] [TEST] Session ${sessionId} simulated timeout (terminatedManually: false)`);
+
+      ctx.body = {
+        message: `Session ${sessionId} marked as timed out (reactivatable)`,
+        success: true,
+        terminatedManually: false,
+      };
+    } catch (err) {
+      strapi.log.error('[magic-sessionmanager] Error simulating timeout:', err);
+      ctx.throw(500, 'Error simulating session timeout');
+    }
+  },
+
+  /**
    * Terminate a single session (Admin action)
    * POST /magic-sessionmanager/sessions/:sessionId/terminate
    */
