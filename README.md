@@ -95,6 +95,11 @@ Track logins, monitor active users, and secure your app with one simple plugin. 
 **When users logout:**
 - Plugin marks their session as "logged out"
 - They disappear from the active sessions list
+- Manual logout permanently blocks session reactivation (security feature)
+
+**Session Timeout vs Manual Logout:**
+- **Timeout:** Session can be reactivated on next request (seamless UX)
+- **Manual Logout:** Session is permanently terminated (security-first)
 
 **While users are active:**
 - Plugin updates their "last seen" time
