@@ -1,3 +1,10 @@
+## [4.4.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.2...v4.4.3) (2026-02-07)
+
+
+### Bug Fixes
+
+* dark/light mode compatibility for entire admin UI ([f6b1e9e](https://github.com/Schero94/Magic-Sessionmanager/commit/f6b1e9ed48915b68feffe615b52f063c07c0a10e))
+
 ## [4.4.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.1...v4.4.2) (2026-01-29)
 
 
