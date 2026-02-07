@@ -84,7 +84,7 @@ const Container = styled(Box)`
 `;
 
 const Header = styled(Box)`
-  background: linear-gradient(135deg, ${theme.colors.primary[600]} 0%, ${theme.colors.secondary[600]} 100%);
+  background: linear-gradient(135deg, ${'var(--colors-primary600, #0284C7)'} 0%, ${'var(--colors-secondary600, #9333EA)'} 100%);
   border-radius: ${theme.borderRadius.xl};
   padding: ${theme.spacing.xl} ${theme.spacing['2xl']};
   margin-bottom: ${theme.spacing.xl};
@@ -122,7 +122,7 @@ const HeaderContent = styled(Flex)`
 `;
 
 const Title = styled(Typography)`
-  color: ${theme.colors.neutral[0]};
+  color: ${'var(--colors-neutral0, white)'};
   font-size: 2.25rem;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -154,7 +154,7 @@ const StatsGrid = styled.div`
 `;
 
 const StatCard = styled(Box)`
-  background: ${theme.colors.neutral[0]};
+  background: ${'var(--colors-neutral0, white)'};
   border-radius: ${theme.borderRadius.lg};
   padding: 32px;
   position: relative;
@@ -163,7 +163,7 @@ const StatCard = styled(Box)`
   ${css`animation: ${fadeIn} ${theme.transitions.slow} backwards;`}
   animation-delay: ${props => props.$delay || '0s'};
   box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${'rgba(128, 128, 128, 0.2)'};
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -173,7 +173,7 @@ const StatCard = styled(Box)`
   &:hover {
     transform: translateY(-6px);
     box-shadow: ${theme.shadows.xl};
-    border-color: ${props => props.$borderColor || theme.colors.primary[500]};
+    border-color: ${props => props.$borderColor || 'var(--colors-primary600, #0EA5E9)'};
     
     .stat-icon {
       transform: scale(1.15) rotate(5deg);
@@ -181,7 +181,7 @@ const StatCard = styled(Box)`
     
     .stat-value {
       transform: scale(1.08);
-      color: ${props => props.$accentColor || theme.colors.primary[600]};
+      color: ${props => props.$accentColor || 'var(--colors-primary600, #0284C7)'};
     }
   }
 `;
@@ -193,7 +193,7 @@ const StatIcon = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${props => props.$bg || theme.colors.primary[100]};
+  background: ${props => props.$bg || 'rgba(2, 132, 199, 0.12)'};
   transition: all ${theme.transitions.normal};
   margin: 0 auto 24px;
   box-shadow: ${theme.shadows.sm};
@@ -201,14 +201,14 @@ const StatIcon = styled(Box)`
   svg {
     width: 40px;
     height: 40px;
-    color: ${props => props.$color || theme.colors.primary[600]};
+    color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
   }
 `;
 
 const StatValue = styled(Typography)`
   font-size: 3.5rem;
   font-weight: 700;
-  color: ${theme.colors.neutral[800]};
+  color: ${'var(--colors-neutral800)'};
   line-height: 1;
   margin-bottom: 12px;
   transition: all ${theme.transitions.normal};
@@ -217,31 +217,31 @@ const StatValue = styled(Typography)`
 
 const StatLabel = styled(Typography)`
   font-size: 1rem;
-  color: ${theme.colors.neutral[600]};
+  color: ${'var(--colors-neutral600)'};
   font-weight: 500;
   text-align: center;
 `;
 
 const ChartCard = styled(Box)`
-  background: ${theme.colors.neutral[0]};
+  background: ${'var(--colors-neutral0, white)'};
   border-radius: ${theme.borderRadius.lg};
   padding: 36px;
   box-shadow: ${theme.shadows.md};
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${'rgba(128, 128, 128, 0.2)'};
   margin-bottom: 28px;
   ${css`animation: ${slideIn} ${theme.transitions.slow};`}
   transition: all ${theme.transitions.normal};
   
   &:hover {
     box-shadow: ${theme.shadows.lg};
-    border-color: ${theme.colors.primary[200]};
+    border-color: ${'rgba(2, 132, 199, 0.2)'};
   }
 `;
 
 const ChartTitle = styled(Typography)`
   font-size: 1.25rem;
   font-weight: 700;
-  color: ${theme.colors.neutral[800]};
+  color: ${'var(--colors-neutral800)'};
   margin-bottom: 24px;
   display: flex;
   align-items: center;
@@ -250,7 +250,7 @@ const ChartTitle = styled(Typography)`
   svg {
     width: 24px;
     height: 24px;
-    color: ${theme.colors.primary[600]};
+    color: ${'var(--colors-primary600, #0284C7)'};
   }
 `;
 
@@ -272,13 +272,13 @@ const BarLabel = styled(Typography)`
   min-width: 110px;
   font-size: 15px;
   font-weight: 600;
-  color: ${theme.colors.neutral[700]};
+  color: ${'var(--colors-neutral700)'};
 `;
 
 const BarContainer = styled.div`
   flex: 1;
   height: 40px;
-  background: ${theme.colors.neutral[100]};
+  background: ${'var(--colors-neutral100)'};
   border-radius: 10px;
   overflow: hidden;
   position: relative;
@@ -287,7 +287,7 @@ const BarContainer = styled.div`
 
 const BarFill = styled.div`
   height: 100%;
-  background: linear-gradient(90deg, ${props => props.$color1 || theme.colors.primary[500]}, ${props => props.$color2 || theme.colors.primary[600]});
+  background: linear-gradient(90deg, ${props => props.$color1 || 'var(--colors-primary600, #0EA5E9)'}, ${props => props.$color2 || 'var(--colors-primary600, #0284C7)'});
   border-radius: 10px;
   --bar-width: ${props => props.$percentage || 0}%;
   ${css`animation: ${growBar} 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;`}
@@ -323,7 +323,7 @@ const AnimatedIcon = styled.div`
   ${css`animation: ${float} 3s ease-in-out infinite;`}
   width: 96px;
   height: 96px;
-  color: #d97706;
+  color: var(--colors-warning600, #D97706);
   margin: 0 auto 32px;
   display: flex;
   align-items: center;
@@ -450,7 +450,7 @@ const AnalyticsPage = () => {
     return (
       <Container>
         <LoadingOverlay>
-          <ChartBubble className="loader-icon" style={{ width: '64px', height: '64px', color: theme.colors.primary[600] }} />
+          <ChartBubble className="loader-icon" style={{ width: '64px', height: '64px', color: 'var(--colors-primary600, #0284C7)' }} />
           <Loader>Checking license...</Loader>
           <Typography variant="pi" textColor="neutral600">
             Please wait while we verify your premium access
@@ -468,9 +468,9 @@ const AnalyticsPage = () => {
           <Box
             padding={10}
             style={{
-              background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(234, 179, 8, 0.25) 100%)',
               borderRadius: '20px',
-              border: '3px solid #fbbf24',
+              border: '3px solid rgba(234, 179, 8, 0.4)',
               textAlign: 'center',
               boxShadow: '0 20px 40px rgba(245, 158, 11, 0.2)',
               maxWidth: '800px',
@@ -498,7 +498,7 @@ const AnalyticsPage = () => {
               <Typography 
                 variant="alpha" 
                 style={{ 
-                  color: '#92400e', 
+                  color: 'var(--colors-warning600, #92400e)', 
                   fontWeight: '700', 
                   marginBottom: '24px', 
                   fontSize: '36px',
@@ -512,7 +512,7 @@ const AnalyticsPage = () => {
               <Typography 
                 variant="omega" 
                 style={{ 
-                  color: '#78350f', 
+                  color: 'var(--colors-warning600, #78350f)', 
                   lineHeight: '1.9', 
                   marginBottom: '44px', 
                   fontSize: '17px',
@@ -527,7 +527,7 @@ const AnalyticsPage = () => {
               <button
                 onClick={() => window.open('https://magicapi.fitlex.me', '_blank')}
                 style={{
-                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  background: 'linear-gradient(135deg, var(--colors-warning600, #f59e0b) 0%, var(--colors-warning600, #d97706) 100%)',
                   color: 'white',
                   border: 'none',
                   padding: '16px 48px',
@@ -561,7 +561,7 @@ const AnalyticsPage = () => {
     return (
       <Container>
         <LoadingOverlay>
-          <ChartBubble className="loader-icon" style={{ width: '64px', height: '64px', color: theme.colors.primary[600] }} />
+          <ChartBubble className="loader-icon" style={{ width: '64px', height: '64px', color: 'var(--colors-primary600, #0284C7)' }} />
           <Loader>Loading analytics data...</Loader>
         </LoadingOverlay>
       </Container>
@@ -574,18 +574,18 @@ const AnalyticsPage = () => {
   const maxLoginHour = Math.max(...(analytics?.loginHours || []), 1);
 
   const deviceColors = {
-    'Desktop': [theme.colors.primary[500], theme.colors.primary[600]],
-    'Mobile': [theme.colors.success[500], theme.colors.success[600]],
-    'Tablet': [theme.colors.warning[500], theme.colors.warning[600]],
+    'Desktop': ['var(--colors-primary600, #0EA5E9)', 'var(--colors-primary600, #0284C7)'],
+    'Mobile': ['var(--colors-success600, #22C55E)', 'var(--colors-success600, #16A34A)'],
+    'Tablet': ['var(--colors-warning600, #F59E0B)', 'var(--colors-warning600, #D97706)'],
   };
 
   const browserColors = {
-    'Chrome': [theme.colors.success[500], theme.colors.success[600]],
-    'Firefox': [theme.colors.warning[500], theme.colors.warning[600]],
-    'Safari': [theme.colors.primary[500], theme.colors.primary[600]],
-    'Edge': [theme.colors.secondary[500], theme.colors.secondary[600]],
-    'API Client': [theme.colors.neutral[600], theme.colors.neutral[700]],
-    'Other': [theme.colors.neutral[500], theme.colors.neutral[600]],
+    'Chrome': ['var(--colors-success600, #22C55E)', 'var(--colors-success600, #16A34A)'],
+    'Firefox': ['var(--colors-warning600, #F59E0B)', 'var(--colors-warning600, #D97706)'],
+    'Safari': ['var(--colors-primary600, #0EA5E9)', 'var(--colors-primary600, #0284C7)'],
+    'Edge': ['var(--colors-secondary500, #A855F7)', 'var(--colors-secondary600, #9333EA)'],
+    'API Client': ['var(--colors-neutral600)', 'var(--colors-neutral700)'],
+    'Other': ['var(--colors-neutral500)', 'var(--colors-neutral600)'],
   };
 
   return (
@@ -604,32 +604,32 @@ const AnalyticsPage = () => {
 
       {/* Overview Stats */}
       <StatsGrid>
-        <StatCard $delay="0.1s" $borderColor={theme.colors.primary[500]} $accentColor={theme.colors.primary[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.primary[100]} $color={theme.colors.primary[600]}>
+        <StatCard $delay="0.1s" $borderColor={'var(--colors-primary600, #0EA5E9)'} $accentColor={'var(--colors-primary600, #0284C7)'}>
+          <StatIcon className="stat-icon" $bg={'rgba(2, 132, 199, 0.12)'} $color={'var(--colors-primary600, #0284C7)'}>
             <ChartBubble />
           </StatIcon>
           <StatValue className="stat-value">{analytics?.totalSessions || 0}</StatValue>
           <StatLabel>Total Sessions</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.2s" $borderColor={theme.colors.success[500]} $accentColor={theme.colors.success[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.success[100]} $color={theme.colors.success[600]}>
+        <StatCard $delay="0.2s" $borderColor={'var(--colors-success600, #22C55E)'} $accentColor={'var(--colors-success600, #16A34A)'}>
+          <StatIcon className="stat-icon" $bg={'rgba(22, 163, 74, 0.12)'} $color={'var(--colors-success600, #16A34A)'}>
             <User />
           </StatIcon>
           <StatValue className="stat-value">{analytics?.activeSessions || 0}</StatValue>
           <StatLabel>Active Now</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.3s" $borderColor={theme.colors.warning[500]} $accentColor={theme.colors.warning[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.warning[100]} $color={theme.colors.warning[600]}>
+        <StatCard $delay="0.3s" $borderColor={'var(--colors-warning600, #F59E0B)'} $accentColor={'var(--colors-warning600, #D97706)'}>
+          <StatIcon className="stat-icon" $bg={'rgba(234, 179, 8, 0.12)'} $color={'var(--colors-warning600, #D97706)'}>
             <Clock />
           </StatIcon>
           <StatValue className="stat-value">{analytics?.todayLogins || 0}</StatValue>
           <StatLabel>Today's Logins</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.4s" $borderColor={theme.colors.secondary[500]} $accentColor={theme.colors.secondary[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.secondary[100]} $color={theme.colors.secondary[600]}>
+        <StatCard $delay="0.4s" $borderColor={'var(--colors-secondary500, #A855F7)'} $accentColor={'var(--colors-secondary600, #9333EA)'}>
+          <StatIcon className="stat-icon" $bg={'rgba(139, 92, 246, 0.12)'} $color={'var(--colors-secondary600, #9333EA)'}>
             <Clock />
           </StatIcon>
           <StatValue className="stat-value">{analytics?.weekLogins || 0}</StatValue>
@@ -655,8 +655,8 @@ const AnalyticsPage = () => {
                     <BarContainer>
                       <BarFill 
                         $percentage={(count / maxDevices) * 100}
-                        $color1={deviceColors[device]?.[0] || theme.colors.neutral[500]}
-                        $color2={deviceColors[device]?.[1] || theme.colors.neutral[600]}
+                        $color1={deviceColors[device]?.[0] || 'var(--colors-neutral500)'}
+                        $color2={deviceColors[device]?.[1] || 'var(--colors-neutral600)'}
                         $delay={`${0.5 + idx * 0.1}s`}
                       >
                         <BarValue>{count}</BarValue>
@@ -684,8 +684,8 @@ const AnalyticsPage = () => {
                     <BarContainer>
                       <BarFill 
                         $percentage={(count / maxBrowsers) * 100}
-                        $color1={browserColors[browser]?.[0] || theme.colors.neutral[500]}
-                        $color2={browserColors[browser]?.[1] || theme.colors.neutral[600]}
+                        $color1={browserColors[browser]?.[0] || 'var(--colors-neutral500)'}
+                        $color2={browserColors[browser]?.[1] || 'var(--colors-neutral600)'}
                         $delay={`${0.5 + idx * 0.1}s`}
                       >
                         <BarValue>{count}</BarValue>
@@ -720,7 +720,7 @@ const AnalyticsPage = () => {
         </Flex>
         
         {analytics?.avgSessionDuration > 0 && (
-          <Box marginTop={5} padding={5} background="primary50" hasRadius style={{ border: `1px solid ${theme.colors.primary[100]}` }}>
+          <Box marginTop={5} padding={5} background="primary50" hasRadius style={{ border: `1px solid ${'rgba(2, 132, 199, 0.12)'}` }}>
             <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', lineHeight: '1.8', fontWeight: '500' }}>
               ℹ️ Average time between login and last activity across all sessions. 
               Lower values indicate more frequent activity, higher values may indicate idle or abandoned sessions.

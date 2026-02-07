@@ -32,7 +32,7 @@ const theme = {
     success: { 600: '#16A34A', 700: '#15803D', 100: '#DCFCE7', 50: '#F0FDF4' },
     danger: { 600: '#DC2626', 700: '#B91C1C', 100: '#FEE2E2', 50: '#FEF2F2' },
     warning: { 600: '#D97706', 700: '#A16207', 100: '#FEF3C7', 50: '#FFFBEB' },
-    neutral: { 0: '#FFFFFF', 50: '#F9FAFB', 100: '#F3F4F6', 200: '#E5E7EB', 400: '#9CA3AF', 600: '#4B5563', 700: '#374151', 800: '#1F2937' }
+    neutral: { 0: '#FFFFFF', 50: '#F9FAFB', 100: '#F3F4F6', 200: 'rgba(128, 128, 128, 0.2)', 400: '#9CA3AF', 600: '#4B5563', 700: '#374151', 800: '#1F2937' }
   },
   shadows: { sm: '0 1px 3px rgba(0,0,0,0.1)', md: '0 4px 6px rgba(0,0,0,0.1)', xl: '0 20px 25px rgba(0,0,0,0.1)' },
   borderRadius: { md: '8px', lg: '12px', xl: '16px' }
@@ -60,17 +60,17 @@ const StickySaveBar = styled(Box)`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: white;
-  border-bottom: 1px solid ${theme.colors.neutral[200]};
+  background: var(--colors-neutral0, white);
+  border-bottom: 1px solid ${'rgba(128, 128, 128, 0.2)'};
   box-shadow: ${theme.shadows.sm};
 `;
 
 const ToggleCard = styled(Box)`
-  background: ${props => props.$active ? theme.colors.success[50] : theme.colors.neutral[50]};
+  background: ${props => props.$active ? 'rgba(22, 163, 74, 0.06)' : 'var(--colors-neutral100)'};
   border-radius: ${theme.borderRadius.md};
   padding: 20px;
   transition: all 0.3s;
-  border: 2px solid ${props => props.$active ? theme.colors.success[600] : theme.colors.neutral[200]};
+  border: 2px solid ${props => props.$active ? 'var(--colors-success600, #16A34A)' : 'rgba(128, 128, 128, 0.2)'};
   box-shadow: ${props => props.$active ? '0 4px 12px rgba(34, 197, 94, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'};
   position: relative;
   cursor: pointer;
@@ -86,7 +86,7 @@ const ToggleCard = styled(Box)`
       position: absolute;
       top: 8px;
       right: 8px;
-      background: ${theme.colors.success[600]};
+      background: ${'var(--colors-success600, #16A34A)'};
       color: white;
       padding: 2px 8px;
       border-radius: 4px;
@@ -101,7 +101,7 @@ const ToggleCard = styled(Box)`
       position: absolute;
       top: 8px;
       right: 8px;
-      background: ${theme.colors.neutral[400]};
+      background: ${'rgba(128, 128, 128, 0.4)'};
       color: white;
       padding: 2px 8px;
       border-radius: 4px;
@@ -114,17 +114,17 @@ const ToggleCard = styled(Box)`
 const GreenToggle = styled.div`
   ${props => props.$isActive && `
     button[role="switch"] {
-      background-color: #16A34A !important;
-      border-color: #16A34A !important;
+      background-color: var(--colors-success600, #16A34A) !important;
+      border-color: var(--colors-success600, #16A34A) !important;
       
       &:hover {
-        background-color: #15803D !important;
-        border-color: #15803D !important;
+        background-color: var(--colors-success600, #15803D) !important;
+        border-color: var(--colors-success600, #15803D) !important;
       }
       
       &:focus {
-        background-color: #16A34A !important;
-        border-color: #16A34A !important;
+        background-color: var(--colors-success600, #16A34A) !important;
+        border-color: var(--colors-success600, #16A34A) !important;
         box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2) !important;
       }
     }
@@ -137,10 +137,10 @@ const GreenToggle = styled.div`
   
   ${props => !props.$isActive && `
     button[role="switch"] {
-      background-color: #E5E7EB;
+      background-color: rgba(128, 128, 128, 0.2);
       
       &:hover {
-        background-color: #D1D5DB;
+        background-color: rgba(128, 128, 128, 0.2);
       }
     }
   `}
@@ -214,7 +214,7 @@ const getDefaultTemplates = () => ({
     <h2 style="color: #dc2626;">[ALERT] Suspicious Login Detected</h2>
     <p>A potentially suspicious login was detected for your account.</p>
     
-    <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <div style="background: var(--colors-neutral0, white); padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account Information:</h3>
       <ul>
         <li><strong>Email:</strong> {{user.email}}</li>
@@ -269,7 +269,7 @@ Security: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThre
     <h2 style="color: #0284c7;">[LOCATION] Login from New Location</h2>
     <p>Your account was accessed from a new location.</p>
     
-    <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <div style="background: var(--colors-neutral0, white); padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account:</h3>
       <p><strong>{{user.email}}</strong></p>
       
@@ -312,7 +312,7 @@ If this was you, no action is needed.`,
     <h2 style="color: #d97706;">[WARNING] VPN/Proxy Detected</h2>
     <p>A login from a VPN or proxy service was detected on your account.</p>
     
-    <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <div style="background: var(--colors-neutral0, white); padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account:</h3>
       <p><strong>{{user.email}}</strong></p>
       
@@ -502,8 +502,8 @@ const SettingsPage = () => {
               style={{
                 background: hasChanges && !saving
                   ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
-                  : '#e5e7eb',
-                color: hasChanges && !saving ? 'white' : '#9ca3af',
+                  : 'rgba(128, 128, 128, 0.2)',
+                color: hasChanges && !saving ? 'white' : 'var(--colors-neutral500)',
                 fontWeight: '600',
                 padding: '12px 24px',
                 border: 'none',
@@ -552,7 +552,7 @@ const SettingsPage = () => {
               <Box padding={6}>
                 
                 {/* Session Timeout */}
-                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   SESSION TIMEOUT
                 </Typography>
                 <Grid.Root gap={6} style={{ marginBottom: '32px' }}>
@@ -602,7 +602,7 @@ const SettingsPage = () => {
 
                 {/* Cleanup & Retention */}
                 <Divider style={{ marginBottom: '24px' }} />
-                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   🧹 AUTO-CLEANUP & RETENTION
                 </Typography>
                 <Grid.Root gap={6}>
@@ -650,9 +650,9 @@ const SettingsPage = () => {
                   </Grid.Item>
                   
                   <Grid.Item col={12}>
-                    <Box padding={4} background="danger100" style={{ borderRadius: theme.borderRadius.md, border: `2px solid ${theme.colors.danger[200]}` }}>
+                    <Box padding={4} background="danger100" style={{ borderRadius: theme.borderRadius.md, border: `2px solid rgba(220, 38, 38, 0.2)` }}>
                       <Flex gap={3} alignItems="flex-start">
-                        <Trash style={{ width: '18px', height: '18px', color: theme.colors.danger[600], flexShrink: 0, marginTop: '2px' }} />
+                        <Trash style={{ width: '18px', height: '18px', color: 'var(--colors-danger600, #DC2626)', flexShrink: 0, marginTop: '2px' }} />
                         <Box style={{ flex: 1 }}>
                           <Typography variant="omega" fontWeight="bold" textColor="danger700" style={{ marginBottom: '8px', display: 'block' }}>
                             Danger Zone
@@ -693,7 +693,7 @@ const SettingsPage = () => {
             <Accordion.Content>
               <Box padding={6}>
                 
-                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   SECURITY OPTIONS
                 </Typography>
                 
@@ -820,7 +820,7 @@ const SettingsPage = () => {
                   
                   {/* Email Alerts Toggle */}
                   <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>
-                    <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', textAlign: 'center', color: theme.colors.neutral[700] }}>
+                    <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', textAlign: 'center', color: 'var(--colors-neutral700)' }}>
                       📧 EMAIL ALERTS
                     </Typography>
                     <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', textAlign: 'center', fontSize: '12px' }}>
@@ -856,12 +856,12 @@ const SettingsPage = () => {
                   {/* Alert Type Checkboxes */}
                   {settings.enableEmailAlerts && (
                     <>
-                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                         ⚙️ ALERT TYPES
                       </Typography>
                       <Grid.Root gap={4} style={{ marginBottom: '32px' }}>
                         <Grid.Item col={4} s={12}>
-                          <Box padding={3} background="neutral50" style={{ borderRadius: theme.borderRadius.md, border: '1px solid #E5E7EB' }}>
+                          <Box padding={3} background="neutral50" style={{ borderRadius: theme.borderRadius.md, border: '1px solid rgba(128, 128, 128, 0.2)' }}>
                             <Checkbox
                               checked={settings.alertOnSuspiciousLogin}
                               onChange={() => handleChange('alertOnSuspiciousLogin', !settings.alertOnSuspiciousLogin)}
@@ -871,7 +871,7 @@ const SettingsPage = () => {
                           </Box>
                         </Grid.Item>
                         <Grid.Item col={4} s={12}>
-                          <Box padding={3} background="neutral50" style={{ borderRadius: theme.borderRadius.md, border: '1px solid #E5E7EB' }}>
+                          <Box padding={3} background="neutral50" style={{ borderRadius: theme.borderRadius.md, border: '1px solid rgba(128, 128, 128, 0.2)' }}>
                             <Checkbox
                               checked={settings.alertOnNewLocation}
                               onChange={() => handleChange('alertOnNewLocation', !settings.alertOnNewLocation)}
@@ -881,7 +881,7 @@ const SettingsPage = () => {
                           </Box>
                         </Grid.Item>
                         <Grid.Item col={4} s={12}>
-                          <Box padding={3} background="neutral50" style={{ borderRadius: theme.borderRadius.md, border: '1px solid #E5E7EB' }}>
+                          <Box padding={3} background="neutral50" style={{ borderRadius: theme.borderRadius.md, border: '1px solid rgba(128, 128, 128, 0.2)' }}>
                             <Checkbox
                               checked={settings.alertOnVpnProxy}
                               onChange={() => handleChange('alertOnVpnProxy', !settings.alertOnVpnProxy)}
@@ -894,7 +894,7 @@ const SettingsPage = () => {
 
                       {/* Email Templates */}
                       <Divider style={{ marginBottom: '24px' }} />
-                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: theme.colors.neutral[700] }}>
+                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: 'var(--colors-neutral700)' }}>
                         EMAIL TEMPLATES
                       </Typography>
                       <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', fontSize: '12px' }}>
@@ -932,11 +932,11 @@ const SettingsPage = () => {
                               <Box 
                                 padding={3} 
                                 background="primary100" 
-                                style={{ borderRadius: theme.borderRadius.md, marginBottom: '20px', border: '2px solid #BAE6FD' }}
+                                style={{ borderRadius: theme.borderRadius.md, marginBottom: '20px', border: '2px solid rgba(14, 165, 233, 0.3)' }}
                               >
                                 <Flex direction="column" gap={2}>
                                   <Flex alignItems="center" gap={2}>
-                                    <Code style={{ width: '16px', height: '16px', color: theme.colors.primary[600] }} />
+                                    <Code style={{ width: '16px', height: '16px', color: 'var(--colors-primary600, #0284C7)' }} />
                                     <Typography variant="omega" fontWeight="bold" textColor="primary600">
                                       Available Variables (click to copy)
                                     </Typography>
@@ -1148,14 +1148,14 @@ const SettingsPage = () => {
         {/* Footer Info */}
         <Box padding={5} background="neutral100" style={{ borderRadius: theme.borderRadius.md, marginTop: '32px' }}>
           <Flex gap={3} alignItems="flex-start">
-            <Information style={{ width: '20px', height: '20px', color: theme.colors.neutral[600], flexShrink: 0, marginTop: '2px' }} />
+            <Information style={{ width: '20px', height: '20px', color: 'var(--colors-neutral600)', flexShrink: 0, marginTop: '2px' }} />
             <Box style={{ flex: 1 }}>
               <Typography variant="omega" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
                 How to Apply These Settings
               </Typography>
               <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.8' }}>
                 Settings are saved in your browser. To apply permanently, copy the config below and paste it into{' '}
-                <code style={{ background: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>config/plugins.ts</code>, then restart.
+                <code style={{ background: 'rgba(128, 128, 128, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>config/plugins.ts</code>, then restart.
               </Typography>
               <Button
                 onClick={async () => {

@@ -58,8 +58,8 @@ const StickySaveBar = styled(Box)`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: ${props => props.theme.colors.neutral0};
-  border-bottom: 1px solid ${props => props.theme.colors.neutral200};
+  background: var(--colors-neutral0, white);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 `;
 
@@ -430,7 +430,7 @@ Generated:   ${new Date().toLocaleString()}
                         fontSize: '13px', 
                         fontWeight: '700', 
                         padding: '8px 16px',
-                        border: data.features?.premium ? '2px solid #dcfce7' : '2px solid #e5e7eb'
+                        border: data.features?.premium ? '2px solid rgba(34, 197, 94, 0.3)' : '2px solid rgba(128, 128, 128, 0.2)'
                       }}
                     >
                       {data.features?.premium ? '✓' : '✗'} PREMIUM FEATURES
@@ -442,7 +442,7 @@ Generated:   ${new Date().toLocaleString()}
                         fontSize: '13px', 
                         fontWeight: '700', 
                         padding: '8px 16px',
-                        border: data.features?.advanced ? '2px solid #bae6fd' : '2px solid #e5e7eb'
+                        border: data.features?.advanced ? '2px solid rgba(14, 165, 233, 0.3)' : '2px solid rgba(128, 128, 128, 0.2)'
                       }}
                     >
                       {data.features?.advanced ? '✓' : '✗'} ADVANCED FEATURES
@@ -454,7 +454,7 @@ Generated:   ${new Date().toLocaleString()}
                         fontSize: '13px', 
                         fontWeight: '700', 
                         padding: '8px 16px',
-                        border: data.features?.enterprise ? '2px solid #ddd6fe' : '2px solid #e5e7eb'
+                        border: data.features?.enterprise ? '2px solid rgba(139, 92, 246, 0.3)' : '2px solid rgba(128, 128, 128, 0.2)'
                       }}
                     >
                       {data.features?.enterprise ? '✓' : '✗'} ENTERPRISE FEATURES
@@ -463,7 +463,7 @@ Generated:   ${new Date().toLocaleString()}
                   
                   {/* Premium Features List */}
                   {data.features?.premium && (
-                    <Box marginBottom={5} padding={5} background="success50" hasRadius style={{ border: '2px solid #dcfce7' }}>
+                    <Box marginBottom={5} padding={5} background="success50" hasRadius style={{ border: '2px solid rgba(34, 197, 94, 0.3)' }}>
                       <Typography variant="delta" fontWeight="bold" textColor="success700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         Premium Features Active
                       </Typography>
@@ -492,7 +492,7 @@ Generated:   ${new Date().toLocaleString()}
                   
                   {/* Advanced Features List */}
                   {data.features?.advanced && (
-                    <Box marginBottom={5} padding={5} background="primary50" hasRadius style={{ border: '2px solid #bae6fd' }}>
+                    <Box marginBottom={5} padding={5} background="primary50" hasRadius style={{ border: '2px solid rgba(14, 165, 233, 0.3)' }}>
                       <Typography variant="delta" fontWeight="bold" textColor="primary700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         Advanced Features Active
                       </Typography>
@@ -518,7 +518,7 @@ Generated:   ${new Date().toLocaleString()}
                   
                   {/* Enterprise Features List */}
                   {data.features?.enterprise && (
-                    <Box padding={5} background="secondary50" hasRadius style={{ border: '2px solid #ddd6fe' }}>
+                    <Box padding={5} background="secondary50" hasRadius style={{ border: '2px solid rgba(139, 92, 246, 0.3)' }}>
                       <Typography variant="delta" fontWeight="bold" textColor="secondary700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         🏢 Enterprise Features Active
                       </Typography>

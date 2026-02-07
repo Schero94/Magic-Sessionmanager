@@ -16,39 +16,39 @@ const PanelContainer = styled(Box)`
 const StatusCard = styled(Box)`
   padding: 20px;
   border-radius: 12px;
-  border: 1px solid ${props => props.$isOnline ? '#BBF7D0' : '#E5E7EB'};
+  border: 1px solid ${props => props.$isOnline ? 'rgba(34, 197, 94, 0.3)' : 'rgba(128, 128, 128, 0.2)'};
   background: ${props => props.$isOnline 
-    ? 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)' 
-    : 'linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%)'};
+    ? 'linear-gradient(135deg, rgba(22, 163, 74, 0.06) 0%, rgba(22, 163, 74, 0.12) 100%)' 
+    : 'linear-gradient(135deg, rgba(128, 128, 128, 0.04) 0%, rgba(128, 128, 128, 0.08) 100%)'};
   transition: all 0.2s ease;
 `;
 
 const BlockedWarning = styled(Box)`
   padding: 16px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
-  border: 1px solid #FECACA;
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.06) 0%, rgba(220, 38, 38, 0.12) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.4);
 `;
 
 const SessionCard = styled(Box)`
   padding: 16px;
-  background: white;
+  background: var(--colors-neutral0, white);
   border-radius: 10px;
-  border: 1px solid #E5E7EB;
+  border: 1px solid rgba(128, 128, 128, 0.2);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   transition: all 0.2s ease;
   
   &:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: #0EA5E9;
+    border-color: var(--colors-primary600, #0EA5E9);
   }
 `;
 
 const EmptyState = styled(Box)`
   padding: 32px;
-  background: #F9FAFB;
+  background: var(--colors-neutral100);
   border-radius: 12px;
-  border: 2px dashed #E5E7EB;
+  border: 2px dashed rgba(128, 128, 128, 0.2);
   text-align: center;
 `;
 
@@ -59,9 +59,9 @@ const EmptyIcon = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #E5E7EB;
+  background: rgba(128, 128, 128, 0.2);
   border-radius: 50%;
-  color: #9CA3AF;
+  color: var(--colors-neutral500);
 `;
 
 const SectionLabel = styled(Typography)`
@@ -69,7 +69,7 @@ const SectionLabel = styled(Typography)`
   letter-spacing: 0.5px;
   font-size: 11px !important;
   font-weight: 700 !important;
-  color: #6B7280;
+  color: var(--colors-neutral600);
   margin-bottom: 12px;
   display: block;
 `;
@@ -88,23 +88,23 @@ const ActionButton = styled.button`
   transition: all 0.2s ease;
   
   ${props => props.$variant === 'danger' && `
-    background: white;
-    color: #DC2626;
-    border: 2px solid #DC2626;
+    background: var(--colors-neutral0, white);
+    color: var(--colors-danger600, #DC2626);
+    border: 2px solid var(--colors-danger600, #DC2626);
     
     &:hover:not(:disabled) {
-      background: #DC2626;
+      background: var(--colors-danger600, #DC2626);
       color: white;
     }
   `}
   
   ${props => props.$variant === 'success' && `
-    background: white;
-    color: #16A34A;
-    border: 2px solid #16A34A;
+    background: var(--colors-neutral0, white);
+    color: var(--colors-success600, #16A34A);
+    border: 2px solid var(--colors-success600, #16A34A);
     
     &:hover:not(:disabled) {
-      background: #16A34A;
+      background: var(--colors-success600, #16A34A);
       color: white;
     }
   `}
@@ -126,14 +126,14 @@ const IconWrapper = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #F3F4F6;
+  background: var(--colors-neutral100);
   border-radius: 8px;
   flex-shrink: 0;
   
   svg {
     width: 16px;
     height: 16px;
-    color: #6B7280;
+    color: var(--colors-neutral600);
   }
 `;
 
@@ -341,14 +341,14 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                       <Divider />
                       
                       <Flex gap={2} alignItems="center">
-                        <Server width="14px" height="14px" style={{ color: '#9CA3AF' }} />
+                        <Server width="14px" height="14px" style={{ color: 'var(--colors-neutral500)' }} />
                         <Typography variant="pi" textColor="neutral600">
                           {session.ipAddress}
                         </Typography>
                       </Flex>
                       
                       <Flex gap={2} alignItems="center">
-                        <Clock width="14px" height="14px" style={{ color: '#9CA3AF' }} />
+                        <Clock width="14px" height="14px" style={{ color: 'var(--colors-neutral500)' }} />
                         <Typography variant="pi" textColor="neutral600">
                           {new Date(session.loginTime).toLocaleString('en-US', {
                             month: 'short',

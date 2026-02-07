@@ -95,8 +95,8 @@ const Container = styled(Box)`
 
 const Header = styled(Box)`
   background: linear-gradient(135deg, 
-    ${theme.colors.primary[600]} 0%, 
-    ${theme.colors.secondary[600]} 100%
+    ${'var(--colors-primary600, #0284C7)'} 0%, 
+    ${'#9333EA'} 100%
   );
   border-radius: ${theme.borderRadius.xl};
   padding: ${theme.spacing.xl} ${theme.spacing['2xl']};
@@ -200,7 +200,7 @@ const StatsGrid = styled.div`
 `;
 
 const StatCard = styled(Box)`
-  background: ${props => props.theme.colors.neutral0};
+  background: var(--colors-neutral0, white);
   border-radius: ${theme.borderRadius.lg};
   padding: 28px ${theme.spacing.lg};
   position: relative;
@@ -209,7 +209,7 @@ const StatCard = styled(Box)`
   ${css`animation: ${fadeIn} ${theme.transitions.slow} backwards;`}
   animation-delay: ${props => props.$delay || '0s'};
   box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${props => props.theme.colors.neutral200};
+  border: 1px solid rgba(128, 128, 128, 0.2);
   min-width: 200px;
   flex: 1;
   text-align: center;
@@ -230,7 +230,7 @@ const StatCard = styled(Box)`
   &:hover {
     transform: translateY(-6px);
     box-shadow: ${theme.shadows.xl};
-    border-color: ${props => props.$color || props.theme.colors.primary600};
+    border-color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
     
     .stat-icon {
       transform: scale(1.15) rotate(5deg);
@@ -238,7 +238,7 @@ const StatCard = styled(Box)`
     
     .stat-value {
       transform: scale(1.08);
-      color: ${props => props.$color || props.theme.colors.primary600};
+      color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
     }
   }
 `;
@@ -250,7 +250,7 @@ const StatIcon = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${props => props.$bg || props.theme.colors.primary100};
+  background: ${props => props.$bg || 'rgba(2, 132, 199, 0.12)'};
   transition: all ${theme.transitions.normal};
   margin: 0 auto 20px;
   box-shadow: ${theme.shadows.sm};
@@ -258,7 +258,7 @@ const StatIcon = styled(Box)`
   svg {
     width: 34px;
     height: 34px;
-    color: ${props => props.$color || props.theme.colors.primary600};
+    color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
   }
   
   @media screen and (max-width: ${breakpoints.mobile}) {
@@ -276,7 +276,7 @@ const StatIcon = styled(Box)`
 const StatValue = styled(Typography)`
   font-size: 2.75rem;
   font-weight: 700;
-  color: ${props => props.theme.colors.neutral800};
+  color: var(--colors-neutral800);
   line-height: 1;
   margin-bottom: 10px;
   transition: all ${theme.transitions.normal};
@@ -290,7 +290,7 @@ const StatValue = styled(Typography)`
 
 const StatLabel = styled(Typography)`
   font-size: 0.95rem;
-  color: ${props => props.theme.colors.neutral600};
+  color: var(--colors-neutral600);
   font-weight: 500;
   letter-spacing: 0.025em;
   text-align: center;
@@ -301,22 +301,22 @@ const StatLabel = styled(Typography)`
 `;
 
 const DataTable = styled(Box)`
-  background: ${props => props.theme.colors.neutral0};
+  background: var(--colors-neutral0, white);
   border-radius: ${theme.borderRadius.lg};
   overflow: hidden;
   box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${props => props.theme.colors.neutral200};
+  border: 1px solid rgba(128, 128, 128, 0.2);
   margin-bottom: ${theme.spacing.xl};
 `;
 
 const StyledTable = styled(Table)`
   thead {
-    background: ${props => props.theme.colors.neutral100};
-    border-bottom: 2px solid ${props => props.theme.colors.neutral200};
+    background: var(--colors-neutral100);
+    border-bottom: 2px solid rgba(128, 128, 128, 0.2);
     
     th {
       font-weight: 600;
-      color: ${props => props.theme.colors.neutral800};
+      color: var(--colors-neutral800);
       font-size: 0.875rem;
       text-transform: uppercase;
       letter-spacing: 0.025em;
@@ -326,14 +326,14 @@ const StyledTable = styled(Table)`
   
   tbody tr {
     transition: all ${theme.transitions.fast};
-    border-bottom: 1px solid ${props => props.theme.colors.neutral150};
+    border-bottom: 1px solid rgba(128, 128, 128, 0.15);
     
     &:last-child {
       border-bottom: none;
     }
     
     &:hover {
-      background: ${props => props.theme.colors.primary100};
+      background: rgba(2, 132, 199, 0.12);
       
       .action-buttons {
         opacity: 1;
@@ -342,7 +342,7 @@ const StyledTable = styled(Table)`
     
     td {
       padding: ${theme.spacing.lg} ${theme.spacing.lg};
-      color: ${props => props.theme.colors.neutral800};
+      color: var(--colors-neutral800);
       vertical-align: middle;
     }
   }
@@ -352,19 +352,19 @@ const OnlineIndicator = styled.div`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: ${props => props.$online ? theme.colors.success[500] : props.theme.colors.neutral400};
+  background: ${props => props.$online ? 'var(--colors-success600, #22C55E)' : 'rgba(128, 128, 128, 0.4)'};
   display: inline-block;
   margin-right: 8px;
   ${css`animation: ${props => props.$online ? pulse : 'none'} 2s ease-in-out infinite;`}
 `;
 
 const FilterBar = styled(Flex)`
-  background: ${props => props.theme.colors.neutral0};
+  background: var(--colors-neutral0, white);
   padding: ${theme.spacing.md} ${theme.spacing.lg};
   border-radius: ${theme.borderRadius.lg};
   margin-bottom: ${theme.spacing.lg};
   box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${props => props.theme.colors.neutral200};
+  border: 1px solid rgba(128, 128, 128, 0.2);
   gap: ${theme.spacing.md};
   align-items: center;
 `;
@@ -381,28 +381,28 @@ const SearchIcon = styled(Search)`
   left: 12px;
   width: 16px;
   height: 16px;
-  color: ${props => props.theme.colors.neutral600};
+  color: var(--colors-neutral600);
   pointer-events: none;
 `;
 
 const StyledSearchInput = styled.input`
   width: 100%;
   padding: ${theme.spacing.sm} ${theme.spacing.sm} ${theme.spacing.sm} 36px;
-  border: 1px solid ${props => props.theme.colors.neutral200};
+  border: 1px solid rgba(128, 128, 128, 0.2);
   border-radius: ${theme.borderRadius.md};
   font-size: 0.875rem;
   transition: all ${theme.transitions.fast};
-  background: ${props => props.theme.colors.neutral0};
-  color: ${props => props.theme.colors.neutral800};
+  background: var(--colors-neutral0, white);
+  color: var(--colors-neutral800);
   
   &:focus {
     outline: none;
-    border-color: ${props => props.theme.colors.primary600};
-    box-shadow: 0 0 0 3px ${props => props.theme.colors.primary100};
+    border-color: var(--colors-primary600, #0284C7);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
   }
   
   &::placeholder {
-    color: ${props => props.theme.colors.neutral500};
+    color: var(--colors-neutral500);
   }
 `;
 
@@ -413,7 +413,7 @@ const ActionButtons = styled(Flex)`
   justify-content: flex-end;
 `;
 
-// Status Badge - pill-shaped with subtle gradient
+// Status Badge - pill shaped with subtle gradient
 const StatusBadge = styled.span`
   display: inline-flex;
   align-items: center;
@@ -427,27 +427,27 @@ const StatusBadge = styled.span`
   transition: all 0.2s ease;
   
   ${props => props.$status === 'active' && `
-    background: linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%);
-    color: #15803D;
-    border: 1px solid #86EFAC;
+    background: linear-gradient(135deg, rgba(22, 163, 74, 0.12) 0%, rgba(34, 197, 94, 0.3) 100%);
+    color: var(--colors-success700, #15803D);
+    border: 1px solid rgba(34, 197, 94, 0.3);
   `}
   
   ${props => props.$status === 'idle' && `
-    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
-    color: #A16207;
-    border: 1px solid #FCD34D;
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(234, 179, 8, 0.4) 100%);
+    color: var(--colors-warning600, #A16207);
+    border: 1px solid rgba(234, 179, 8, 0.4);
   `}
   
   ${props => props.$status === 'loggedout' && `
-    background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%);
-    color: #B91C1C;
-    border: 1px solid #FCA5A5;
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.12) 0%, rgba(239, 68, 68, 0.4) 100%);
+    color: var(--colors-danger600, #B91C1C);
+    border: 1px solid rgba(239, 68, 68, 0.4);
   `}
   
   ${props => props.$status === 'terminated' && `
-    background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
-    color: #4B5563;
-    border: 1px solid #D1D5DB;
+    background: linear-gradient(135deg, var(--colors-neutral100) 0%, rgba(128, 128, 128, 0.2) 100%);
+    color: var(--colors-neutral600);
+    border: 1px solid rgba(128, 128, 128, 0.2);
   `}
 `;
 
@@ -458,21 +458,21 @@ const StatusDot = styled.span`
   flex-shrink: 0;
   
   ${props => props.$status === 'active' && `
-    background: #22C55E;
+    background: var(--colors-success600, #22C55E);
     box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
     animation: pulse-green 2s ease-in-out infinite;
   `}
   
   ${props => props.$status === 'idle' && `
-    background: #F59E0B;
+    background: var(--colors-warning600, #F59E0B);
   `}
   
   ${props => props.$status === 'loggedout' && `
-    background: #EF4444;
+    background: var(--colors-danger600, #EF4444);
   `}
   
   ${props => props.$status === 'terminated' && `
-    background: #9CA3AF;
+    background: var(--colors-neutral500);
   `}
   
   @keyframes pulse-green {
@@ -485,15 +485,15 @@ const ClickableRow = styled(Tr)`
   cursor: pointer;
   
   &:hover {
-    background: ${props => props.theme.colors.primary100} !important;
+    background: rgba(2, 132, 199, 0.12) !important;
   }
 `;
 
 // Empty state background that works in dark mode
 const EmptyStateBox = styled(Box)`
-  background: ${props => props.theme.colors.neutral0};
+  background: var(--colors-neutral0, white);
   border-radius: ${theme.borderRadius.xl};
-  border: 2px dashed ${props => props.theme.colors.neutral300};
+  border: 2px dashed rgba(128, 128, 128, 0.3);
   padding: 80px 32px;
   text-align: center;
   position: relative;
@@ -510,7 +510,7 @@ const EmptyStateGradient = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, ${theme.colors.primary[50]} 0%, ${theme.colors.secondary[50]} 100%);
+  background: linear-gradient(135deg, ${'rgba(2, 132, 199, 0.06)'} 0%, ${'rgba(147, 51, 234, 0.06)'} 100%);
   opacity: 0.3;
   z-index: 0;
 `;
@@ -823,32 +823,32 @@ const HomePage = () => {
       
       {/* Stats Cards */}
       <StatsGrid>
-        <StatCard $delay="0.1s" $color={theme.colors.success[500]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.success[100]} $color={theme.colors.success[600]}>
+        <StatCard $delay="0.1s" $color={'var(--colors-success600, #22C55E)'}>
+          <StatIcon className="stat-icon" $bg={'rgba(22, 163, 74, 0.12)'} $color={'var(--colors-success600, #16A34A)'}>
             <Check />
           </StatIcon>
           <StatValue className="stat-value">{activeSessions.length}</StatValue>
           <StatLabel>{t('homepage.stats.active', 'Active')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.2s" $color={theme.colors.warning[500]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.warning[100]} $color={theme.colors.warning[600]}>
+        <StatCard $delay="0.2s" $color={'var(--colors-warning600, #F59E0B)'}>
+          <StatIcon className="stat-icon" $bg={'rgba(234, 179, 8, 0.12)'} $color={'var(--colors-warning600, #D97706)'}>
             <Clock />
           </StatIcon>
           <StatValue className="stat-value">{idleSessions.length}</StatValue>
           <StatLabel>{t('homepage.stats.idle', 'Idle')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.3s" $color={theme.colors.danger[500]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.danger[100]} $color={theme.colors.danger[600]}>
+        <StatCard $delay="0.3s" $color={'var(--colors-danger600, #EF4444)'}>
+          <StatIcon className="stat-icon" $bg={'rgba(220, 38, 38, 0.12)'} $color={'var(--colors-danger600, #DC2626)'}>
             <Cross />
           </StatIcon>
           <StatValue className="stat-value">{loggedOutSessions.length}</StatValue>
           <StatLabel>{t('homepage.stats.loggedOut', 'Logged Out')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.4s" $color="#4B5563">
-          <StatIcon className="stat-icon" $bg="#F3F4F6" $color="#4B5563">
+        <StatCard $delay="0.4s" $color="var(--colors-neutral600)">
+          <StatIcon className="stat-icon" $bg="var(--colors-neutral100)" $color="var(--colors-neutral600)">
             <Cross />
           </StatIcon>
           <StatValue className="stat-value">{terminatedSessions.length}</StatValue>
@@ -856,7 +856,7 @@ const HomePage = () => {
         </StatCard>
 
         <StatCard $delay="0.5s" $color="#A855F7">
-          <StatIcon className="stat-icon" $bg="#EDE9FE" $color="#9333EA">
+          <StatIcon className="stat-icon" $bg="rgba(147, 51, 234, 0.12)" $color="#9333EA">
             <User />
           </StatIcon>
           <StatValue className="stat-value">{sessions.length}</StatValue>
@@ -959,26 +959,26 @@ const HomePage = () => {
                   // Status colors and labels
                   const statusConfig = {
                     active: { 
-                      bg: theme.colors.success[50], 
+                      bg: 'rgba(22, 163, 74, 0.06)', 
                       badgeColor: 'success600', 
                       label: t('homepage.status.active', 'Active'),
                       indicator: true 
                     },
                     idle: { 
-                      bg: theme.colors.warning[50], 
+                      bg: 'rgba(234, 179, 8, 0.06)', 
                       badgeColor: 'warning600', 
                       label: t('homepage.status.idle', 'Idle'),
                       indicator: false 
                     },
                     loggedout: { 
-                      bg: theme.colors.danger[50], 
+                      bg: 'rgba(220, 38, 38, 0.06)', 
                       badgeColor: 'danger600', 
                       label: t('homepage.status.loggedOut', 'Logged Out'),
                       indicator: false,
                       opacity: 0.7 
                     },
                     terminated: { 
-                      bg: '#F3F4F6', 
+                      bg: 'var(--colors-neutral100)', 
                       badgeColor: 'neutral600', 
                       label: t('homepage.status.terminated', 'Terminated'),
                       indicator: false,
@@ -1105,7 +1105,7 @@ const HomePage = () => {
           background="neutral0"
           style={{
             borderRadius: theme.borderRadius.xl,
-            border: '2px dashed #E5E7EB',
+            border: '2px dashed rgba(128, 128, 128, 0.2)',
             padding: '60px 32px',
             textAlign: 'center',
             position: 'relative',
@@ -1124,7 +1124,7 @@ const HomePage = () => {
               left: 0,
               right: 0,
               bottom: 0,
-              background: `linear-gradient(135deg, ${theme.colors.primary[50]} 0%, ${theme.colors.secondary[50]} 100%)`,
+              background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.06)'} 0%, ${'rgba(147, 51, 234, 0.06)'} 100%)`,
               opacity: 0.3,
               zIndex: 0,
             }}
@@ -1143,14 +1143,14 @@ const HomePage = () => {
                 width: '100px',
                 height: '100px',
                 borderRadius: '50%',
-                background: `linear-gradient(135deg, ${theme.colors.primary[100]} 0%, ${theme.colors.secondary[100]} 100%)`,
+                background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.12)'} 0%, ${'rgba(147, 51, 234, 0.12)'} 100%)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 boxShadow: theme.shadows.xl,
               }}
             >
-              <Search style={{ width: '50px', height: '50px', color: '#0284C7' }} />
+              <Search style={{ width: '50px', height: '50px', color: 'var(--colors-primary600, #0284C7)' }} />
             </Box>
             
             <Typography 
@@ -1188,7 +1188,7 @@ const HomePage = () => {
           background="neutral0"
           style={{
             borderRadius: theme.borderRadius.xl,
-            border: '2px dashed #E5E7EB',
+            border: '2px dashed rgba(128, 128, 128, 0.2)',
             padding: '80px 32px',
             textAlign: 'center',
             position: 'relative',
@@ -1207,7 +1207,7 @@ const HomePage = () => {
               left: 0,
               right: 0,
               bottom: 0,
-              background: `linear-gradient(135deg, ${theme.colors.primary[50]} 0%, ${theme.colors.secondary[50]} 100%)`,
+              background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.06)'} 0%, ${'rgba(147, 51, 234, 0.06)'} 100%)`,
               opacity: 0.3,
               zIndex: 0,
             }}
@@ -1221,14 +1221,14 @@ const HomePage = () => {
                 width: '120px',
                 height: '120px',
                 borderRadius: '50%',
-                background: `linear-gradient(135deg, ${theme.colors.primary[100]} 0%, ${theme.colors.secondary[100]} 100%)`,
+                background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.12)'} 0%, ${'rgba(147, 51, 234, 0.12)'} 100%)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 boxShadow: theme.shadows.xl,
               }}
             >
-              <Monitor style={{ width: '60px', height: '60px', color: '#0284C7' }} />
+              <Monitor style={{ width: '60px', height: '60px', color: 'var(--colors-primary600, #0284C7)' }} />
             </Box>
             
             <Typography 

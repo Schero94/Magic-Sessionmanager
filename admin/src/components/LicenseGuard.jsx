@@ -48,7 +48,7 @@ const ModalOverlay = styled.div`
 `;
 
 const ModalContent = styled(Box)`
-  background: white;
+  background: var(--colors-neutral0, white);
   border-radius: 16px;
   width: 100%;
   max-width: 580px;
@@ -401,7 +401,7 @@ const LicenseGuard = ({ children }) => {
                 padding={4}
                 style={{
                   borderRadius: '8px',
-                  border: '2px solid #BAE6FD',
+                  border: '2px solid rgba(14, 165, 233, 0.3)',
                   width: '100%',
                 }}
               >
@@ -468,12 +468,12 @@ const LicenseGuard = ({ children }) => {
                   padding={5}
                   style={{
                     borderRadius: '8px',
-                    border: '2px solid #DCFCE7',
+                    border: '2px solid rgba(34, 197, 94, 0.3)',
                     textAlign: 'center',
                   }}
                 >
                   <Typography variant="omega" fontWeight="bold" style={{ marginBottom: '12px', display: 'block' }}>
-                    Ready to activate with your account:
+                    Ready to activate with your account
                   </Typography>
                   <Typography variant="pi" style={{ marginBottom: '4px', display: 'block' }}>
                     {adminUser.firstname || 'Admin'} {adminUser.lastname || 'User'}

@@ -41,7 +41,7 @@ const theme = {
     success: { 600: '#16A34A', 700: '#15803D', 100: '#DCFCE7', 50: '#F0FDF4' },
     danger: { 600: '#DC2626', 700: '#B91C1C', 100: '#FEE2E2', 50: '#FEF2F2' },
     warning: { 600: '#D97706', 700: '#A16207', 100: '#FEF3C7', 50: '#FFFBEB' },
-    neutral: { 0: '#FFFFFF', 50: '#F9FAFB', 100: '#F3F4F6', 200: '#E5E7EB', 400: '#9CA3AF', 600: '#4B5563', 700: '#374151', 800: '#1F2937' }
+    neutral: { 0: '#FFFFFF', 50: '#F9FAFB', 100: '#F3F4F6', 200: 'rgba(128, 128, 128, 0.2)', 400: '#9CA3AF', 600: '#4B5563', 700: '#374151', 800: '#1F2937' }
   },
   shadows: { sm: '0 1px 3px rgba(0,0,0,0.1)', md: '0 4px 6px rgba(0,0,0,0.1)', xl: '0 20px 25px rgba(0,0,0,0.1)' },
   borderRadius: { md: '8px', lg: '12px', xl: '16px' }
@@ -69,20 +69,20 @@ const StickySaveBar = styled(Box)`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: ${props => props.theme.colors.neutral0};
-  border-bottom: 1px solid ${props => props.theme.colors.neutral200};
+  background: var(--colors-neutral0, white);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 `;
 
 const ToggleCard = styled(Box)`
   background: ${props => props.$active 
-    ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' 
-    : 'linear-gradient(135deg, #fafafa 0%, #f3f4f6 100%)'};
+    ? 'linear-gradient(135deg, rgba(22, 163, 74, 0.06) 0%, rgba(22, 163, 74, 0.12) 100%)' 
+    : 'linear-gradient(135deg, rgba(128, 128, 128, 0.04) 0%, rgba(128, 128, 128, 0.08) 100%)'};
   border-radius: ${theme.borderRadius.lg};
   padding: 24px;
   min-height: 120px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid ${props => props.$active ? theme.colors.success[600] : theme.colors.neutral[200]};
+  border: 2px solid ${props => props.$active ? 'var(--colors-success600, #16A34A)' : 'rgba(128, 128, 128, 0.2)'};
   box-shadow: ${props => props.$active 
     ? '0 4px 20px rgba(34, 197, 94, 0.15)' 
     : '0 2px 8px rgba(0, 0, 0, 0.06)'};
@@ -96,7 +96,7 @@ const ToggleCard = styled(Box)`
     box-shadow: ${props => props.$active 
       ? '0 8px 30px rgba(34, 197, 94, 0.25)' 
       : '0 6px 16px rgba(0, 0, 0, 0.12)'};
-    border-color: ${props => props.$active ? theme.colors.success[700] : theme.colors.neutral[300]};
+    border-color: ${props => props.$active ? 'var(--colors-success600, #15803D)' : 'rgba(128, 128, 128, 0.3)'};
   }
   
   &:active {
@@ -109,7 +109,7 @@ const ToggleCard = styled(Box)`
       position: absolute;
       top: 12px;
       right: 12px;
-      background: ${theme.colors.success[600]};
+      background: ${'var(--colors-success600, #16A34A)'};
       color: white;
       padding: 4px 10px;
       border-radius: 6px;
@@ -126,7 +126,7 @@ const ToggleCard = styled(Box)`
       position: absolute;
       top: 12px;
       right: 12px;
-      background: ${theme.colors.neutral[400]};
+      background: ${'rgba(128, 128, 128, 0.4)'};
       color: white;
       padding: 4px 10px;
       border-radius: 6px;
@@ -141,17 +141,17 @@ const ToggleCard = styled(Box)`
 const GreenToggle = styled.div`
   ${props => props.$isActive && `
     button[role="switch"] {
-      background-color: #16A34A !important;
-      border-color: #16A34A !important;
+      background-color: var(--colors-success600, #16A34A) !important;
+      border-color: var(--colors-success600, #16A34A) !important;
       
       &:hover {
-        background-color: #15803D !important;
-        border-color: #15803D !important;
+        background-color: var(--colors-success600, #15803D) !important;
+        border-color: var(--colors-success600, #15803D) !important;
       }
       
       &:focus {
-        background-color: #16A34A !important;
-        border-color: #16A34A !important;
+        background-color: var(--colors-success600, #16A34A) !important;
+        border-color: var(--colors-success600, #16A34A) !important;
         box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2) !important;
       }
     }
@@ -164,10 +164,10 @@ const GreenToggle = styled.div`
   
   ${props => !props.$isActive && `
     button[role="switch"] {
-      background-color: #E5E7EB;
+      background-color: rgba(128, 128, 128, 0.2);
       
       &:hover {
-        background-color: #D1D5DB;
+        background-color: rgba(128, 128, 128, 0.2);
       }
     }
   `}
@@ -587,8 +587,8 @@ const SettingsPage = () => {
               style={{
                 background: hasChanges && !saving
                   ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
-                  : '#e5e7eb',
-                color: hasChanges && !saving ? 'white' : '#9ca3af',
+                  : 'rgba(128, 128, 128, 0.2)',
+                color: hasChanges && !saving ? 'white' : 'var(--colors-neutral500)',
                 fontWeight: '600',
                 padding: '12px 24px',
                 border: 'none',
@@ -616,9 +616,9 @@ const SettingsPage = () => {
       <Box paddingTop={6} paddingLeft={6} paddingRight={6} paddingBottom={10}>
         
         {/* License Status Debug */}
-        <Box padding={4} background="primary50" hasRadius style={{ marginBottom: '24px', border: '1px solid #bae6fd' }}>
+        <Box padding={4} background="primary50" hasRadius style={{ marginBottom: '24px', border: '1px solid rgba(14, 165, 233, 0.3)' }}>
           <Flex gap={3} alignItems="center">
-            <Information style={{ width: '20px', height: '20px', color: '#0284C7' }} />
+            <Information style={{ width: '20px', height: '20px', color: 'var(--colors-primary600, #0284C7)' }} />
             <Box>
               <Typography variant="omega" fontWeight="bold" textColor="primary700" style={{ marginBottom: '4px' }}>
                 {t('settings.license.title', 'Current License Status')}
@@ -655,7 +655,7 @@ const SettingsPage = () => {
               <Box padding={6}>
                 
                 {/* Session Timeout */}
-                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   {t('settings.general.timeout.title', 'SESSION TIMEOUT')}
                 </Typography>
                 <Grid.Root gap={6} style={{ marginBottom: '32px' }}>
@@ -705,7 +705,7 @@ const SettingsPage = () => {
 
                 {/* Cleanup & Retention */}
                 <Divider style={{ marginBottom: '24px' }} />
-                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   🧹 {t('settings.general.cleanup.title', 'AUTO-CLEANUP & RETENTION')}
                 </Typography>
                 <Grid.Root gap={6}>
@@ -756,9 +756,9 @@ const SettingsPage = () => {
                   </Grid.Item>
                   
                   <Grid.Item col={12}>
-                    <Box padding={4} background="danger100" style={{ borderRadius: theme.borderRadius.md, border: `2px solid ${theme.colors.danger[200]}` }}>
+                    <Box padding={4} background="danger100" style={{ borderRadius: theme.borderRadius.md, border: `2px solid rgba(220, 38, 38, 0.2)` }}>
                       <Flex gap={3} alignItems="flex-start">
-                        <Trash style={{ width: '18px', height: '18px', color: theme.colors.danger[600], flexShrink: 0, marginTop: '2px' }} />
+                        <Trash style={{ width: '18px', height: '18px', color: 'var(--colors-danger600, #DC2626)', flexShrink: 0, marginTop: '2px' }} />
                         <Box style={{ flex: 1 }}>
                           <Typography variant="omega" fontWeight="bold" textColor="danger700" style={{ marginBottom: '8px', display: 'block' }}>
                             {t('settings.general.danger.title', 'Danger Zone')}
@@ -798,7 +798,7 @@ const SettingsPage = () => {
             <Accordion.Content>
               <Box padding={6}>
                 
-                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   {t('settings.security.options', 'SECURITY OPTIONS')}
                 </Typography>
 
@@ -809,13 +809,13 @@ const SettingsPage = () => {
                   style={{ 
                     borderRadius: theme.borderRadius.lg, 
                     marginBottom: '32px',
-                    border: `2px solid ${theme.colors.primary[100]}`,
-                    background: `linear-gradient(135deg, ${theme.colors.neutral[0]} 0%, ${theme.colors.primary[50]} 100%)`
+                    border: `2px solid ${'rgba(2, 132, 199, 0.12)'}`,
+                    background: `linear-gradient(135deg, ${'var(--colors-neutral0, white)'} 0%, ${'rgba(2, 132, 199, 0.06)'} 100%)`
                   }}
                 >
                   <Flex direction="column" gap={4}>
                     <Flex alignItems="center" gap={3}>
-                      <Shield style={{ width: 24, height: 24, color: theme.colors.primary[600] }} />
+                      <Shield style={{ width: 24, height: 24, color: 'var(--colors-primary600, #0284C7)' }} />
                       <Typography variant="delta" fontWeight="bold">
                         {t('settings.security.encryption.title', 'JWT Encryption Key Generator')}
                       </Typography>
@@ -910,7 +910,7 @@ const SettingsPage = () => {
                         background="neutral100" 
                         style={{ 
                           borderRadius: theme.borderRadius.md,
-                          border: '1px solid ' + theme.colors.neutral[200],
+                          border: '1px solid ' + 'rgba(128, 128, 128, 0.2)',
                           fontFamily: 'monospace',
                           fontSize: '12px',
                           wordBreak: 'break-all'
@@ -919,7 +919,7 @@ const SettingsPage = () => {
                         <Typography variant="omega" fontWeight="bold" style={{ marginBottom: 8, display: 'block' }}>
                           {t('settings.security.encryption.envLabel', 'Add to .env file:')}
                         </Typography>
-                        <code style={{ color: theme.colors.primary[700] }}>
+                        <code style={{ color: 'var(--colors-primary600, #075985)' }}>
                           SESSION_ENCRYPTION_KEY={encryptionKey}
                         </code>
                       </Box>
@@ -1065,7 +1065,7 @@ const SettingsPage = () => {
                   
                   {/* Email Alerts Toggle */}
                   <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>
-                    <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', textAlign: 'center', color: theme.colors.neutral[700] }}>
+                    <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', textAlign: 'center', color: 'var(--colors-neutral700)' }}>
                       📧 {t('settings.email.alerts.title', 'EMAIL ALERTS')}
                     </Typography>
                     <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', textAlign: 'center', fontSize: '12px' }}>
@@ -1106,7 +1106,7 @@ const SettingsPage = () => {
                   {/* Alert Type Checkboxes */}
                   {settings.enableEmailAlerts && (
                     <>
-                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: theme.colors.neutral[700] }}>
+                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                         ⚙️ {t('settings.email.types.title', 'ALERT TYPES')}
                       </Typography>
                       <Grid.Root gap={4} style={{ marginBottom: '32px' }}>
@@ -1116,7 +1116,7 @@ const SettingsPage = () => {
                             background={settings.alertOnSuspiciousLogin ? 'danger50' : 'neutral50'}
                             style={{ 
                               borderRadius: theme.borderRadius.md, 
-                              border: `2px solid ${settings.alertOnSuspiciousLogin ? '#fecaca' : '#E5E7EB'}`,
+                              border: `2px solid ${settings.alertOnSuspiciousLogin ? 'rgba(239, 68, 68, 0.4)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
                               cursor: 'pointer'
                             }}
@@ -1138,7 +1138,7 @@ const SettingsPage = () => {
                             background={settings.alertOnNewLocation ? 'primary50' : 'neutral50'}
                             style={{ 
                               borderRadius: theme.borderRadius.md, 
-                              border: `2px solid ${settings.alertOnNewLocation ? '#bae6fd' : '#E5E7EB'}`,
+                              border: `2px solid ${settings.alertOnNewLocation ? 'rgba(14, 165, 233, 0.3)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
                               cursor: 'pointer'
                             }}
@@ -1160,7 +1160,7 @@ const SettingsPage = () => {
                             background={settings.alertOnVpnProxy ? 'warning50' : 'neutral50'}
                             style={{ 
                               borderRadius: theme.borderRadius.md, 
-                              border: `2px solid ${settings.alertOnVpnProxy ? '#fde68a' : '#E5E7EB'}`,
+                              border: `2px solid ${settings.alertOnVpnProxy ? 'rgba(234, 179, 8, 0.4)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
                               cursor: 'pointer'
                             }}
@@ -1180,7 +1180,7 @@ const SettingsPage = () => {
 
                       {/* Email Templates */}
                       <Divider style={{ marginBottom: '24px' }} />
-                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: theme.colors.neutral[700] }}>
+                      <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: 'var(--colors-neutral700)' }}>
                         {t('settings.email.templates.title', 'EMAIL TEMPLATES')}
                       </Typography>
                       <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', fontSize: '12px' }}>
@@ -1218,11 +1218,11 @@ const SettingsPage = () => {
                               <Box 
                                 padding={3} 
                                 background="primary100" 
-                                style={{ borderRadius: theme.borderRadius.md, marginBottom: '20px', border: '2px solid #BAE6FD' }}
+                                style={{ borderRadius: theme.borderRadius.md, marginBottom: '20px', border: '2px solid rgba(14, 165, 233, 0.3)' }}
                               >
                                 <Flex direction="column" gap={2}>
                                   <Flex alignItems="center" gap={2}>
-                                    <Code style={{ width: '16px', height: '16px', color: theme.colors.primary[600] }} />
+                                    <Code style={{ width: '16px', height: '16px', color: 'var(--colors-primary600, #0284C7)' }} />
                                     <Typography variant="omega" fontWeight="bold" textColor="primary600">
                                       {t('settings.email.templates.variables', 'Available Variables (click to copy)')}
                                     </Typography>
@@ -1255,7 +1255,7 @@ const SettingsPage = () => {
                               <Box 
                                 background="neutral0" 
                                 padding={6} 
-                                style={{ borderRadius: theme.borderRadius.lg, border: '2px solid #E5E7EB', width: '100%', marginBottom: '24px' }}
+                                style={{ borderRadius: theme.borderRadius.lg, border: '2px solid rgba(128, 128, 128, 0.2)', width: '100%', marginBottom: '24px' }}
                               >
                                 <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '16px' }}>
                                   <Flex alignItems="center" gap={2}>
@@ -1282,7 +1282,7 @@ const SettingsPage = () => {
                                 </Typography>
                                 <Box 
                                   style={{ 
-                                    border: '2px solid #E5E7EB', 
+                                    border: '2px solid rgba(128, 128, 128, 0.2)', 
                                     borderRadius: '6px', 
                                     overflow: 'hidden',
                                     background: '#1e1e1e',
@@ -1371,7 +1371,7 @@ const SettingsPage = () => {
                               <Box 
                                 background="neutral0" 
                                 padding={6} 
-                                style={{ borderRadius: theme.borderRadius.lg, border: '2px solid #E5E7EB', width: '100%', marginBottom: '24px' }}
+                                style={{ borderRadius: theme.borderRadius.lg, border: '2px solid rgba(128, 128, 128, 0.2)', width: '100%', marginBottom: '24px' }}
                               >
                                 <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '16px' }}>
                                   <Flex alignItems="center" gap={2}>
@@ -1398,7 +1398,7 @@ const SettingsPage = () => {
                                 </Typography>
                                 <Box 
                                   style={{ 
-                                    border: '2px solid #E5E7EB', 
+                                    border: '2px solid rgba(128, 128, 128, 0.2)', 
                                     borderRadius: '6px', 
                                     overflow: 'hidden',
                                     background: '#1e1e1e',
@@ -1525,10 +1525,10 @@ const SettingsPage = () => {
                           </Typography>
                           <Box 
                             style={{ 
-                              border: '2px solid #E5E7EB', 
+                              border: '2px solid rgba(128, 128, 128, 0.2)', 
                               borderRadius: theme.borderRadius.md,
                               overflow: 'hidden',
-                              background: '#fafafa'
+                              background: 'var(--colors-neutral100)'
                             }}
                           >
                             <textarea
@@ -1544,8 +1544,8 @@ const SettingsPage = () => {
                                 fontFamily: 'Monaco, Consolas, monospace',
                                 fontSize: '14px',
                                 lineHeight: '1.8',
-                                color: '#374151',
-                                background: 'white',
+                                color: 'var(--colors-neutral800)',
+                                background: 'var(--colors-neutral0, white)',
                                 resize: 'vertical',
                                 minHeight: '80px',
                               }}
@@ -1571,10 +1571,10 @@ const SettingsPage = () => {
                           </Typography>
                           <Box 
                             style={{ 
-                              border: '2px solid #E5E7EB', 
+                              border: '2px solid rgba(128, 128, 128, 0.2)', 
                               borderRadius: theme.borderRadius.md,
                               overflow: 'hidden',
-                              background: '#fafafa'
+                              background: 'var(--colors-neutral100)'
                             }}
                           >
                             <textarea
@@ -1590,8 +1590,8 @@ const SettingsPage = () => {
                                 fontFamily: 'Monaco, Consolas, monospace',
                                 fontSize: '14px',
                                 lineHeight: '1.8',
-                                color: '#374151',
-                                background: 'white',
+                                color: 'var(--colors-neutral800)',
+                                background: 'var(--colors-neutral0, white)',
                                 resize: 'vertical',
                                 minHeight: '80px',
                               }}
@@ -1620,11 +1620,11 @@ const SettingsPage = () => {
         </Accordion.Root>
 
          {/* Footer Info */}
-         <Box padding={5} background="primary100" style={{ borderRadius: theme.borderRadius.md, marginTop: '32px', border: '2px solid #BAE6FD' }}>
+         <Box padding={5} background="primary100" style={{ borderRadius: theme.borderRadius.md, marginTop: '32px', border: '2px solid rgba(14, 165, 233, 0.3)' }}>
            <Flex gap={3} alignItems="flex-start">
-             <Check style={{ width: '20px', height: '20px', color: theme.colors.success[600], flexShrink: 0, marginTop: '2px' }} />
+             <Check style={{ width: '20px', height: '20px', color: 'var(--colors-success600, #16A34A)', flexShrink: 0, marginTop: '2px' }} />
              <Box style={{ flex: 1 }}>
-               <Typography variant="omega" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: theme.colors.primary[700] }}>
+               <Typography variant="omega" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', color: 'var(--colors-primary600, #075985)' }}>
                  {t('settings.footer.title', 'Database-Backed Settings')}
                </Typography>
                <Typography variant="pi" textColor="primary700" style={{ fontSize: '13px', lineHeight: '1.8' }}>

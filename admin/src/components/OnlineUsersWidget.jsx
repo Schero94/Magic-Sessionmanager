@@ -108,7 +108,7 @@ const OnlineUsersWidget = () => {
         textDecoration: 'none',
         cursor: 'default',
         transition: 'box-shadow 0.2s',
-        border: '1px solid #f0f0ff',
+        border: '1px solid rgba(128, 128, 128, 0.1)',
       }}
     >
       <Flex justifyContent="space-between" alignItems="flex-start">

@@ -48,10 +48,10 @@ const SectionTitle = styled(Typography)`
   letter-spacing: 0.5px;
   font-size: 11px;
   font-weight: 700;
-  color: #374151;
+  color: var(--colors-neutral800);
   margin-bottom: 16px;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid rgba(128, 128, 128, 0.2);
   display: block;
 `;
 
@@ -72,16 +72,16 @@ const ModalStatusBadge = styled.span`
   text-transform: uppercase;
   
   ${props => props.$online && `
-    background: linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%);
-    color: #166534;
-    border: 2px solid #86EFAC;
+    background: linear-gradient(135deg, rgba(22, 163, 74, 0.12) 0%, rgba(34, 197, 94, 0.3) 100%);
+    color: var(--colors-success600, #166534);
+    border: 2px solid rgba(34, 197, 94, 0.3);
     box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
   `}
   
   ${props => !props.$online && `
-    background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
-    color: #4B5563;
-    border: 2px solid #D1D5DB;
+    background: linear-gradient(135deg, rgba(128, 128, 128, 0.08) 0%, rgba(128, 128, 128, 0.2) 100%);
+    color: var(--colors-neutral600);
+    border: 2px solid rgba(128, 128, 128, 0.2);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   `}
 `;
@@ -92,13 +92,13 @@ const StatusDot = styled.span`
   border-radius: 50%;
   
   ${props => props.$online && `
-    background: #22C55E;
+    background: var(--colors-success600, #22C55E);
     box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
     animation: pulse-green 2s ease-in-out infinite;
   `}
   
   ${props => !props.$online && `
-    background: #9CA3AF;
+    background: var(--colors-neutral500);
   `}
   
   @keyframes pulse-green {
@@ -234,7 +234,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
-          background: '#f3f4f6',
+          background: 'var(--colors-neutral100)',
           borderRadius: '8px',
           flexShrink: 0,
         }}>
@@ -261,7 +261,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
               width: '48px',
               height: '48px',
               borderRadius: '12px',
-              background: isOnline ? '#dcfce7' : '#f3f4f6',
+              background: isOnline ? 'rgba(22, 163, 74, 0.12)' : 'var(--colors-neutral100)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -424,18 +424,18 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                 <Box
                   padding={5}
                   style={{
-                    background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+                    background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(234, 179, 8, 0.25) 100%)',
                     borderRadius: '12px',
-                    border: '2px solid #fbbf24',
+                    border: '2px solid rgba(234, 179, 8, 0.4)',
                     textAlign: 'center',
                   }}
                 >
                   <Flex direction="column" alignItems="center" gap={3}>
-                    <Crown style={{ width: '40px', height: '40px', color: '#d97706' }} />
-                    <Typography variant="beta" style={{ color: '#92400e', fontWeight: '700' }}>
+                    <Crown style={{ width: '40px', height: '40px', color: 'var(--colors-warning600, #d97706)' }} />
+                    <Typography variant="beta" style={{ color: 'var(--colors-warning600, #92400e)', fontWeight: '700' }}>
                       {t('modal.premium.title', 'Location and Security Analysis')}
                     </Typography>
-                    <Typography variant="omega" style={{ color: '#78350f', fontSize: '14px', lineHeight: '1.6' }}>
+                    <Typography variant="omega" style={{ color: 'var(--colors-warning600, #78350f)', fontSize: '14px', lineHeight: '1.6' }}>
                       {t('modal.premium.description', 'Unlock premium features to get IP geolocation, security scoring, and VPN/Proxy detection for every session')}
                     </Typography>
                     <PremiumButton
