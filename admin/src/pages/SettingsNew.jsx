@@ -60,7 +60,7 @@ const StickySaveBar = styled(Box)`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--colors-neutral0, white);
+  background: ${(p) => p.theme.colors.neutral0};
   border-bottom: 1px solid ${'rgba(128, 128, 128, 0.2)'};
   box-shadow: ${theme.shadows.sm};
 `;
@@ -214,7 +214,7 @@ const getDefaultTemplates = () => ({
     <h2 style="color: #dc2626;">[ALERT] Suspicious Login Detected</h2>
     <p>A potentially suspicious login was detected for your account.</p>
     
-    <div style="background: var(--colors-neutral0, white); padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <div style="background: ${(p) => p.theme.colors.neutral0}; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account Information:</h3>
       <ul>
         <li><strong>Email:</strong> {{user.email}}</li>
@@ -269,7 +269,7 @@ Security: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThre
     <h2 style="color: #0284c7;">[LOCATION] Login from New Location</h2>
     <p>Your account was accessed from a new location.</p>
     
-    <div style="background: var(--colors-neutral0, white); padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <div style="background: ${(p) => p.theme.colors.neutral0}; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account:</h3>
       <p><strong>{{user.email}}</strong></p>
       
@@ -312,7 +312,7 @@ If this was you, no action is needed.`,
     <h2 style="color: #d97706;">[WARNING] VPN/Proxy Detected</h2>
     <p>A login from a VPN or proxy service was detected on your account.</p>
     
-    <div style="background: var(--colors-neutral0, white); padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <div style="background: ${(p) => p.theme.colors.neutral0}; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account:</h3>
       <p><strong>{{user.email}}</strong></p>
       

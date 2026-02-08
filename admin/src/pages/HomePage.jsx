@@ -200,7 +200,7 @@ const StatsGrid = styled.div`
 `;
 
 const StatCard = styled(Box)`
-  background: var(--colors-neutral0, white);
+  background: ${(p) => p.theme.colors.neutral0};
   border-radius: ${theme.borderRadius.lg};
   padding: 28px ${theme.spacing.lg};
   position: relative;
@@ -301,7 +301,7 @@ const StatLabel = styled(Typography)`
 `;
 
 const DataTable = styled(Box)`
-  background: var(--colors-neutral0, white);
+  background: ${(p) => p.theme.colors.neutral0};
   border-radius: ${theme.borderRadius.lg};
   overflow: hidden;
   box-shadow: ${theme.shadows.sm};
@@ -359,7 +359,7 @@ const OnlineIndicator = styled.div`
 `;
 
 const FilterBar = styled(Flex)`
-  background: var(--colors-neutral0, white);
+  background: ${(p) => p.theme.colors.neutral0};
   padding: ${theme.spacing.md} ${theme.spacing.lg};
   border-radius: ${theme.borderRadius.lg};
   margin-bottom: ${theme.spacing.lg};
@@ -392,7 +392,7 @@ const StyledSearchInput = styled.input`
   border-radius: ${theme.borderRadius.md};
   font-size: 0.875rem;
   transition: all ${theme.transitions.fast};
-  background: var(--colors-neutral0, white);
+  background: ${(p) => p.theme.colors.neutral0};
   color: var(--colors-neutral800);
   
   &:focus {
@@ -491,7 +491,7 @@ const ClickableRow = styled(Tr)`
 
 // Empty state background that works in dark mode
 const EmptyStateBox = styled(Box)`
-  background: var(--colors-neutral0, white);
+  background: ${(p) => p.theme.colors.neutral0};
   border-radius: ${theme.borderRadius.xl};
   border: 2px dashed rgba(128, 128, 128, 0.3);
   padding: 80px 32px;

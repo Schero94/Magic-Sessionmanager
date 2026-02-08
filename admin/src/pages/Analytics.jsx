@@ -122,7 +122,7 @@ const HeaderContent = styled(Flex)`
 `;
 
 const Title = styled(Typography)`
-  color: ${'var(--colors-neutral0, white)'};
+  color: ${(p) => p.theme.colors.neutral0};
   font-size: 2.25rem;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -154,7 +154,7 @@ const StatsGrid = styled.div`
 `;
 
 const StatCard = styled(Box)`
-  background: ${'var(--colors-neutral0, white)'};
+  background: ${(p) => p.theme.colors.neutral0};
   border-radius: ${theme.borderRadius.lg};
   padding: 32px;
   position: relative;
@@ -223,7 +223,7 @@ const StatLabel = styled(Typography)`
 `;
 
 const ChartCard = styled(Box)`
-  background: ${'var(--colors-neutral0, white)'};
+  background: ${(p) => p.theme.colors.neutral0};
   border-radius: ${theme.borderRadius.lg};
   padding: 36px;
   box-shadow: ${theme.shadows.md};

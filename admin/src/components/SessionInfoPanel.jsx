@@ -32,7 +32,7 @@ const BlockedWarning = styled(Box)`
 
 const SessionCard = styled(Box)`
   padding: 16px;
-  background: var(--colors-neutral0, white);
+  background: ${(p) => p.theme.colors.neutral0};
   border-radius: 10px;
   border: 1px solid rgba(128, 128, 128, 0.2);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -88,7 +88,7 @@ const ActionButton = styled.button`
   transition: all 0.2s ease;
   
   ${props => props.$variant === 'danger' && `
-    background: var(--colors-neutral0, white);
+    background: ${(p) => p.theme.colors.neutral0};
     color: var(--colors-danger600, #DC2626);
     border: 2px solid var(--colors-danger600, #DC2626);
     
@@ -99,7 +99,7 @@ const ActionButton = styled.button`
   `}
   
   ${props => props.$variant === 'success' && `
-    background: var(--colors-neutral0, white);
+    background: ${(p) => p.theme.colors.neutral0};
     color: var(--colors-success600, #16A34A);
     border: 2px solid var(--colors-success600, #16A34A);
     
