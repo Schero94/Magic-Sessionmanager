@@ -1,3 +1,10 @@
+## [4.4.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.3...v4.4.4) (2026-02-08)
+
+
+### Bug Fixes
+
+* use props.theme.colors.neutral0 for dark mode card backgrounds ([1a33e81](https://github.com/Schero94/Magic-Sessionmanager/commit/1a33e81a4ebed1504eb0b8936d035f398570c94b))
+
 ## [4.4.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.2...v4.4.3) (2026-02-07)
 
 
