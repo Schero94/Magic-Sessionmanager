@@ -1,3 +1,10 @@
+## [4.4.6](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.5...v4.4.6) (2026-02-16)
+
+
+### Bug Fixes
+
+* comprehensive security audit - 30 fixes across 14 files ([9372c9f](https://github.com/Schero94/Magic-Sessionmanager/commit/9372c9ff1aadcb4a118f5c16eaea848ccdd44144))
+
 ## [4.4.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.4...v4.4.5) (2026-02-16)
 
 
