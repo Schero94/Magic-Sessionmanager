@@ -1,3 +1,10 @@
+## [4.4.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.4...v4.4.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* critical security hardening for license routes, SSRF, and encryption ([beb35b7](https://github.com/Schero94/Magic-Sessionmanager/commit/beb35b7461338c08a085bfce14020d3120fb90fd))
+
 ## [4.4.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.3...v4.4.4) (2026-02-08)
 
 
