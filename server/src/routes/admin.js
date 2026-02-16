@@ -90,7 +90,7 @@ module.exports = {
       path: '/license/status',
       handler: 'license.getStatus',
       config: {
-        policies: [],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -98,7 +98,7 @@ module.exports = {
       path: '/license/auto-create',
       handler: 'license.autoCreate',
       config: {
-        policies: [],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -106,7 +106,7 @@ module.exports = {
       path: '/license/create',
       handler: 'license.createAndActivate',
       config: {
-        policies: [],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -114,7 +114,7 @@ module.exports = {
       path: '/license/ping',
       handler: 'license.ping',
       config: {
-        policies: [],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -122,7 +122,7 @@ module.exports = {
       path: '/license/store-key',
       handler: 'license.storeKey',
       config: {
-        policies: [],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     // Geolocation (Premium Feature)

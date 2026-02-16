@@ -22,19 +22,19 @@ function getEncryptionKey() {
   const envKey = process.env.SESSION_ENCRYPTION_KEY;
   
   if (envKey) {
-    // Use provided key (must be 32 bytes for AES-256)
-    const key = crypto.createHash('sha256').update(envKey).digest();
-    return key;
+    return crypto.createHash('sha256').update(envKey).digest();
   }
   
-  // Fallback: Use Strapi's app keys (not recommended for production)
-  const strapiKeys = process.env.APP_KEYS || process.env.API_TOKEN_SALT || 'default-insecure-key';
-  const key = crypto.createHash('sha256').update(strapiKeys).digest();
+  // Fallback: Use Strapi's app keys (always present in running Strapi)
+  const strapiKeys = process.env.APP_KEYS || process.env.API_TOKEN_SALT;
+  if (!strapiKeys) {
+    throw new Error(
+      '[magic-sessionmanager] No encryption key available. ' +
+      'Set SESSION_ENCRYPTION_KEY in your .env file, or ensure APP_KEYS is configured.'
+    );
+  }
   
-  console.warn('[magic-sessionmanager/encryption] [WARNING]  No SESSION_ENCRYPTION_KEY found. Using fallback (not recommended for production).');
-  console.warn('[magic-sessionmanager/encryption] Set SESSION_ENCRYPTION_KEY in .env for better security.');
-  
-  return key;
+  return crypto.createHash('sha256').update(strapiKeys).digest();
 }
 
 /**

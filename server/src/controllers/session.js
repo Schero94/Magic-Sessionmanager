@@ -594,6 +594,13 @@ module.exports = {
         return ctx.badRequest('IP address is required');
       }
 
+      // Validate IP address format to prevent SSRF
+      const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
+      const IPV6_REGEX = /^[0-9a-fA-F:]+$/;
+      if (!IPV4_REGEX.test(ipAddress) && !IPV6_REGEX.test(ipAddress)) {
+        return ctx.badRequest('Invalid IP address format');
+      }
+
       // Check if user has premium license
       const licenseGuard = strapi.plugin('magic-sessionmanager').service('license-guard');
       const pluginStore = strapi.store({ 
