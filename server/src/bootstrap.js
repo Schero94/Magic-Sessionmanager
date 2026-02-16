@@ -59,11 +59,13 @@ module.exports = async ({ strapi }) => {
         log.info('║                                                                ║');
         
         if (licenseStatus.data) {
-          log.info(`║  License: ${licenseStatus.data.licenseKey}`.padEnd(66) + '║');
+          const maskedKey = licenseStatus.data.licenseKey 
+            ? `${licenseStatus.data.licenseKey.substring(0, 8)}...` 
+            : 'N/A';
+          log.info(`║  License: ${maskedKey}`.padEnd(66) + '║');
           log.info(`║  User: ${licenseStatus.data.firstName} ${licenseStatus.data.lastName}`.padEnd(66) + '║');
-          log.info(`║  Email: ${licenseStatus.data.email}`.padEnd(66) + '║');
         } else if (storedKey) {
-          log.info(`║  License: ${storedKey} (Offline Mode)`.padEnd(66) + '║');
+          log.info(`║  License: ${storedKey.substring(0, 8)}... (Offline Mode)`.padEnd(66) + '║');
           log.info(`║  Status: Grace Period Active`.padEnd(66) + '║');
         }
         
@@ -104,6 +106,7 @@ module.exports = async ({ strapi }) => {
     strapi.sessionManagerIntervals.cleanup = cleanupIntervalHandle;
 
     // HIGH PRIORITY: Register /api/auth/logout route BEFORE other plugins
+    // SECURITY: Requires valid JWT token - only authenticated users can logout
     strapi.server.routes([{
       method: 'POST',
       path: '/api/auth/logout',
@@ -112,9 +115,23 @@ module.exports = async ({ strapi }) => {
           const token = ctx.request.headers?.authorization?.replace('Bearer ', '');
           
           if (!token) {
-            ctx.status = 200;
-            ctx.body = { message: 'Logged out successfully' };
+            ctx.status = 401;
+            ctx.body = { error: { status: 401, message: 'Authorization token required' } };
             return;
+          }
+
+          // Verify the JWT is valid before allowing logout
+          try {
+            const jwtService = strapi.plugin('users-permissions').service('jwt');
+            const decoded = await jwtService.verify(token);
+            if (!decoded || !decoded.id) {
+              ctx.status = 401;
+              ctx.body = { error: { status: 401, message: 'Invalid token' } };
+              return;
+            }
+          } catch (jwtErr) {
+            // Token is invalid or expired - still allow logout to clean up session
+            log.debug('JWT verify failed during logout (cleaning up anyway):', jwtErr.message);
           }
 
           // Find session by tokenHash - O(1) DB lookup instead of O(n) decrypt loop!
@@ -140,7 +157,7 @@ module.exports = async ({ strapi }) => {
         }
       },
       config: {
-        auth: false,
+        auth: false, // We handle auth manually above to support expired-but-valid tokens
       },
     }]);
 
@@ -222,15 +239,14 @@ module.exports = async ({ strapi }) => {
           
           // Block if needed
           if (shouldBlock) {
+            // Log the reason internally but do NOT expose to client
             log.warn(`[BLOCKED] Blocking login: ${blockReason}`);
             
-            // Don't create session, return error
             ctx.status = 403;
             ctx.body = {
               error: {
                 status: 403,
-                message: 'Login blocked for security reasons',
-                details: { reason: blockReason }
+                message: 'Login blocked for security reasons. Please contact support.',
               }
             };
             return; // Stop here
@@ -308,11 +324,25 @@ module.exports = async ({ strapi }) => {
                 });
                 
                 if (config.discordWebhookUrl) {
-                  await notificationService.sendWebhook({
-                    event: 'session.login',
-                    data: webhookData,
-                    webhookUrl: config.discordWebhookUrl,
-                  });
+                  // SECURITY: Validate webhook URL even from plugin config
+                  const webhookUrl = config.discordWebhookUrl;
+                  try {
+                    const parsed = new URL(webhookUrl);
+                    const isValidDomain = parsed.protocol === 'https:' && 
+                      (parsed.hostname === 'discord.com' || parsed.hostname === 'discordapp.com' || 
+                       parsed.hostname.endsWith('.discord.com') || parsed.hostname === 'hooks.slack.com');
+                    if (isValidDomain) {
+                      await notificationService.sendWebhook({
+                        event: 'session.login',
+                        data: webhookData,
+                        webhookUrl,
+                      });
+                    } else {
+                      log.warn(`[SECURITY] Blocked webhook to untrusted domain: ${parsed.hostname}`);
+                    }
+                  } catch {
+                    log.warn('[SECURITY] Invalid webhook URL in plugin config');
+                  }
                 }
               }
             } catch (notifErr) {
@@ -568,6 +598,55 @@ async function ensureTokenHashIndex(strapi, log) {
 }
 
 /**
+ * Error counter for fail-open safety: if too many consecutive errors occur,
+ * we switch to fail-closed to prevent security bypass via error flooding
+ */
+const sessionCheckErrors = { count: 0, lastReset: Date.now() };
+const MAX_CONSECUTIVE_ERRORS = 10;
+const ERROR_RESET_INTERVAL = 60 * 1000; // Reset error counter every 60 seconds
+
+/**
+ * Records a session check error and returns whether we should fail-open or fail-closed
+ * @returns {boolean} true if we should allow the request (fail-open), false to block (fail-closed)
+ */
+function shouldFailOpen() {
+  const now = Date.now();
+  
+  // Reset counter periodically
+  if (now - sessionCheckErrors.lastReset > ERROR_RESET_INTERVAL) {
+    sessionCheckErrors.count = 0;
+    sessionCheckErrors.lastReset = now;
+  }
+  
+  sessionCheckErrors.count++;
+  
+  // If too many consecutive errors, switch to fail-closed
+  if (sessionCheckErrors.count > MAX_CONSECUTIVE_ERRORS) {
+    return false;
+  }
+  
+  return true;
+}
+
+/** Resets the error counter after a successful session check */
+function resetErrorCounter() {
+  sessionCheckErrors.count = 0;
+}
+
+/**
+ * Checks if a session has exceeded the maximum allowed age
+ * @param {object} session - Session object with loginTime
+ * @param {number} maxAgeDays - Maximum session age in days (default: 30)
+ * @returns {boolean} true if session is too old
+ */
+function isSessionExpired(session, maxAgeDays = 30) {
+  if (!session.loginTime) return false;
+  const loginTime = new Date(session.loginTime).getTime();
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+  return (Date.now() - loginTime) > maxAgeMs;
+}
+
+/**
  * Register session-aware auth strategy that wraps users-permissions JWT strategy
  * This ensures ALL authenticated requests check for active sessions
  * @param {object} strapi - Strapi instance
@@ -576,7 +655,6 @@ async function ensureTokenHashIndex(strapi, log) {
 async function registerSessionAwareAuthStrategy(strapi, log) {
   try {
     // In Strapi v5, we need to wrap the users-permissions authenticate function
-    // The strategy is stored in the plugin's services
     const usersPermissionsPlugin = strapi.plugin('users-permissions');
     
     if (!usersPermissionsPlugin) {
@@ -584,7 +662,6 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
       return;
     }
     
-    // Try to get the JWT service
     const jwtService = usersPermissionsPlugin.service('jwt');
     
     if (!jwtService || !jwtService.verify) {
@@ -602,34 +679,28 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
       // First, verify the JWT normally
       const decoded = await originalVerify(token);
       
-      // If verification failed, return the result
       if (!decoded || !decoded.id) {
         return decoded;
       }
       
-      // Get config - strictSessionEnforcement must be explicitly enabled to block
+      // Get config
       const config = strapi.config.get('plugin::magic-sessionmanager') || {};
       const strictMode = config.strictSessionEnforcement === true;
+      const maxSessionAgeDays = config.maxSessionAgeDays || 30;
       
-      // Now check if THIS SPECIFIC session (by token hash) is valid
       try {
-        // Hash the token to find the specific session
         const tokenHashValue = hashToken(token);
         
-        // Get user documentId
-        let userDocId = null;
-        
-        // decoded.id is numeric, we need documentId
+        // Get user documentId (decoded.id is numeric)
         const user = await strapi.entityService.findOne(
           'plugin::users-permissions.user',
           decoded.id,
           { fields: ['documentId'] }
         );
         
-        userDocId = user?.documentId;
+        const userDocId = user?.documentId;
         
         if (!userDocId) {
-          // Can't determine user - allow through (fail-open)
           strapi.log.debug('[magic-sessionmanager] [JWT] No documentId found, allowing through');
           return decoded;
         }
@@ -640,14 +711,24 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             user: { documentId: userDocId },
             tokenHash: tokenHashValue,
           },
-          fields: ['documentId', 'isActive', 'terminatedManually', 'lastActive'],
+          fields: ['documentId', 'isActive', 'terminatedManually', 'lastActive', 'loginTime'],
         });
         
         if (thisSession) {
-          // Found the specific session for this token
+          // SECURITY: Check max session age - prevents indefinite reactivation
+          if (isSessionExpired(thisSession, maxSessionAgeDays)) {
+            strapi.log.info(
+              `[magic-sessionmanager] [JWT-EXPIRED] Session exceeded max age of ${maxSessionAgeDays} days (user: ${userDocId.substring(0, 8)}...)`
+            );
+            // Terminate the expired session
+            await strapi.documents(SESSION_UID).update({
+              documentId: thisSession.documentId,
+              data: { isActive: false, terminatedManually: true, logoutTime: new Date() },
+            });
+            return null;
+          }
           
           if (thisSession.terminatedManually === true) {
-            // This specific session was manually terminated → BLOCK
             strapi.log.info(
               `[magic-sessionmanager] [JWT-BLOCKED] Session was manually terminated (user: ${userDocId.substring(0, 8)}...)`
             );
@@ -655,60 +736,50 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           }
           
           if (thisSession.isActive) {
-            // Session is active → allow
+            resetErrorCounter();
             return decoded;
           }
           
-          // Session is inactive but NOT manually terminated → reactivate
+          // Session inactive but NOT manually terminated -> reactivate (within max age)
           await strapi.documents(SESSION_UID).update({
             documentId: thisSession.documentId,
-            data: {
-              isActive: true,
-              lastActive: new Date(),
-            },
+            data: { isActive: true, lastActive: new Date() },
           });
           strapi.log.info(
             `[magic-sessionmanager] [JWT-REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`
           );
+          resetErrorCounter();
           return decoded;
         }
         
-        // No session found for this specific token - check if user has ANY sessions
-        // This handles tokens issued before session manager was installed
+        // No session for this token - check backward compatibility
         const anyActiveSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: {
-            user: { documentId: userDocId },
-            isActive: true,
-          },
+          filters: { user: { documentId: userDocId }, isActive: true },
           limit: 1,
         });
         
         if (anyActiveSessions && anyActiveSessions.length > 0) {
-          // User has other active sessions - allow this token (backward compatibility)
           strapi.log.debug(
             `[magic-sessionmanager] [JWT] No session for token but user has other active sessions (allowing)`
           );
+          resetErrorCounter();
           return decoded;
         }
         
-        // Check for any manually terminated sessions
+        // Check for manually terminated sessions
         const terminatedSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: {
-            user: { documentId: userDocId },
-            terminatedManually: true,
-          },
+          filters: { user: { documentId: userDocId }, terminatedManually: true },
           limit: 1,
         });
         
         if (terminatedSessions && terminatedSessions.length > 0) {
-          // User was logged out (all sessions terminated) → BLOCK
           strapi.log.info(
             `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... has terminated sessions`
           );
           return null;
         }
         
-        // No sessions at all - session was never created
+        // No sessions at all
         if (strictMode) {
           strapi.log.info(
             `[magic-sessionmanager] [JWT-BLOCKED] No sessions exist for user ${userDocId.substring(0, 8)}... (strictMode)`
@@ -716,16 +787,20 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           return null;
         }
         
-        // Non-strict mode: Allow through but warn
         strapi.log.warn(
           `[magic-sessionmanager] [JWT-WARN] No session for user ${userDocId.substring(0, 8)}... (allowing)`
         );
+        resetErrorCounter();
         return decoded;
         
       } catch (err) {
-        // On ANY error, allow through (fail-open for availability)
-        strapi.log.warn('[magic-sessionmanager] [JWT] Session check error (allowing):', err.message);
-        return decoded;
+        // Fail-open with error counting: after too many consecutive errors, fail-closed
+        if (shouldFailOpen()) {
+          strapi.log.warn('[magic-sessionmanager] [JWT] Session check error (allowing):', err.message);
+          return decoded;
+        }
+        strapi.log.error('[magic-sessionmanager] [JWT] Too many consecutive errors, blocking request:', err.message);
+        return null;
       }
     };
     

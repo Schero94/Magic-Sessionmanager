@@ -71,15 +71,15 @@ module.exports = ({ strapi }) => {
           osName: parsedUA.osVersion 
             ? `${parsedUA.osName} ${parsedUA.osVersion}` 
             : parsedUA.osName,
-          // Geolocation data (if available from Premium features)
-          geoLocation: geoData ? JSON.stringify({
+          // Geolocation data (stored as JSON object, schema type: json)
+          geoLocation: geoData ? {
             country: geoData.country,
             country_code: geoData.country_code,
             country_flag: geoData.country_flag,
             city: geoData.city,
             region: geoData.region,
             timezone: geoData.timezone,
-          }) : null,
+          } : null,
           securityScore: geoData?.securityScore || null,
         },
       });
@@ -104,6 +104,17 @@ module.exports = ({ strapi }) => {
       const now = new Date();
 
       if (sessionId) {
+        // Verify session exists before updating
+        const existing = await strapi.documents(SESSION_UID).findOne({
+          documentId: sessionId,
+          fields: ['documentId'],
+        });
+        
+        if (!existing) {
+          log.warn(`Session ${sessionId} not found for termination`);
+          return;
+        }
+        
         // Using Document Service API (Strapi v5)
         await strapi.documents(SESSION_UID).update({
           documentId: sessionId,
@@ -225,7 +236,7 @@ module.exports = ({ strapi }) => {
               strapi.documents(SESSION_UID).update({
                 documentId: session.documentId,
                 data: { 
-                  geoLocation: JSON.stringify(geoLocation),
+                  geoLocation,
                   securityScore: geoData.securityScore || null,
                 },
               }).catch(() => {}); // Ignore update errors
@@ -273,6 +284,7 @@ module.exports = ({ strapi }) => {
         filters: { isActive: true },
         populate: { user: { fields: ['documentId', 'email', 'username'] } },
         sort: { loginTime: 'desc' },
+        limit: 1000,
       });
 
       // Get inactivity timeout from config (default: 15 minutes)
@@ -329,7 +341,7 @@ module.exports = ({ strapi }) => {
               strapi.documents(SESSION_UID).update({
                 documentId: session.documentId,
                 data: { 
-                  geoLocation: JSON.stringify(geoLocation),
+                  geoLocation,
                   securityScore: geoData.securityScore || null,
                 },
               }).catch(() => {});
@@ -447,7 +459,7 @@ module.exports = ({ strapi }) => {
               strapi.documents(SESSION_UID).update({
                 documentId: session.documentId,
                 data: { 
-                  geoLocation: JSON.stringify(geoLocation),
+                  geoLocation,
                   securityScore: geoData.securityScore || null,
                 },
               }).catch(() => {});
@@ -605,7 +617,7 @@ module.exports = ({ strapi }) => {
   },
 
   /**
-   * Delete all inactive sessions from database
+   * Delete all inactive sessions from database in batches
    * WARNING: This permanently deletes records!
    * @returns {Promise<number>} Number of deleted sessions
    */
@@ -613,17 +625,37 @@ module.exports = ({ strapi }) => {
     try {
       log.info('[DELETE] Deleting all inactive sessions...');
       
-      // Find all inactive sessions (documentId is always included automatically)
-      const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
-        filters: { isActive: false },
-      });
-      
       let deletedCount = 0;
+      const BATCH_SIZE = 100;
+      let hasMore = true;
       
-      // Delete each inactive session
-      for (const session of inactiveSessions) {
-        await strapi.documents(SESSION_UID).delete({ documentId: session.documentId });
-        deletedCount++;
+      while (hasMore) {
+        // Fetch a batch of inactive sessions
+        const batch = await strapi.documents(SESSION_UID).findMany({
+          filters: { isActive: false },
+          fields: ['documentId'],
+          limit: BATCH_SIZE,
+        });
+        
+        if (!batch || batch.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        // Delete batch using Promise.allSettled for resilience
+        const deleteResults = await Promise.allSettled(
+          batch.map(session => 
+            strapi.documents(SESSION_UID).delete({ documentId: session.documentId })
+          )
+        );
+        
+        const batchDeleted = deleteResults.filter(r => r.status === 'fulfilled').length;
+        deletedCount += batchDeleted;
+        
+        // If batch was smaller than limit, we're done
+        if (batch.length < BATCH_SIZE) {
+          hasMore = false;
+        }
       }
       
       log.info(`[SUCCESS] Deleted ${deletedCount} inactive sessions`);

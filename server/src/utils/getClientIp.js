@@ -75,23 +75,34 @@ const getClientIp = (ctx) => {
 };
 
 /**
- * Clean IP address (remove IPv6 prefix, port, etc.)
+ * Clean IP address (remove IPv6-mapped prefix, brackets, port)
+ * Handles both IPv4 and IPv6 addresses correctly
  * @param {string} ip - Raw IP address to clean
  * @returns {string} Cleaned IP address or 'unknown'
  */
 const cleanIp = (ip) => {
   if (!ip) return 'unknown';
   
-  // Remove port if present
-  ip = ip.split(':')[0];
+  ip = ip.trim();
   
-  // Remove IPv6 prefix (::ffff:)
+  // Remove surrounding brackets (used in IPv6 with port: [::1]:8080)
+  if (ip.startsWith('[')) {
+    const bracketEnd = ip.indexOf(']');
+    if (bracketEnd !== -1) {
+      ip = ip.substring(1, bracketEnd);
+    }
+  }
+  
+  // Remove IPv6-mapped IPv4 prefix (::ffff:192.168.1.1 -> 192.168.1.1)
   if (ip.startsWith('::ffff:')) {
     ip = ip.substring(7);
   }
   
-  // Trim whitespace
-  ip = ip.trim();
+  // Only strip port for pure IPv4 addresses (IPv6 uses [bracket]:port format)
+  // An IPv4 with port looks like "1.2.3.4:8080" - contains exactly one colon and dots
+  if (ip.includes('.') && ip.includes(':') && ip.indexOf(':') === ip.lastIndexOf(':')) {
+    ip = ip.split(':')[0];
+  }
   
   return ip || 'unknown';
 };

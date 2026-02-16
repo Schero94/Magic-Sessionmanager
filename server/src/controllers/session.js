@@ -1,6 +1,6 @@
 'use strict';
 
-const { decryptToken, hashToken } = require('../utils/encryption');
+const { hashToken } = require('../utils/encryption');
 const { parseUserAgent } = require('../utils/user-agent-parser');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
@@ -77,10 +77,11 @@ module.exports = {
         return ctx.throw(401, 'Unauthorized');
       }
 
-      // Get all sessions for the user
+      // Get all sessions for the user (limited to prevent memory issues)
       const allSessions = await strapi.documents(SESSION_UID).findMany({
         filters: { user: { documentId: userId } },
         sort: { loginTime: 'desc' },
+        limit: 200,
       });
 
       // Get config for inactivity timeout
@@ -138,7 +139,7 @@ module.exports = {
               strapi.documents(SESSION_UID).update({
                 documentId: session.documentId,
                 data: { 
-                  geoLocation: JSON.stringify(geoLocation),
+                  geoLocation,
                   securityScore: geoData.securityScore || null,
                 },
               }).catch(() => {}); // Ignore update errors
@@ -205,9 +206,17 @@ module.exports = {
 
       // SECURITY CHECK: Content API users can only see their own sessions
       // Admins can see any user's sessions
-      if (!isAdminRequest && requestingUserDocId && String(requestingUserDocId) !== String(userId)) {
-        strapi.log.warn(`[magic-sessionmanager] Security: User ${requestingUserDocId} tried to access sessions of user ${userId}`);
-        return ctx.forbidden('You can only access your own sessions');
+      if (!isAdminRequest) {
+        // CRITICAL: If we cannot determine the requesting user's documentId,
+        // deny access to prevent IDOR attacks via null/undefined bypass
+        if (!requestingUserDocId) {
+          strapi.log.warn(`[magic-sessionmanager] Security: Request without documentId tried to access sessions of user ${userId}`);
+          return ctx.forbidden('Cannot verify user identity');
+        }
+        if (String(requestingUserDocId) !== String(userId)) {
+          strapi.log.warn(`[magic-sessionmanager] Security: User ${requestingUserDocId} tried to access sessions of user ${userId}`);
+          return ctx.forbidden('You can only access your own sessions');
+        }
       }
 
       const sessionService = strapi
@@ -376,7 +385,7 @@ module.exports = {
             strapi.documents(SESSION_UID).update({
               documentId: currentSession.documentId,
               data: { 
-                geoLocation: JSON.stringify(geoLocation),
+                geoLocation,
                 securityScore: geoData.securityScore || null,
               },
             }).catch(() => {}); // Ignore update errors
@@ -473,27 +482,6 @@ module.exports = {
   },
 
   /**
-   * Terminate specific session
-   * DELETE /magic-sessionmanager/sessions/:sessionId
-   */
-  async terminateSession(ctx) {
-    try {
-      const { sessionId } = ctx.params;
-      const sessionService = strapi
-        .plugin('magic-sessionmanager')
-        .service('session');
-
-      await sessionService.terminateSession({ sessionId });
-
-      ctx.body = {
-        message: `Session ${sessionId} terminated`,
-      };
-    } catch (err) {
-      ctx.throw(500, 'Error terminating session');
-    }
-  },
-
-  /**
    * Simulate session timeout for testing (Admin action)
    * POST /magic-sessionmanager/sessions/:sessionId/simulate-timeout
    * Sets isActive: false, terminatedManually: false (as if cleanup job ran)
@@ -501,6 +489,12 @@ module.exports = {
    */
   async simulateTimeout(ctx) {
     try {
+      // SECURITY: Only allow in non-production environments
+      const nodeEnv = process.env.NODE_ENV || 'development';
+      if (nodeEnv === 'production') {
+        return ctx.forbidden('simulate-timeout is disabled in production');
+      }
+
       const { sessionId } = ctx.params;
       
       // Find the session first
@@ -595,9 +589,18 @@ module.exports = {
       }
 
       // Validate IP address format to prevent SSRF
-      const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
-      const IPV6_REGEX = /^[0-9a-fA-F:]+$/;
-      if (!IPV4_REGEX.test(ipAddress) && !IPV6_REGEX.test(ipAddress)) {
+      const IPV4_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+      const ipv4Match = ipAddress.match(IPV4_REGEX);
+      const isValidIpv4 = ipv4Match && ipv4Match.slice(1).every(octet => {
+        const n = parseInt(octet, 10);
+        return n >= 0 && n <= 255;
+      });
+      
+      // IPv6: must contain at least 2 colons, only hex digits and colons, 3-45 chars
+      const IPV6_REGEX = /^[0-9a-fA-F:]{3,45}$/;
+      const isValidIpv6 = !isValidIpv4 && IPV6_REGEX.test(ipAddress) && (ipAddress.match(/:/g) || []).length >= 2;
+      
+      if (!isValidIpv4 && !isValidIpv6) {
         return ctx.badRequest('Invalid IP address format');
       }
 

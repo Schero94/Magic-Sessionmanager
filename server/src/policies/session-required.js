@@ -12,7 +12,7 @@
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const { errors } = require('@strapi/utils');
 
-module.exports = async (policyContext, config, { strapi }) => {
+module.exports = async (policyContext, _policyConfig, { strapi }) => {
   // If no user is authenticated, let the normal auth flow handle it
   if (!policyContext.state.user) {
     return true;
@@ -39,9 +39,9 @@ module.exports = async (policyContext, config, { strapi }) => {
       return true;
     }
 
-    // Get config - strictSessionEnforcement must be explicitly enabled to block
-    const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-    const strictMode = config.strictSessionEnforcement === true;
+    // Get plugin config - strictSessionEnforcement must be explicitly enabled to block
+    const pluginConfig = strapi.config.get('plugin::magic-sessionmanager') || {};
+    const strictMode = pluginConfig.strictSessionEnforcement === true;
     
     // Check if user has ANY active session
     const activeSessions = await strapi.documents(SESSION_UID).findMany({
@@ -95,7 +95,7 @@ module.exports = async (policyContext, config, { strapi }) => {
       return true;
     }
     
-    // No sessions exist at all - session was never created
+    // No sessions exist at all
     if (strictMode) {
       strapi.log.info(
         `[magic-sessionmanager] [POLICY-BLOCKED] No session exists (user: ${userDocId.substring(0, 8)}..., strictMode)`

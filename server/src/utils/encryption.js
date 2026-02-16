@@ -59,7 +59,8 @@ function encryptToken(token) {
     // Format: iv:authTag:encryptedData
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
   } catch (err) {
-    console.error('[magic-sessionmanager/encryption] Encryption failed:', err);
+    const errMsg = err instanceof Error ? err.message : 'Unknown encryption error';
+    console.error('[magic-sessionmanager/encryption] Encryption failed:', errMsg);
     throw new Error('Failed to encrypt token');
   }
 }
@@ -94,7 +95,8 @@ function decryptToken(encryptedToken) {
     
     return decrypted;
   } catch (err) {
-    console.error('[magic-sessionmanager/encryption] Decryption failed:', err);
+    const errMsg = err instanceof Error ? err.message : 'Unknown decryption error';
+    console.error('[magic-sessionmanager/encryption] Decryption failed:', errMsg);
     return null; // Return null if decryption fails (invalid/tampered token)
   }
 }

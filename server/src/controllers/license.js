@@ -75,14 +75,13 @@ module.exports = ({ strapi }) => ({
         });
       }
 
-      strapi.log.info(`[magic-sessionmanager/license-controller] Checking stored license: ${licenseKey}`);
+      strapi.log.info(`[magic-sessionmanager/license-controller] Checking stored license: ${licenseKey.substring(0, 8)}...`);
 
       const verification = await licenseGuard.verifyLicense(licenseKey);
       const license = await licenseGuard.getLicenseByKey(licenseKey);
       
       strapi.log.info('[magic-sessionmanager/license-controller] License data from MagicAPI:', {
-        licenseKey: license?.licenseKey,
-        email: license?.email,
+        licenseKey: license?.licenseKey ? `${license.licenseKey.substring(0, 8)}...` : 'N/A',
         featurePremium: license?.featurePremium,
         isActive: license?.isActive,
         pluginName: license?.pluginName,

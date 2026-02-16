@@ -1,11 +1,14 @@
-const controller = ({ strapi }) => ({
+'use strict';
+
+/**
+ * Default controller for magic-sessionmanager plugin
+ */
+module.exports = ({ strapi }) => ({
+  /** Returns a welcome message for the plugin */
   index(ctx) {
     ctx.body = strapi
       .plugin('magic-sessionmanager')
-      // the name of the service file & the method.
       .service('service')
       .getWelcomeMessage();
   },
 });
-
-export default controller;

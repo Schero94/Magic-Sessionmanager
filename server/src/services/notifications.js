@@ -93,31 +93,48 @@ module.exports = ({ strapi }) => ({
   },
   
   /**
-   * Replace template variables with actual values
+   * Escapes HTML special characters to prevent XSS in email templates
+   * @param {string} str - String to escape
+   * @returns {string} HTML-safe string
+   */
+  escapeHtml(str) {
+    if (!str || typeof str !== 'string') return str || '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
+  /**
+   * Replace template variables with HTML-escaped actual values
+   * SECURITY: All dynamic values are HTML-escaped to prevent XSS via email
    */
   replaceVariables(template, data) {
     let result = template;
+    const esc = this.escapeHtml.bind(this);
     
-    // User variables
-    result = result.replace(/\{\{user\.email\}\}/g, data.user?.email || 'N/A');
-    result = result.replace(/\{\{user\.username\}\}/g, data.user?.username || 'N/A');
+    // User variables (escaped - user-controlled input!)
+    result = result.replace(/\{\{user\.email\}\}/g, esc(data.user?.email || 'N/A'));
+    result = result.replace(/\{\{user\.username\}\}/g, esc(data.user?.username || 'N/A'));
     
-    // Session variables
+    // Session variables (escaped - contains user-agent which is user-controlled)
     result = result.replace(/\{\{session\.loginTime\}\}/g, 
-      data.session?.loginTime ? new Date(data.session.loginTime).toLocaleString() : 'N/A');
-    result = result.replace(/\{\{session\.ipAddress\}\}/g, data.session?.ipAddress || 'N/A');
-    result = result.replace(/\{\{session\.userAgent\}\}/g, data.session?.userAgent || 'N/A');
+      esc(data.session?.loginTime ? new Date(data.session.loginTime).toLocaleString() : 'N/A'));
+    result = result.replace(/\{\{session\.ipAddress\}\}/g, esc(data.session?.ipAddress || 'N/A'));
+    result = result.replace(/\{\{session\.userAgent\}\}/g, esc(data.session?.userAgent || 'N/A'));
     
-    // Geo variables
-    result = result.replace(/\{\{geo\.city\}\}/g, data.geoData?.city || 'Unknown');
-    result = result.replace(/\{\{geo\.country\}\}/g, data.geoData?.country || 'Unknown');
-    result = result.replace(/\{\{geo\.timezone\}\}/g, data.geoData?.timezone || 'Unknown');
+    // Geo variables (escaped - from external API)
+    result = result.replace(/\{\{geo\.city\}\}/g, esc(data.geoData?.city || 'Unknown'));
+    result = result.replace(/\{\{geo\.country\}\}/g, esc(data.geoData?.country || 'Unknown'));
+    result = result.replace(/\{\{geo\.timezone\}\}/g, esc(data.geoData?.timezone || 'Unknown'));
     
-    // Reason variables
+    // Reason variables (safe values, but escape anyway for defense-in-depth)
     result = result.replace(/\{\{reason\.isVpn\}\}/g, data.reason?.isVpn ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isProxy\}\}/g, data.reason?.isProxy ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isThreat\}\}/g, data.reason?.isThreat ? 'Yes' : 'No');
-    result = result.replace(/\{\{reason\.securityScore\}\}/g, data.reason?.securityScore || '0');
+    result = result.replace(/\{\{reason\.securityScore\}\}/g, esc(String(data.reason?.securityScore || '0')));
     
     return result;
   },

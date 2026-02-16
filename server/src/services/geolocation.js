@@ -18,8 +18,8 @@ module.exports = ({ strapi }) => ({
    */
   async getIpInfo(ipAddress) {
     try {
-      // Skip localhost/private IPs
-      if (!ipAddress || ipAddress === '127.0.0.1' || ipAddress === '::1' || ipAddress.startsWith('192.168.') || ipAddress.startsWith('10.')) {
+      // Skip localhost/private IPs (RFC 1918 + RFC 4193 + link-local)
+      if (!ipAddress || this.isPrivateIp(ipAddress)) {
         return {
           ip: ipAddress,
           country: 'Local Network',
@@ -145,6 +145,32 @@ module.exports = ({ strapi }) => ({
       .map(char => 127397 + char.charCodeAt());
     
     return String.fromCodePoint(...codePoints);
+  },
+
+  /**
+   * Checks if an IP address is private/local (RFC 1918, RFC 4193, loopback, link-local)
+   * @param {string} ip - IP address to check
+   * @returns {boolean} True if IP is private/local
+   */
+  isPrivateIp(ip) {
+    if (!ip || ip === 'unknown') return true;
+    
+    // IPv4 private ranges
+    if (ip === '127.0.0.1' || ip === 'localhost' || ip === '::1') return true;
+    if (ip.startsWith('192.168.')) return true;
+    if (ip.startsWith('10.')) return true;
+    if (ip.startsWith('172.')) {
+      const second = parseInt(ip.split('.')[1], 10);
+      if (second >= 16 && second <= 31) return true;
+    }
+    if (ip.startsWith('169.254.')) return true; // Link-local
+    
+    // IPv6 private ranges
+    if (ip.startsWith('fc00:') || ip.startsWith('fd00:')) return true; // RFC 4193
+    if (ip.startsWith('fe80:')) return true; // Link-local
+    if (ip === '::1') return true; // Loopback
+    
+    return false;
   },
 
   /**

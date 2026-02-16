@@ -40,14 +40,15 @@ function isAuthEndpoint(path) {
 }
 
 /**
- * Cache for numeric ID -> documentId mapping to reduce DB queries
- * TTL: 5 minutes
+ * LRU-like cache for numeric ID -> documentId mapping to reduce DB queries
+ * TTL: 5 minutes, Max size: 1000 entries
  */
 const userIdCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_MAX_SIZE = 1000;
 
 /**
- * Gets documentId from numeric id, with caching
+ * Gets documentId from numeric id, with caching and size limit
  * @param {object} strapi - Strapi instance
  * @param {number} numericId - Numeric user ID
  * @returns {Promise<string|null>} documentId or null
@@ -58,6 +59,21 @@ async function getDocumentIdFromNumericId(strapi, numericId) {
   
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.documentId;
+  }
+  
+  // Evict expired or excess entries when cache grows too large
+  if (userIdCache.size >= CACHE_MAX_SIZE) {
+    const now = Date.now();
+    for (const [key, value] of userIdCache) {
+      if (now - value.timestamp >= CACHE_TTL) {
+        userIdCache.delete(key);
+      }
+    }
+    // If still over limit after TTL eviction, remove oldest 25%
+    if (userIdCache.size >= CACHE_MAX_SIZE) {
+      const keysToDelete = [...userIdCache.keys()].slice(0, Math.floor(CACHE_MAX_SIZE / 4));
+      keysToDelete.forEach(key => userIdCache.delete(key));
+    }
   }
   
   try {
@@ -120,7 +136,7 @@ module.exports = ({ strapi, sessionService }) => {
                 isActive: false,
               },
               limit: 5,
-              fields: ['documentId', 'terminatedManually', 'lastActive'],
+              fields: ['documentId', 'terminatedManually', 'lastActive', 'loginTime'],
               sort: [{ lastActive: 'desc' }],
             });
             
@@ -129,13 +145,26 @@ module.exports = ({ strapi, sessionService }) => {
               const manuallyTerminated = inactiveSessions.find(s => s.terminatedManually === true);
               
               if (manuallyTerminated) {
-                // User was explicitly logged out → BLOCK
+                // User was explicitly logged out -> BLOCK
                 strapi.log.info(`[magic-sessionmanager] [BLOCKED] User ${userDocId.substring(0, 8)}... was manually logged out`);
                 return ctx.unauthorized('Session has been terminated. Please login again.');
               }
               
-              // Session was deactivated by timeout → REACTIVATE most recent one
+              // Session was deactivated by timeout -> REACTIVATE most recent one
+              // SECURITY: Check maxSessionAge to prevent indefinite reactivation
               const sessionToReactivate = inactiveSessions[0];
+              const maxAgeDays = config.maxSessionAgeDays || 30;
+              const loginTime = sessionToReactivate.loginTime 
+                ? new Date(sessionToReactivate.loginTime).getTime() 
+                : (sessionToReactivate.lastActive ? new Date(sessionToReactivate.lastActive).getTime() : 0);
+              const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+              const isExpired = loginTime > 0 && (Date.now() - loginTime) > maxAgeMs;
+              
+              if (isExpired) {
+                strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session exceeded max age of ${maxAgeDays} days (user: ${userDocId.substring(0, 8)}...)`);
+                return ctx.unauthorized('Session expired. Please login again.');
+              }
+              
               await strapi.documents(SESSION_UID).update({
                 documentId: sessionToReactivate.documentId,
                 data: {
