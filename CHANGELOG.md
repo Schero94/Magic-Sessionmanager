@@ -1,3 +1,10 @@
+## [4.4.7](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.6...v4.4.7) (2026-02-27)
+
+
+### Bug Fixes
+
+* prevent old terminated sessions from blocking new magic-link logins ([5c6c4ae](https://github.com/Schero94/Magic-Sessionmanager/commit/5c6c4aecd58d6a19d5794b1de4d05ad1c0691031))
+
 ## [4.4.6](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.5...v4.4.6) (2026-02-16)
 
 
