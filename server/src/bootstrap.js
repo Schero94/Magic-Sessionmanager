@@ -170,9 +170,16 @@ module.exports = async ({ strapi }) => {
       
       // Check if this was a successful login request
       const isAuthLocal = ctx.path === '/api/auth/local' && ctx.method === 'POST';
-      const isMagicLink = ctx.path.includes('/magic-link/login') && ctx.method === 'POST';
+      // Magic-link login is GET (/api/magic-link/login?loginToken=XXX)
+      // TOTP-as-primary is POST (/api/magic-link/login-totp)
+      const isMagicLinkLogin = ctx.path.includes('/magic-link/login') && (ctx.method === 'GET' || ctx.method === 'POST');
+      // MFA TOTP verification after magic link click
+      const isMagicLinkMFA = ctx.path.includes('/magic-link/verify-mfa-totp') && ctx.method === 'POST';
+      // OTP verification completes the login flow and returns a JWT
+      const isMagicLinkOTP = ctx.path.includes('/magic-link/otp/verify') && ctx.method === 'POST';
+      const isMagicLink = isMagicLinkLogin || isMagicLinkMFA || isMagicLinkOTP;
       
-      if ((isAuthLocal || isMagicLink) && ctx.status === 200 && ctx.body && ctx.body.user) {
+      if ((isAuthLocal || isMagicLink) && ctx.status === 200 && ctx.body && ctx.body.jwt && ctx.body.user) {
         try {
           const user = ctx.body.user;
           
@@ -766,23 +773,14 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           return decoded;
         }
         
-        // Check for manually terminated sessions
-        const terminatedSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: { user: { documentId: userDocId }, terminatedManually: true },
-          limit: 1,
-        });
-        
-        if (terminatedSessions && terminatedSessions.length > 0) {
-          strapi.log.info(
-            `[magic-sessionmanager] [JWT-BLOCKED] User ${userDocId.substring(0, 8)}... has terminated sessions`
-          );
-          return null;
-        }
-        
-        // No sessions at all
+        // No active sessions exist for this user and no session matched this token.
+        // Old terminated sessions from PREVIOUS logins must NOT block new tokens.
+        // The token-specific terminated check (by tokenHash above) already handles
+        // blocking the exact token that was terminated. Blocking here based on
+        // unrelated old sessions would prevent re-login after session termination.
         if (strictMode) {
           strapi.log.info(
-            `[magic-sessionmanager] [JWT-BLOCKED] No sessions exist for user ${userDocId.substring(0, 8)}... (strictMode)`
+            `[magic-sessionmanager] [JWT-BLOCKED] No active sessions for user ${userDocId.substring(0, 8)}... (strictMode)`
           );
           return null;
         }

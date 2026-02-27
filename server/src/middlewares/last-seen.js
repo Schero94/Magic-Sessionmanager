@@ -141,39 +141,43 @@ module.exports = ({ strapi, sessionService }) => {
             });
             
             if (inactiveSessions && inactiveSessions.length > 0) {
-              // Check if ANY session was manually terminated
-              const manuallyTerminated = inactiveSessions.find(s => s.terminatedManually === true);
+              // Find a session that can be reactivated (timed out, NOT manually terminated)
+              const reactivatable = inactiveSessions.find(s => s.terminatedManually !== true);
               
-              if (manuallyTerminated) {
-                // User was explicitly logged out -> BLOCK
-                strapi.log.info(`[magic-sessionmanager] [BLOCKED] User ${userDocId.substring(0, 8)}... was manually logged out`);
-                return ctx.unauthorized('Session has been terminated. Please login again.');
+              if (reactivatable) {
+                // SECURITY: Check maxSessionAge to prevent indefinite reactivation
+                const maxAgeDays = config.maxSessionAgeDays || 30;
+                const loginTime = reactivatable.loginTime 
+                  ? new Date(reactivatable.loginTime).getTime() 
+                  : (reactivatable.lastActive ? new Date(reactivatable.lastActive).getTime() : 0);
+                const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+                const isExpired = loginTime > 0 && (Date.now() - loginTime) > maxAgeMs;
+                
+                if (isExpired) {
+                  strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session exceeded max age of ${maxAgeDays} days (user: ${userDocId.substring(0, 8)}...)`);
+                  return ctx.unauthorized('Session expired. Please login again.');
+                }
+                
+                await strapi.documents(SESSION_UID).update({
+                  documentId: reactivatable.documentId,
+                  data: {
+                    isActive: true,
+                    lastActive: new Date(),
+                  },
+                });
+                strapi.log.info(`[magic-sessionmanager] [REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`);
+                // Continue - session is now active
+              } else {
+                // Only terminated sessions exist - do NOT block here.
+                // Old terminated sessions from previous logins must not prevent
+                // new logins (e.g., user got a new magic link after being terminated).
+                // The JWT verify wrapper already blocks the specific terminated token.
+                if (strictMode) {
+                  strapi.log.info(`[magic-sessionmanager] [BLOCKED] No active session for user ${userDocId.substring(0, 8)}... (strictMode)`);
+                  return ctx.unauthorized('No valid session. Please login again.');
+                }
+                strapi.log.warn(`[magic-sessionmanager] [WARN] No active session for user ${userDocId.substring(0, 8)}... (allowing)`);
               }
-              
-              // Session was deactivated by timeout -> REACTIVATE most recent one
-              // SECURITY: Check maxSessionAge to prevent indefinite reactivation
-              const sessionToReactivate = inactiveSessions[0];
-              const maxAgeDays = config.maxSessionAgeDays || 30;
-              const loginTime = sessionToReactivate.loginTime 
-                ? new Date(sessionToReactivate.loginTime).getTime() 
-                : (sessionToReactivate.lastActive ? new Date(sessionToReactivate.lastActive).getTime() : 0);
-              const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
-              const isExpired = loginTime > 0 && (Date.now() - loginTime) > maxAgeMs;
-              
-              if (isExpired) {
-                strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session exceeded max age of ${maxAgeDays} days (user: ${userDocId.substring(0, 8)}...)`);
-                return ctx.unauthorized('Session expired. Please login again.');
-              }
-              
-              await strapi.documents(SESSION_UID).update({
-                documentId: sessionToReactivate.documentId,
-                data: {
-                  isActive: true,
-                  lastActive: new Date(),
-                },
-              });
-              strapi.log.info(`[magic-sessionmanager] [REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`);
-              // Continue - session is now active
             } else {
               // No sessions exist at all - session was never created
               if (strictMode) {

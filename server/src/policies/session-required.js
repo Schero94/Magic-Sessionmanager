@@ -69,28 +69,35 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
     });
     
     if (inactiveSessions && inactiveSessions.length > 0) {
-      // Check if ANY session was manually terminated
-      const manuallyTerminated = inactiveSessions.find(s => s.terminatedManually === true);
+      // Find a session that can be reactivated (timed out, NOT manually terminated)
+      const reactivatable = inactiveSessions.find(s => s.terminatedManually !== true);
       
-      if (manuallyTerminated) {
-        // User was explicitly logged out → BLOCK
+      if (reactivatable) {
+        await strapi.documents(SESSION_UID).update({
+          documentId: reactivatable.documentId,
+          data: {
+            isActive: true,
+            lastActive: new Date(),
+          },
+        });
         strapi.log.info(
-          `[magic-sessionmanager] [POLICY-BLOCKED] User ${userDocId.substring(0, 8)}... was manually logged out`
+          `[magic-sessionmanager] [POLICY-REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`
         );
-        throw new errors.UnauthorizedError('Session terminated. Please login again.');
+        return true;
       }
       
-      // Session was deactivated by timeout → REACTIVATE most recent one
-      const sessionToReactivate = inactiveSessions[0];
-      await strapi.documents(SESSION_UID).update({
-        documentId: sessionToReactivate.documentId,
-        data: {
-          isActive: true,
-          lastActive: new Date(),
-        },
-      });
-      strapi.log.info(
-        `[magic-sessionmanager] [POLICY-REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`
+      // Only terminated sessions exist - do NOT block here.
+      // Old terminated sessions from previous logins must not prevent
+      // new logins. The JWT verify wrapper already blocks the specific terminated token.
+      if (strictMode) {
+        strapi.log.info(
+          `[magic-sessionmanager] [POLICY-BLOCKED] No active session for user ${userDocId.substring(0, 8)}... (strictMode)`
+        );
+        throw new errors.UnauthorizedError('No valid session. Please login again.');
+      }
+      
+      strapi.log.warn(
+        `[magic-sessionmanager] [POLICY-WARN] No active session for user ${userDocId.substring(0, 8)}... (allowing)`
       );
       return true;
     }
