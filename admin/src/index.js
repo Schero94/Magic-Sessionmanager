@@ -17,7 +17,8 @@ const name = pluginPkg.strapi.name;
 
 export default {
   register(app) {
-    // Menu link - path should be relative to root (no leading slash)
+    const pluginPermissions = [{ action: `plugin::${pluginId}.access`, subject: null }];
+
     app.addMenuLink({
       to: `plugins/${pluginId}`,
       icon: PluginIcon,
@@ -26,6 +27,7 @@ export default {
         defaultMessage: pluginPkg.strapi.displayName,
       },
       Component: () => import('./pages/App'),
+      permissions: pluginPermissions,
     });
 
     // Settings section - paths should be relative to /settings (no /settings/ prefix)
@@ -44,6 +46,7 @@ export default {
           id: 'upgrade',
           to: `${pluginId}/upgrade`,
           Component: () => import('./pages/UpgradePage'),
+          permissions: pluginPermissions,
         },
         {
           intlLabel: {
@@ -53,6 +56,7 @@ export default {
           id: 'general',
           to: `${pluginId}/general`,
           Component: () => import('./pages/Settings'),
+          permissions: pluginPermissions,
         },
         {
           intlLabel: {
@@ -62,6 +66,7 @@ export default {
           id: 'analytics',
           to: `${pluginId}/analytics`,
           Component: () => import('./pages/Analytics'),
+          permissions: pluginPermissions,
         },
         {
           intlLabel: {
@@ -71,6 +76,7 @@ export default {
           id: 'license',
           to: `${pluginId}/license`,
           Component: () => import('./pages/License'),
+          permissions: pluginPermissions,
         },
       ]
     );

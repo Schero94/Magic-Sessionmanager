@@ -12,6 +12,15 @@ module.exports = async ({ strapi }) => {
   
   log.info('[START] Plugin registration starting...');
 
+  strapi.admin.services.permission.actionProvider.registerMany([
+    {
+      section: 'plugins',
+      displayName: 'Access the Session Manager plugin',
+      uid: 'access',
+      pluginName: 'magic-sessionmanager',
+    },
+  ]);
+
   try {
     // Get the user content type
     const userCT = strapi.contentType('plugin::users-permissions.user');
