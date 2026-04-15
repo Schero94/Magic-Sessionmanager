@@ -8,7 +8,7 @@ module.exports = {
       path: '/sessions',
       handler: 'session.getAllSessionsAdmin',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Get all sessions - active and inactive (admin)',
       },
     },
@@ -17,7 +17,7 @@ module.exports = {
       path: '/sessions/active',
       handler: 'session.getActiveSessions',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Get only active sessions (admin)',
       },
     },
@@ -26,7 +26,7 @@ module.exports = {
       path: '/user/:userId/sessions',
       handler: 'session.getUserSessions',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Get user sessions (admin)',
       },
     },
@@ -35,7 +35,7 @@ module.exports = {
       path: '/sessions/:sessionId/terminate',
       handler: 'session.terminateSingleSession',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Terminate a specific session (admin)',
       },
     },
@@ -44,7 +44,7 @@ module.exports = {
       path: '/sessions/:sessionId/simulate-timeout',
       handler: 'session.simulateTimeout',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Simulate session timeout for testing (sets isActive: false, terminatedManually: false)',
       },
     },
@@ -53,7 +53,7 @@ module.exports = {
       path: '/sessions/:sessionId',
       handler: 'session.deleteSession',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Delete a single session permanently (admin)',
       },
     },
@@ -62,7 +62,7 @@ module.exports = {
       path: '/sessions/clean-inactive',
       handler: 'session.cleanInactiveSessions',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Delete all inactive sessions from database (admin)',
       },
     },
@@ -71,7 +71,7 @@ module.exports = {
       path: '/user/:userId/terminate-all',
       handler: 'session.terminateAllUserSessions',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Terminate all sessions for a user (admin)',
       },
     },
@@ -80,7 +80,7 @@ module.exports = {
       path: '/user/:userId/toggle-block',
       handler: 'session.toggleUserBlock',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Toggle user blocked status (admin)',
       },
     },
@@ -90,7 +90,7 @@ module.exports = {
       path: '/license/status',
       handler: 'license.getStatus',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -98,7 +98,7 @@ module.exports = {
       path: '/license/auto-create',
       handler: 'license.autoCreate',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -106,7 +106,7 @@ module.exports = {
       path: '/license/create',
       handler: 'license.createAndActivate',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -114,7 +114,7 @@ module.exports = {
       path: '/license/ping',
       handler: 'license.ping',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     {
@@ -122,7 +122,7 @@ module.exports = {
       path: '/license/store-key',
       handler: 'license.storeKey',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
       },
     },
     // Geolocation (Premium Feature)
@@ -131,7 +131,7 @@ module.exports = {
       path: '/geolocation/:ipAddress',
       handler: 'session.getIpGeolocation',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Get IP geolocation data (Premium feature)',
       },
     },
@@ -141,7 +141,7 @@ module.exports = {
       path: '/settings',
       handler: 'settings.getSettings',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Get plugin settings',
       },
     },
@@ -150,7 +150,7 @@ module.exports = {
       path: '/settings',
       handler: 'settings.updateSettings',
       config: {
-        policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: ['plugin::magic-sessionmanager.access'] } }],
+        policies: ['admin::isAuthenticatedAdmin'],
         description: 'Update plugin settings',
       },
     },
