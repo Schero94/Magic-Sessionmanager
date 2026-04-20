@@ -85,7 +85,16 @@ module.exports = async ({ strapi }) => {
             try {
               await strapi.documents(SESSION_UID).update({
                 documentId: session.documentId,
-                data: { isActive: false, terminatedManually: true, logoutTime: now },
+                data: {
+                  isActive: false,
+                  // Blocked users are NOT a "manual" self-logout — mark
+                  // this distinctly so the client receives a different
+                  // error message ("account blocked") rather than
+                  // "session terminated".
+                  terminatedManually: false,
+                  terminationReason: 'blocked',
+                  logoutTime: now,
+                },
               });
               terminated++;
             } catch (updateErr) {

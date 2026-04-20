@@ -78,6 +78,11 @@
       "default": false,
       "required": false
     },
+    "terminationReason": {
+      "type": "enumeration",
+      "enum": ["manual", "idle", "expired", "blocked"],
+      "required": false
+    },
     "geoLocation": {
       "type": "json"
     },

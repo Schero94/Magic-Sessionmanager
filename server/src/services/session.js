@@ -109,15 +109,39 @@ module.exports = ({ strapi }) => {
     },
 
     /**
-     * Terminates a single session or all sessions of a user.
+     * Terminates a single session or all sessions of a user with a typed
+     * reason so the JWT-verify wrapper and downstream middleware can
+     * communicate the cause to the client (and we can show sensible UI).
+     *
+     * Supported reasons:
+     *   - 'manual':   user clicked logout, or admin terminated a session
+     *   - 'idle':     inactivity timeout cleanup
+     *   - 'expired':  maxSessionAgeDays exceeded
+     *   - 'blocked':  the owning user was marked blocked
+     *
+     * For backwards compatibility `terminatedManually` is still set true
+     * only when reason === 'manual'; idle/expired/blocked paths set it
+     * false so reporting dashboards that queried that boolean continue
+     * to work, while new code relies on `terminationReason`.
+     *
      * @param {Object} params
      * @param {string} [params.sessionId]
      * @param {string|number} [params.userId]
+     * @param {'manual'|'idle'|'expired'|'blocked'} [params.reason='manual']
      * @returns {Promise<void>}
      */
-    async terminateSession({ sessionId, userId }) {
+    async terminateSession({ sessionId, userId, reason = 'manual' }) {
       try {
         const now = new Date();
+        const validReasons = ['manual', 'idle', 'expired', 'blocked'];
+        const finalReason = validReasons.includes(reason) ? reason : 'manual';
+
+        const updateData = {
+          isActive: false,
+          terminatedManually: finalReason === 'manual',
+          terminationReason: finalReason,
+          logoutTime: now,
+        };
 
         if (sessionId) {
           const existing = await strapi.documents(SESSION_UID).findOne({
@@ -132,10 +156,10 @@ module.exports = ({ strapi }) => {
 
           await strapi.documents(SESSION_UID).update({
             documentId: sessionId,
-            data: { isActive: false, terminatedManually: true, logoutTime: now },
+            data: updateData,
           });
 
-          log.info(`Session ${sessionId} terminated (manual)`);
+          log.info(`Session ${sessionId} terminated (reason: ${finalReason})`);
         } else if (userId) {
           const userDocumentId = await resolveUserDocumentId(strapi, userId);
           if (!userDocumentId) return;
@@ -149,11 +173,11 @@ module.exports = ({ strapi }) => {
           for (const session of activeSessions) {
             await strapi.documents(SESSION_UID).update({
               documentId: session.documentId,
-              data: { isActive: false, terminatedManually: true, logoutTime: now },
+              data: updateData,
             });
           }
 
-          log.info(`All sessions terminated (manual) for user ${userDocumentId}`);
+          log.info(`All sessions terminated for user ${userDocumentId} (reason: ${finalReason})`);
         }
       } catch (err) {
         log.error('Error terminating session:', err);
@@ -342,6 +366,9 @@ module.exports = ({ strapi }) => {
           // Fast path: single SQL UPDATE. Drains the entire backlog in one
           // statement, regardless of size. Uses snake_case since Strapi
           // content-type field names map to snake_case columns by default.
+          // `terminated_manually` stays false because this cleanup is NOT
+          // a manual termination — we communicate the real cause via the
+          // new `termination_reason` column.
           try {
             const deactivated = await strapi.db.connection('magic_sessions')
               .where('is_active', true)
@@ -353,7 +380,8 @@ module.exports = ({ strapi }) => {
               })
               .update({
                 is_active: false,
-                terminated_manually: true,
+                terminated_manually: false,
+                termination_reason: 'idle',
                 logout_time: now,
               });
             log.info(`[SUCCESS] Cleanup (db-direct) complete: ${deactivated} sessions deactivated`);
@@ -404,7 +432,8 @@ module.exports = ({ strapi }) => {
               documentId,
               data: {
                 isActive: false,
-                terminatedManually: true,
+                terminatedManually: false,
+                terminationReason: 'idle',
                 logoutTime: now,
               },
             });

@@ -90,6 +90,19 @@ function normalizeStoredSettings(stored) {
     // values that would defeat strict-session enforcement entirely.
     out.sessionCreationGraceMs = toIntInRange(stored.sessionCreationGraceMs, 5000, 0, 30000);
   }
+
+  // Rate-limit budgets for Content-API read and write endpoints. The
+  // defaults come from the route definitions themselves; only override
+  // here when an admin has explicitly raised/lowered them.
+  if (stored.rateLimitWriteMax !== undefined) {
+    out.rateLimitWriteMax = toIntInRange(stored.rateLimitWriteMax, 10, 1, 1000);
+  }
+  if (stored.rateLimitReadMax !== undefined) {
+    out.rateLimitReadMax = toIntInRange(stored.rateLimitReadMax, 120, 1, 10000);
+  }
+  if (stored.rateLimitWindowSeconds !== undefined) {
+    out.rateLimitWindowSeconds = toIntInRange(stored.rateLimitWindowSeconds, 60, 10, 3600);
+  }
   for (const key of passthroughBooleans) {
     if (stored[key] !== undefined) out[key] = !!stored[key];
   }

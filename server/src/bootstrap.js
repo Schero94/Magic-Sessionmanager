@@ -18,6 +18,10 @@ const { createLogger } = require('./utils/logger');
 const { resolveUserDocumentId } = require('./utils/resolve-user');
 const { getPluginSettings } = require('./utils/settings-loader');
 const { extractBearerToken } = require('./utils/extract-token');
+const {
+  setSessionRejectionReason,
+  consumeSessionRejectionReason,
+} = require('./utils/rejection-cache');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
@@ -209,6 +213,14 @@ module.exports = async ({ strapi }) => {
     mountLoginInterceptor({ strapi, log, sessionService });
 
     mountRefreshTokenInterceptor({ strapi, log });
+
+    // Mount response decorator BEFORE last-seen so it wraps every request
+    // and can write a structured reason header/body on 401s produced by
+    // downstream auth middleware.
+    strapi.server.use(
+      require('./middlewares/session-rejection-headers')({}, { strapi })
+    );
+    log.info('[SUCCESS] Session-rejection-headers middleware mounted');
 
     strapi.server.use(
       require('./middlewares/last-seen')({ strapi, sessionService })
@@ -1102,6 +1114,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             strapi.log.info(
               `[magic-sessionmanager] [JWT-BLOCKED] User is blocked (user: ${userDocId.substring(0, 8)}...)`
             );
+            setSessionRejectionReason(hashToken(token), 'blocked');
             return null;
           }
         } catch {
@@ -1115,7 +1128,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             user: { documentId: userDocId },
             tokenHash: tokenHashValue,
           },
-          fields: ['documentId', 'isActive', 'terminatedManually', 'lastActive', 'loginTime'],
+          fields: ['documentId', 'isActive', 'terminatedManually', 'terminationReason', 'lastActive', 'loginTime'],
         });
 
         if (thisSession) {
@@ -1125,16 +1138,32 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             );
             await strapi.documents(SESSION_UID).update({
               documentId: thisSession.documentId,
-              data: { isActive: false, terminatedManually: true, logoutTime: new Date() },
+              data: {
+                isActive: false,
+                terminatedManually: false,
+                terminationReason: 'expired',
+                logoutTime: new Date(),
+              },
             });
+            setSessionRejectionReason(tokenHashValue, 'expired');
             return null;
           }
 
-          if (thisSession.terminatedManually === true) {
-            strapi.log.info(
-              `[magic-sessionmanager] [JWT-BLOCKED] Session was manually terminated (user: ${userDocId.substring(0, 8)}...)`
-            );
-            return null;
+          // Terminated session — surface the real reason to the caller so
+          // the client can show "You were logged out" vs "Your session
+          // expired due to inactivity" vs "Your account was blocked".
+          if (thisSession.isActive === false) {
+            const reason =
+              thisSession.terminationReason ||
+              (thisSession.terminatedManually === true ? 'manual' : null);
+
+            if (reason) {
+              strapi.log.info(
+                `[magic-sessionmanager] [JWT-REJECTED] Session inactive (reason: ${reason}) for user ${userDocId.substring(0, 8)}...`
+              );
+              setSessionRejectionReason(tokenHashValue, reason);
+              return null;
+            }
           }
 
           if (thisSession.isActive) {
@@ -1142,10 +1171,10 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             return decoded;
           }
 
-          // Inactive-but-not-manually-terminated sessions can be reactivated,
-          // but ONLY if the inactivity window has not elapsed. Otherwise the
-          // cleanup-job's purpose (idle logout) would be silently defeated
-          // every time a stale JWT is reused.
+          // Inactive-but-no-reason (legacy rows from pre-terminationReason
+          // cleanup, or rare races) can still be reactivated, but only if
+          // the inactivity window has not elapsed. Otherwise the cleanup
+          // job's purpose (idle logout) would be silently defeated.
           const inactivityTimeout = settings.inactivityTimeout || 15 * 60 * 1000;
           const lastActiveMs = thisSession.lastActive
             ? new Date(thisSession.lastActive).getTime()
@@ -1160,8 +1189,13 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             );
             await strapi.documents(SESSION_UID).update({
               documentId: thisSession.documentId,
-              data: { terminatedManually: true, logoutTime: new Date() },
+              data: {
+                terminatedManually: false,
+                terminationReason: 'idle',
+                logoutTime: new Date(),
+              },
             });
+            setSessionRejectionReason(tokenHashValue, 'idle');
             return null;
           }
 

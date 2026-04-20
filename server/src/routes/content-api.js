@@ -14,14 +14,24 @@
  *    frontend legitimately hits them often.
  */
 
-// Writes (logout / terminate) — tight limit.
+// Writes (logout / terminate) — tight limit. The `profile: 'write'` tag
+// means the admin can only TIGHTEN via settings, never loosen, so these
+// destructive endpoints keep their protective floor.
 const writeRateLimit = [
-  { name: 'plugin::magic-sessionmanager.rate-limit', config: { max: 10, window: 60_000 } },
+  {
+    name: 'plugin::magic-sessionmanager.rate-limit',
+    config: { profile: 'write', max: 10, window: 60_000 },
+  },
 ];
 
-// Reads (listings / current-session) — generous.
+// Reads (listings / current-session) — generous floor. The `profile: 'read'`
+// tag lets admins RAISE the limit via `rateLimitReadMax` (useful for
+// dashboards that poll often) without needing a plugin release.
 const readRateLimit = [
-  { name: 'plugin::magic-sessionmanager.rate-limit', config: { max: 120, window: 60_000 } },
+  {
+    name: 'plugin::magic-sessionmanager.rate-limit',
+    config: { profile: 'read', max: 120, window: 60_000 },
+  },
 ];
 
 module.exports = {
