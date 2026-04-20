@@ -1,3 +1,10 @@
+## [4.5.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.0...v4.5.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* **settings:** wire sessionCreationGraceMs and cleanupUseDbDirect end-to-end ([782278c](https://github.com/Schero94/Magic-Sessionmanager/commit/782278ce21be7ef431fdbafb99185df68fd618c2))
+
 # [4.5.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.7...v4.5.0) (2026-04-20)
 
 
