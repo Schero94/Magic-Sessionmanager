@@ -1,3 +1,10 @@
+## [4.5.8](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.7...v4.5.8) (2026-04-20)
+
+
+### Bug Fixes
+
+* **license:** raise fetch timeout to 12s + add 1 retry, downgrade grace-period log to info ([6f02c20](https://github.com/Schero94/Magic-Sessionmanager/commit/6f02c20c21190826619d5ee7fce8a6079debc767))
+
 ## [4.5.7](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.6...v4.5.7) (2026-04-20)
 
 
