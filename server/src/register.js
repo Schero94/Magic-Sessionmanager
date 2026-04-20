@@ -48,19 +48,25 @@ module.exports = async ({ strapi }) => {
       models: [USER_UID],
 
       /**
-       * Terminates the user's active sessions when they are blocked.
+       * Terminates the user's active sessions the MOMENT they are blocked.
        *
-       * This runs on EVERY update of a blocked user, but session termination
-       * is idempotent — already-terminated sessions are skipped by the
-       * filter `isActive: true`. We also only act when `blocked === true`,
-       * so unblocking never re-terminates anything.
+       * We only fire on the transition to `blocked: true` — i.e. when the
+       * update's params.data actually flips the field. This avoids running
+       * a session-scan query on every unrelated user update (email change,
+       * profile picture, …) which at scale would be a real load problem.
        *
        * @param {object} event
        */
       async afterUpdate(event) {
         try {
-          const { result } = event;
+          const { result, params } = event;
           if (!result || result.blocked !== true) return;
+
+          // Only act when THIS update actually set blocked=true. Without
+          // this check, every update of an already-blocked user would
+          // re-run the session scan for no gain.
+          const data = params && params.data ? params.data : null;
+          if (!data || data.blocked !== true) return;
 
           const userDocId = result.documentId;
           if (!userDocId) return;

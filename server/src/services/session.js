@@ -226,7 +226,18 @@ module.exports = ({ strapi }) => {
     },
 
     /**
-     * Update lastActive timestamp on a session (rate-limited).
+     * In-memory coalescing cache for touch() calls. Two concurrent requests
+     * from the same session would both pass the rate-limit check (because
+     * neither has committed its update yet) and both fire an UPDATE. The
+     * cache short-circuits the second caller if ANY write was issued within
+     * `rateLimit` ms, regardless of whether the DB value is visible yet.
+     * Bounded at 10 000 entries to cap memory; evicted on every read.
+     */
+    _lastTouchCache: new Map(),
+
+    /**
+     * Update lastActive timestamp on a session (rate-limited + coalesced).
+     *
      * @param {Object} params
      * @param {string|number} [params.userId]
      * @param {string} [params.sessionId]
@@ -262,29 +273,62 @@ module.exports = ({ strapi }) => {
           }
         }
 
-        if (session && sessionDocId) {
-          const lastActiveTime = session.lastActive ? new Date(session.lastActive).getTime() : 0;
-          if (now.getTime() - lastActiveTime > rateLimit) {
-            await strapi.documents(SESSION_UID).update({
-              documentId: sessionDocId,
-              data: { lastActive: now },
-            });
-            log.debug(`[TOUCH] Session ${sessionDocId.substring(0, 8)}... lastActive updated`);
+        if (!session || !sessionDocId) return;
+
+        // Coalesce with in-memory cache: if we issued an UPDATE for this
+        // session within the last `rateLimit` ms, skip — even if the DB
+        // value is not yet visible to a parallel findOne.
+        const cached = this._lastTouchCache.get(sessionDocId);
+        if (cached && now.getTime() - cached < rateLimit) {
+          return;
+        }
+
+        const lastActiveTime = session.lastActive ? new Date(session.lastActive).getTime() : 0;
+        if (now.getTime() - lastActiveTime <= rateLimit) {
+          return;
+        }
+
+        // Stamp the cache BEFORE awaiting the UPDATE so a concurrent
+        // second caller sees the stamp and bails out.
+        this._lastTouchCache.set(sessionDocId, now.getTime());
+        if (this._lastTouchCache.size > 10_000) {
+          const cutoff = now.getTime() - rateLimit;
+          for (const [k, ts] of this._lastTouchCache) {
+            if (ts < cutoff) this._lastTouchCache.delete(k);
           }
         }
+
+        await strapi.documents(SESSION_UID).update({
+          documentId: sessionDocId,
+          data: { lastActive: now },
+        });
+        log.debug(`[TOUCH] Session ${sessionDocId.substring(0, 8)}... lastActive updated`);
       } catch (err) {
         log.debug('Error touching session:', err.message);
       }
     },
 
     /**
-     * Marks sessions that have been idle past `inactivityTimeout` as inactive.
+     * Marks sessions that have been idle past `inactivityTimeout` as
+     * terminated. Historically this set `terminatedManually: false`, which
+     * allowed the JWT-verify wrapper to immediately reactivate the session
+     * on the next request — nullifying the idle-logout feature. The cleanup
+     * now sets `terminatedManually: true` so the session cannot be silently
+     * reactivated; the JWT-verify wrapper still separately enforces the
+     * inactivity check for fast-idled sessions.
+     *
      * Processes in batches by collecting IDs first, then updating — this
      * avoids pagination-skew issues caused by mutating the queried set.
      *
+     * @param {Object} [options]
+     * @param {boolean} [options.useDbDirect=false]  When true, performs a
+     *   single knex UPDATE which is orders of magnitude faster for large
+     *   installations but bypasses Document Service lifecycle hooks. Use
+     *   only when the savings are needed and hooks are known to be safe
+     *   to skip.
      * @returns {Promise<number>} Number of sessions deactivated
      */
-    async cleanupInactiveSessions() {
+    async cleanupInactiveSessions({ useDbDirect = false } = {}) {
       try {
         const settings = await getPluginSettings(strapi);
         const inactivityTimeout = settings.inactivityTimeout || 15 * 60 * 1000;
@@ -293,6 +337,31 @@ module.exports = ({ strapi }) => {
         const cutoffTime = new Date(now.getTime() - inactivityTimeout);
 
         log.info(`[CLEANUP] Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
+
+        if (useDbDirect) {
+          // Fast path: single SQL UPDATE. Drains the entire backlog in one
+          // statement, regardless of size. Uses snake_case since Strapi
+          // content-type field names map to snake_case columns by default.
+          try {
+            const deactivated = await strapi.db.connection('magic_sessions')
+              .where('is_active', true)
+              .andWhere(function whereIdle() {
+                this.where('last_active', '<', cutoffTime)
+                  .orWhere(function whereNullLastActive() {
+                    this.whereNull('last_active').andWhere('login_time', '<', cutoffTime);
+                  });
+              })
+              .update({
+                is_active: false,
+                terminated_manually: true,
+                logout_time: now,
+              });
+            log.info(`[SUCCESS] Cleanup (db-direct) complete: ${deactivated} sessions deactivated`);
+            return deactivated;
+          } catch (err) {
+            log.warn('[CLEANUP] DB-direct cleanup failed, falling back to Document Service:', err.message);
+          }
+        }
 
         const idsToDeactivate = [];
         const BATCH = 500;
@@ -323,7 +392,7 @@ module.exports = ({ strapi }) => {
           start += BATCH;
 
           if (start > 50000) {
-            log.warn('[CLEANUP] Reached safety cap of 50k scanned sessions; aborting scan.');
+            log.warn('[CLEANUP] Reached safety cap of 50k scanned sessions; consider enabling useDbDirect for this installation size.');
             break;
           }
         }
@@ -333,7 +402,11 @@ module.exports = ({ strapi }) => {
           try {
             await strapi.documents(SESSION_UID).update({
               documentId,
-              data: { isActive: false, terminatedManually: false },
+              data: {
+                isActive: false,
+                terminatedManually: true,
+                logoutTime: now,
+              },
             });
             deactivatedCount++;
           } catch (err) {

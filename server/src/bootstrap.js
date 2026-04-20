@@ -53,6 +53,17 @@ module.exports = async ({ strapi }) => {
 
   log.info('[START] Bootstrap starting...');
 
+  // Fail fast on missing production secrets. getEncryptionKey() throws
+  // when NODE_ENV=production and SESSION_ENCRYPTION_KEY is missing, so a
+  // bad deploy dies here with a clear error instead of silently failing
+  // later when the first encrypted-token read/write happens.
+  try {
+    encryptToken('self-test');
+  } catch (e) {
+    log.error(`[BOOTSTRAP] ${e.message}`);
+    throw e;
+  }
+
   try {
     await ensureTokenHashIndex(strapi, log);
 
@@ -109,13 +120,23 @@ module.exports = async ({ strapi }) => {
     const sessionService = strapi.plugin('magic-sessionmanager').service('session');
 
     log.info('Running initial session cleanup...');
-    await sessionService.cleanupInactiveSessions();
+    try {
+      const settings = await getPluginSettings(strapi);
+      await sessionService.cleanupInactiveSessions({
+        useDbDirect: settings.cleanupUseDbDirect === true,
+      });
+    } catch (cleanupErr) {
+      log.warn('Initial cleanup failed:', cleanupErr.message);
+    }
 
     const cleanupInterval = 30 * 60 * 1000;
     const cleanupIntervalHandle = setInterval(async () => {
       try {
         const service = strapi.plugin('magic-sessionmanager').service('session');
-        await service.cleanupInactiveSessions();
+        const settings = await getPluginSettings(strapi).catch(() => ({}));
+        await service.cleanupInactiveSessions({
+          useDbDirect: settings.cleanupUseDbDirect === true,
+        });
       } catch (err) {
         log.error('Periodic cleanup error:', err);
       }
@@ -649,8 +670,23 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 }
 
 /**
- * Blocks refresh-token requests that no longer correspond to an active
- * session, and rotates the tokens atomically after a successful refresh.
+ * Refresh-token interceptor.
+ *
+ * NOTE ON APPLICABILITY:
+ *   Strapi's default users-permissions plugin does NOT ship a
+ *   POST /api/auth/refresh endpoint. This middleware only does something
+ *   when a refresh-token plugin (e.g. strapi-plugin-jwt-refresh) or a
+ *   custom controller is installed that exposes that route. Otherwise
+ *   the middleware is a pure passthrough — mounting it unconditionally
+ *   is safe and prepares the installation for future refresh-token
+ *   support without requiring a second plugin install/restart cycle.
+ *
+ * Responsibilities when a refresh endpoint IS present:
+ *   1. Block incoming requests whose refreshToken does not match an
+ *      active session (defence against stale/stolen refresh tokens).
+ *   2. After a successful refresh, atomically rotate the stored token +
+ *      refreshToken hashes on the session so the new JWT can be
+ *      validated by magicSessionAwareVerify.
  *
  * @param {{strapi: object, log: object}} deps
  */
@@ -761,8 +797,13 @@ async function ensureContentApiPermissions(strapi, log) {
     const ROLE_UID = 'plugin::users-permissions.role';
     const PERMISSION_UID = 'plugin::users-permissions.permission';
 
-    const roles = await strapi.entityService.findMany(ROLE_UID, {
+    // Document Service replaces the deprecated entityService (Strapi v5).
+    // We still need the numeric `id` of the role for the permission's
+    // `role` relation because users-permissions Permission stores the
+    // foreign key by numeric id, not documentId.
+    const roles = await strapi.documents(ROLE_UID).findMany({
       filters: { type: 'authenticated' },
+      fields: ['id'],
       limit: 1,
     });
 
@@ -782,11 +823,13 @@ async function ensureContentApiPermissions(strapi, log) {
       'plugin::magic-sessionmanager.session.terminateOwnSession',
     ];
 
-    const existingPermissions = await strapi.entityService.findMany(PERMISSION_UID, {
+    const existingPermissions = await strapi.documents(PERMISSION_UID).findMany({
       filters: {
         role: authenticatedRole.id,
         action: { $in: requiredActions },
       },
+      fields: ['action'],
+      limit: requiredActions.length,
     });
 
     const existingActions = existingPermissions.map(p => p.action);
@@ -799,7 +842,7 @@ async function ensureContentApiPermissions(strapi, log) {
     }
 
     for (const action of missingActions) {
-      await strapi.entityService.create(PERMISSION_UID, {
+      await strapi.documents(PERMISSION_UID).create({
         data: { action, role: authenticatedRole.id },
       });
       log.info(`[PERMISSION] Enabled ${action} for authenticated users`);
@@ -935,15 +978,25 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
   try {
     const usersPermissionsPlugin = strapi.plugin('users-permissions');
 
+    // These two conditions are both FATAL for the plugin's purpose: without a
+    // wrappable JWT verify, we cannot enforce server-side session revocation.
+    // We still return instead of throwing so the rest of the plugin (admin
+    // UI, settings) keeps working, but we log at ERROR so ops notices.
     if (!usersPermissionsPlugin) {
-      strapi.log.warn('[magic-sessionmanager] [AUTH] users-permissions plugin not found');
+      strapi.log.error(
+        '[magic-sessionmanager] [AUTH] users-permissions plugin not found — ' +
+        'session revocation will NOT be enforced. Install @strapi/plugin-users-permissions.'
+      );
       return;
     }
 
     const jwtService = usersPermissionsPlugin.service('jwt');
 
     if (!jwtService || !jwtService.verify) {
-      strapi.log.warn('[magic-sessionmanager] [AUTH] JWT service not found or no verify method');
+      strapi.log.error(
+        '[magic-sessionmanager] [AUTH] users-permissions JWT service has no .verify method — ' +
+        'API surface changed. Session revocation will NOT be enforced until the plugin is updated.'
+      );
       return;
     }
 
@@ -972,6 +1025,17 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
 
       const strictMode = settings.strictSessionEnforcement === true;
       const maxSessionAgeDays = settings.maxSessionAgeDays || 30;
+      // Grace period: the login interceptor writes the Session record AFTER
+      // ctx.body has already left the server. A client that fires its next
+      // authenticated request within a few hundred ms may beat the write.
+      // Without this window, strictSessionEnforcement would reject the JWT
+      // as "no matching session" even though a session is being created.
+      // Configurable; defaults to 5s which comfortably covers DB commit +
+      // network RTT on most stacks.
+      const gracePeriodMs = Math.max(
+        0,
+        Number(settings.sessionCreationGraceMs) || 5000
+      );
 
       try {
         const userDocId = await resolveUserDocumentId(strapi, decoded.id);
@@ -1030,6 +1094,29 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             return decoded;
           }
 
+          // Inactive-but-not-manually-terminated sessions can be reactivated,
+          // but ONLY if the inactivity window has not elapsed. Otherwise the
+          // cleanup-job's purpose (idle logout) would be silently defeated
+          // every time a stale JWT is reused.
+          const inactivityTimeout = settings.inactivityTimeout || 15 * 60 * 1000;
+          const lastActiveMs = thisSession.lastActive
+            ? new Date(thisSession.lastActive).getTime()
+            : thisSession.loginTime
+              ? new Date(thisSession.loginTime).getTime()
+              : 0;
+          const idleFor = Date.now() - lastActiveMs;
+
+          if (idleFor > inactivityTimeout) {
+            strapi.log.info(
+              `[magic-sessionmanager] [JWT-IDLE] Session too idle to reactivate (${Math.round(idleFor / 1000)}s > ${inactivityTimeout / 1000}s) for user ${userDocId.substring(0, 8)}...`
+            );
+            await strapi.documents(SESSION_UID).update({
+              documentId: thisSession.documentId,
+              data: { terminatedManually: true, logoutTime: new Date() },
+            });
+            return null;
+          }
+
           await strapi.documents(SESSION_UID).update({
             documentId: thisSession.documentId,
             data: { isActive: true, lastActive: new Date() },
@@ -1039,6 +1126,22 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
           );
           resetErrorCounter();
           return decoded;
+        }
+
+        // JWT has no matching session record. Before blocking, honor the
+        // grace period: if the JWT was issued within the last `gracePeriodMs`
+        // the login interceptor's DB write may simply not be visible yet.
+        // `iat` is seconds-since-epoch per RFC 7519.
+        if (gracePeriodMs > 0 && typeof decoded.iat === 'number') {
+          const issuedMs = decoded.iat * 1000;
+          const ageMs = Date.now() - issuedMs;
+          if (ageMs >= 0 && ageMs < gracePeriodMs) {
+            strapi.log.debug(
+              `[magic-sessionmanager] [JWT-GRACE] New JWT (age ${ageMs}ms) inside grace window — allowing`
+            );
+            resetErrorCounter();
+            return decoded;
+          }
         }
 
         if (strictMode) {

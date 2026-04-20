@@ -3,38 +3,62 @@
 const crypto = require('crypto');
 
 /**
- * JWT Encryption Utility
- * Uses AES-256-GCM for secure token storage
- * 
- * SECURITY: Tokens are encrypted before storing in database
- * This prevents exposure if database is compromised
+ * JWT Encryption Utility — AES-256-GCM for at-rest token storage.
+ *
+ * SECURITY POLICY
+ * ---------------
+ * In production NODE_ENV, SESSION_ENCRYPTION_KEY is MANDATORY. We used to
+ * fall back to APP_KEYS / API_TOKEN_SALT, but Strapi documents APP_KEYS
+ * as rotatable — and a rotation would make every previously-encrypted
+ * token blob undecryptable, silently breaking all sessions.
+ *
+ * In non-production we permit a derived fallback so local dev setups
+ * keep working without requiring the env var, and emit exactly one WARN
+ * per process so nobody ships the derived key to production by accident.
  */
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
+let warnedMissingKey = false;
+
+const isProduction = () => process.env.NODE_ENV === 'production';
+
 /**
- * Get encryption key from environment or generate one
- * IMPORTANT: Set SESSION_ENCRYPTION_KEY in .env for production!
+ * Returns the 32-byte AES-256 key for session-token encryption.
+ *
+ * @returns {Buffer} 32 bytes
+ * @throws {Error} In production when SESSION_ENCRYPTION_KEY is missing
  */
 function getEncryptionKey() {
   const envKey = process.env.SESSION_ENCRYPTION_KEY;
-  
-  if (envKey) {
+
+  if (envKey && envKey.length > 0) {
     return crypto.createHash('sha256').update(envKey).digest();
   }
-  
-  // Fallback: Use Strapi's app keys (always present in running Strapi)
-  const strapiKeys = process.env.APP_KEYS || process.env.API_TOKEN_SALT;
-  if (!strapiKeys) {
+
+  if (isProduction()) {
     throw new Error(
-      '[magic-sessionmanager] No encryption key available. ' +
-      'Set SESSION_ENCRYPTION_KEY in your .env file, or ensure APP_KEYS is configured.'
+      '[magic-sessionmanager] FATAL: SESSION_ENCRYPTION_KEY is required in production. ' +
+      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
     );
   }
-  
-  return crypto.createHash('sha256').update(strapiKeys).digest();
+
+  if (!warnedMissingKey) {
+    warnedMissingKey = true;
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[magic-sessionmanager] SESSION_ENCRYPTION_KEY not set — using dev fallback derived from ' +
+      'APP_KEYS/API_TOKEN_SALT. Set this env var before deploying (it is NOT rotatable).'
+    );
+  }
+
+  const fallback =
+    (Array.isArray(process.env.APP_KEYS) ? process.env.APP_KEYS[0] : process.env.APP_KEYS) ||
+    process.env.API_TOKEN_SALT ||
+    'magic-sessionmanager-dev-fallback-DO-NOT-USE-IN-PRODUCTION';
+  return crypto.createHash('sha256').update(fallback).digest();
 }
 
 /**

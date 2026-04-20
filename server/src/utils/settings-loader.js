@@ -77,7 +77,19 @@ function normalizeStoredSettings(stored) {
     'enableWebhooks',
     'enableGeofencing',
     'strictSessionEnforcement',
+    // Opt-in: use a single-statement SQL UPDATE in the cleanup job instead
+    // of batching via the Document Service. Bypasses lifecycle hooks but
+    // drains the backlog in one query on very large installations.
+    'cleanupUseDbDirect',
   ];
+
+  if (stored.sessionCreationGraceMs !== undefined) {
+    // Grace window, in milliseconds, during which a freshly-issued JWT is
+    // accepted without a matching session record. Bounded to prevent both
+    // pointless zero-value (setting becomes no-op) and absurdly large
+    // values that would defeat strict-session enforcement entirely.
+    out.sessionCreationGraceMs = toIntInRange(stored.sessionCreationGraceMs, 5000, 0, 30000);
+  }
   for (const key of passthroughBooleans) {
     if (stored[key] !== undefined) out[key] = !!stored[key];
   }
