@@ -119,6 +119,10 @@ module.exports = async ({ strapi }) => {
 
     const sessionService = strapi.plugin('magic-sessionmanager').service('session');
 
+    if (!strapi.sessionManagerIntervals) {
+      strapi.sessionManagerIntervals = {};
+    }
+
     log.info('Running initial session cleanup...');
     try {
       const settings = await getPluginSettings(strapi);
@@ -129,25 +133,69 @@ module.exports = async ({ strapi }) => {
       log.warn('Initial cleanup failed:', cleanupErr.message);
     }
 
-    const cleanupInterval = 30 * 60 * 1000;
-    const cleanupIntervalHandle = setInterval(async () => {
+    // Schedule the idle-session cleanup using setTimeout recursion instead
+    // of setInterval, so that changes to `settings.cleanupInterval` take
+    // effect on the next scheduled tick rather than requiring a restart.
+    // The minimum is clamped to 5 minutes to avoid pathological configs
+    // from turning the job into a hot loop.
+    const scheduleIdleCleanup = async () => {
+      let intervalMs = 30 * 60 * 1000;
+      let useDbDirect = false;
       try {
-        const service = strapi.plugin('magic-sessionmanager').service('session');
-        const settings = await getPluginSettings(strapi).catch(() => ({}));
-        await service.cleanupInactiveSessions({
-          useDbDirect: settings.cleanupUseDbDirect === true,
-        });
-      } catch (err) {
-        log.error('Periodic cleanup error:', err);
+        const settings = await getPluginSettings(strapi);
+        intervalMs = Math.max(5 * 60 * 1000, settings.cleanupInterval || intervalMs);
+        useDbDirect = settings.cleanupUseDbDirect === true;
+      } catch {
+        // use defaults
       }
-    }, cleanupInterval);
 
-    log.info('[TIME] Periodic cleanup scheduled (every 30 minutes)');
+      const handle = setTimeout(async () => {
+        try {
+          const service = strapi.plugin('magic-sessionmanager').service('session');
+          await service.cleanupInactiveSessions({ useDbDirect });
+        } catch (err) {
+          log.error('Periodic cleanup error:', err);
+        }
+        scheduleIdleCleanup();
+      }, intervalMs);
 
-    if (!strapi.sessionManagerIntervals) {
-      strapi.sessionManagerIntervals = {};
-    }
-    strapi.sessionManagerIntervals.cleanup = cleanupIntervalHandle;
+      strapi.sessionManagerIntervals.cleanupTimeout = handle;
+    };
+    await scheduleIdleCleanup();
+
+    // Separate scheduler for retention (permanently-delete inactive sessions
+    // older than settings.retentionDays). We run this at most once per day,
+    // because retention is a slow-moving property and more frequent runs
+    // add no business value.
+    const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+    const scheduleRetention = async () => {
+      let useDbDirect = false;
+      try {
+        const settings = await getPluginSettings(strapi);
+        useDbDirect = settings.cleanupUseDbDirect === true;
+      } catch {
+        // use defaults
+      }
+
+      const handle = setTimeout(async () => {
+        try {
+          const service = strapi.plugin('magic-sessionmanager').service('session');
+          await service.deleteOldSessions({ useDbDirect });
+        } catch (err) {
+          log.error('Retention cleanup error:', err);
+        }
+        scheduleRetention();
+      }, RETENTION_INTERVAL_MS);
+
+      strapi.sessionManagerIntervals.retentionTimeout = handle;
+    };
+    // Delay the first retention run by 5 minutes so Strapi bootstrap is
+    // fully settled and we do not compete with startup DB activity.
+    strapi.sessionManagerIntervals.retentionStartup = setTimeout(() => {
+      scheduleRetention();
+    }, 5 * 60 * 1000);
+
+    log.info('[TIME] Dynamic cleanup + retention scheduled');
 
     mountPreLoginGeoGuard({ strapi, log });
 

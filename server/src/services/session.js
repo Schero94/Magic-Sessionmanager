@@ -439,6 +439,99 @@ module.exports = ({ strapi }) => {
     },
 
     /**
+     * Permanently deletes sessions that have been inactive past the
+     * configured retention window. Distinct from `deleteInactiveSessions`
+     * (which deletes ALL inactive sessions) — this only drops rows older
+     * than `retentionDays`, so recently-terminated sessions stay queryable
+     * for audits.
+     *
+     * @param {Object} [options]
+     * @param {number} [options.retentionDays]    Overrides the stored setting.
+     * @param {boolean} [options.useDbDirect]     Fast-path via single SQL
+     *   DELETE. Bypasses lifecycle hooks; use only when necessary.
+     * @returns {Promise<number>} Number of sessions deleted
+     */
+    async deleteOldSessions({ retentionDays, useDbDirect } = {}) {
+      try {
+        const settings = await getPluginSettings(strapi);
+        const effectiveDays = Number.isFinite(retentionDays)
+          ? retentionDays
+          : (settings.retentionDays || 90);
+
+        if (effectiveDays === -1) {
+          log.debug('[RETENTION] retentionDays=-1 (forever) — skipping');
+          return 0;
+        }
+
+        const cutoffDate = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000);
+        const wantDbDirect = useDbDirect ?? settings.cleanupUseDbDirect === true;
+
+        log.info(`[RETENTION] Deleting inactive sessions older than ${effectiveDays} days (before ${cutoffDate.toISOString()})`);
+
+        if (wantDbDirect) {
+          try {
+            const deleted = await strapi.db.connection('magic_sessions')
+              .where('is_active', false)
+              .andWhere(function whereOldEnough() {
+                this.where('logout_time', '<', cutoffDate)
+                  .orWhere(function whereNullLogout() {
+                    this.whereNull('logout_time').andWhere(function whereOldByActivity() {
+                      this.where('last_active', '<', cutoffDate)
+                        .orWhere(function whereNullActivity() {
+                          this.whereNull('last_active').andWhere('login_time', '<', cutoffDate);
+                        });
+                    });
+                  });
+              })
+              .del();
+            log.info(`[SUCCESS] Retention (db-direct) deleted ${deleted} old session(s)`);
+            return deleted;
+          } catch (err) {
+            log.warn('[RETENTION] DB-direct delete failed, falling back to Document Service:', err.message);
+          }
+        }
+
+        let deletedCount = 0;
+        const BATCH = 200;
+
+        while (true) {
+          const batch = await strapi.documents(SESSION_UID).findMany({
+            filters: {
+              isActive: false,
+              $or: [
+                { logoutTime: { $lt: cutoffDate } },
+                { logoutTime: { $null: true }, lastActive: { $lt: cutoffDate } },
+                { logoutTime: { $null: true }, lastActive: { $null: true }, loginTime: { $lt: cutoffDate } },
+              ],
+            },
+            fields: ['documentId'],
+            sort: { loginTime: 'asc' },
+            limit: BATCH,
+          });
+
+          if (!batch || batch.length === 0) break;
+
+          for (const session of batch) {
+            try {
+              await strapi.documents(SESSION_UID).delete({ documentId: session.documentId });
+              deletedCount++;
+            } catch (err) {
+              log.debug(`[RETENTION] Failed to delete session ${session.documentId}:`, err.message);
+            }
+          }
+
+          if (batch.length < BATCH) break;
+        }
+
+        log.info(`[SUCCESS] Retention deleted ${deletedCount} old session(s)`);
+        return deletedCount;
+      } catch (err) {
+        log.error('Error in retention cleanup:', err);
+        return 0;
+      }
+    },
+
+    /**
      * Permanently deletes all inactive sessions.
      * Uses an inner scan loop that tolerates partial failures.
      * @returns {Promise<number>}

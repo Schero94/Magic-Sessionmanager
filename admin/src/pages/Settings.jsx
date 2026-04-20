@@ -25,6 +25,7 @@ import styled, { keyframes, css } from 'styled-components';
 import pluginId from '../pluginId';
 import { useLicense } from '../hooks/useLicense';
 import { getTranslation } from '../utils/getTranslation';
+import { COUNTRIES, normalizeCountryCode, formatCountry } from '../utils/countries';
 import { 
   GradientButton, 
   SecondaryButton, 
@@ -387,6 +388,216 @@ const generateSecureKey = () => {
   }
   
   return key;
+};
+
+/**
+ * Geofencing section. Lets the admin choose between an allowlist (only
+ * these countries may authenticate) or a blocklist (every country except
+ * these). Enforces mutual exclusivity by clearing the other list on mode
+ * switch — the backend would reject-and-allow inconsistent lists anyway,
+ * but the UI should never put the admin in that state.
+ *
+ * @param {{ settings: object, handleChange: Function, t: Function }} props
+ */
+const GeofencingPanel = ({ settings, handleChange, t }) => {
+  const [pendingCode, setPendingCode] = useState('');
+
+  const mode = (() => {
+    if (Array.isArray(settings.allowedCountries) && settings.allowedCountries.length > 0) {
+      return 'allowlist';
+    }
+    if (Array.isArray(settings.blockedCountries) && settings.blockedCountries.length > 0) {
+      return 'blocklist';
+    }
+    return 'allowlist';
+  })();
+
+  const activeField = mode === 'allowlist' ? 'allowedCountries' : 'blockedCountries';
+  const activeList = Array.isArray(settings[activeField]) ? settings[activeField] : [];
+
+  const setMode = (newMode) => {
+    if (newMode === mode) return;
+    // Mutual exclusivity: switching modes clears the other list so the
+    // server never receives both a non-empty allowlist AND a non-empty
+    // blocklist — that would be a contradictory rule set.
+    if (newMode === 'allowlist') {
+      handleChange('blockedCountries', []);
+    } else {
+      handleChange('allowedCountries', []);
+    }
+  };
+
+  const addCode = (raw) => {
+    const code = normalizeCountryCode(raw);
+    if (!code) return;
+    if (activeList.includes(code)) return;
+    handleChange(activeField, [...activeList, code]);
+    setPendingCode('');
+  };
+
+  const removeCode = (code) => {
+    handleChange(activeField, activeList.filter((c) => c !== code));
+  };
+
+  return (
+    <Grid.Root gap={5}>
+      <Grid.Item col={12}>
+        <Box
+          padding={3}
+          background={settings.enableGeofencing ? 'success100' : 'neutral100'}
+          hasRadius
+          style={{ borderLeft: `4px solid ${settings.enableGeofencing ? '#16A34A' : '#9CA3AF'}` }}
+        >
+          <Flex justifyContent="space-between" alignItems="center">
+            <Box>
+              <Typography variant="delta" style={{ display: 'block', marginBottom: '4px' }}>
+                {t('settings.geofencing.enable.title', 'Enable Geofencing')}
+              </Typography>
+              <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
+                {t(
+                  'settings.geofencing.enable.description',
+                  'When enabled, the pre-login guard compares the caller\'s country against the configured list and rejects logins that do not match.'
+                )}
+              </Typography>
+            </Box>
+            <Toggle
+              onLabel="On"
+              offLabel="Off"
+              checked={!!settings.enableGeofencing}
+              onChange={() => handleChange('enableGeofencing', !settings.enableGeofencing)}
+            />
+          </Flex>
+        </Box>
+      </Grid.Item>
+
+      <Grid.Item col={12}>
+        <Box>
+          <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+            {t('settings.geofencing.mode.title', 'Mode')}
+          </Typography>
+          <Flex gap={2}>
+            <Button
+              variant={mode === 'allowlist' ? 'default' : 'tertiary'}
+              onClick={() => setMode('allowlist')}
+              disabled={!settings.enableGeofencing}
+            >
+              {t('settings.geofencing.mode.allowlist', 'Allowlist (only selected countries)')}
+            </Button>
+            <Button
+              variant={mode === 'blocklist' ? 'default' : 'tertiary'}
+              onClick={() => setMode('blocklist')}
+              disabled={!settings.enableGeofencing}
+            >
+              {t('settings.geofencing.mode.blocklist', 'Blocklist (block selected countries)')}
+            </Button>
+          </Flex>
+          <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
+            {mode === 'allowlist'
+              ? t(
+                  'settings.geofencing.mode.allowlist.hint',
+                  'Only countries in the list may authenticate. Empty list = no geo restriction.'
+                )
+              : t(
+                  'settings.geofencing.mode.blocklist.hint',
+                  'Every country EXCEPT those in the list may authenticate.'
+                )}
+          </Typography>
+        </Box>
+      </Grid.Item>
+
+      <Grid.Item col={12}>
+        <Box>
+          <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+            {mode === 'allowlist'
+              ? t('settings.geofencing.allowed.title', 'Allowed Countries')
+              : t('settings.geofencing.blocked.title', 'Blocked Countries')}
+          </Typography>
+
+          <Flex gap={2} wrap="wrap" style={{ marginBottom: '12px', minHeight: '36px' }}>
+            {activeList.length === 0 ? (
+              <Typography variant="pi" textColor="neutral500">
+                {t('settings.geofencing.empty', 'No countries configured.')}
+              </Typography>
+            ) : (
+              activeList.map((code) => (
+                <Badge
+                  key={code}
+                  onClick={settings.enableGeofencing ? () => removeCode(code) : undefined}
+                  style={{
+                    cursor: settings.enableGeofencing ? 'pointer' : 'not-allowed',
+                    padding: '6px 10px',
+                    background: mode === 'allowlist' ? '#DCFCE7' : '#FEE2E2',
+                    color: mode === 'allowlist' ? '#15803D' : '#B91C1C',
+                  }}
+                >
+                  {formatCountry(code)}
+                  {settings.enableGeofencing ? '  ✕' : ''}
+                </Badge>
+              ))
+            )}
+          </Flex>
+
+          <Flex gap={2}>
+            <Box style={{ flex: 1 }}>
+              <SingleSelect
+                disabled={!settings.enableGeofencing}
+                value={pendingCode || ''}
+                onChange={(value) => {
+                  setPendingCode(value);
+                  if (value) addCode(value);
+                }}
+                placeholder={t('settings.geofencing.pick', 'Pick a country to add…')}
+              >
+                {COUNTRIES
+                  .filter((c) => !activeList.includes(c.code))
+                  .map((c) => (
+                    <SingleSelectOption key={c.code} value={c.code}>
+                      {c.flag} {c.name} ({c.code})
+                    </SingleSelectOption>
+                  ))}
+              </SingleSelect>
+            </Box>
+
+            <TextInput
+              disabled={!settings.enableGeofencing}
+              placeholder={t('settings.geofencing.manual', 'Or type ISO-2 (e.g. JP)')}
+              value={pendingCode.length <= 2 ? pendingCode : ''}
+              onChange={(e) => setPendingCode(e.target.value.toUpperCase().slice(0, 2))}
+              style={{ width: '180px' }}
+            />
+            <Button
+              disabled={!settings.enableGeofencing || !normalizeCountryCode(pendingCode)}
+              onClick={() => addCode(pendingCode)}
+            >
+              {t('settings.geofencing.add', 'Add')}
+            </Button>
+          </Flex>
+        </Box>
+      </Grid.Item>
+
+      {!settings.enableGeofencing && (
+        <Grid.Item col={12}>
+          <Alert variant="default" closeLabel="" title="" onClose={() => {}}>
+            {t(
+              'settings.geofencing.disabled',
+              'Geofencing is currently disabled. Enable it above to enforce the configured country list.'
+            )}
+          </Alert>
+        </Grid.Item>
+      )}
+
+      {settings.enableGeofencing && !settings.enableGeolocation && (
+        <Grid.Item col={12}>
+          <Alert variant="warning" closeLabel="" title="" onClose={() => {}}>
+            {t(
+              'settings.geofencing.needsGeolocation',
+              'Geofencing requires Geolocation to be enabled (Security tab).'
+            )}
+          </Alert>
+        </Grid.Item>
+      )}
+    </Grid.Root>
+  );
 };
 
 const SettingsPage = () => {
@@ -1231,6 +1442,27 @@ const SettingsPage = () => {
                   </Grid.Item>
                 </Grid.Root>
 
+              </Box>
+            </Accordion.Content>
+          </Accordion.Item>
+
+          {/* Geofencing */}
+          <Accordion.Item value="geofencing">
+            <Accordion.Header>
+              <Accordion.Trigger
+                icon={Shield}
+                description={t('settings.geofencing.description', 'Allow or block sign-ins by country')}
+              >
+                {t('settings.geofencing.title', 'Geofencing')}
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content>
+              <Box padding={6}>
+                <GeofencingPanel
+                  settings={settings}
+                  handleChange={handleChange}
+                  t={t}
+                />
               </Box>
             </Accordion.Content>
           </Accordion.Item>
