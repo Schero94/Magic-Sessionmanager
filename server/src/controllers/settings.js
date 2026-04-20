@@ -171,15 +171,29 @@ module.exports = {
 
       if (!settings) {
         settings = {
+          // Timing & cleanup
           inactivityTimeout: 15,
           cleanupInterval: 30,
           lastSeenRateLimit: 30,
           retentionDays: 90,
           maxSessionAgeDays: 30,
+          // Grace window (ms) during which a freshly-issued JWT is accepted
+          // without a matching session row — see JWT-verify wrapper in bootstrap.
+          sessionCreationGraceMs: 5000,
+          // Opt-in: use a single SQL UPDATE for idle-session cleanup
+          // (bypasses Document Service lifecycle, required for very large installs).
+          cleanupUseDbDirect: false,
+
+          // Geo / security
           enableGeolocation: true,
           enableSecurityScoring: true,
           blockSuspiciousSessions: false,
           maxFailedLogins: 5,
+          enableGeofencing: false,
+          allowedCountries: [],
+          blockedCountries: [],
+
+          // Notifications
           enableEmailAlerts: false,
           alertOnSuspiciousLogin: true,
           alertOnNewLocation: true,
@@ -187,11 +201,12 @@ module.exports = {
           enableWebhooks: false,
           discordWebhookUrl: '',
           slackWebhookUrl: '',
-          enableGeofencing: false,
-          allowedCountries: [],
-          blockedCountries: [],
+
+          // Session policy
           strictSessionEnforcement: false,
           trustedProxies: false,
+
+          // Email templates
           emailTemplates: {
             suspiciousLogin: { subject: '', html: '', text: '' },
             newLocation: { subject: '', html: '', text: '' },
@@ -229,16 +244,35 @@ module.exports = {
         name: 'magic-sessionmanager',
       });
 
+      // sessionCreationGraceMs is bounded 0..30s. 0 disables the grace window
+      // (strictSessionEnforcement will block the very first request after login
+      // if the session-create write has not propagated). Values > 30s are
+      // rejected because they would silently defeat session revocation.
+      const graceRaw = body.sessionCreationGraceMs;
+      const grace = Number.isFinite(parseInt(graceRaw))
+        ? Math.max(0, Math.min(parseInt(graceRaw), 30000))
+        : 5000;
+
       const sanitizedSettings = {
+        // Timing & cleanup
         inactivityTimeout: Math.max(1, Math.min(parseInt(body.inactivityTimeout) || 15, 1440)),
         cleanupInterval: Math.max(5, Math.min(parseInt(body.cleanupInterval) || 30, 1440)),
         lastSeenRateLimit: Math.max(5, Math.min(parseInt(body.lastSeenRateLimit) || 30, 300)),
         retentionDays: Math.max(1, Math.min(parseInt(body.retentionDays) || 90, 365)),
         maxSessionAgeDays: Math.max(1, Math.min(parseInt(body.maxSessionAgeDays) || 30, 365)),
+        sessionCreationGraceMs: grace,
+        cleanupUseDbDirect: !!body.cleanupUseDbDirect,
+
+        // Geo / security
         enableGeolocation: !!body.enableGeolocation,
         enableSecurityScoring: !!body.enableSecurityScoring,
         blockSuspiciousSessions: !!body.blockSuspiciousSessions,
         maxFailedLogins: Math.max(1, Math.min(parseInt(body.maxFailedLogins) || 5, 100)),
+        enableGeofencing: !!body.enableGeofencing,
+        allowedCountries: sanitizeCountryList(body.allowedCountries),
+        blockedCountries: sanitizeCountryList(body.blockedCountries),
+
+        // Notifications
         enableEmailAlerts: !!body.enableEmailAlerts,
         alertOnSuspiciousLogin: !!body.alertOnSuspiciousLogin,
         alertOnNewLocation: !!body.alertOnNewLocation,
@@ -246,11 +280,12 @@ module.exports = {
         enableWebhooks: !!body.enableWebhooks,
         discordWebhookUrl: sanitizeWebhookUrl(body.discordWebhookUrl, 'discord'),
         slackWebhookUrl: sanitizeWebhookUrl(body.slackWebhookUrl, 'slack'),
-        enableGeofencing: !!body.enableGeofencing,
-        allowedCountries: sanitizeCountryList(body.allowedCountries),
-        blockedCountries: sanitizeCountryList(body.blockedCountries),
+
+        // Session policy
         strictSessionEnforcement: !!body.strictSessionEnforcement,
         trustedProxies: !!body.trustedProxies,
+
+        // Email templates
         emailTemplates: sanitizeEmailTemplates(body.emailTemplates),
       };
 

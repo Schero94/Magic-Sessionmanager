@@ -409,6 +409,14 @@ const SettingsPage = () => {
     lastSeenRateLimit: 30,
     retentionDays: 90,
     maxSessionAgeDays: 30,
+    // Grace window (ms) during which a freshly-issued JWT is accepted
+    // without a matching session row. Prevents strict-session enforcement
+    // from blocking the very first request after login. 0 disables.
+    sessionCreationGraceMs: 5000,
+    // Opt-in fast path for the periodic idle-session cleanup: single
+    // SQL UPDATE instead of batched Document-Service writes. Bypasses
+    // lifecycle hooks; required for very large installations.
+    cleanupUseDbDirect: false,
     strictSessionEnforcement: false,
     trustedProxies: false,
     enableGeolocation: true,
@@ -444,7 +452,7 @@ const SettingsPage = () => {
       
       if (response?.data?.settings) {
         const loadedSettings = response.data.settings;
-        
+
         // Ensure email templates exist with defaults
         if (!loadedSettings.emailTemplates || Object.keys(loadedSettings.emailTemplates).length === 0) {
           loadedSettings.emailTemplates = getDefaultTemplates();
@@ -455,7 +463,6 @@ const SettingsPage = () => {
             if (!loadedSettings.emailTemplates[key]) {
               loadedSettings.emailTemplates[key] = defaultTemplates[key];
             } else {
-              // Fill missing fields with defaults
               loadedSettings.emailTemplates[key] = {
                 subject: loadedSettings.emailTemplates[key].subject || defaultTemplates[key].subject,
                 html: loadedSettings.emailTemplates[key].html || defaultTemplates[key].html,
@@ -464,10 +471,13 @@ const SettingsPage = () => {
             }
           });
         }
-        
-        setSettings(loadedSettings);
+
+        // Merge WITHOUT replacing the state wholesale so that newly-introduced
+        // keys (e.g. sessionCreationGraceMs, cleanupUseDbDirect) on a stored
+        // settings blob written by an older version still fall back to our
+        // in-component defaults instead of undefined.
+        setSettings(prev => ({ ...prev, ...loadedSettings }));
       } else {
-        // Use defaults if no settings in DB
         setSettings(prev => ({ ...prev, emailTemplates: getDefaultTemplates() }));
       }
     } catch (err) {
@@ -757,7 +767,56 @@ const SettingsPage = () => {
                       </Typography>
                     </Box>
                   </Grid.Item>
-                  
+
+                  <Grid.Item col={6} s={12}>
+                    <Box>
+                      <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+                        {t('settings.general.grace.title', 'Post-Login Grace Period')}
+                      </Typography>
+                      <SingleSelect
+                        value={String(settings.sessionCreationGraceMs ?? 5000)}
+                        onChange={(value) => handleChange('sessionCreationGraceMs', parseInt(value))}
+                      >
+                        <SingleSelectOption value="0">{t('settings.general.grace.off', 'Off (strict from first request)')}</SingleSelectOption>
+                        <SingleSelectOption value="2000">{t('settings.general.grace.2s', '2 seconds')}</SingleSelectOption>
+                        <SingleSelectOption value="5000">{t('settings.general.grace.5s', '5 seconds (Recommended)')}</SingleSelectOption>
+                        <SingleSelectOption value="10000">{t('settings.general.grace.10s', '10 seconds')}</SingleSelectOption>
+                        <SingleSelectOption value="30000">{t('settings.general.grace.30s', '30 seconds')}</SingleSelectOption>
+                      </SingleSelect>
+                      <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
+                        {t(
+                          'settings.general.grace.hint',
+                          'Accepts a freshly-issued JWT without a matching session row for this window, preventing strict-enforcement races right after login.'
+                        )}
+                      </Typography>
+                    </Box>
+                  </Grid.Item>
+
+                  <Grid.Item col={6} s={12}>
+                    <Box>
+                      <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+                        {t('settings.general.cleanupMode.title', 'Cleanup Strategy')}
+                      </Typography>
+                      <SingleSelect
+                        value={settings.cleanupUseDbDirect ? 'db' : 'document-service'}
+                        onChange={(value) => handleChange('cleanupUseDbDirect', value === 'db')}
+                      >
+                        <SingleSelectOption value="document-service">
+                          {t('settings.general.cleanupMode.ds', 'Document Service (Recommended, safe)')}
+                        </SingleSelectOption>
+                        <SingleSelectOption value="db">
+                          {t('settings.general.cleanupMode.db', 'Direct SQL UPDATE (large-scale)')}
+                        </SingleSelectOption>
+                      </SingleSelect>
+                      <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
+                        {t(
+                          'settings.general.cleanupMode.hint',
+                          'Direct SQL drains the entire idle-session backlog in one statement but bypasses lifecycle hooks. Only switch if you run >50 k active sessions.'
+                        )}
+                      </Typography>
+                    </Box>
+                  </Grid.Item>
+
                   <Grid.Item col={12}>
                     <Box padding={4} background="danger100" style={{ borderRadius: theme.borderRadius.md, border: `2px solid rgba(220, 38, 38, 0.2)` }}>
                       <Flex gap={3} alignItems="flex-start">
