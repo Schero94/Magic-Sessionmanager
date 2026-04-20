@@ -1,3 +1,10 @@
+## [4.5.7](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.6...v4.5.7) (2026-04-20)
+
+
+### Bug Fixes
+
+* **deps:** bump devDependencies (sdk-plugin v6, design-system 2.2, styled-components 6.4) ([bf9a743](https://github.com/Schero94/Magic-Sessionmanager/commit/bf9a7433995dc96c23f8f4a149081fe858b7332f)), closes [package.json#exports](https://github.com/package.json/issues/exports)
+
 ## [4.5.6](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.5...v4.5.6) (2026-04-20)
 
 
