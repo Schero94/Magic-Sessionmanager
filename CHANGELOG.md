@@ -1,3 +1,10 @@
+## [4.5.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.2...v4.5.3) (2026-04-20)
+
+
+### Bug Fixes
+
+* **ux,dx:** communicate termination reason, consistent 401s, grace-aware endpoints ([3eb5bc2](https://github.com/Schero94/Magic-Sessionmanager/commit/3eb5bc25bf55d78d7f7f84f286d45e1fa4c2ceeb))
+
 ## [4.5.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.1...v4.5.2) (2026-04-20)
 
 
