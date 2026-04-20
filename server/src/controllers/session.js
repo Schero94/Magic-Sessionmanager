@@ -222,7 +222,14 @@ module.exports = {
   },
 
   /**
-   * Terminates all sessions of the authenticated user.
+   * Terminates EVERY session of the authenticated user — including the
+   * current one. After this call the caller will also be logged out on
+   * the next request (their own JWT is rejected by the JWT-verify wrapper
+   * with reason=manual).
+   *
+   * For the "log me out everywhere ELSE but keep me here" flow, use
+   * `/logout-others` below.
+   *
    * @route POST /api/magic-sessionmanager/logout-all
    */
   async logoutAll(ctx) {
@@ -233,14 +240,95 @@ module.exports = {
       }
 
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
-      await sessionService.terminateSession({ userId: userDocId, reason: 'manual' });
+      const { terminatedCount } = await sessionService.terminateSession({
+        userId: userDocId,
+        reason: 'manual',
+      });
 
-      strapi.log.info(`[magic-sessionmanager] User ${userDocId} logged out from all devices`);
+      strapi.log.info(
+        `[magic-sessionmanager] User ${userDocId} logged out from all devices (${terminatedCount})`
+      );
 
-      ctx.body = { message: 'Logged out from all devices successfully' };
+      ctx.body = {
+        message: 'Logged out from all devices successfully',
+        terminatedCount,
+      };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Logout-all error:', err);
       ctx.throw(500, 'Error during logout');
+    }
+  },
+
+  /**
+   * Terminates every session of the authenticated user EXCEPT the current
+   * one. This is the "kick everyone else off my account" flow — the
+   * caller stays logged in on the device they are using.
+   *
+   * If no "current session" record can be located for the caller's JWT
+   * (edge case: user logged in before the session-manager was installed,
+   * or right at the end of the grace window) we fall back to terminating
+   * ALL sessions so the user still gets the safety effect they asked for,
+   * and we report `fellBackToLogoutAll: true` so the client can adjust
+   * its success message.
+   *
+   * @route POST /api/magic-sessionmanager/logout-others
+   */
+  async logoutOthers(ctx) {
+    try {
+      const userDocId = await resolveAuthUserDocId(ctx);
+      const token = extractBearerToken(ctx);
+
+      if (!userDocId || !token) {
+        return ctx.unauthorized('Authentication required');
+      }
+
+      const currentTokenHash = hashToken(token);
+      const currentSession = await strapi.documents(SESSION_UID).findFirst({
+        filters: { user: { documentId: userDocId }, tokenHash: currentTokenHash },
+        fields: ['documentId'],
+      });
+
+      const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+
+      if (!currentSession) {
+        // No current-session record to preserve — falling back to logoutAll
+        // keeps the safety semantic ("throw every session out"). Client
+        // gets told so they can re-login if needed.
+        const { terminatedCount } = await sessionService.terminateSession({
+          userId: userDocId,
+          reason: 'manual',
+        });
+        strapi.log.warn(
+          `[magic-sessionmanager] logoutOthers fell back to logoutAll for user ${userDocId} (no current session match)`
+        );
+        ctx.body = {
+          message: 'All sessions terminated (could not preserve current session)',
+          terminatedCount,
+          fellBackToLogoutAll: true,
+        };
+        return;
+      }
+
+      const { terminatedCount } = await sessionService.terminateSession({
+        userId: userDocId,
+        exceptSessionId: currentSession.documentId,
+        reason: 'manual',
+      });
+
+      strapi.log.info(
+        `[magic-sessionmanager] User ${userDocId} logged out ${terminatedCount} other device(s)`
+      );
+
+      ctx.body = {
+        message: terminatedCount === 0
+          ? 'No other active sessions to terminate'
+          : `${terminatedCount} other session(s) terminated`,
+        terminatedCount,
+        currentSessionPreserved: true,
+      };
+    } catch (err) {
+      strapi.log.error('[magic-sessionmanager] Logout-others error:', err);
+      ctx.throw(500, 'Error terminating other sessions');
     }
   },
 

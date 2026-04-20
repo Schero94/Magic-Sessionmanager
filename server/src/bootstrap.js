@@ -553,19 +553,51 @@ function mountFailedLoginLockout({ strapi, log }) {
  *
  * @param {{strapi: object, log: object, sessionService: object}} deps
  */
+/**
+ * Returns true for any users-permissions / magic-link endpoint that is
+ * expected to mint a fresh JWT on success. Keeping this as an explicit
+ * whitelist (rather than "any path that returns a jwt") prevents us
+ * from accidentally creating sessions for unrelated endpoints that
+ * might include a jwt field in their response for some reason.
+ *
+ * @param {string} path
+ * @param {string} method
+ * @returns {boolean}
+ */
+function isJwtIssuingPath(path, method) {
+  if (!path) return false;
+  const get = method === 'GET';
+  const post = method === 'POST';
+
+  // users-permissions core
+  if (post && path === '/api/auth/local') return true;
+  if (post && path === '/api/auth/local/register') return true;
+  if (post && path === '/api/auth/reset-password') return true;
+  if ((get || post) && path === '/api/auth/email-confirmation') return true;
+
+  // users-permissions OAuth flow: /api/auth/:provider/callback
+  // The provider segment is any non-empty alnum/dash token.
+  if (get && /^\/api\/auth\/[a-z0-9-]+\/callback$/i.test(path)) return true;
+
+  // magic-link
+  if ((get || post) && path.startsWith('/api/magic-link/login')) return true;
+  if (post && path === '/api/magic-link/verify-mfa-totp') return true;
+  if (post && path === '/api/magic-link/otp/verify') return true;
+  if (post && path === '/api/magic-link/login-totp') return true;
+
+  // passwordless-compat alias that ships with magic-link v5
+  if ((get || post) && path.startsWith('/api/passwordless/')) return true;
+
+  return false;
+}
+
 function mountLoginInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
     await next();
 
-    const isAuthLocal = ctx.path === '/api/auth/local' && ctx.method === 'POST';
-    const isMagicLinkLogin = ctx.path.includes('/magic-link/login') && (ctx.method === 'GET' || ctx.method === 'POST');
-    const isMagicLinkMFA = ctx.path.includes('/magic-link/verify-mfa-totp') && ctx.method === 'POST';
-    const isMagicLinkOTP = ctx.path.includes('/magic-link/otp/verify') && ctx.method === 'POST';
-    const isMagicLink = isMagicLinkLogin || isMagicLinkMFA || isMagicLinkOTP;
-
-    if (!((isAuthLocal || isMagicLink) && ctx.status === 200 && ctx.body && ctx.body.jwt && ctx.body.user)) {
-      return;
-    }
+    if (!isJwtIssuingPath(ctx.path, ctx.method)) return;
+    if (ctx.status !== 200) return;
+    if (!ctx.body || !ctx.body.jwt || !ctx.body.user) return;
 
     try {
       const user = ctx.body.user;
@@ -846,11 +878,27 @@ function mountRefreshTokenInterceptor({ strapi, log }) {
  * @param {object} log - Logger instance
  */
 async function ensureContentApiPermissions(strapi, log) {
+  // Bump this when the list of required actions changes so existing
+  // installations pick up the new permissions on next boot. Storing a
+  // version (not a boolean) also lets us back out a bad migration by
+  // decrementing the stored value manually.
+  const PERMISSIONS_VERSION = 2;
+
   try {
     const pluginStore = strapi.store({ type: 'plugin', name: 'magic-sessionmanager' });
-    const alreadyInitialized = await pluginStore.get({ key: 'contentApiPermissionsInitialized' });
-    if (alreadyInitialized === true) {
-      log.debug('Content-API permissions already initialized (skipping auto-setup)');
+    const storedVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
+
+    // Legacy rollout (boolean flag pre-v2) — treat as version 1.
+    if (storedVersion === undefined) {
+      const legacyFlag = await pluginStore.get({ key: 'contentApiPermissionsInitialized' });
+      if (legacyFlag === true) {
+        await pluginStore.set({ key: 'contentApiPermissionsVersion', value: 1 });
+      }
+    }
+
+    const effectiveVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
+    if (effectiveVersion >= PERMISSIONS_VERSION) {
+      log.debug('Content-API permissions already at current version (skipping auto-setup)');
       return;
     }
 
@@ -877,6 +925,7 @@ async function ensureContentApiPermissions(strapi, log) {
     const requiredActions = [
       'plugin::magic-sessionmanager.session.logout',
       'plugin::magic-sessionmanager.session.logoutAll',
+      'plugin::magic-sessionmanager.session.logoutOthers',
       'plugin::magic-sessionmanager.session.getOwnSessions',
       'plugin::magic-sessionmanager.session.getUserSessions',
       'plugin::magic-sessionmanager.session.getCurrentSession',
@@ -896,7 +945,7 @@ async function ensureContentApiPermissions(strapi, log) {
     const missingActions = requiredActions.filter(action => !existingActions.includes(action));
 
     if (missingActions.length === 0) {
-      await pluginStore.set({ key: 'contentApiPermissionsInitialized', value: true });
+      await pluginStore.set({ key: 'contentApiPermissionsVersion', value: PERMISSIONS_VERSION });
       log.debug('Content-API permissions already configured');
       return;
     }
@@ -908,7 +957,7 @@ async function ensureContentApiPermissions(strapi, log) {
       log.info(`[PERMISSION] Enabled ${action} for authenticated users`);
     }
 
-    await pluginStore.set({ key: 'contentApiPermissionsInitialized', value: true });
+    await pluginStore.set({ key: 'contentApiPermissionsVersion', value: PERMISSIONS_VERSION });
     log.info('[SUCCESS] Content-API permissions configured for authenticated users');
   } catch (err) {
     log.warn('Could not auto-configure permissions:', err.message);

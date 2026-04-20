@@ -109,9 +109,9 @@ module.exports = ({ strapi }) => {
     },
 
     /**
-     * Terminates a single session or all sessions of a user with a typed
-     * reason so the JWT-verify wrapper and downstream middleware can
-     * communicate the cause to the client (and we can show sensible UI).
+     * Terminates a single session, all sessions of a user, or all sessions
+     * of a user EXCEPT one with a typed reason so the JWT-verify wrapper
+     * can communicate the cause to the client.
      *
      * Supported reasons:
      *   - 'manual':   user clicked logout, or admin terminated a session
@@ -125,12 +125,18 @@ module.exports = ({ strapi }) => {
      * to work, while new code relies on `terminationReason`.
      *
      * @param {Object} params
-     * @param {string} [params.sessionId]
-     * @param {string|number} [params.userId]
+     * @param {string} [params.sessionId]        Terminate exactly this session
+     * @param {string|number} [params.userId]    Terminate every active session
+     *                                           of this user …
+     * @param {string} [params.exceptSessionId]  … except for this one. Only
+     *                                           meaningful together with
+     *                                           `userId`. Used by
+     *                                           /logout-other-devices so
+     *                                           the caller stays logged in.
      * @param {'manual'|'idle'|'expired'|'blocked'} [params.reason='manual']
-     * @returns {Promise<void>}
+     * @returns {Promise<{terminatedCount: number}>}
      */
-    async terminateSession({ sessionId, userId, reason = 'manual' }) {
+    async terminateSession({ sessionId, userId, exceptSessionId = null, reason = 'manual' }) {
       try {
         const now = new Date();
         const validReasons = ['manual', 'idle', 'expired', 'blocked'];
@@ -151,7 +157,7 @@ module.exports = ({ strapi }) => {
 
           if (!existing) {
             log.warn(`Session ${sessionId} not found for termination`);
-            return;
+            return { terminatedCount: 0 };
           }
 
           await strapi.documents(SESSION_UID).update({
@@ -160,25 +166,45 @@ module.exports = ({ strapi }) => {
           });
 
           log.info(`Session ${sessionId} terminated (reason: ${finalReason})`);
-        } else if (userId) {
+          return { terminatedCount: 1 };
+        }
+
+        if (userId) {
           const userDocumentId = await resolveUserDocumentId(strapi, userId);
-          if (!userDocumentId) return;
+          if (!userDocumentId) return { terminatedCount: 0 };
+
+          const filters = { user: { documentId: userDocumentId }, isActive: true };
+          if (exceptSessionId) {
+            filters.documentId = { $ne: exceptSessionId };
+          }
 
           const activeSessions = await strapi.documents(SESSION_UID).findMany({
-            filters: { user: { documentId: userDocumentId }, isActive: true },
+            filters,
             fields: ['documentId'],
             limit: MAX_SESSIONS_QUERY,
           });
 
+          let terminatedCount = 0;
           for (const session of activeSessions) {
-            await strapi.documents(SESSION_UID).update({
-              documentId: session.documentId,
-              data: updateData,
-            });
+            try {
+              await strapi.documents(SESSION_UID).update({
+                documentId: session.documentId,
+                data: updateData,
+              });
+              terminatedCount++;
+            } catch (err) {
+              log.debug(`Failed to terminate session ${session.documentId}:`, err.message);
+            }
           }
 
-          log.info(`All sessions terminated for user ${userDocumentId} (reason: ${finalReason})`);
+          const label = exceptSessionId ? 'OTHER sessions' : 'ALL sessions';
+          log.info(
+            `${label} terminated for user ${userDocumentId} (reason: ${finalReason}, count: ${terminatedCount})`
+          );
+          return { terminatedCount };
         }
+
+        return { terminatedCount: 0 };
       } catch (err) {
         log.error('Error terminating session:', err);
         throw err;

@@ -55,7 +55,17 @@ module.exports = {
       config: {
         auth: { strategies: ['users-permissions'] },
         middlewares: writeRateLimit,
-        description: 'Logout from all devices (requires JWT)',
+        description: 'Logout from ALL devices including the current one (requires JWT)',
+      },
+    },
+    {
+      method: 'POST',
+      path: '/logout-others',
+      handler: 'session.logoutOthers',
+      config: {
+        auth: { strategies: ['users-permissions'] },
+        middlewares: writeRateLimit,
+        description: 'Logout from all OTHER devices, keep current session alive (requires JWT)',
       },
     },
 
