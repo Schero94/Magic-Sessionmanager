@@ -1,3 +1,10 @@
+## [4.5.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.4...v4.5.5) (2026-04-20)
+
+
+### Bug Fixes
+
+* **security:** enforce plugin-access permission on every admin route ([7935a63](https://github.com/Schero94/Magic-Sessionmanager/commit/7935a6304bfebeb17d17fdc1146917bf3185eef0))
+
 ## [4.5.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.3...v4.5.4) (2026-04-20)
 
 
