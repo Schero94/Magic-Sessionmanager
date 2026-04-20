@@ -4,6 +4,20 @@
 ### Bug Fixes
 
 * **rbac:** keep routes functional, only hide UI for unpermitted roles ([97744f7](https://github.com/Schero94/Magic-Sessionmanager/commit/97744f75a56305176c8136a6cbeaf778d30bfce8))
+* **session,security:** close 11 correctness and hardening gaps ([7742c9c](https://github.com/Schero94/Magic-Sessionmanager/commit/7742c9c7c56022c40c7a753a5848d19dc6f90aac))
+
+
+### Features
+
+* **notifications,security:** slack webhook, new-location alerts, lockout ([ccfe87a](https://github.com/Schero94/Magic-Sessionmanager/commit/ccfe87a33da3cea5b15ea8071e49b3ec1609c6b2))
+* **rbac:** add access permission for role-based visibility ([6310696](https://github.com/Schero94/Magic-Sessionmanager/commit/6310696d21c7090f45805b2625d3a6035fabad90))
+
+# [4.5.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.4.7...v4.5.0) (2026-04-20)
+
+
+### Bug Fixes
+
+* **rbac:** keep routes functional, only hide UI for unpermitted roles ([97744f7](https://github.com/Schero94/Magic-Sessionmanager/commit/97744f75a56305176c8136a6cbeaf778d30bfce8))
 
 
 ### Features
