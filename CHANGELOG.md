@@ -1,3 +1,10 @@
+## [4.5.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.1...v4.5.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* **settings:** implement geofencing UI, dynamic cleanupInterval, retention cleanup ([50d7ee0](https://github.com/Schero94/Magic-Sessionmanager/commit/50d7ee0ca2a5b7bf3016aae72f1ab5a3b0d34d63))
+
 ## [4.5.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.0...v4.5.1) (2026-04-20)
 
 
