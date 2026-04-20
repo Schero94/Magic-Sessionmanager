@@ -1,3 +1,10 @@
+## [4.5.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.3...v4.5.4) (2026-04-20)
+
+
+### Bug Fixes
+
+* **login,logout:** no-login-drop-off for OAuth/TOTP, add /logout-others ([afeebb2](https://github.com/Schero94/Magic-Sessionmanager/commit/afeebb2e7ab4b74d8f261975a5720d4c9d7ac9e6))
+
 ## [4.5.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.2...v4.5.3) (2026-04-20)
 
 
