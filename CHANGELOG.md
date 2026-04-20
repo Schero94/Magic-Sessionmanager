@@ -1,3 +1,10 @@
+## [4.5.6](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.5...v4.5.6) (2026-04-20)
+
+
+### Bug Fixes
+
+* **enduser:** honest logout message + consistent 5xx envelope across session controller ([7e5f6b8](https://github.com/Schero94/Magic-Sessionmanager/commit/7e5f6b81781d494981a2eae835e2ec11d7eda3d2))
+
 ## [4.5.5](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.4...v4.5.5) (2026-04-20)
 
 
