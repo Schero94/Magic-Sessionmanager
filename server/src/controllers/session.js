@@ -29,12 +29,15 @@ async function resolveAuthUserDocId(ctx) {
  * Session Controller
  * Handles HTTP requests for session management.
  *
- * Error-handling convention: every 4xx response uses the Koa / Strapi
- * convenience helpers (`ctx.unauthorized`, `ctx.forbidden`,
- * `ctx.badRequest`, `ctx.notFound`) so every plugin response is wrapped
- * in the standard `{ data, error }` envelope. We never call
- * `ctx.throw(4xx, ...)` because that path returns a raw text body that
- * the frontend has to special-case.
+ * Error-handling convention: EVERY error response — 4xx and 5xx — uses
+ * the Koa / Strapi convenience helpers (`ctx.unauthorized`,
+ * `ctx.forbidden`, `ctx.badRequest`, `ctx.notFound`,
+ * `ctx.internalServerError`) so every plugin response is wrapped in the
+ * standard `{ data, error: { status, name, message, details } }`
+ * envelope. We never call `ctx.throw(statusCode, ...)` because that
+ * path returns a raw text body that the frontend has to special-case.
+ * Returning the helper call directly (i.e. `return ctx.xyz(...)`) also
+ * prevents accidental fall-through since the helpers do not throw.
  */
 module.exports = {
   /**
@@ -56,7 +59,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] getAllSessionsAdmin error:', err);
-      ctx.throw(500, 'Error fetching sessions');
+      return ctx.internalServerError('Error fetching sessions');
     }
   },
 
@@ -75,7 +78,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] getActiveSessions error:', err);
-      ctx.throw(500, 'Error fetching active sessions');
+      return ctx.internalServerError('Error fetching active sessions');
     }
   },
 
@@ -136,7 +139,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error fetching own sessions:', err);
-      ctx.throw(500, 'Error fetching sessions');
+      return ctx.internalServerError('Error fetching sessions');
     }
   },
 
@@ -173,7 +176,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] getUserSessions error:', err);
-      ctx.throw(500, 'Error fetching user sessions');
+      return ctx.internalServerError('Error fetching user sessions');
     }
   },
 
@@ -211,13 +214,19 @@ module.exports = {
         strapi.log.info(`[magic-sessionmanager] User ${userDocId} logged out (session ${matchingSession.documentId})`);
       }
 
+      // Message must reflect reality: "Logged out successfully" when we
+      // actually terminated a session, otherwise make it clear that no
+      // active session was on record (the user may have been logged out
+      // by the JWT-verify wrapper just before this request arrived).
       ctx.body = {
-        message: 'Logged out successfully',
+        message: terminated
+          ? 'Logged out successfully'
+          : 'No active session found — you are already logged out',
         terminated,
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Logout error:', err);
-      ctx.throw(500, 'Error during logout');
+      return ctx.internalServerError('Error during logout');
     }
   },
 
@@ -255,7 +264,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Logout-all error:', err);
-      ctx.throw(500, 'Error during logout');
+      return ctx.internalServerError('Error during logout');
     }
   },
 
@@ -328,7 +337,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Logout-others error:', err);
-      ctx.throw(500, 'Error terminating other sessions');
+      return ctx.internalServerError('Error terminating other sessions');
     }
   },
 
@@ -395,7 +404,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error getting current session:', err);
-      ctx.throw(500, 'Error fetching current session');
+      return ctx.internalServerError('Error fetching current session');
     }
   },
 
@@ -456,7 +465,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error terminating own session:', err);
-      ctx.throw(500, 'Error terminating session');
+      return ctx.internalServerError('Error terminating session');
     }
   },
 
@@ -499,7 +508,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error simulating timeout:', err);
-      ctx.throw(500, 'Error simulating session timeout');
+      return ctx.internalServerError('Error simulating session timeout');
     }
   },
 
@@ -518,7 +527,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error terminating session:', err);
-      ctx.throw(500, 'Error terminating session');
+      return ctx.internalServerError('Error terminating session');
     }
   },
 
@@ -537,7 +546,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error terminating all user sessions:', err);
-      ctx.throw(500, 'Error terminating all user sessions');
+      return ctx.internalServerError('Error terminating all user sessions');
     }
   },
 
@@ -596,7 +605,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error getting IP geolocation:', err);
-      ctx.throw(500, 'Error fetching IP geolocation data');
+      return ctx.internalServerError('Error fetching IP geolocation data');
     }
   },
 
@@ -615,7 +624,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error deleting session:', err);
-      ctx.throw(500, 'Error deleting session');
+      return ctx.internalServerError('Error deleting session');
     }
   },
 
@@ -634,7 +643,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error cleaning inactive sessions:', err);
-      ctx.throw(500, 'Error deleting inactive sessions');
+      return ctx.internalServerError('Error deleting inactive sessions');
     }
   },
 
@@ -687,7 +696,7 @@ module.exports = {
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error toggling user block:', err);
-      ctx.throw(500, 'Error toggling user block status');
+      return ctx.internalServerError('Error toggling user block status');
     }
   },
 };
