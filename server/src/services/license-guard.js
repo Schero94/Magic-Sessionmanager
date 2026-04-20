@@ -15,11 +15,28 @@ const pluginPkg = require('../../../package.json');
 const { createLogger } = require('../utils/logger');
 
 const DEFAULT_LICENSE_SERVER_URL = 'https://magicapi.fitlex.me';
-const DEFAULT_FETCH_TIMEOUT_MS = 5000;
+
+// 12s default tolerates a cold-start on the license server (serverless
+// containers often need 5–10s for the first TLS handshake) — the old
+// 5s was too aggressive and produced spurious
+//   "This operation was aborted" warnings during first-boot / restart.
+// Overridable via MAGIC_LICENSE_TIMEOUT_MS for very fast or very slow
+// networks.
+const envTimeout = Number(process.env.MAGIC_LICENSE_TIMEOUT_MS);
+const DEFAULT_FETCH_TIMEOUT_MS = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 12000;
+
+// Number of retries (on top of the initial attempt) before we give up
+// and trigger the grace-period fallback. One quick retry is enough to
+// absorb a cold-start without adding real latency to the happy path.
+const FETCH_RETRIES = 1;
+const FETCH_RETRY_BACKOFF_MS = 750;
 
 /**
- * Wraps `fetch` with a hard timeout via AbortController so license-server
- * calls can never block indefinitely.
+ * Wraps `fetch` with a hard timeout via AbortController and one retry
+ * so a cold-start on the license server does not immediately show up
+ * as a scary log line. Each attempt has its own fresh AbortController
+ * — re-using one across attempts would cancel the retry before it
+ * even connects.
  *
  * @param {string} url
  * @param {object} options
@@ -27,13 +44,27 @@ const DEFAULT_FETCH_TIMEOUT_MS = 5000;
  * @returns {Promise<Response>}
  */
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
+  let lastError;
+  for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (err) {
+      lastError = err;
+      // Only retry on network-y failures (AbortError = our timeout,
+      // TypeError from undici on connection reset, etc.). A 4xx/5xx
+      // body never reaches this catch because fetch resolves those.
+      if (attempt < FETCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, FETCH_RETRY_BACKOFF_MS));
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw lastError;
 }
 
 module.exports = ({ strapi }) => {
@@ -200,7 +231,15 @@ module.exports = ({ strapi }) => {
       return { valid: false, data: null };
     } catch (error) {
       if (allowGracePeriod) {
-        log.warn('License server unreachable, using grace period:', error.message);
+        // fetchWithTimeout already retried once, so by the time we end
+        // up here the license server is really not answering within
+        // ~24s. We log at info level (not warn) because the grace
+        // period is a graceful fallback, not a defect — the plugin
+        // keeps working normally for up to 24h while the network or
+        // the upstream recovers.
+        log.info(
+          `License server unreachable after retry, continuing on grace period (${error.message})`
+        );
         return { valid: true, data: null, gracePeriod: true };
       }
       return { valid: false, data: null };
