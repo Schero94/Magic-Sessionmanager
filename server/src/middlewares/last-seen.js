@@ -2,219 +2,131 @@
 
 /**
  * lastSeen Middleware
- * Updates user lastSeen and session lastActive on each authenticated request
- * Rate-limited to prevent DB write noise (default: 30 seconds)
- * 
- * CRITICAL: This middleware validates that authenticated users have active sessions.
- * If a session is terminated, the JWT becomes invalid even if not expired.
- * 
- * [SUCCESS] Migrated to strapi.documents() API (Strapi v5 Best Practice)
+ *
+ * Runs on every authenticated request. Responsibilities:
+ *   1. Validates that the user's JWT corresponds to an ACTIVE session
+ *      (the JWT verify wrapper does most of the work; this is a safety net).
+ *   2. In strict mode, blocks requests when no session exists.
+ *   3. Updates `lastActive` on the matching session (rate-limited).
+ *
+ * Reactivation is intentionally handled by the JWT verify wrapper (which can
+ * atomically reactivate based on tokenHash). This middleware NEVER reactivates
+ * sessions without tokenHash match to avoid the "concurrent-reactivates-
+ * multiple-sessions" race condition.
  */
+
+const { resolveUserDocumentId } = require('../utils/resolve-user');
+const { getPluginSettings } = require('../utils/settings-loader');
+const { extractBearerToken } = require('../utils/extract-token');
+const { hashToken } = require('../utils/encryption');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
-const USER_UID = 'plugin::users-permissions.user';
 
 /**
- * Patterns that identify auth-related endpoints (excluded from session checking)
- * Uses simple substring matching for maintainability
+ * Path prefixes that should NOT be session-checked. Uses startsWith (not
+ * includes) to prevent bypass via crafted paths like `/api/articles/my-login`.
  */
-const AUTH_PATTERNS = [
-  '/auth/',           // All /api/auth/* endpoints (login, logout, refresh, etc.)
-  '/magic-link/',     // All Magic-Link endpoints
-  '/passwordless/',   // Legacy passwordless endpoints
-  '/otp/',            // OTP endpoints (any plugin)
-  '/login',           // Any login endpoint
-  '/register',        // Any register endpoint
-  '/forgot-password', // Password reset
-  '/reset-password',  // Password reset
-  '/admin/',          // Admin panel endpoints (have their own auth)
+const AUTH_PATH_PREFIXES = [
+  '/api/auth/',
+  '/api/magic-link/',
+  '/api/passwordless/',
+  '/api/otp/',
+  '/api/forgot-password',
+  '/api/reset-password',
+  '/api/register',
+  '/admin/',
 ];
 
 /**
- * Checks if path is an auth-related endpoint that should skip session validation
- * @param {string} path - The request path
- * @returns {boolean} True if path should be excluded
+ * Returns true if the given path should skip session enforcement.
+ * Session/auth endpoints bootstrap sessions themselves and cannot depend on
+ * their existence.
+ *
+ * @param {string} path
+ * @returns {boolean}
  */
 function isAuthEndpoint(path) {
-  return AUTH_PATTERNS.some(pattern => path.includes(pattern));
+  if (!path) return false;
+  return AUTH_PATH_PREFIXES.some(prefix => path.startsWith(prefix));
 }
 
 /**
- * LRU-like cache for numeric ID -> documentId mapping to reduce DB queries
- * TTL: 5 minutes, Max size: 1000 entries
+ * Creates the last-seen Koa middleware.
+ *
+ * @param {{strapi: object, sessionService: object}} deps
+ * @returns {import('koa').Middleware}
  */
-const userIdCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000;
-const CACHE_MAX_SIZE = 1000;
-
-/**
- * Gets documentId from numeric id, with caching and size limit
- * @param {object} strapi - Strapi instance
- * @param {number} numericId - Numeric user ID
- * @returns {Promise<string|null>} documentId or null
- */
-async function getDocumentIdFromNumericId(strapi, numericId) {
-  const cacheKey = `user_${numericId}`;
-  const cached = userIdCache.get(cacheKey);
-  
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.documentId;
-  }
-  
-  // Evict expired or excess entries when cache grows too large
-  if (userIdCache.size >= CACHE_MAX_SIZE) {
-    const now = Date.now();
-    for (const [key, value] of userIdCache) {
-      if (now - value.timestamp >= CACHE_TTL) {
-        userIdCache.delete(key);
-      }
-    }
-    // If still over limit after TTL eviction, remove oldest 25%
-    if (userIdCache.size >= CACHE_MAX_SIZE) {
-      const keysToDelete = [...userIdCache.keys()].slice(0, Math.floor(CACHE_MAX_SIZE / 4));
-      keysToDelete.forEach(key => userIdCache.delete(key));
-    }
-  }
-  
-  try {
-    // Use entityService to get user by numeric ID
-    const user = await strapi.entityService.findOne(USER_UID, numericId, {
-      fields: ['documentId'],
-    });
-    
-    if (user?.documentId) {
-      userIdCache.set(cacheKey, { documentId: user.documentId, timestamp: Date.now() });
-      return user.documentId;
-    }
-  } catch (err) {
-    strapi.log.debug('[magic-sessionmanager] Error fetching documentId:', err.message);
-  }
-  
-  return null;
-}
-
 module.exports = ({ strapi, sessionService }) => {
   return async (ctx, next) => {
-    // Skip session checking for auth-related endpoints
-    // These endpoints create/manage sessions, so checking here causes chicken-and-egg problems
     if (isAuthEndpoint(ctx.path)) {
       await next();
       return;
     }
 
-    // BEFORE processing request: Check if user's sessions are active
-    // Support both documentId (Strapi v5) and numeric id (legacy/auth strategy)
     if (ctx.state.user) {
       try {
         let userDocId = ctx.state.user.documentId;
-        
-        // If no documentId but has numeric id, fetch documentId from DB
-        if (!userDocId && ctx.state.user.id) {
-          userDocId = await getDocumentIdFromNumericId(strapi, ctx.state.user.id);
-        }
-        
-        if (userDocId) {
-          // Get config - strictSessionEnforcement must be explicitly enabled to block
-          const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-          const strictMode = config.strictSessionEnforcement === true;
-          
-          // Check if user has ANY active sessions
-          const activeSessions = await strapi.documents(SESSION_UID).findMany({
-            filters: {
-              user: { documentId: userDocId },
-              isActive: true,
-            },
-            limit: 1,
-          });
 
-          // If user has NO active sessions
-          if (!activeSessions || activeSessions.length === 0) {
-            // Check for inactive sessions
-            const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
-              filters: { 
-                user: { documentId: userDocId },
-                isActive: false,
-              },
-              limit: 5,
-              fields: ['documentId', 'terminatedManually', 'lastActive', 'loginTime'],
-              sort: [{ lastActive: 'desc' }],
-            });
-            
-            if (inactiveSessions && inactiveSessions.length > 0) {
-              // Find a session that can be reactivated (timed out, NOT manually terminated)
-              const reactivatable = inactiveSessions.find(s => s.terminatedManually !== true);
-              
-              if (reactivatable) {
-                // SECURITY: Check maxSessionAge to prevent indefinite reactivation
-                const maxAgeDays = config.maxSessionAgeDays || 30;
-                const loginTime = reactivatable.loginTime 
-                  ? new Date(reactivatable.loginTime).getTime() 
-                  : (reactivatable.lastActive ? new Date(reactivatable.lastActive).getTime() : 0);
-                const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
-                const isExpired = loginTime > 0 && (Date.now() - loginTime) > maxAgeMs;
-                
-                if (isExpired) {
-                  strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session exceeded max age of ${maxAgeDays} days (user: ${userDocId.substring(0, 8)}...)`);
-                  return ctx.unauthorized('Session expired. Please login again.');
-                }
-                
-                await strapi.documents(SESSION_UID).update({
-                  documentId: reactivatable.documentId,
-                  data: {
-                    isActive: true,
-                    lastActive: new Date(),
-                  },
-                });
-                strapi.log.info(`[magic-sessionmanager] [REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`);
-                // Continue - session is now active
-              } else {
-                // Only terminated sessions exist - do NOT block here.
-                // Old terminated sessions from previous logins must not prevent
-                // new logins (e.g., user got a new magic link after being terminated).
-                // The JWT verify wrapper already blocks the specific terminated token.
-                if (strictMode) {
-                  strapi.log.info(`[magic-sessionmanager] [BLOCKED] No active session for user ${userDocId.substring(0, 8)}... (strictMode)`);
-                  return ctx.unauthorized('No valid session. Please login again.');
-                }
-                strapi.log.warn(`[magic-sessionmanager] [WARN] No active session for user ${userDocId.substring(0, 8)}... (allowing)`);
-              }
-            } else {
-              // No sessions exist at all - session was never created
-              if (strictMode) {
-                strapi.log.info(`[magic-sessionmanager] [BLOCKED] No session exists (user: ${userDocId.substring(0, 8)}..., strictMode)`);
-                return ctx.unauthorized('No valid session. Please login again.');
-              }
-              
-              // Non-strict mode: Allow but log warning
-              strapi.log.warn(`[magic-sessionmanager] [WARN] No session for user ${userDocId.substring(0, 8)}... (allowing)`);
+        if (!userDocId && ctx.state.user.id) {
+          userDocId = await resolveUserDocumentId(strapi, ctx.state.user.id);
+        }
+
+        if (userDocId) {
+          const settings = await getPluginSettings(strapi);
+          const strictMode = settings.strictSessionEnforcement === true;
+
+          const token = extractBearerToken(ctx);
+          const tokenHashValue = token ? hashToken(token) : null;
+
+          const thisSession = tokenHashValue
+            ? await strapi.documents(SESSION_UID).findFirst({
+                filters: { user: { documentId: userDocId }, tokenHash: tokenHashValue },
+                fields: ['documentId', 'isActive', 'terminatedManually'],
+              })
+            : null;
+
+          if (thisSession) {
+            if (thisSession.terminatedManually === true) {
+              strapi.log.info(`[magic-sessionmanager] [BLOCKED] Session was manually terminated (user: ${userDocId.substring(0, 8)}...)`);
+              return ctx.unauthorized('Session terminated. Please login again.');
             }
+            ctx.state.userDocumentId = userDocId;
+            ctx.state.__magicSessionId = thisSession.documentId;
+            await next();
+
+            if (thisSession.isActive) {
+              try {
+                await sessionService.touch({
+                  userId: userDocId,
+                  sessionId: thisSession.documentId,
+                });
+              } catch (err) {
+                strapi.log.debug('[magic-sessionmanager] Error updating lastSeen:', err.message);
+              }
+            }
+            return;
           }
-          
-          // Store documentId for later use
+
+          if (strictMode) {
+            strapi.log.info(`[magic-sessionmanager] [BLOCKED] No session matches this token (user: ${userDocId.substring(0, 8)}..., strictMode)`);
+            return ctx.unauthorized('No valid session. Please login again.');
+          }
+
+          strapi.log.warn(`[magic-sessionmanager] [WARN] No session for token (user: ${userDocId.substring(0, 8)}...) - allowing in non-strict mode`);
           ctx.state.userDocumentId = userDocId;
         }
       } catch (err) {
         strapi.log.debug('[magic-sessionmanager] Error checking active sessions:', err.message);
-        // On error, allow request to continue (fail-open for availability)
       }
     }
 
-    // Process request
     await next();
 
-    // AFTER response: Update activity timestamps if user is authenticated
     const userDocId = ctx.state.userDocumentId || ctx.state.user?.documentId;
-    if (userDocId) {
+    const sessionId = ctx.state.__magicSessionId;
+    if (userDocId && sessionId) {
       try {
-        // Extract JWT token from Authorization header
-        const authHeader = ctx.request.headers.authorization;
-        const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-
-        // Call touch with rate limiting - uses tokenHash to find session
-        await sessionService.touch({
-          userId: userDocId,
-          token, // Session service will hash this to find the matching session
-        });
+        await sessionService.touch({ userId: userDocId, sessionId });
       } catch (err) {
         strapi.log.debug('[magic-sessionmanager] Error updating lastSeen:', err.message);
       }

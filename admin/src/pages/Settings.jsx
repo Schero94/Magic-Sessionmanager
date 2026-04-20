@@ -408,6 +408,9 @@ const SettingsPage = () => {
     cleanupInterval: 30,
     lastSeenRateLimit: 30,
     retentionDays: 90,
+    maxSessionAgeDays: 30,
+    strictSessionEnforcement: false,
+    trustedProxies: false,
     enableGeolocation: true,
     enableSecurityScoring: true,
     blockSuspiciousSessions: false,
@@ -926,7 +929,131 @@ const SettingsPage = () => {
                     )}
                   </Flex>
                 </Box>
-                
+
+                {/* Session Enforcement Policy */}
+                <Box
+                  background="neutral0"
+                  padding={6}
+                  style={{
+                    borderRadius: theme.borderRadius.lg,
+                    marginBottom: '32px',
+                    border: `2px solid ${settings.strictSessionEnforcement ? 'rgba(220, 38, 38, 0.25)' : 'rgba(2, 132, 199, 0.12)'}`,
+                    background: settings.strictSessionEnforcement ? 'rgba(220, 38, 38, 0.04)' : 'rgba(2, 132, 199, 0.04)'
+                  }}
+                >
+                  <Flex direction="column" gap={4}>
+                    <Flex alignItems="center" gap={3}>
+                      <Shield style={{ width: 24, height: 24, color: settings.strictSessionEnforcement ? 'var(--colors-danger600, #DC2626)' : 'var(--colors-primary600, #0284C7)' }} />
+                      <Typography variant="delta" fontWeight="bold">
+                        {t('settings.security.enforcement.title', 'Session Enforcement Policy')}
+                      </Typography>
+                      <Badge backgroundColor={settings.strictSessionEnforcement ? 'danger100' : 'neutral100'} textColor={settings.strictSessionEnforcement ? 'danger700' : 'neutral700'}>
+                        {settings.strictSessionEnforcement
+                          ? t('settings.security.enforcement.badgeStrict', 'STRICT')
+                          : t('settings.security.enforcement.badgeRelaxed', 'RELAXED')}
+                      </Badge>
+                    </Flex>
+
+                    <Typography variant="omega" textColor="neutral600" style={{ lineHeight: 1.6 }}>
+                      {t('settings.security.enforcement.description', 'Controls how aggressively JWT tokens are tied to an active session record. Strict mode rejects any token without a matching session, which is more secure but breaks tokens issued before this plugin was installed.')}
+                    </Typography>
+
+                    <Grid.Root gap={6}>
+                      <Grid.Item col={12} s={12}>
+                        <ToggleCard
+                          $active={settings.strictSessionEnforcement}
+                          onClick={() => handleChange('strictSessionEnforcement', !settings.strictSessionEnforcement)}
+                        >
+                          <Flex direction="row" gap={4} style={{ width: '100%' }} alignItems="center">
+                            <GreenToggle $isActive={settings.strictSessionEnforcement}>
+                              <Toggle
+                                checked={settings.strictSessionEnforcement}
+                                onChange={() => handleChange('strictSessionEnforcement', !settings.strictSessionEnforcement)}
+                              />
+                            </GreenToggle>
+                            <Flex direction="column" gap={1} style={{ flex: 1 }}>
+                              <Typography
+                                variant="delta"
+                                fontWeight="bold"
+                                textColor={settings.strictSessionEnforcement ? 'success700' : 'neutral800'}
+                                style={{ fontSize: '15px' }}
+                              >
+                                {t('settings.security.enforcement.strict.title', 'Strict Session Enforcement')}
+                              </Typography>
+                              <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px', lineHeight: '1.5' }}>
+                                {t('settings.security.enforcement.strict.description', 'Reject every authenticated request that does not have a matching session record. Recommended for production.')}
+                              </Typography>
+                            </Flex>
+                          </Flex>
+                        </ToggleCard>
+                      </Grid.Item>
+
+                      <Grid.Item col={6} s={12}>
+                        <Box>
+                          <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+                            <Clock style={{ width: 14, height: 14, verticalAlign: 'middle', marginRight: 6 }} />
+                            {t('settings.security.enforcement.maxAge.title', 'Max Session Age')}
+                          </Typography>
+                          <SingleSelect
+                            value={String(settings.maxSessionAgeDays)}
+                            onChange={(value) => handleChange('maxSessionAgeDays', parseInt(value))}
+                          >
+                            <SingleSelectOption value="1">{t('settings.security.enforcement.maxAge.1day', '1 day (Very Strict)')}</SingleSelectOption>
+                            <SingleSelectOption value="7">{t('settings.security.enforcement.maxAge.7days', '7 days')}</SingleSelectOption>
+                            <SingleSelectOption value="14">{t('settings.security.enforcement.maxAge.14days', '14 days')}</SingleSelectOption>
+                            <SingleSelectOption value="30">{t('settings.security.enforcement.maxAge.30days', '30 days (Recommended)')}</SingleSelectOption>
+                            <SingleSelectOption value="60">{t('settings.security.enforcement.maxAge.60days', '60 days')}</SingleSelectOption>
+                            <SingleSelectOption value="90">{t('settings.security.enforcement.maxAge.90days', '90 days')}</SingleSelectOption>
+                            <SingleSelectOption value="180">{t('settings.security.enforcement.maxAge.180days', '180 days')}</SingleSelectOption>
+                            <SingleSelectOption value="365">{t('settings.security.enforcement.maxAge.365days', '1 year')}</SingleSelectOption>
+                          </SingleSelect>
+                          <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
+                            {t('settings.security.enforcement.maxAge.hint', 'Sessions older than {days} days are automatically terminated, even if still active', { days: settings.maxSessionAgeDays })}
+                          </Typography>
+                        </Box>
+                      </Grid.Item>
+
+                      <Grid.Item col={6} s={12}>
+                        <ToggleCard
+                          $active={settings.trustedProxies}
+                          onClick={() => handleChange('trustedProxies', !settings.trustedProxies)}
+                        >
+                          <Flex direction="row" gap={4} style={{ width: '100%' }} alignItems="center">
+                            <GreenToggle $isActive={settings.trustedProxies}>
+                              <Toggle
+                                checked={settings.trustedProxies}
+                                onChange={() => handleChange('trustedProxies', !settings.trustedProxies)}
+                              />
+                            </GreenToggle>
+                            <Flex direction="column" gap={1} style={{ flex: 1 }}>
+                              <Typography
+                                variant="delta"
+                                fontWeight="bold"
+                                textColor={settings.trustedProxies ? 'success700' : 'neutral800'}
+                                style={{ fontSize: '15px' }}
+                              >
+                                {t('settings.security.enforcement.trustedProxies.title', 'Trust Upstream Proxy')}
+                              </Typography>
+                              <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px', lineHeight: '1.5' }}>
+                                {t('settings.security.enforcement.trustedProxies.description', 'Only enable when Strapi sits behind a trusted reverse proxy (nginx, Cloudflare). Otherwise clients can spoof X-Forwarded-For.')}
+                              </Typography>
+                            </Flex>
+                          </Flex>
+                        </ToggleCard>
+                      </Grid.Item>
+                    </Grid.Root>
+
+                    {!settings.strictSessionEnforcement && (
+                      <Alert
+                        variant="warning"
+                        title={t('settings.security.enforcement.warning.title', 'Running in Relaxed Mode')}
+                      >
+                        {t('settings.security.enforcement.warning.body', 'Tokens without a matching session record are allowed through. Manual session termination is still enforced via the token hash, but we strongly recommend enabling strict mode in production.')}
+                      </Alert>
+                    )}
+                  </Flex>
+                </Box>
+
                 {/* Feature Toggles */}
                 <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>
                   <Grid.Root gap={4}>

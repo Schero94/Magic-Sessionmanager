@@ -1,669 +1,420 @@
 'use strict';
 
-const { encryptToken, decryptToken, generateSessionId, hashToken } = require('../utils/encryption');
+const { encryptToken, generateSessionId, hashToken } = require('../utils/encryption');
 const { createLogger } = require('../utils/logger');
 const { parseUserAgent } = require('../utils/user-agent-parser');
+const { resolveUserDocumentId } = require('../utils/resolve-user');
+const { enhanceSessions } = require('../utils/enhance-session');
+const { getPluginSettings } = require('../utils/settings-loader');
 
 /**
  * Session Service
- * Uses plugin::magic-sessionmanager.session content type with relation to users
- * All session tracking happens in the Session collection
  *
- * SECURITY: JWT tokens are encrypted before storing in database using AES-256-GCM
- * 
- * [SUCCESS] Migrated to strapi.documents() API (Strapi v5 Best Practice)
- * 
- * TODO: For production multi-instance deployments, use Redis for:
- *   - Session store instead of DB
- *   - Rate limiting locks
- *   - Distributed session state
+ * All session data is accessed via `strapi.documents()` (Strapi v5 Document
+ * Service). JWT tokens are encrypted (AES-256-GCM) before storage; a SHA-256
+ * hash of the raw token is kept for O(1) lookups.
  */
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
-const USER_UID = 'plugin::users-permissions.user';
+const MAX_SESSIONS_QUERY = 1000;
 
 module.exports = ({ strapi }) => {
   const log = createLogger(strapi);
-  
+
+  /**
+   * Returns the common options passed to `enhanceSessions`.
+   * @returns {Promise<object>}
+   */
+  async function getEnhanceOpts() {
+    const settings = await getPluginSettings(strapi);
+    return {
+      inactivityTimeout: settings.inactivityTimeout || 15 * 60 * 1000,
+      geolocationService: strapi.plugin('magic-sessionmanager').service('geolocation'),
+      strapi,
+    };
+  }
+
   return {
-  /**
-   * Create a new session record
-   * @param {Object} params - { userId, ip, userAgent, token, refreshToken, geoData }
-   * @returns {Promise<Object>} Created session
-   */
-  async createSession({ userId, ip = 'unknown', userAgent = 'unknown', token, refreshToken, geoData }) {
-    try {
-      const now = new Date();
-      
-      // Generate unique session ID
-      const sessionId = generateSessionId(userId);
-      
-      // Encrypt JWT tokens before storing (both access and refresh)
-      const encryptedToken = token ? encryptToken(token) : null;
-      const encryptedRefreshToken = refreshToken ? encryptToken(refreshToken) : null;
-      
-      // Generate token hashes for O(1) lookups (no need to decrypt all tokens)
-      const tokenHashValue = token ? hashToken(token) : null;
-      const refreshTokenHashValue = refreshToken ? hashToken(refreshToken) : null;
-      
-      // Parse user agent for device info
-      const parsedUA = parseUserAgent(userAgent);
-      
-      // Using Document Service API (Strapi v5)
-      const session = await strapi.documents(SESSION_UID).create({
-        data: {
-          user: userId, // userId should be documentId (string)
-          ipAddress: ip.substring(0, 45),
-          userAgent: userAgent.substring(0, 500),
-          loginTime: now,
-          lastActive: now,
-          isActive: true,
-          token: encryptedToken,              // Encrypted Access Token
-          tokenHash: tokenHashValue,           // SHA-256 hash for fast lookup
-          refreshToken: encryptedRefreshToken, // Encrypted Refresh Token
-          refreshTokenHash: refreshTokenHashValue, // SHA-256 hash for fast lookup
-          sessionId: sessionId,                // Unique identifier
-          // Device info from User-Agent
-          deviceType: parsedUA.deviceType,
-          browserName: parsedUA.browserVersion 
-            ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
-            : parsedUA.browserName,
-          osName: parsedUA.osVersion 
-            ? `${parsedUA.osName} ${parsedUA.osVersion}` 
-            : parsedUA.osName,
-          // Geolocation data (stored as JSON object, schema type: json)
-          geoLocation: geoData ? {
-            country: geoData.country,
-            country_code: geoData.country_code,
-            country_flag: geoData.country_flag,
-            city: geoData.city,
-            region: geoData.region,
-            timezone: geoData.timezone,
-          } : null,
-          securityScore: geoData?.securityScore || null,
-        },
-      });
+    /**
+     * Create a new session record.
+     * @param {Object} params
+     * @param {string} params.userId - User documentId
+     * @param {string} [params.ip]
+     * @param {string} [params.userAgent]
+     * @param {string} [params.token] - Access token (will be encrypted)
+     * @param {string} [params.refreshToken] - Refresh token (will be encrypted)
+     * @param {object} [params.geoData]
+     * @returns {Promise<object>} Created session
+     * @throws {Error} When userId is missing
+     */
+    async createSession({ userId, ip = 'unknown', userAgent = 'unknown', token, refreshToken, geoData }) {
+      if (!userId) {
+        throw new Error('createSession: userId is required');
+      }
 
-      log.info(`[SUCCESS] Session ${session.documentId} (${sessionId}) created for user ${userId}`);
+      try {
+        const now = new Date();
+        const sessionId = generateSessionId(userId);
 
-      return session;
-    } catch (err) {
-      log.error('Error creating session:', err);
-      throw err;
-    }
-  },
+        const encryptedToken = token ? encryptToken(token) : null;
+        const encryptedRefreshToken = refreshToken ? encryptToken(refreshToken) : null;
+        const tokenHashValue = token ? hashToken(token) : null;
+        const refreshTokenHashValue = refreshToken ? hashToken(refreshToken) : null;
 
-  /**
-   * Terminate a session or all sessions for a user
-   * Supports both numeric id (legacy) and documentId (Strapi v5)
-   * @param {Object} params - { sessionId | userId }
-   * @returns {Promise<void>}
-   */
-  async terminateSession({ sessionId, userId }) {
-    try {
-      const now = new Date();
+        const parsedUA = parseUserAgent(userAgent);
 
-      if (sessionId) {
-        // Verify session exists before updating
-        const existing = await strapi.documents(SESSION_UID).findOne({
-          documentId: sessionId,
-          fields: ['documentId'],
-        });
-        
-        if (!existing) {
-          log.warn(`Session ${sessionId} not found for termination`);
-          return;
-        }
-        
-        // Using Document Service API (Strapi v5)
-        await strapi.documents(SESSION_UID).update({
-          documentId: sessionId,
+        const safeIp = (typeof ip === 'string' ? ip : 'unknown').substring(0, 45);
+        const safeUa = (typeof userAgent === 'string' ? userAgent : 'unknown').substring(0, 500);
+
+        const session = await strapi.documents(SESSION_UID).create({
           data: {
-            isActive: false,
-            terminatedManually: true,
-            logoutTime: now,
-          },
-        });
-
-        log.info(`Session ${sessionId} terminated (manual)`);
-      } else if (userId) {
-        // Strapi v5: If numeric id provided, look up documentId first
-        // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
-        let userDocumentId = userId;
-        if (!isNaN(userId)) {
-          const user = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
-          if (user) {
-            userDocumentId = user.documentId;
-          }
-        }
-        
-        // Find all active sessions for user - use Deep Filtering (Strapi v5)
-        const activeSessions = await strapi.documents(SESSION_UID).findMany({
-          filters: {
-            user: { documentId: userDocumentId }, // Deep filtering syntax
+            user: userId,
+            ipAddress: safeIp,
+            userAgent: safeUa,
+            loginTime: now,
+            lastActive: now,
             isActive: true,
+            token: encryptedToken,
+            tokenHash: tokenHashValue,
+            refreshToken: encryptedRefreshToken,
+            refreshTokenHash: refreshTokenHashValue,
+            sessionId,
+            deviceType: parsedUA.deviceType,
+            browserName: parsedUA.browserVersion
+              ? `${parsedUA.browserName} ${parsedUA.browserVersion}`
+              : parsedUA.browserName,
+            osName: parsedUA.osVersion
+              ? `${parsedUA.osName} ${parsedUA.osVersion}`
+              : parsedUA.osName,
+            geoLocation: geoData
+              ? {
+                  country: geoData.country,
+                  country_code: geoData.country_code,
+                  country_flag: geoData.country_flag,
+                  city: geoData.city,
+                  region: geoData.region,
+                  timezone: geoData.timezone,
+                }
+              : null,
+            securityScore: geoData?.securityScore || null,
           },
         });
 
-        // Terminate all active sessions (manual logout)
-        for (const session of activeSessions) {
-          await strapi.documents(SESSION_UID).update({
-            documentId: session.documentId,
-            data: {
-              isActive: false,
-              terminatedManually: true,
-              logoutTime: now,
-            },
+        log.info(`[SUCCESS] Session ${session.documentId} (${sessionId}) created for user ${userId}`);
+        return session;
+      } catch (err) {
+        log.error('Error creating session:', err);
+        throw err;
+      }
+    },
+
+    /**
+     * Terminates a single session or all sessions of a user.
+     * @param {Object} params
+     * @param {string} [params.sessionId]
+     * @param {string|number} [params.userId]
+     * @returns {Promise<void>}
+     */
+    async terminateSession({ sessionId, userId }) {
+      try {
+        const now = new Date();
+
+        if (sessionId) {
+          const existing = await strapi.documents(SESSION_UID).findOne({
+            documentId: sessionId,
+            fields: ['documentId'],
           });
-        }
 
-        log.info(`All sessions terminated (manual) for user ${userDocumentId}`);
+          if (!existing) {
+            log.warn(`Session ${sessionId} not found for termination`);
+            return;
+          }
+
+          await strapi.documents(SESSION_UID).update({
+            documentId: sessionId,
+            data: { isActive: false, terminatedManually: true, logoutTime: now },
+          });
+
+          log.info(`Session ${sessionId} terminated (manual)`);
+        } else if (userId) {
+          const userDocumentId = await resolveUserDocumentId(strapi, userId);
+          if (!userDocumentId) return;
+
+          const activeSessions = await strapi.documents(SESSION_UID).findMany({
+            filters: { user: { documentId: userDocumentId }, isActive: true },
+            fields: ['documentId'],
+            limit: MAX_SESSIONS_QUERY,
+          });
+
+          for (const session of activeSessions) {
+            await strapi.documents(SESSION_UID).update({
+              documentId: session.documentId,
+              data: { isActive: false, terminatedManually: true, logoutTime: now },
+            });
+          }
+
+          log.info(`All sessions terminated (manual) for user ${userDocumentId}`);
+        }
+      } catch (err) {
+        log.error('Error terminating session:', err);
+        throw err;
       }
-    } catch (err) {
-      log.error('Error terminating session:', err);
-      throw err;
-    }
-  },
+    },
 
-  /**
-   * Get ALL sessions (active + inactive) with accurate online status
-   * Fetches geolocation on-demand for sessions without it (limited to prevent API abuse)
-   * @returns {Promise<Array>} All sessions with enhanced data
-   */
-  async getAllSessions() {
-    try {
-      const sessions = await strapi.documents(SESSION_UID).findMany( {
-        populate: { user: { fields: ['documentId', 'email', 'username'] } },
-        sort: { loginTime: 'desc' },
-        limit: 1000, // Reasonable limit
-      });
-
-      // Get inactivity timeout from config (default: 15 minutes)
-      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-      const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
-      
-      // Get geolocation service
-      const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
-      
-      // Track how many geolocation lookups we do (limit to prevent API abuse)
-      let geoLookupsRemaining = 20; // Max 20 lookups per request
-
-      // Enhance sessions with accurate online status and device info
-      const now = new Date();
-      const enhancedSessions = await Promise.all(sessions.map(async (session) => {
-        const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
-        const timeSinceActive = now - lastActiveTime;
-        
-        // Session is "truly active" if within timeout window AND isActive is true
-        const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
-        
-        // Parse user agent to get device info (if not already stored)
-        const parsedUA = parseUserAgent(session.userAgent);
-        const deviceType = session.deviceType || parsedUA.deviceType;
-        const browserName = session.browserName || (parsedUA.browserVersion 
-          ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
-          : parsedUA.browserName);
-        const osName = session.osName || (parsedUA.osVersion 
-          ? `${parsedUA.osName} ${parsedUA.osVersion}` 
-          : parsedUA.osName);
-        
-        // Parse geoLocation JSON if stored as string
-        let geoLocation = session.geoLocation;
-        if (typeof geoLocation === 'string') {
-          try {
-            geoLocation = JSON.parse(geoLocation);
-          } catch (e) {
-            geoLocation = null;
-          }
-        }
-        
-        // On-demand geolocation lookup if not already stored (with limit)
-        if (!geoLocation && session.ipAddress && geoLookupsRemaining > 0) {
-          geoLookupsRemaining--;
-          try {
-            const geoData = await geolocationService.getIpInfo(session.ipAddress);
-            if (geoData && geoData.country !== 'Unknown') {
-              geoLocation = {
-                country: geoData.country,
-                country_code: geoData.country_code,
-                country_flag: geoData.country_flag,
-                city: geoData.city,
-                region: geoData.region,
-                timezone: geoData.timezone,
-              };
-              
-              // Persist to database for future requests (fire-and-forget)
-              strapi.documents(SESSION_UID).update({
-                documentId: session.documentId,
-                data: { 
-                  geoLocation,
-                  securityScore: geoData.securityScore || null,
-                },
-              }).catch(() => {}); // Ignore update errors
-            }
-          } catch (geoErr) {
-            log.debug('Geolocation lookup failed:', geoErr.message);
-          }
-        }
-        
-        // Remove sensitive fields and internal Strapi fields
-        const { 
-          token, tokenHash, refreshToken, refreshTokenHash,
-          locale, publishedAt,
-          geoLocation: _geo, // Remove raw geoLocation, we use parsed version
-          ...safeSession 
-        } = session;
-        
-        return {
-          ...safeSession,
-          id: session.documentId, // Alias for frontend compatibility
-          deviceType,
-          browserName,
-          osName,
-          geoLocation, // Parsed object or null
-          isTrulyActive,
-          minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
-        };
-      }));
-
-      return enhancedSessions;
-    } catch (err) {
-      log.error('Error getting all sessions:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Get all active sessions with accurate online status
-   * Fetches geolocation on-demand for sessions without it
-   * @returns {Promise<Array>} Active sessions with user data and online status
-   */
-  async getActiveSessions() {
-    try {
-      const sessions = await strapi.documents(SESSION_UID).findMany( {
-        filters: { isActive: true },
-        populate: { user: { fields: ['documentId', 'email', 'username'] } },
-        sort: { loginTime: 'desc' },
-        limit: 1000,
-      });
-
-      // Get inactivity timeout from config (default: 15 minutes)
-      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-      const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
-      
-      // Get geolocation service
-      const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
-
-      // Enhance sessions with accurate online status and device info
-      const now = new Date();
-      const enhancedSessions = await Promise.all(sessions.map(async (session) => {
-        const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
-        const timeSinceActive = now - lastActiveTime;
-        
-        // Session is "truly active" if within timeout window
-        const isTrulyActive = timeSinceActive < inactivityTimeout;
-        
-        // Parse user agent to get device info (if not already stored)
-        const parsedUA = parseUserAgent(session.userAgent);
-        const deviceType = session.deviceType || parsedUA.deviceType;
-        const browserName = session.browserName || (parsedUA.browserVersion 
-          ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
-          : parsedUA.browserName);
-        const osName = session.osName || (parsedUA.osVersion 
-          ? `${parsedUA.osName} ${parsedUA.osVersion}` 
-          : parsedUA.osName);
-        
-        // Parse geoLocation JSON if stored as string
-        let geoLocation = session.geoLocation;
-        if (typeof geoLocation === 'string') {
-          try {
-            geoLocation = JSON.parse(geoLocation);
-          } catch (e) {
-            geoLocation = null;
-          }
-        }
-        
-        // On-demand geolocation lookup if not already stored
-        if (!geoLocation && session.ipAddress) {
-          try {
-            const geoData = await geolocationService.getIpInfo(session.ipAddress);
-            if (geoData && geoData.country !== 'Unknown') {
-              geoLocation = {
-                country: geoData.country,
-                country_code: geoData.country_code,
-                country_flag: geoData.country_flag,
-                city: geoData.city,
-                region: geoData.region,
-                timezone: geoData.timezone,
-              };
-              
-              // Persist to database (fire-and-forget)
-              strapi.documents(SESSION_UID).update({
-                documentId: session.documentId,
-                data: { 
-                  geoLocation,
-                  securityScore: geoData.securityScore || null,
-                },
-              }).catch(() => {});
-            }
-          } catch (geoErr) {
-            log.debug('Geolocation lookup failed:', geoErr.message);
-          }
-        }
-        
-        // Remove sensitive fields and internal Strapi fields
-        const { 
-          token, tokenHash, refreshToken, refreshTokenHash,
-          locale, publishedAt,
-          geoLocation: _geo,
-          ...safeSession 
-        } = session;
-        
-        return {
-          ...safeSession,
-          id: session.documentId, // Alias for frontend compatibility
-          deviceType,
-          browserName,
-          osName,
-          geoLocation,
-          isTrulyActive,
-          minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
-        };
-      }));
-
-      // Only return truly active sessions
-      return enhancedSessions.filter(s => s.isTrulyActive);
-    } catch (err) {
-      log.error('Error getting active sessions:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Get all sessions for a specific user
-   * Supports both numeric id (legacy) and documentId (Strapi v5)
-   * Fetches geolocation on-demand for sessions without it
-   * @param {string|number} userId - User documentId or numeric id
-   * @returns {Promise<Array>} User's sessions with accurate online status
-   */
-  async getUserSessions(userId) {
-    try {
-      // Strapi v5: If numeric id provided, look up documentId first
-      // NOTE: entityService is deprecated, but required here for numeric ID -> documentId conversion
-      let userDocumentId = userId;
-      if (!isNaN(userId)) {
-        const user = await strapi.entityService.findOne(USER_UID, parseInt(userId, 10));
-        if (user) {
-          userDocumentId = user.documentId;
-        }
-      }
-      
-      const sessions = await strapi.documents(SESSION_UID).findMany( {
-        filters: { user: { documentId: userDocumentId } },
-        sort: { loginTime: 'desc' },
-      });
-
-      // Get inactivity timeout from config (default: 15 minutes)
-      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-      const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
-      
-      // Get geolocation service
-      const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
-
-      // Enhance sessions with accurate online status and device info
-      const now = new Date();
-      const enhancedSessions = await Promise.all(sessions.map(async (session) => {
-        const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
-        const timeSinceActive = now - lastActiveTime;
-        
-        // Session is "truly active" if:
-        // 1. isActive = true AND
-        // 2. lastActive is within timeout window
-        const isTrulyActive = session.isActive && (timeSinceActive < inactivityTimeout);
-        
-        // Parse user agent to get device info (if not already stored)
-        const parsedUA = parseUserAgent(session.userAgent);
-        const deviceType = session.deviceType || parsedUA.deviceType;
-        const browserName = session.browserName || (parsedUA.browserVersion 
-          ? `${parsedUA.browserName} ${parsedUA.browserVersion}` 
-          : parsedUA.browserName);
-        const osName = session.osName || (parsedUA.osVersion 
-          ? `${parsedUA.osName} ${parsedUA.osVersion}` 
-          : parsedUA.osName);
-        
-        // Parse geoLocation JSON if stored as string
-        let geoLocation = session.geoLocation;
-        if (typeof geoLocation === 'string') {
-          try {
-            geoLocation = JSON.parse(geoLocation);
-          } catch (e) {
-            geoLocation = null;
-          }
-        }
-        
-        // On-demand geolocation lookup if not already stored
-        if (!geoLocation && session.ipAddress) {
-          try {
-            const geoData = await geolocationService.getIpInfo(session.ipAddress);
-            if (geoData && geoData.country !== 'Unknown') {
-              geoLocation = {
-                country: geoData.country,
-                country_code: geoData.country_code,
-                country_flag: geoData.country_flag,
-                city: geoData.city,
-                region: geoData.region,
-                timezone: geoData.timezone,
-              };
-              
-              // Persist to database (fire-and-forget)
-              strapi.documents(SESSION_UID).update({
-                documentId: session.documentId,
-                data: { 
-                  geoLocation,
-                  securityScore: geoData.securityScore || null,
-                },
-              }).catch(() => {});
-            }
-          } catch (geoErr) {
-            log.debug('Geolocation lookup failed:', geoErr.message);
-          }
-        }
-        
-        // Remove sensitive fields and internal Strapi fields
-        const { 
-          token, tokenHash, refreshToken, refreshTokenHash,
-          locale, publishedAt,
-          geoLocation: _geo,
-          ...safeSession 
-        } = session;
-        
-        return {
-          ...safeSession,
-          id: session.documentId, // Alias for frontend compatibility
-          deviceType,
-          browserName,
-          osName,
-          geoLocation,
-          isTrulyActive,
-          minutesSinceActive: Math.floor(timeSinceActive / 1000 / 60),
-        };
-      }));
-
-      return enhancedSessions;
-    } catch (err) {
-      log.error('Error getting user sessions:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Update lastActive timestamp on session (rate-limited to avoid DB noise)
-   * @param {Object} params - { userId, sessionId }
-   * @returns {Promise<void>}
-   */
-  async touch({ userId, sessionId, token }) {
-    try {
-      const now = new Date();
-      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-      const rateLimit = config.lastSeenRateLimit || 30000; // Default: 30 seconds
-
-      let session = null;
-      let sessionDocId = sessionId;
-
-      // Find session by sessionId OR by tokenHash
-      if (sessionId) {
-        session = await strapi.documents(SESSION_UID).findOne({ documentId: sessionId });
-        sessionDocId = sessionId;
-      } else if (token && userId) {
-        // Find session by tokenHash - O(1) lookup instead of iterating all sessions
-        const tokenHash = hashToken(token);
+    /**
+     * Get ALL sessions (active + inactive) with enhanced display fields.
+     * @returns {Promise<Array>}
+     */
+    async getAllSessions() {
+      try {
         const sessions = await strapi.documents(SESSION_UID).findMany({
-          filters: {
-            user: { documentId: userId },
-            tokenHash: tokenHash,
-            isActive: true,
-          },
-          limit: 1,
+          populate: { user: { fields: ['documentId', 'email', 'username'] } },
+          sort: { loginTime: 'desc' },
+          limit: MAX_SESSIONS_QUERY,
         });
-        
-        if (sessions && sessions.length > 0) {
-          session = sessions[0];
-          sessionDocId = session.documentId;
-        }
+
+        return enhanceSessions(sessions, await getEnhanceOpts(), 20);
+      } catch (err) {
+        log.error('Error getting all sessions:', err);
+        throw err;
       }
+    },
 
-      // Update session lastActive if found
-      if (session && sessionDocId) {
-        const lastActiveTime = session.lastActive ? new Date(session.lastActive).getTime() : 0;
-        const currentTime = now.getTime();
-
-        // Rate limit: only update if more than rateLimit ms since last update
-        if (currentTime - lastActiveTime > rateLimit) {
-          await strapi.documents(SESSION_UID).update({ 
-            documentId: sessionDocId,
-            data: { lastActive: now },
-          });
-          log.debug(`[TOUCH] Session ${sessionDocId.substring(0, 8)}... lastActive updated`);
-        }
-      }
-    } catch (err) {
-      log.debug('Error touching session:', err.message);
-      // Don't throw - this is a non-critical operation
-    }
-  },
-
-  /**
-   * Cleanup inactive sessions - set isActive to false for sessions older than inactivityTimeout
-   * Should be called on bootstrap to clean up stale sessions
-   */
-  async cleanupInactiveSessions() {
-    try {
-      // Get inactivity timeout from config (default: 15 minutes)
-      const config = strapi.config.get('plugin::magic-sessionmanager') || {};
-      const inactivityTimeout = config.inactivityTimeout || 15 * 60 * 1000; // 15 min in ms
-      
-      // Calculate cutoff time
-      const now = new Date();
-      const cutoffTime = new Date(now.getTime() - inactivityTimeout);
-      
-      log.info(`[CLEANUP] Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
-      
-      // Find all active sessions
-      const activeSessions = await strapi.documents(SESSION_UID).findMany({
-        filters: { isActive: true },
-        fields: ['lastActive', 'loginTime'],
-      });
-      
-      // Deactivate old sessions
-      let deactivatedCount = 0;
-      for (const session of activeSessions) {
-        const lastActiveTime = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
-        
-        if (lastActiveTime < cutoffTime) {
-          await strapi.documents(SESSION_UID).update({
-            documentId: session.documentId,
-            data: { 
-              isActive: false,
-              terminatedManually: false,  // Timeout, not manual - can be reactivated
-            },
-          });
-          deactivatedCount++;
-        }
-      }
-      
-      log.info(`[SUCCESS] Cleanup complete: ${deactivatedCount} sessions deactivated`);
-      return deactivatedCount;
-    } catch (err) {
-      log.error('Error cleaning up inactive sessions:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Delete a single session from database
-   * WARNING: This permanently deletes the record!
-   * @param {number} sessionId - Session ID to delete
-   * @returns {Promise<boolean>} Success status
-   */
-  async deleteSession(sessionId) {
-    try {
-      await strapi.documents(SESSION_UID).delete({ documentId: sessionId });
-      log.info(`[DELETE] Session ${sessionId} permanently deleted`);
-      return true;
-    } catch (err) {
-      log.error('Error deleting session:', err);
-      throw err;
-    }
-  },
-
-  /**
-   * Delete all inactive sessions from database in batches
-   * WARNING: This permanently deletes records!
-   * @returns {Promise<number>} Number of deleted sessions
-   */
-  async deleteInactiveSessions() {
-    try {
-      log.info('[DELETE] Deleting all inactive sessions...');
-      
-      let deletedCount = 0;
-      const BATCH_SIZE = 100;
-      let hasMore = true;
-      
-      while (hasMore) {
-        // Fetch a batch of inactive sessions
-        const batch = await strapi.documents(SESSION_UID).findMany({
-          filters: { isActive: false },
-          fields: ['documentId'],
-          limit: BATCH_SIZE,
+    /**
+     * Get only sessions that are both `isActive: true` AND still within their
+     * activity window.
+     * @returns {Promise<Array>}
+     */
+    async getActiveSessions() {
+      try {
+        const sessions = await strapi.documents(SESSION_UID).findMany({
+          filters: { isActive: true },
+          populate: { user: { fields: ['documentId', 'email', 'username'] } },
+          sort: { loginTime: 'desc' },
+          limit: MAX_SESSIONS_QUERY,
         });
-        
-        if (!batch || batch.length === 0) {
-          hasMore = false;
-          break;
-        }
-        
-        // Delete batch using Promise.allSettled for resilience
-        const deleteResults = await Promise.allSettled(
-          batch.map(session => 
-            strapi.documents(SESSION_UID).delete({ documentId: session.documentId })
-          )
-        );
-        
-        const batchDeleted = deleteResults.filter(r => r.status === 'fulfilled').length;
-        deletedCount += batchDeleted;
-        
-        // If batch was smaller than limit, we're done
-        if (batch.length < BATCH_SIZE) {
-          hasMore = false;
-        }
+
+        const enhanced = await enhanceSessions(sessions, await getEnhanceOpts(), 20);
+        return enhanced.filter((s) => s.isTrulyActive);
+      } catch (err) {
+        log.error('Error getting active sessions:', err);
+        throw err;
       }
-      
-      log.info(`[SUCCESS] Deleted ${deletedCount} inactive sessions`);
-      return deletedCount;
-    } catch (err) {
-      log.error('Error deleting inactive sessions:', err);
-      throw err;
-    }
-  },
-};
+    },
+
+    /**
+     * Get all sessions for a user (any state).
+     * @param {string|number} userId
+     * @returns {Promise<Array>}
+     */
+    async getUserSessions(userId) {
+      try {
+        const userDocumentId = await resolveUserDocumentId(strapi, userId);
+        if (!userDocumentId) return [];
+
+        const sessions = await strapi.documents(SESSION_UID).findMany({
+          filters: { user: { documentId: userDocumentId } },
+          sort: { loginTime: 'desc' },
+          limit: MAX_SESSIONS_QUERY,
+        });
+
+        return enhanceSessions(sessions, await getEnhanceOpts(), 20);
+      } catch (err) {
+        log.error('Error getting user sessions:', err);
+        throw err;
+      }
+    },
+
+    /**
+     * Update lastActive timestamp on a session (rate-limited).
+     * @param {Object} params
+     * @param {string|number} [params.userId]
+     * @param {string} [params.sessionId]
+     * @param {string} [params.token] - Raw JWT (will be hashed for lookup)
+     * @returns {Promise<void>}
+     */
+    async touch({ userId, sessionId, token }) {
+      try {
+        const now = new Date();
+        const settings = await getPluginSettings(strapi);
+        const rateLimit = settings.lastSeenRateLimit || 30000;
+
+        let session = null;
+        let sessionDocId = sessionId;
+
+        if (sessionId) {
+          session = await strapi.documents(SESSION_UID).findOne({
+            documentId: sessionId,
+            fields: ['documentId', 'lastActive'],
+          });
+          sessionDocId = sessionId;
+        } else if (token && userId) {
+          const tokenHashVal = hashToken(token);
+          const sessions = await strapi.documents(SESSION_UID).findMany({
+            filters: { user: { documentId: userId }, tokenHash: tokenHashVal, isActive: true },
+            fields: ['documentId', 'lastActive'],
+            limit: 1,
+          });
+
+          if (sessions && sessions.length > 0) {
+            session = sessions[0];
+            sessionDocId = session.documentId;
+          }
+        }
+
+        if (session && sessionDocId) {
+          const lastActiveTime = session.lastActive ? new Date(session.lastActive).getTime() : 0;
+          if (now.getTime() - lastActiveTime > rateLimit) {
+            await strapi.documents(SESSION_UID).update({
+              documentId: sessionDocId,
+              data: { lastActive: now },
+            });
+            log.debug(`[TOUCH] Session ${sessionDocId.substring(0, 8)}... lastActive updated`);
+          }
+        }
+      } catch (err) {
+        log.debug('Error touching session:', err.message);
+      }
+    },
+
+    /**
+     * Marks sessions that have been idle past `inactivityTimeout` as inactive.
+     * Processes in batches by collecting IDs first, then updating — this
+     * avoids pagination-skew issues caused by mutating the queried set.
+     *
+     * @returns {Promise<number>} Number of sessions deactivated
+     */
+    async cleanupInactiveSessions() {
+      try {
+        const settings = await getPluginSettings(strapi);
+        const inactivityTimeout = settings.inactivityTimeout || 15 * 60 * 1000;
+
+        const now = new Date();
+        const cutoffTime = new Date(now.getTime() - inactivityTimeout);
+
+        log.info(`[CLEANUP] Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`);
+
+        const idsToDeactivate = [];
+        const BATCH = 500;
+        let start = 0;
+
+        while (true) {
+          const batch = await strapi.documents(SESSION_UID).findMany({
+            filters: { isActive: true },
+            fields: ['documentId', 'lastActive', 'loginTime'],
+            limit: BATCH,
+            start,
+            sort: { loginTime: 'asc' },
+          });
+
+          if (!batch || batch.length === 0) break;
+
+          for (const session of batch) {
+            const lastActiveTime = session.lastActive
+              ? new Date(session.lastActive)
+              : (session.loginTime ? new Date(session.loginTime) : null);
+
+            if (lastActiveTime && lastActiveTime < cutoffTime) {
+              idsToDeactivate.push(session.documentId);
+            }
+          }
+
+          if (batch.length < BATCH) break;
+          start += BATCH;
+
+          if (start > 50000) {
+            log.warn('[CLEANUP] Reached safety cap of 50k scanned sessions; aborting scan.');
+            break;
+          }
+        }
+
+        let deactivatedCount = 0;
+        for (const documentId of idsToDeactivate) {
+          try {
+            await strapi.documents(SESSION_UID).update({
+              documentId,
+              data: { isActive: false, terminatedManually: false },
+            });
+            deactivatedCount++;
+          } catch (err) {
+            log.debug(`[CLEANUP] Failed to deactivate session ${documentId}:`, err.message);
+          }
+        }
+
+        log.info(`[SUCCESS] Cleanup complete: ${deactivatedCount} sessions deactivated`);
+        return deactivatedCount;
+      } catch (err) {
+        log.error('Error cleaning up inactive sessions:', err);
+        throw err;
+      }
+    },
+
+    /**
+     * Permanently deletes a single session.
+     * @param {string} sessionId
+     * @returns {Promise<boolean>}
+     */
+    async deleteSession(sessionId) {
+      try {
+        await strapi.documents(SESSION_UID).delete({ documentId: sessionId });
+        log.info(`[DELETE] Session ${sessionId} permanently deleted`);
+        return true;
+      } catch (err) {
+        log.error('Error deleting session:', err);
+        throw err;
+      }
+    },
+
+    /**
+     * Permanently deletes all inactive sessions.
+     * Uses an inner scan loop that tolerates partial failures.
+     * @returns {Promise<number>}
+     */
+    async deleteInactiveSessions() {
+      try {
+        log.info('[DELETE] Deleting all inactive sessions...');
+
+        let deletedCount = 0;
+        const BATCH_SIZE = 100;
+        let consecutiveEmptyLoops = 0;
+
+        while (true) {
+          const batch = await strapi.documents(SESSION_UID).findMany({
+            filters: { isActive: false },
+            fields: ['documentId'],
+            limit: BATCH_SIZE,
+          });
+
+          if (!batch || batch.length === 0) break;
+
+          const deleteResults = await Promise.allSettled(
+            batch.map((session) =>
+              strapi.documents(SESSION_UID).delete({ documentId: session.documentId })
+            )
+          );
+
+          const successful = deleteResults.filter((r) => r.status === 'fulfilled').length;
+          deletedCount += successful;
+
+          if (successful === 0) {
+            consecutiveEmptyLoops++;
+            if (consecutiveEmptyLoops >= 3) {
+              log.warn('[DELETE] No progress on 3 consecutive batches, aborting to prevent infinite loop');
+              break;
+            }
+          } else {
+            consecutiveEmptyLoops = 0;
+          }
+
+          if (batch.length < BATCH_SIZE) break;
+        }
+
+        log.info(`[SUCCESS] Deleted ${deletedCount} inactive sessions`);
+        return deletedCount;
+      } catch (err) {
+        log.error('Error deleting inactive sessions:', err);
+        throw err;
+      }
+    },
+  };
 };

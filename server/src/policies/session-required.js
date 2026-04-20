@@ -2,18 +2,27 @@
 
 /**
  * Session Required Policy
- * 
- * This policy checks if the authenticated user has an active session.
- * If not, the request is rejected even if the JWT is valid.
- * 
- * Usage: Apply this policy globally or per-route to enforce session validation.
+ *
+ * Enforces that an authenticated request is tied to a valid, non-terminated
+ * session. The check is based on the JWT's tokenHash (NOT "any active session
+ * for the user") so manual session termination is always enforced.
+ *
+ * In `strictSessionEnforcement` mode, the request is rejected if no session
+ * matches the token hash. In non-strict mode, the request is allowed but a
+ * warning is logged.
+ *
+ * Reactivation is intentionally NOT done here to avoid race conditions;
+ * the JWT verify wrapper handles reactivation atomically.
  */
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const { errors } = require('@strapi/utils');
+const { resolveUserDocumentId } = require('../utils/resolve-user');
+const { getPluginSettings } = require('../utils/settings-loader');
+const { extractBearerToken } = require('../utils/extract-token');
+const { hashToken } = require('../utils/encryption');
 
 module.exports = async (policyContext, _policyConfig, { strapi }) => {
-  // If no user is authenticated, let the normal auth flow handle it
   if (!policyContext.state.user) {
     return true;
   }
@@ -21,109 +30,57 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
   const user = policyContext.state.user;
 
   try {
-    // Get user documentId (support both numeric id and documentId)
     let userDocId = user.documentId;
 
     if (!userDocId && user.id) {
-      // Fetch documentId from DB if not available
-      const fullUser = await strapi.entityService.findOne(
-        'plugin::users-permissions.user',
-        user.id,
-        { fields: ['documentId'] }
-      );
-      userDocId = fullUser?.documentId;
+      userDocId = await resolveUserDocumentId(strapi, user.id);
     }
 
     if (!userDocId) {
-      // Can't verify session without user ID - allow through
       return true;
     }
 
-    // Get plugin config - strictSessionEnforcement must be explicitly enabled to block
-    const pluginConfig = strapi.config.get('plugin::magic-sessionmanager') || {};
-    const strictMode = pluginConfig.strictSessionEnforcement === true;
-    
-    // Check if user has ANY active session
-    const activeSessions = await strapi.documents(SESSION_UID).findMany({
-      filters: {
-        user: { documentId: userDocId },
-        isActive: true,
-      },
-      limit: 1,
-    });
+    const settings = await getPluginSettings(strapi);
+    const strictMode = settings.strictSessionEnforcement === true;
 
-    // If active session exists, allow through
-    if (activeSessions && activeSessions.length > 0) {
-      return true;
-    }
-    
-    // No active session - check for inactive sessions
-    const inactiveSessions = await strapi.documents(SESSION_UID).findMany({
-      filters: { 
-        user: { documentId: userDocId },
-        isActive: false,
-      },
-      limit: 5,
-      fields: ['documentId', 'terminatedManually', 'lastActive'],
-      sort: [{ lastActive: 'desc' }],
-    });
-    
-    if (inactiveSessions && inactiveSessions.length > 0) {
-      // Find a session that can be reactivated (timed out, NOT manually terminated)
-      const reactivatable = inactiveSessions.find(s => s.terminatedManually !== true);
-      
-      if (reactivatable) {
-        await strapi.documents(SESSION_UID).update({
-          documentId: reactivatable.documentId,
-          data: {
-            isActive: true,
-            lastActive: new Date(),
-          },
-        });
-        strapi.log.info(
-          `[magic-sessionmanager] [POLICY-REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`
-        );
-        return true;
-      }
-      
-      // Only terminated sessions exist - do NOT block here.
-      // Old terminated sessions from previous logins must not prevent
-      // new logins. The JWT verify wrapper already blocks the specific terminated token.
+    const token = extractBearerToken(policyContext);
+    const tokenHashValue = token ? hashToken(token) : null;
+
+    if (!tokenHashValue) {
       if (strictMode) {
-        strapi.log.info(
-          `[magic-sessionmanager] [POLICY-BLOCKED] No active session for user ${userDocId.substring(0, 8)}... (strictMode)`
-        );
+        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] No bearer token (user: ${userDocId.substring(0, 8)}..., strictMode)`);
         throw new errors.UnauthorizedError('No valid session. Please login again.');
       }
-      
-      strapi.log.warn(
-        `[magic-sessionmanager] [POLICY-WARN] No active session for user ${userDocId.substring(0, 8)}... (allowing)`
-      );
       return true;
     }
-    
-    // No sessions exist at all
+
+    const thisSession = await strapi.documents(SESSION_UID).findFirst({
+      filters: { user: { documentId: userDocId }, tokenHash: tokenHashValue },
+      fields: ['documentId', 'isActive', 'terminatedManually'],
+    });
+
+    if (thisSession) {
+      if (thisSession.terminatedManually === true) {
+        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] Session was manually terminated (user: ${userDocId.substring(0, 8)}...)`);
+        throw new errors.UnauthorizedError('Session terminated. Please login again.');
+      }
+      return true;
+    }
+
     if (strictMode) {
-      strapi.log.info(
-        `[magic-sessionmanager] [POLICY-BLOCKED] No session exists (user: ${userDocId.substring(0, 8)}..., strictMode)`
-      );
+      strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] No session matches this token (user: ${userDocId.substring(0, 8)}..., strictMode)`);
       throw new errors.UnauthorizedError('No valid session. Please login again.');
     }
-    
-    // Non-strict mode: Allow but log warning
-    strapi.log.warn(
-      `[magic-sessionmanager] [POLICY-WARN] No session for user ${userDocId.substring(0, 8)}... (allowing)`
-    );
+
+    strapi.log.warn(`[magic-sessionmanager] [POLICY-WARN] No session for token (user: ${userDocId.substring(0, 8)}...) - allowing in non-strict mode`);
     return true;
 
   } catch (err) {
-    // If it's our own UnauthorizedError, rethrow it
     if (err instanceof errors.UnauthorizedError) {
       throw err;
     }
-    
+
     strapi.log.debug('[magic-sessionmanager] Session policy check error:', err.message);
-    // On other errors, allow request through (fail-open for availability)
     return true;
   }
 };

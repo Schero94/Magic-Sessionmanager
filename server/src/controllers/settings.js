@@ -1,5 +1,7 @@
 'use strict';
 
+const { invalidateSettingsCache } = require('../utils/settings-loader');
+
 /**
  * Allowed webhook URL domains to prevent SSRF attacks
  */
@@ -9,7 +11,7 @@ const ALLOWED_WEBHOOK_DOMAINS = {
 };
 
 /**
- * Validates and sanitizes a webhook URL against allowed domains
+ * Validates and sanitizes a webhook URL against allowed domains.
  * @param {string} url - The webhook URL to validate
  * @param {string} type - The webhook type ('discord' or 'slack')
  * @returns {string} Sanitized URL or empty string if invalid
@@ -18,21 +20,17 @@ function sanitizeWebhookUrl(url, type) {
   if (!url || typeof url !== 'string') return '';
   const trimmed = url.trim();
   if (!trimmed) return '';
-  
+
   try {
     const parsed = new URL(trimmed);
-    
-    // Must be HTTPS
     if (parsed.protocol !== 'https:') return '';
-    
-    // Check against allowed domains
+
     const allowedDomains = ALLOWED_WEBHOOK_DOMAINS[type] || [];
-    const isAllowed = allowedDomains.some(domain => 
+    const isAllowed = allowedDomains.some(domain =>
       parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
     );
-    
     if (!isAllowed) return '';
-    
+
     return trimmed;
   } catch {
     return '';
@@ -40,7 +38,7 @@ function sanitizeWebhookUrl(url, type) {
 }
 
 /**
- * Sanitizes country code list (only 2-letter uppercase ISO codes)
+ * Sanitizes country code list (only 2-letter uppercase ISO codes).
  * @param {Array} list - Array of country codes
  * @returns {Array} Sanitized country codes
  */
@@ -52,7 +50,11 @@ function sanitizeCountryList(list) {
 }
 
 /**
- * Sanitizes email templates by stripping dangerous HTML tags
+ * Sanitizes email templates using a conservative allowlist strategy.
+ * Strips all HTML tags except a small safe subset and removes all event handlers
+ * and javascript: / data: URIs. Prefer a dedicated sanitizer (sanitize-html)
+ * in environments where it is available.
+ *
  * @param {object} templates - Email templates object
  * @returns {object} Sanitized templates
  */
@@ -62,12 +64,16 @@ function sanitizeEmailTemplates(templates) {
     newLocation: { subject: '', html: '', text: '' },
     vpnProxy: { subject: '', html: '', text: '' },
   };
-  
+
   if (!templates || typeof templates !== 'object') return defaults;
-  
-  const dangerousTags = /<\s*\/?\s*(script|iframe|object|embed|form|input|button|link|meta|base)\b[^>]*>/gi;
-  const dangerousAttrs = /\s(on\w+|javascript\s*:)[^=]*=/gi;
-  
+
+  let sanitizeHtml = null;
+  try {
+    sanitizeHtml = require('sanitize-html');
+  } catch {
+    sanitizeHtml = null;
+  }
+
   const result = {};
   for (const [key, defaultVal] of Object.entries(defaults)) {
     const tpl = templates[key];
@@ -75,12 +81,70 @@ function sanitizeEmailTemplates(templates) {
       result[key] = defaultVal;
       continue;
     }
+
+    const rawHtml = typeof tpl.html === 'string' ? tpl.html.substring(0, 10000) : '';
+    const rawText = typeof tpl.text === 'string' ? tpl.text.substring(0, 5000) : '';
+    const rawSubject = typeof tpl.subject === 'string' ? tpl.subject.substring(0, 200) : '';
+
+    let cleanedHtml;
+    if (sanitizeHtml) {
+      cleanedHtml = sanitizeHtml(rawHtml, {
+        allowedTags: [
+          'html', 'body', 'head', 'title', 'meta',
+          'div', 'span', 'p', 'br', 'hr',
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          'strong', 'em', 'b', 'i', 'u',
+          'ul', 'ol', 'li',
+          'a', 'img',
+          'table', 'thead', 'tbody', 'tr', 'td', 'th',
+          'blockquote', 'code', 'pre',
+        ],
+        allowedAttributes: {
+          '*': ['style', 'class', 'id'],
+          a: ['href', 'title', 'target', 'rel'],
+          img: ['src', 'alt', 'width', 'height'],
+          table: ['border', 'cellspacing', 'cellpadding', 'width'],
+          td: ['colspan', 'rowspan', 'align', 'valign', 'width'],
+          th: ['colspan', 'rowspan', 'align', 'valign', 'width'],
+        },
+        allowedSchemes: ['http', 'https', 'mailto'],
+        allowedSchemesAppliedToAttributes: ['href', 'src', 'cite'],
+        allowProtocolRelative: false,
+        disallowedTagsMode: 'discard',
+        allowedStyles: {
+          '*': {
+            color: [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3}\s*,\s*){2}\d{1,3}\s*\)$/],
+            'background-color': [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3}\s*,\s*){2}\d{1,3}\s*\)$/],
+            'text-align': [/^left$/, /^right$/, /^center$/, /^justify$/],
+            'font-size': [/^\d+(?:px|em|rem|%)$/],
+            'font-weight': [/^(normal|bold|\d+)$/],
+            'font-family': [/^[\w\s,'"-]+$/],
+            padding: [/^[\d\s\w%.]+$/],
+            margin: [/^[\d\s\w%.]+$/],
+            border: [/^[\w\s#,()%.-]+$/],
+            'border-radius': [/^[\d\s\w%.]+$/],
+            width: [/^\d+(?:px|em|rem|%)$/],
+            'max-width': [/^\d+(?:px|em|rem|%)$/],
+            'line-height': [/^[\d.]+$/],
+          },
+        },
+      });
+    } else {
+      const dangerousTags = /<\s*\/?\s*(script|iframe|object|embed|form|input|button|link|meta|base|svg|math|style)\b[^>]*>/gi;
+      const dangerousAttrs = /\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+      const javascriptScheme = /(?:href|src)\s*=\s*["']?\s*javascript\s*:[^"'>\s]*["']?/gi;
+      const dataScheme = /(?:href|src)\s*=\s*["']?\s*data\s*:[^"'>\s]*["']?/gi;
+      cleanedHtml = rawHtml
+        .replace(dangerousTags, '')
+        .replace(dangerousAttrs, '')
+        .replace(javascriptScheme, '')
+        .replace(dataScheme, '');
+    }
+
     result[key] = {
-      subject: typeof tpl.subject === 'string' ? tpl.subject.substring(0, 200) : '',
-      html: typeof tpl.html === 'string' 
-        ? tpl.html.replace(dangerousTags, '').replace(dangerousAttrs, ' ').substring(0, 10000)
-        : '',
-      text: typeof tpl.text === 'string' ? tpl.text.substring(0, 5000) : '',
+      subject: rawSubject,
+      html: cleanedHtml,
+      text: rawText,
     };
   }
   return result;
@@ -93,7 +157,8 @@ function sanitizeEmailTemplates(templates) {
 
 module.exports = {
   /**
-   * Get plugin settings
+   * Returns the current plugin settings (user-facing units: minutes/seconds/days).
+   * @route GET /magic-sessionmanager/settings
    */
   async getSettings(ctx) {
     try {
@@ -101,16 +166,16 @@ module.exports = {
         type: 'plugin',
         name: 'magic-sessionmanager',
       });
-      
+
       let settings = await pluginStore.get({ key: 'settings' });
-      
-      // If no settings exist, return defaults
+
       if (!settings) {
         settings = {
           inactivityTimeout: 15,
           cleanupInterval: 30,
           lastSeenRateLimit: 30,
           retentionDays: 90,
+          maxSessionAgeDays: 30,
           enableGeolocation: true,
           enableSecurityScoring: true,
           blockSuspiciousSessions: false,
@@ -125,6 +190,8 @@ module.exports = {
           enableGeofencing: false,
           allowedCountries: [],
           blockedCountries: [],
+          strictSessionEnforcement: false,
+          trustedProxies: false,
           emailTemplates: {
             suspiciousLogin: { subject: '', html: '', text: '' },
             newLocation: { subject: '', html: '', text: '' },
@@ -132,10 +199,10 @@ module.exports = {
           },
         };
       }
-      
-      ctx.send({ 
+
+      ctx.send({
         settings,
-        success: true 
+        success: true,
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager/settings] Error getting settings:', error);
@@ -144,22 +211,24 @@ module.exports = {
   },
 
   /**
-   * Update plugin settings
+   * Validates and persists plugin settings, then invalidates the settings cache
+   * so runtime code picks up the new values on next read.
+   * @route PUT /magic-sessionmanager/settings
+   * @throws {ValidationError} when body is missing
    */
   async updateSettings(ctx) {
     try {
       const { body } = ctx.request;
-      
+
       if (!body) {
         return ctx.badRequest('Settings data is required');
       }
-      
+
       const pluginStore = strapi.store({
         type: 'plugin',
         name: 'magic-sessionmanager',
       });
-      
-      // Validate and sanitize settings
+
       const sanitizedSettings = {
         inactivityTimeout: Math.max(1, Math.min(parseInt(body.inactivityTimeout) || 15, 1440)),
         cleanupInterval: Math.max(5, Math.min(parseInt(body.cleanupInterval) || 30, 1440)),
@@ -180,21 +249,24 @@ module.exports = {
         enableGeofencing: !!body.enableGeofencing,
         allowedCountries: sanitizeCountryList(body.allowedCountries),
         blockedCountries: sanitizeCountryList(body.blockedCountries),
+        strictSessionEnforcement: !!body.strictSessionEnforcement,
+        trustedProxies: !!body.trustedProxies,
         emailTemplates: sanitizeEmailTemplates(body.emailTemplates),
       };
-      
-      // Save to database
-      await pluginStore.set({ 
-        key: 'settings', 
-        value: sanitizedSettings 
+
+      await pluginStore.set({
+        key: 'settings',
+        value: sanitizedSettings,
       });
-      
+
+      invalidateSettingsCache();
+
       strapi.log.info('[magic-sessionmanager/settings] Settings updated successfully');
-      
-      ctx.send({ 
+
+      ctx.send({
         settings: sanitizedSettings,
         success: true,
-        message: 'Settings saved successfully!' 
+        message: 'Settings saved successfully!'
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager/settings] Error updating settings:', error);
@@ -202,4 +274,3 @@ module.exports = {
     }
   },
 };
-

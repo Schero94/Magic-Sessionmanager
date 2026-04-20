@@ -1,29 +1,42 @@
+'use strict';
+
 /**
- * Notifications Service (ADVANCED Feature)
- * Send email alerts for session events
+ * Notifications Service.
+ *
+ * Sends email alerts and webhook notifications for session events. Supports
+ * admin-provided templates (loaded from the plugin store) with a hardcoded
+ * fallback. All dynamic values are HTML-escaped before interpolation to
+ * prevent XSS via user-controlled inputs (user-agent, geo data, etc.).
  */
+
+const ALLOWED_WEBHOOK_HOSTS = [
+  'discord.com',
+  'discordapp.com',
+  'hooks.slack.com',
+];
+
+const WEBHOOK_TIMEOUT_MS = 5000;
 
 module.exports = ({ strapi }) => ({
   /**
-   * Get email templates from database settings
-   * Falls back to default hardcoded templates if not found
+   * Loads email templates from the plugin store, falling back to hardcoded
+   * defaults if none are configured.
+   * @returns {Promise<object>}
    */
   async getEmailTemplates() {
     try {
-      // Try to load templates from database
       const pluginStore = strapi.store({
         type: 'plugin',
         name: 'magic-sessionmanager',
       });
-      
+
       const settings = await pluginStore.get({ key: 'settings' });
-      
+
       if (settings?.emailTemplates && Object.keys(settings.emailTemplates).length > 0) {
-        // Check if templates have content
         const hasContent = Object.values(settings.emailTemplates).some(
           template => template.html || template.text
         );
-        
+
         if (hasContent) {
           strapi.log.debug('[magic-sessionmanager/notifications] Using templates from database');
           return settings.emailTemplates;
@@ -32,8 +45,7 @@ module.exports = ({ strapi }) => ({
     } catch (err) {
       strapi.log.warn('[magic-sessionmanager/notifications] Could not load templates from DB, using defaults:', err.message);
     }
-    
-    // Default fallback templates
+
     strapi.log.debug('[magic-sessionmanager/notifications] Using default fallback templates');
     return {
       suspiciousLogin: {
@@ -44,14 +56,14 @@ module.exports = ({ strapi }) => ({
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 10px;">
     <h2 style="color: #dc2626;">[ALERT] Suspicious Login Detected</h2>
     <p>A potentially suspicious login was detected for your account.</p>
-    
+
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account Information:</h3>
       <ul>
         <li><strong>Email:</strong> {{user.email}}</li>
         <li><strong>Username:</strong> {{user.username}}</li>
       </ul>
-      
+
       <h3>Login Details:</h3>
       <ul>
         <li><strong>Time:</strong> {{session.loginTime}}</li>
@@ -60,7 +72,7 @@ module.exports = ({ strapi }) => ({
         <li><strong>Timezone:</strong> {{geo.timezone}}</li>
         <li><strong>Device:</strong> {{session.userAgent}}</li>
       </ul>
-      
+
       <h3 style="color: #dc2626;">Security Alert:</h3>
       <ul>
         <li>VPN Detected: {{reason.isVpn}}</li>
@@ -69,9 +81,9 @@ module.exports = ({ strapi }) => ({
         <li>Security Score: {{reason.securityScore}}/100</li>
       </ul>
     </div>
-    
+
     <p>If this was you, you can safely ignore this email. If you don't recognize this activity, please secure your account immediately.</p>
-    
+
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"/>
     <p style="color: #666; font-size: 12px;">This is an automated security notification from Magic Session Manager.</p>
   </div>
@@ -91,15 +103,18 @@ module.exports = ({ strapi }) => ({
       },
     };
   },
-  
+
   /**
-   * Escapes HTML special characters to prevent XSS in email templates
-   * @param {string} str - String to escape
-   * @returns {string} HTML-safe string
+   * HTML-escapes a string to prevent XSS when it is interpolated into an
+   * HTML email template. Non-string inputs are coerced to strings first.
+   *
+   * @param {unknown} str
+   * @returns {string}
    */
   escapeHtml(str) {
-    if (!str || typeof str !== 'string') return str || '';
-    return str
+    if (str === null || str === undefined) return '';
+    const s = typeof str === 'string' ? str : String(str);
+    return s
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -108,51 +123,48 @@ module.exports = ({ strapi }) => ({
   },
 
   /**
-   * Replace template variables with HTML-escaped actual values
-   * SECURITY: All dynamic values are HTML-escaped to prevent XSS via email
+   * Replaces `{{var}}` placeholders in a template with HTML-escaped actual
+   * values.
+   *
+   * @param {string} template
+   * @param {object} data
+   * @returns {string}
    */
   replaceVariables(template, data) {
     let result = template;
     const esc = this.escapeHtml.bind(this);
-    
-    // User variables (escaped - user-controlled input!)
+
     result = result.replace(/\{\{user\.email\}\}/g, esc(data.user?.email || 'N/A'));
     result = result.replace(/\{\{user\.username\}\}/g, esc(data.user?.username || 'N/A'));
-    
-    // Session variables (escaped - contains user-agent which is user-controlled)
-    result = result.replace(/\{\{session\.loginTime\}\}/g, 
+
+    result = result.replace(/\{\{session\.loginTime\}\}/g,
       esc(data.session?.loginTime ? new Date(data.session.loginTime).toLocaleString() : 'N/A'));
     result = result.replace(/\{\{session\.ipAddress\}\}/g, esc(data.session?.ipAddress || 'N/A'));
     result = result.replace(/\{\{session\.userAgent\}\}/g, esc(data.session?.userAgent || 'N/A'));
-    
-    // Geo variables (escaped - from external API)
+
     result = result.replace(/\{\{geo\.city\}\}/g, esc(data.geoData?.city || 'Unknown'));
     result = result.replace(/\{\{geo\.country\}\}/g, esc(data.geoData?.country || 'Unknown'));
     result = result.replace(/\{\{geo\.timezone\}\}/g, esc(data.geoData?.timezone || 'Unknown'));
-    
-    // Reason variables (safe values, but escape anyway for defense-in-depth)
+
     result = result.replace(/\{\{reason\.isVpn\}\}/g, data.reason?.isVpn ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isProxy\}\}/g, data.reason?.isProxy ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isThreat\}\}/g, data.reason?.isThreat ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.securityScore\}\}/g, esc(String(data.reason?.securityScore || '0')));
-    
+
     return result;
   },
 
   /**
-   * Send suspicious login alert
-   * @param {Object} params - { user, session, reason, geoData }
+   * Sends a suspicious-login email alert using the `suspiciousLogin` template.
+   * @param {{user: object, session: object, reason: object, geoData: object}} params
+   * @returns {Promise<boolean>}
    */
   async sendSuspiciousLoginAlert({ user, session, reason, geoData }) {
     try {
-      // Get templates from database (or defaults)
       const templates = await this.getEmailTemplates();
       const template = templates.suspiciousLogin;
-      
-      // Prepare data for variable replacement
+
       const data = { user, session, reason, geoData };
-      
-      // Replace variables in template
       const htmlContent = this.replaceVariables(template.html, data);
       const textContent = this.replaceVariables(template.text, data);
 
@@ -172,19 +184,16 @@ module.exports = ({ strapi }) => ({
   },
 
   /**
-   * Send new location login alert
-   * @param {Object} params - { user, session, geoData }
+   * Sends a new-location email alert using the `newLocation` template.
+   * @param {{user: object, session: object, geoData: object}} params
+   * @returns {Promise<boolean>}
    */
   async sendNewLocationAlert({ user, session, geoData }) {
     try {
-      // Get templates from database (or defaults)
       const templates = await this.getEmailTemplates();
       const template = templates.newLocation;
-      
-      // Prepare data for variable replacement
+
       const data = { user, session, geoData, reason: {} };
-      
-      // Replace variables in template
       const htmlContent = this.replaceVariables(template.html, data);
       const textContent = this.replaceVariables(template.text, data);
 
@@ -202,21 +211,18 @@ module.exports = ({ strapi }) => ({
       return false;
     }
   },
-  
+
   /**
-   * Send VPN/Proxy login alert
-   * @param {Object} params - { user, session, reason, geoData }
+   * Sends a VPN/Proxy email alert using the `vpnProxy` template.
+   * @param {{user: object, session: object, reason: object, geoData: object}} params
+   * @returns {Promise<boolean>}
    */
   async sendVpnProxyAlert({ user, session, reason, geoData }) {
     try {
-      // Get templates from database (or defaults)
       const templates = await this.getEmailTemplates();
       const template = templates.vpnProxy;
-      
-      // Prepare data for variable replacement
+
       const data = { user, session, reason, geoData };
-      
-      // Replace variables in template
       const htmlContent = this.replaceVariables(template.html, data);
       const textContent = this.replaceVariables(template.text, data);
 
@@ -235,34 +241,65 @@ module.exports = ({ strapi }) => ({
     }
   },
 
+  ALLOWED_WEBHOOK_HOSTS,
+
   /**
-   * Send webhook notification
-   * @param {Object} params - { event, data, webhookUrl }
+   * Posts a JSON payload to a webhook URL. Only allowlisted hosts are
+   * permitted (SSRF protection) and the request times out after
+   * WEBHOOK_TIMEOUT_MS.
+   *
+   * For Discord/Slack webhooks the `data` object is the provider-specific
+   * payload (e.g. `{ embeds: [...] }` for Discord, Block Kit for Slack) and
+   * is sent verbatim — any wrapping would break message rendering. Both
+   * providers reject unknown top-level fields, so we deliberately do NOT
+   * add `event`, `timestamp` or `source` keys.
+   *
+   * @param {{event: string, data: object, webhookUrl: string}} params
+   *   `event` is retained for log output only.
+   * @returns {Promise<boolean>}
    */
   async sendWebhook({ event, data, webhookUrl }) {
     try {
-      const payload = {
-        event,
-        timestamp: new Date().toISOString(),
-        data,
-        source: 'magic-sessionmanager',
-      };
+      try {
+        const parsed = new URL(webhookUrl);
+        const isAllowed = parsed.protocol === 'https:' &&
+          ALLOWED_WEBHOOK_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
+        if (!isAllowed) {
+          strapi.log.warn(`[magic-sessionmanager/notifications] Blocked webhook to untrusted host: ${parsed.hostname}`);
+          return false;
+        }
+      } catch {
+        strapi.log.warn('[magic-sessionmanager/notifications] Invalid webhook URL');
+        return false;
+      }
 
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Strapi-Magic-SessionManager-Webhook/1.0',
-        },
-        body: JSON.stringify(payload),
-      });
+      // Discord & Slack both want the provider-specific payload as the raw
+      // request body. We used to wrap it in { event, timestamp, data, source }
+      // which produced messages that neither platform could render.
+      const payload = data;
 
-      if (response.ok) {
-        strapi.log.info(`[magic-sessionmanager/notifications] Webhook sent: ${event}`);
-        return true;
-      } else {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Strapi-Magic-SessionManager-Webhook/1.0',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        if (response.ok) {
+          strapi.log.info(`[magic-sessionmanager/notifications] Webhook sent: ${event}`);
+          return true;
+        }
         strapi.log.warn(`[magic-sessionmanager/notifications] Webhook failed: ${response.status}`);
         return false;
+      } finally {
+        clearTimeout(timer);
       }
     } catch (err) {
       strapi.log.error('[magic-sessionmanager/notifications] Webhook error:', err);
@@ -271,8 +308,89 @@ module.exports = ({ strapi }) => ({
   },
 
   /**
-   * Format webhook for Discord
-   * @param {Object} params - { event, session, user, geoData }
+   * Formats a session event as a Slack Incoming Webhook payload.
+   *
+   * Uses Slack's Block Kit so the message renders as a rich card with
+   * status color and structured fields, matching the Discord embed shape.
+   *
+   * @param {{event: string, session: object, user: object, geoData: object}} params
+   * @returns {object}
+   */
+  formatSlackWebhook({ event, session, user, geoData }) {
+    const title = this.getEventTitle(event);
+    const color = this.getSlackEventColor(event);
+
+    const fields = [
+      { type: 'mrkdwn', text: `*User*\n${user.email || 'N/A'}` },
+      { type: 'mrkdwn', text: `*Username*\n${user.username || 'N/A'}` },
+      { type: 'mrkdwn', text: `*IP*\n\`${session.ipAddress || 'unknown'}\`` },
+      {
+        type: 'mrkdwn',
+        text: `*Time*\n${session.loginTime ? new Date(session.loginTime).toLocaleString() : '-'}`,
+      },
+    ];
+
+    if (geoData) {
+      const locationFlag = geoData.country_flag ? `${geoData.country_flag} ` : '';
+      fields.push({
+        type: 'mrkdwn',
+        text: `*Location*\n${locationFlag}${geoData.city || '?'}, ${geoData.country || '?'}`,
+      });
+
+      if (geoData.isVpn || geoData.isProxy || geoData.isThreat) {
+        const warnings = [];
+        if (geoData.isVpn) warnings.push('VPN');
+        if (geoData.isProxy) warnings.push('Proxy');
+        if (geoData.isThreat) warnings.push('Threat');
+        fields.push({
+          type: 'mrkdwn',
+          text: `*Security*\n${warnings.join(', ')} — score ${geoData.securityScore ?? '-'}/100`,
+        });
+      }
+    }
+
+    return {
+      text: title, // Fallback for clients without Block Kit support
+      attachments: [
+        {
+          color,
+          blocks: [
+            { type: 'header', text: { type: 'plain_text', text: title } },
+            { type: 'section', fields },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: 'Magic Session Manager' },
+                { type: 'mrkdwn', text: new Date().toISOString() },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  },
+
+  /**
+   * Returns a Slack-compatible color (hex string) for an event kind.
+   * Slack attachments accept hex colors unlike Discord embeds which take ints.
+   * @param {string} event
+   * @returns {string}
+   */
+  getSlackEventColor(event) {
+    const colors = {
+      'login.suspicious': '#dc2626',
+      'login.new_location': '#f59e0b',
+      'login.vpn': '#ef4444',
+      'login.threat': '#7f1d1d',
+      'session.terminated': '#6b7280',
+    };
+    return colors[event] || '#2563eb';
+  },
+
+  /**
+   * Formats a session event as a Discord embed.
+   * @param {{event: string, session: object, user: object, geoData: object}} params
+   * @returns {object}
    */
   formatDiscordWebhook({ event, session, user, geoData }) {
     const embed = {
@@ -290,16 +408,16 @@ module.exports = ({ strapi }) => ({
     if (geoData) {
       embed.fields.push({
         name: '[LOCATION] Location',
-        value: `${geoData.country_flag} ${geoData.city}, ${geoData.country}`,
+        value: `${geoData.country_flag || ''} ${geoData.city}, ${geoData.country}`,
         inline: true,
       });
-      
+
       if (geoData.isVpn || geoData.isProxy || geoData.isThreat) {
         const warnings = [];
         if (geoData.isVpn) warnings.push('VPN');
         if (geoData.isProxy) warnings.push('Proxy');
         if (geoData.isThreat) warnings.push('Threat');
-        
+
         embed.fields.push({
           name: '[WARNING] Security',
           value: `${warnings.join(', ')} detected\nScore: ${geoData.securityScore}/100`,
@@ -311,6 +429,11 @@ module.exports = ({ strapi }) => ({
     return { embeds: [embed] };
   },
 
+  /**
+   * Human-readable title for a webhook event.
+   * @param {string} event
+   * @returns {string}
+   */
   getEventTitle(event) {
     const titles = {
       'login.suspicious': '[ALERT] Suspicious Login',
@@ -322,15 +445,19 @@ module.exports = ({ strapi }) => ({
     return titles[event] || '[STATS] Session Event';
   },
 
+  /**
+   * Discord embed color for a webhook event.
+   * @param {string} event
+   * @returns {number}
+   */
   getEventColor(event) {
     const colors = {
-      'login.suspicious': 0xFF0000, // Red
-      'login.new_location': 0xFFA500, // Orange
-      'login.vpn': 0xFF6B6B, // Light Red
-      'login.threat': 0x8B0000, // Dark Red
-      'session.terminated': 0x808080, // Gray
+      'login.suspicious': 0xFF0000,
+      'login.new_location': 0xFFA500,
+      'login.vpn': 0xFF6B6B,
+      'login.threat': 0x8B0000,
+      'session.terminated': 0x808080,
     };
-    return colors[event] || 0x5865F2; // Discord Blue
+    return colors[event] || 0x5865F2;
   },
 });
-

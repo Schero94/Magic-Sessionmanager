@@ -1,32 +1,43 @@
 'use strict';
 
 /**
- * Debug Logger Utility for magic-sessionmanager
- * Only logs messages when debug: true in plugin config
- * ALL logs (including errors/warnings) are hidden unless debug mode is enabled
+ * Plugin-scoped logger.
+ *
+ * `info` and `debug` are suppressed unless `config.debug === true`, but
+ * `warn` and `error` are ALWAYS emitted to avoid creating a debugging
+ * black-box in production deployments.
  */
 
 const PLUGIN_NAME = 'magic-sessionmanager';
 const PREFIX = '[magic-sessionmanager]';
 
 /**
- * Format message with prefix - returns a formatted string
- * @param {string} prefix - Prefix to prepend to message
- * @param {Array} args - Array of arguments to format
- * @returns {string} Formatted message string
+ * Formats a message prefix and args into a single string suitable for the
+ * Strapi logger. Non-string args are JSON-stringified.
+ *
+ * @param {string} prefix
+ * @param {Array<unknown>} args
+ * @returns {string}
  */
 function formatMessage(prefix, args) {
   if (args.length === 0) return prefix;
-  const parts = args.map(arg => 
-    typeof arg === 'string' ? arg : JSON.stringify(arg)
-  );
+  const parts = args.map(arg => {
+    if (typeof arg === 'string') return arg;
+    if (arg instanceof Error) return arg.stack || arg.message;
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg);
+    }
+  });
   return `${prefix} ${parts.join(' ')}`;
 }
 
 /**
- * Creates a logger instance that respects debug config
- * @param {object} strapi - Strapi instance
- * @returns {object} Logger with info, debug, warn, error methods
+ * Creates a logger bound to the given Strapi instance.
+ *
+ * @param {object} strapi
+ * @returns {{info: Function, debug: Function, warn: Function, error: Function, forceError: Function}}
  */
 function createLogger(strapi) {
   const getDebugMode = () => {
@@ -40,7 +51,8 @@ function createLogger(strapi) {
 
   return {
     /**
-     * Log info - only when debug: true
+     * Info log. Only emitted when `debug: true`.
+     * @param {...unknown} args
      */
     info: (...args) => {
       if (getDebugMode()) {
@@ -49,7 +61,8 @@ function createLogger(strapi) {
     },
 
     /**
-     * Log debug - only when debug: true
+     * Debug log. Only emitted when `debug: true`.
+     * @param {...unknown} args
      */
     debug: (...args) => {
       if (getDebugMode()) {
@@ -58,25 +71,24 @@ function createLogger(strapi) {
     },
 
     /**
-     * Log warning - only when debug: true
+     * Warning log. Always emitted.
+     * @param {...unknown} args
      */
     warn: (...args) => {
-      if (getDebugMode()) {
-        strapi.log.warn(formatMessage(PREFIX, args));
-      }
+      strapi.log.warn(formatMessage(PREFIX, args));
     },
 
     /**
-     * Log error - only when debug: true
+     * Error log. Always emitted.
+     * @param {...unknown} args
      */
     error: (...args) => {
-      if (getDebugMode()) {
-        strapi.log.error(formatMessage(PREFIX, args));
-      }
+      strapi.log.error(formatMessage(PREFIX, args));
     },
 
     /**
-     * Force log - always logged (for critical errors only)
+     * Deprecated alias kept for backwards compatibility. Identical to `error`.
+     * @param {...unknown} args
      */
     forceError: (...args) => {
       strapi.log.error(formatMessage(PREFIX, args));
