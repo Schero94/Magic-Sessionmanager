@@ -1,3 +1,10 @@
+## [4.5.11](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.10...v4.5.11) (2026-04-21)
+
+
+### Bug Fixes
+
+* **rbac:** make plugin::magic-sessionmanager.access visible in role editor ([21779d8](https://github.com/Schero94/Magic-Sessionmanager/commit/21779d824294c962db9b3dc73e8f0ee2036e361c))
+
 ## [4.5.10](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.9...v4.5.10) (2026-04-21)
 
 
