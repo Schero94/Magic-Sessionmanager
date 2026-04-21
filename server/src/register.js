@@ -27,6 +27,11 @@ module.exports = async ({ strapi }) => {
       section: 'plugins',
       displayName: 'Access the Session Manager plugin',
       uid: 'access',
+      // Strapi 5's role editor only renders checkboxes for actions that
+      // belong to a subCategory. Without this field the permission
+      // exists but is invisible in Settings → Roles → Plugins → Session
+      // Manager, so admins cannot grant or revoke it.
+      subCategory: 'General',
       pluginName: 'magic-sessionmanager',
     },
   ]);
