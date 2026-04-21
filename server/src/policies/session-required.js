@@ -16,7 +16,11 @@
  */
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
-const { errors } = require('@strapi/utils');
+// Avoid destructuring `@strapi/utils` at require time — pack-up's
+// rollup-commonjs plugin rewrites the import in a way that resolves to
+// undefined at runtime for dual ESM/CJS packages. Direct property access
+// after a plain require() sidesteps the rewrite.
+const errors = require('@strapi/utils').errors;
 const { resolveUserDocumentId } = require('../utils/resolve-user');
 const { getPluginSettings } = require('../utils/settings-loader');
 const { extractBearerToken } = require('../utils/extract-token');
