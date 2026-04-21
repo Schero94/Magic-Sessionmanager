@@ -1,3 +1,10 @@
+## [4.5.13](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.12...v4.5.13) (2026-04-21)
+
+
+### Bug Fixes
+
+* **build:** use non-destructured require for @strapi/utils ([1402eef](https://github.com/Schero94/Magic-Sessionmanager/commit/1402eeff18cd6469cc4f9b177637896115652993))
+
 ## [4.5.12](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.11...v4.5.12) (2026-04-21)
 
 
