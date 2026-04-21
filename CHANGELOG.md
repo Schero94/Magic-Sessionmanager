@@ -1,3 +1,10 @@
+## [4.5.12](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.11...v4.5.12) (2026-04-21)
+
+
+### Bug Fixes
+
+* **build:** declare @strapi/utils as peerDependency — preventive zod/v4 fix ([729e794](https://github.com/Schero94/Magic-Sessionmanager/commit/729e79461b92c5b95c37685d1e0bdba45bbc8422))
+
 ## [4.5.11](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.10...v4.5.11) (2026-04-21)
 
 
