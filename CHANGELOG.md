@@ -1,3 +1,10 @@
+## [4.5.10](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.9...v4.5.10) (2026-04-21)
+
+
+### Bug Fixes
+
+* **build:** pin @strapi/sdk-plugin to ^5.4.0 — v6 produces broken 23-line stub bundles ([7e8784b](https://github.com/Schero94/Magic-Sessionmanager/commit/7e8784b3115604763007b1b34bb369a216e4001a))
+
 ## [4.5.9](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.8...v4.5.9) (2026-04-21)
 
 
