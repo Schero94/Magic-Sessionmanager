@@ -1,3 +1,10 @@
+## [4.5.9](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.8...v4.5.9) (2026-04-21)
+
+
+### Bug Fixes
+
+* **deps:** pin styled-components to ^6.3.9 to avoid npm ci ERESOLVE ([81aaacd](https://github.com/Schero94/Magic-Sessionmanager/commit/81aaacdb6f6ecb9cef01500c96793349393509bd))
+
 ## [4.5.8](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.7...v4.5.8) (2026-04-20)
 
 
