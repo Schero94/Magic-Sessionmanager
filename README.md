@@ -304,9 +304,13 @@ enter the MaxMind account ID and license key, then use **Download / Update DB**.
 The plugin stores the credentials in the Strapi plugin store and never returns
 the license key to the browser after saving it.
 
-Download or update the database:
+Download or update the database. The CLI updater needs your MaxMind
+credentials via environment variables (the in-admin updater stores them in the
+Strapi plugin store instead):
 
 ```bash
+export MAXMIND_ACCOUNT_ID=your_account_id
+export MAXMIND_LICENSE_KEY=your_license_key
 npm run geoip:update
 ```
 
