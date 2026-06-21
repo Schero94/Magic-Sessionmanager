@@ -1,3 +1,10 @@
+# [4.6.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.13...v4.6.0) (2026-06-21)
+
+
+### Features
+
+* add local GeoIP firewall and free session manager ([f99e4db](https://github.com/Schero94/Magic-Sessionmanager/commit/f99e4db4256c5ca2dbfac4709875e6992d640c0e))
+
 ## [4.5.13](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.12...v4.5.13) (2026-04-21)
 
 
