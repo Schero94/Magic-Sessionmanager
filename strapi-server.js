@@ -1,4 +1,5 @@
 'use strict';
 
-module.exports = require('./server/src/index.js');
+const server = require('./dist/server/index.js');
 
+module.exports = server.default || server;

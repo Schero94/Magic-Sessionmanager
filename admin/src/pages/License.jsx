@@ -12,7 +12,6 @@ import {
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import { 
   ArrowClockwise, 
-  Key, 
   User, 
   Shield,
   Sparkle,
@@ -122,7 +121,7 @@ const LicensePage = () => {
       setLicenseData(response.data);
     } catch (err) {
       console.error('[magic-sessionmanager/License] Error fetching license:', err);
-      setError('Failed to load license information');
+      setError('Failed to load activation information');
     } finally {
       setLoading(false);
     }
@@ -133,12 +132,12 @@ const LicensePage = () => {
       await navigator.clipboard.writeText(licenseData?.data?.licenseKey || '');
       toggleNotification({
         type: 'success',
-        message: 'License key copied to clipboard!',
+        message: 'Activation key copied to clipboard!',
       });
     } catch (err) {
       toggleNotification({
         type: 'danger',
-        message: 'Failed to copy license key',
+        message: 'Failed to copy activation key',
       });
     }
   };
@@ -152,28 +151,26 @@ const LicensePage = () => {
       const lastName = data.lastName || '';
       const fullName = `${firstName} ${lastName}`.trim() || 'N/A';
       
-      const content = `Magic Session Manager - License Key
-═══════════════════════════════════════
+      const content = `Magic Session Manager - Optional Activation Key
+=======================================
 
-License Key: ${licenseKey}
+Activation Key: ${licenseKey}
 
-License Holder Information:
-──────────────────────────────────────
+Activation Holder Information:
+---------------------------------------
 Name:        ${fullName}
 Email:       ${email}
 
-License Status:
-──────────────────────────────────────
+Activation Status:
+---------------------------------------
 Status:      ${data.isActive ? 'ACTIVE' : 'INACTIVE'}
 Expires:     ${data.expiresAt ? new Date(data.expiresAt).toLocaleDateString() : 'Never'}
 
 Features:
-──────────────────────────────────────
-Premium:     ${data.features?.premium ? 'Enabled' : 'Disabled'}
-Advanced:    ${data.features?.advanced ? 'Enabled' : 'Disabled'}
-Enterprise:  ${data.features?.enterprise ? 'Enabled' : 'Disabled'}
+---------------------------------------
+All Session Manager features are included without a paid key.
 
-═══════════════════════════════════════
+=======================================
 Generated:   ${new Date().toLocaleString()}
 `;
       
@@ -181,7 +178,7 @@ Generated:   ${new Date().toLocaleString()}
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `session-manager-license-${licenseKey.substring(0, 8)}.txt`;
+      link.download = `session-manager-activation-${licenseKey.substring(0, 8)}.txt`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -189,12 +186,12 @@ Generated:   ${new Date().toLocaleString()}
 
       toggleNotification({
         type: 'success',
-        message: 'License key downloaded successfully!',
+        message: 'Activation key downloaded successfully!',
       });
     } catch (err) {
       toggleNotification({
         type: 'danger',
-        message: 'Failed to download license key',
+        message: 'Failed to download activation key',
       });
     }
   };
@@ -207,7 +204,7 @@ Generated:   ${new Date().toLocaleString()}
     return (
       <Container>
         <LoaderContainer>
-          <Loader>Loading license information...</Loader>
+          <Loader>Loading activation information...</Loader>
         </LoaderContainer>
       </Container>
     );
@@ -226,8 +223,13 @@ Generated:   ${new Date().toLocaleString()}
   }
 
   const isValid = licenseData?.valid;
-  const isDemo = licenseData?.demo;
+  // `hasKey` is the authoritative "is a key stored" signal from the controller.
+  // The old `demo` flag is now always false, so branching on it left the
+  // "no key stored" state unreachable and showed a green "key stored" banner
+  // on a fresh install. Fall back to inspecting the returned key for older
+  // responses that predate the `hasKey` field.
   const data = licenseData?.data || {};
+  const hasKey = licenseData?.hasKey ?? Boolean(data.licenseKey);
 
   return (
     <Container>
@@ -236,10 +238,10 @@ Generated:   ${new Date().toLocaleString()}
         <Flex justifyContent="space-between" alignItems="center">
           <Flex direction="column" gap={1}>
             <Typography variant="alpha" fontWeight="bold">
-              License Management
+              Optional Activation
             </Typography>
             <Typography variant="epsilon" textColor="neutral600">
-              View your Session Manager plugin license
+              Store and inspect an optional activation key. All features work without one.
             </Typography>
           </Flex>
           <Button
@@ -261,28 +263,28 @@ Generated:   ${new Date().toLocaleString()}
       {/* Content */}
       <Box paddingTop={6} paddingLeft={6} paddingRight={6} paddingBottom={10}>
         {/* Status Alert */}
-        {isDemo ? (
-          <Alert variant="warning" title="Demo Mode" closeLabel="Close">
-            You're using the demo version. Create a license to unlock all features.
+        {!hasKey ? (
+          <Alert variant="default" title="No Activation Key Stored" closeLabel="Close">
+            All Session Manager features are available. An activation key is optional and only used for install tracking or display.
           </Alert>
         ) : isValid ? (
-          <Alert variant="success" title="License Active" closeLabel="Close">
-            Your license is active and all features are unlocked.
+          <Alert variant="success" title="Activation Key Stored" closeLabel="Close">
+            Your optional activation key is stored. All features remain available with or without this key.
           </Alert>
         ) : (
-          <Alert variant="danger" title="License Issue" closeLabel="Close">
-            There's an issue with your license. Please check your license status.
+          <Alert variant="warning" title="Activation Check Failed" closeLabel="Close">
+            The activation server could not verify this key. The plugin still keeps all features available.
           </Alert>
         )}
 
-        {/* License Key */}
+        {/* Activation Key */}
         {data.licenseKey && (
           <Box marginTop={6}>
             <LicenseKeyBanner>
               <Flex justifyContent="space-between" alignItems="flex-start">
                 <Box style={{ flex: 1 }}>
                   <Typography variant="pi" style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '12px', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px', display: 'block' }}>
-                    License Key
+                    Activation Key
                   </Typography>
                   <Typography style={{ color: 'white', fontFamily: 'monospace', fontSize: '28px', fontWeight: 'bold', wordBreak: 'break-all', marginBottom: '16px' }}>
                     {data.licenseKey}
@@ -353,7 +355,7 @@ Generated:   ${new Date().toLocaleString()}
                     </Box>
                     <Box style={{ flex: '1', minWidth: '200px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        License Holder
+                        Activation Holder
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
                         {data.firstName && data.lastName 
@@ -367,11 +369,11 @@ Generated:   ${new Date().toLocaleString()}
               </Accordion.Content>
             </Accordion.Item>
 
-            {/* License Details */}
+            {/* Activation Details */}
             <Accordion.Item value="details">
               <Accordion.Header>
                 <Accordion.Trigger icon={Shield}>
-                  License Details
+                  Activation Details
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
@@ -412,7 +414,7 @@ Generated:   ${new Date().toLocaleString()}
               </Accordion.Content>
             </Accordion.Item>
 
-            {/* Features - Beautiful Visual Display */}
+            {/* Features */}
             <Accordion.Item value="features">
               <Accordion.Header>
                 <Accordion.Trigger icon={Sparkle}>
@@ -421,126 +423,25 @@ Generated:   ${new Date().toLocaleString()}
               </Accordion.Header>
               <Accordion.Content>
                 <Box padding={6}>
-                  {/* Feature Tier Badges */}
-                  <Flex gap={3} style={{ marginBottom: '32px' }}>
-                    <Badge
-                      backgroundColor={data.features?.premium ? "success100" : "neutral100"}
-                      textColor={data.features?.premium ? "success700" : "neutral600"}
-                      style={{ 
-                        fontSize: '13px', 
-                        fontWeight: '700', 
-                        padding: '8px 16px',
-                        border: data.features?.premium ? '2px solid rgba(34, 197, 94, 0.3)' : '2px solid rgba(128, 128, 128, 0.2)'
-                      }}
-                    >
-                      {data.features?.premium ? '✓' : '✗'} PREMIUM FEATURES
-                    </Badge>
-                    <Badge
-                      backgroundColor={data.features?.advanced ? "primary100" : "neutral100"}
-                      textColor={data.features?.advanced ? "primary700" : "neutral600"}
-                      style={{ 
-                        fontSize: '13px', 
-                        fontWeight: '700', 
-                        padding: '8px 16px',
-                        border: data.features?.advanced ? '2px solid rgba(14, 165, 233, 0.3)' : '2px solid rgba(128, 128, 128, 0.2)'
-                      }}
-                    >
-                      {data.features?.advanced ? '✓' : '✗'} ADVANCED FEATURES
-                    </Badge>
-                    <Badge
-                      backgroundColor={data.features?.enterprise ? "secondary100" : "neutral100"}
-                      textColor={data.features?.enterprise ? "secondary700" : "neutral600"}
-                      style={{ 
-                        fontSize: '13px', 
-                        fontWeight: '700', 
-                        padding: '8px 16px',
-                        border: data.features?.enterprise ? '2px solid rgba(139, 92, 246, 0.3)' : '2px solid rgba(128, 128, 128, 0.2)'
-                      }}
-                    >
-                      {data.features?.enterprise ? '✓' : '✗'} ENTERPRISE FEATURES
-                    </Badge>
-                  </Flex>
-                  
-                  {/* Premium Features List */}
-                  {data.features?.premium && (
-                    <Box marginBottom={5} padding={5} background="success50" hasRadius style={{ border: '2px solid rgba(34, 197, 94, 0.3)' }}>
-                      <Typography variant="delta" fontWeight="bold" textColor="success700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Premium Features Active
+                  <Box padding={5} background="success50" hasRadius style={{ border: '2px solid rgba(34, 197, 94, 0.3)' }}>
+                    <Typography variant="delta" fontWeight="bold" textColor="success700" style={{ marginBottom: '16px', display: 'block' }}>
+                      All Features Included
+                    </Typography>
+                    <Flex direction="column" gap={2}>
+                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
+                        IP geolocation tracking with country, city, and timezone
                       </Typography>
-                      <Flex direction="column" gap={2}>
-                        <Typography variant="omega" textColor="success700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ IP Geolocation Tracking (Country, City, Timezone)
-                        </Typography>
-                        <Typography variant="omega" textColor="success700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Security Risk Scoring (0-100)
-                        </Typography>
-                        <Typography variant="omega" textColor="success700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ VPN Detection
-                        </Typography>
-                        <Typography variant="omega" textColor="success700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Proxy Detection
-                        </Typography>
-                        <Typography variant="omega" textColor="success700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Threat Analysis
-                        </Typography>
-                        <Typography variant="omega" textColor="success700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Advanced Session Analytics
-                        </Typography>
-                      </Flex>
-                    </Box>
-                  )}
-                  
-                  {/* Advanced Features List */}
-                  {data.features?.advanced && (
-                    <Box marginBottom={5} padding={5} background="primary50" hasRadius style={{ border: '2px solid rgba(14, 165, 233, 0.3)' }}>
-                      <Typography variant="delta" fontWeight="bold" textColor="primary700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Advanced Features Active
+                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
+                        Security scoring, VPN/proxy detection, and threat analysis
                       </Typography>
-                      <Flex direction="column" gap={2}>
-                        <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Email Notifications & Alerts
-                        </Typography>
-                        <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Webhook Integration (Discord/Slack)
-                        </Typography>
-                        <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Auto-blocking Suspicious Sessions
-                        </Typography>
-                        <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Geo-fencing (Country-based Access Control)
-                        </Typography>
-                        <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Enhanced Analytics Dashboard
-                        </Typography>
-                      </Flex>
-                    </Box>
-                  )}
-                  
-                  {/* Enterprise Features List */}
-                  {data.features?.enterprise && (
-                    <Box padding={5} background="secondary50" hasRadius style={{ border: '2px solid rgba(139, 92, 246, 0.3)' }}>
-                      <Typography variant="delta" fontWeight="bold" textColor="secondary700" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        🏢 Enterprise Features Active
+                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
+                        Session analytics, CSV/JSON export, and real-time monitoring
                       </Typography>
-                      <Flex direction="column" gap={2}>
-                        <Typography variant="omega" textColor="secondary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Multi-tenant Support
-                        </Typography>
-                        <Typography variant="omega" textColor="secondary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Compliance Reports (GDPR, SOC2)
-                        </Typography>
-                        <Typography variant="omega" textColor="secondary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Custom Security Rules Engine
-                        </Typography>
-                        <Typography variant="omega" textColor="secondary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ ML-based Anomaly Detection
-                        </Typography>
-                        <Typography variant="omega" textColor="secondary700" style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          ✓ Priority Support
-                        </Typography>
-                      </Flex>
-                    </Box>
-                  )}
+                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
+                        Email alerts, Discord/Slack webhooks, and geofencing
+                      </Typography>
+                    </Flex>
+                  </Box>
                 </Box>
               </Accordion.Content>
             </Accordion.Item>
@@ -557,7 +458,7 @@ Generated:   ${new Date().toLocaleString()}
                   <Flex gap={8} wrap="wrap">
                     <Box style={{ flex: '1', minWidth: '150px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        License Status
+                        Activation Status
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
                         {data.isActive ? 'Active' : 'Inactive'}

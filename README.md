@@ -4,6 +4,8 @@
 
 Track logins, monitor active users, and secure your app with one simple plugin. No complicated setup required.
 
+Free and open under the MIT license. All features are available without a paid license or activation key.
+
 [![NPM](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -45,8 +47,8 @@ Track logins, monitor active users, and secure your app with one simple plugin. 
 - Full device information
 - Browser and operating system
 - Complete session history
-- IP geolocation (Premium)
-- Security risk score (Premium)
+- IP geolocation
+- Security risk score
 
 ---
 
@@ -199,7 +201,7 @@ SESSION_ENCRYPTION_KEY=your-key-here
 - Last time they did something
 - What browser/device they use
 - Their IP address
-- Location (if Premium)
+- Location
 
 ### 4. Multiple Devices
 
@@ -269,7 +271,7 @@ Add to `config/plugins.ts`:
 
 ---
 
-## 🌍 Premium Features (Optional License)
+## 🌍 Security Features
 
 ### IP Geolocation
 
@@ -278,6 +280,77 @@ Add to `config/plugins.ts`:
 - City
 - ISP Provider
 - Coordinates (for map)
+
+### Local GeoIP Firewall (Recommended)
+
+For login blocking, use a local MaxMind GeoLite2 Country database. This avoids
+remote API timeouts and rate limits in the login path.
+
+1. Create a free MaxMind account and download `GeoLite2-Country.mmdb`:
+   https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/
+2. Store the file on your Strapi server, for example:
+   `/var/lib/strapi/GeoLite2-Country.mmdb`
+3. Configure the plugin:
+
+```bash
+MAGIC_SESSIONMANAGER_GEOIP_DATABASE=/var/lib/strapi/GeoLite2-Country.mmdb
+MAXMIND_ACCOUNT_ID=your-account-id
+MAXMIND_LICENSE_KEY=your-license-key
+```
+
+You can also manage this from the Strapi admin UI. Open
+**Magic Session Manager -> Settings -> Geofencing**, choose `local-mmdb`,
+enter the MaxMind account ID and license key, then use **Download / Update DB**.
+The plugin stores the credentials in the Strapi plugin store and never returns
+the license key to the browser after saving it.
+
+Download or update the database:
+
+```bash
+npm run geoip:update
+```
+
+When installed as a package in a Strapi project, run the packaged binary:
+
+```bash
+npx strapi-magic-sessionmanager-geoip
+```
+
+The updater checks MaxMind's `Last-Modified` header first and skips the download
+when the local metadata is current. Use `npm run geoip:update -- --force` in the
+plugin repo or `npx strapi-magic-sessionmanager-geoip --force` in an installed
+Strapi project to force a refresh. Schedule it weekly or twice weekly with
+cron/systemd. MaxMind requires GeoLite databases to stay up to date and
+currently limits GeoLite users to 30 database downloads per day.
+
+```typescript
+// config/plugins.ts
+export default () => ({
+  'magic-sessionmanager': {
+    enabled: true,
+    config: {
+      geoIpProvider: 'local-mmdb',
+      geoIpDatabasePath: process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE,
+      // "auto": fail closed for suspicious-session blocking, fail open for plain geofencing
+      // "block": fail closed whenever GEOIP lookup is unavailable
+      // "allow": fail open whenever GEOIP lookup is unavailable
+      geoLookupFailureMode: 'block',
+      enableGeofencing: true,
+      allowedCountries: ['DE', 'AT', 'CH'],
+    },
+  },
+});
+```
+
+Provider options:
+- `local-mmdb`: local MaxMind-compatible database only
+- `auto`: use local database when configured, otherwise use the legacy remote provider
+- `ipapi`: legacy remote provider
+- `disabled`: no GEOIP lookup
+
+Country firewall rules use the local database. VPN/proxy/threat detection still
+requires a provider that supplies those risk signals; a free country database
+does not reliably identify VPNs or proxies.
 
 ### Threat Detection
 
@@ -305,7 +378,7 @@ Add to `config/plugins.ts`:
 
 ---
 
-## 📧 Email Alerts Setup (Premium)
+## 📧 Email Alerts Setup
 
 The Session Manager uses **Strapi's Email Plugin** to send notifications. You need to configure an email provider first.
 
@@ -713,11 +786,11 @@ When you install this plugin, you get:
 - ✅ Encryption (secure)
 - ✅ Multi-device support
 
-**Premium features require a license (free to generate):**
-- 🔒 IP Geolocation
-- 🔒 Threat detection
-- 🔒 Auto-blocking
-- 🔒 Email/webhook alerts
+**All features are included for free:**
+- ✅ IP Geolocation
+- ✅ Threat detection
+- ✅ Auto-blocking
+- ✅ Email/webhook alerts
 
 ---
 
@@ -757,32 +830,11 @@ A: Not yet, but it's planned for future versions!
 
 **Copyright © 2025 Schero D.**
 
-### Important License Restriction
+### Optional license-key activation
 
-This plugin is **free and open source**, BUT:
+The admin panel includes a License page where you can register an optional key. This is only used for install tracking and support context; it does not unlock or restrict any plugin feature.
 
-⚠️ **You CANNOT modify the license validation system**
-
-This means:
-- ❌ Cannot remove `license-guard.js`
-- ❌ Cannot bypass license activation
-- ❌ Cannot disable license checks
-- ❌ Cannot modify license-related endpoints
-
-**Why?** The license system ensures:
-- Quality and ongoing support
-- Spam prevention
-- Usage analytics for improvements
-- Fair use tracking
-
-**What you CAN do:**
-- ✅ Use freely (personal & commercial)
-- ✅ View and study source code
-- ✅ Report issues and contribute
-- ✅ Deploy in production without fees
-- ✅ Integrate in your projects
-
-See [LICENSE](./LICENSE) and [COPYRIGHT_NOTICE.txt](./COPYRIGHT_NOTICE.txt) for full terms.
+See [LICENSE](./LICENSE) for full terms.
 
 ---
 

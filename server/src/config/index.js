@@ -25,6 +25,9 @@ module.exports = {
     enableGeofencing: false,
     allowedCountries: [],
     blockedCountries: [],
+    geoIpProvider: 'auto',
+    geoIpDatabasePath: process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE || '',
+    geoLookupFailureMode: 'auto',
 
     enableEmailAlerts: false,
     alertOnSuspiciousLogin: true,
@@ -55,6 +58,21 @@ module.exports = {
     }
     if (config.strictSessionEnforcement !== undefined && typeof config.strictSessionEnforcement !== 'boolean') {
       throw new Error('strictSessionEnforcement must be a boolean');
+    }
+    if (
+      config.geoIpProvider !== undefined &&
+      !['auto', 'local-mmdb', 'ipapi', 'disabled'].includes(config.geoIpProvider)
+    ) {
+      throw new Error('geoIpProvider must be one of: auto, local-mmdb, ipapi, disabled');
+    }
+    if (config.geoIpDatabasePath !== undefined && typeof config.geoIpDatabasePath !== 'string') {
+      throw new Error('geoIpDatabasePath must be a string');
+    }
+    if (
+      config.geoLookupFailureMode !== undefined &&
+      !['auto', 'allow', 'block'].includes(config.geoLookupFailureMode)
+    ) {
+      throw new Error('geoLookupFailureMode must be one of: auto, allow, block');
     }
   },
 };

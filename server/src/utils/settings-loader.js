@@ -16,6 +16,8 @@
 const PLUGIN_ID = 'magic-sessionmanager';
 const SETTINGS_KEY = 'settings';
 const CACHE_TTL_MS = 30 * 1000;
+const GEO_IP_PROVIDERS = new Set(['auto', 'local-mmdb', 'ipapi', 'disabled']);
+const GEO_LOOKUP_FAILURE_MODES = new Set(['auto', 'allow', 'block']);
 
 let cached = null;
 let cachedAt = 0;
@@ -33,6 +35,46 @@ function toIntInRange(value, fallback, min, max) {
   const n = Number.parseInt(value, 10);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(n, max));
+}
+
+/**
+ * Normalizes the inactive-session retention setting. `-1` is a first-class
+ * value meaning "keep forever"; positive values are clamped to 1..365 days.
+ * @param {unknown} value
+ * @param {number} fallback
+ * @returns {number}
+ */
+function normalizeRetentionDays(value, fallback = 90) {
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n)) return fallback;
+  if (n === -1) return -1;
+  return Math.max(1, Math.min(n, 365));
+}
+
+/**
+ * Reads the post-login strict-enforcement grace window. Unlike `value || 5000`,
+ * this preserves an explicit `0`, which disables the grace window.
+ * @param {object} settings
+ * @returns {number}
+ */
+function getSessionCreationGraceMs(settings = {}) {
+  if (!settings || settings.sessionCreationGraceMs === undefined) {
+    return 5000;
+  }
+  return toIntInRange(settings.sessionCreationGraceMs, 5000, 0, 30000);
+}
+
+function normalizeGeoIpProvider(value) {
+  return GEO_IP_PROVIDERS.has(value) ? value : 'auto';
+}
+
+function normalizeGeoLookupFailureMode(value) {
+  return GEO_LOOKUP_FAILURE_MODES.has(value) ? value : 'auto';
+}
+
+function normalizeGeoIpDatabasePath(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\0/g, '').trim().slice(0, 1024);
 }
 
 /**
@@ -57,13 +99,13 @@ function normalizeStoredSettings(stored) {
     out.lastSeenRateLimit = seconds * 1000;
   }
   if (stored.retentionDays !== undefined) {
-    out.retentionDays = toIntInRange(stored.retentionDays, 90, 1, 365);
+    out.retentionDays = normalizeRetentionDays(stored.retentionDays, 90);
   }
   if (stored.maxSessionAgeDays !== undefined) {
     out.maxSessionAgeDays = toIntInRange(stored.maxSessionAgeDays, 30, 1, 365);
   }
   if (stored.maxFailedLogins !== undefined) {
-    out.maxFailedLogins = toIntInRange(stored.maxFailedLogins, 5, 1, 100);
+    out.maxFailedLogins = toIntInRange(stored.maxFailedLogins, 5, 0, 100);
   }
 
   const passthroughBooleans = [
@@ -88,7 +130,7 @@ function normalizeStoredSettings(stored) {
     // accepted without a matching session record. Bounded to prevent both
     // pointless zero-value (setting becomes no-op) and absurdly large
     // values that would defeat strict-session enforcement entirely.
-    out.sessionCreationGraceMs = toIntInRange(stored.sessionCreationGraceMs, 5000, 0, 30000);
+    out.sessionCreationGraceMs = getSessionCreationGraceMs(stored);
   }
 
   // Rate-limit budgets for Content-API read and write endpoints. The
@@ -118,6 +160,15 @@ function normalizeStoredSettings(stored) {
   }
   if (Array.isArray(stored.blockedCountries)) {
     out.blockedCountries = stored.blockedCountries;
+  }
+  if (stored.geoIpProvider !== undefined) {
+    out.geoIpProvider = normalizeGeoIpProvider(stored.geoIpProvider);
+  }
+  if (stored.geoIpDatabasePath !== undefined) {
+    out.geoIpDatabasePath = normalizeGeoIpDatabasePath(stored.geoIpDatabasePath);
+  }
+  if (stored.geoLookupFailureMode !== undefined) {
+    out.geoLookupFailureMode = normalizeGeoLookupFailureMode(stored.geoLookupFailureMode);
   }
   if (stored.emailTemplates && typeof stored.emailTemplates === 'object') {
     out.emailTemplates = stored.emailTemplates;
@@ -185,4 +236,9 @@ module.exports = {
   getPluginSettingsSync,
   invalidateSettingsCache,
   normalizeStoredSettings,
+  normalizeRetentionDays,
+  getSessionCreationGraceMs,
+  normalizeGeoIpProvider,
+  normalizeGeoIpDatabasePath,
+  normalizeGeoLookupFailureMode,
 };

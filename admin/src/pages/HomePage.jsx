@@ -37,7 +37,6 @@ import {
 import pluginId from '../pluginId';
 import parseUserAgent from '../utils/parseUserAgent';
 import SessionDetailModal from '../components/SessionDetailModal';
-import { useLicense } from '../hooks/useLicense';
 import { 
   IconButtonPrimary, 
   IconButtonWarning, 
@@ -519,7 +518,6 @@ const HomePage = () => {
   const { formatMessage } = useIntl();
   const { get, post, del } = useFetchClient();
   const { toggleNotification } = useNotification();
-  const { isPremium } = useLicense();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -590,17 +588,10 @@ const HomePage = () => {
   };
 
   const handleExportCSV = () => {
-    if (!isPremium) {
-      toggleNotification({
-        type: 'warning',
-        message: t('notifications.warning.premiumRequired', 'Premium license required for export functionality'),
-      });
-      return;
-    }
-
     try {
       // CSV Header
       const headers = ['ID', 'Status', 'User Email', 'Username', 'Device', 'Browser', 'OS', 'IP Address', 'Login Time', 'Last Active', 'Logout Time', 'Minutes Idle'];
+      const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
       
       // CSV Rows
       const rows = filteredSessions.map(session => {
@@ -625,8 +616,8 @@ const HomePage = () => {
       
       // Create CSV content
       const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        headers.map(escapeCsvValue).join(','),
+        ...rows.map(row => row.map(escapeCsvValue).join(','))
       ].join('\n');
       
       // Download
@@ -650,14 +641,6 @@ const HomePage = () => {
   };
 
   const handleExportJSON = () => {
-    if (!isPremium) {
-      toggleNotification({
-        type: 'warning',
-        message: t('notifications.warning.premiumRequired', 'Premium license required for export functionality'),
-      });
-      return;
-    }
-
     try {
       const exportData = {
         exportedAt: new Date().toISOString(),
@@ -786,7 +769,7 @@ const HomePage = () => {
             </Subtitle>
           </Flex>
       
-          {isPremium && filteredSessions.length > 0 && (
+          {filteredSessions.length > 0 && (
             <Flex gap={2}>
               <Button
                 onClick={handleExportCSV}

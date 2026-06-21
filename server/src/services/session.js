@@ -360,12 +360,11 @@ module.exports = ({ strapi }) => {
 
     /**
      * Marks sessions that have been idle past `inactivityTimeout` as
-     * terminated. Historically this set `terminatedManually: false`, which
-     * allowed the JWT-verify wrapper to immediately reactivate the session
-     * on the next request — nullifying the idle-logout feature. The cleanup
-     * now sets `terminatedManually: true` so the session cannot be silently
-     * reactivated; the JWT-verify wrapper still separately enforces the
-     * inactivity check for fast-idled sessions.
+     * terminated. The cleanup stores the real cause in `terminationReason:
+     * 'idle'` and keeps `terminatedManually: false`, because this is not a
+     * manual/admin termination. The JWT-verify wrapper treats
+     * `terminationReason` as authoritative, so idle sessions cannot be
+     * silently reactivated while reporting remains semantically correct.
      *
      * Processes in batches by collecting IDs first, then updating — this
      * avoids pagination-skew issues caused by mutating the queried set.
@@ -548,6 +547,7 @@ module.exports = ({ strapi }) => {
 
         let deletedCount = 0;
         const BATCH = 200;
+        let consecutiveNoProgressBatches = 0;
 
         while (true) {
           const batch = await strapi.documents(SESSION_UID).findMany({
@@ -566,6 +566,7 @@ module.exports = ({ strapi }) => {
 
           if (!batch || batch.length === 0) break;
 
+          const deletedBeforeBatch = deletedCount;
           for (const session of batch) {
             try {
               await strapi.documents(SESSION_UID).delete({ documentId: session.documentId });
@@ -573,6 +574,16 @@ module.exports = ({ strapi }) => {
             } catch (err) {
               log.debug(`[RETENTION] Failed to delete session ${session.documentId}:`, err.message);
             }
+          }
+
+          if (deletedCount === deletedBeforeBatch) {
+            consecutiveNoProgressBatches++;
+            if (consecutiveNoProgressBatches >= 3) {
+              log.warn('[RETENTION] No progress on 3 consecutive batches, aborting to prevent infinite loop');
+              break;
+            }
+          } else {
+            consecutiveNoProgressBatches = 0;
           }
 
           if (batch.length < BATCH) break;

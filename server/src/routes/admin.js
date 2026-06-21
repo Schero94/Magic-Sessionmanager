@@ -180,7 +180,34 @@ const baseRoutes = [
     handler: 'session.getIpGeolocation',
     config: {
       policies: adminPolicy(),
-      description: 'Get IP geolocation data (Premium feature, admin)',
+      description: 'Get IP geolocation data (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/geoip/status',
+    handler: 'geoip.getStatus',
+    config: {
+      policies: adminPolicy(),
+      description: 'Get local GeoIP database status (admin)',
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/geoip/credentials',
+    handler: 'geoip.storeCredentials',
+    config: {
+      policies: adminPolicy(),
+      description: 'Store MaxMind credentials for GeoIP downloads (admin)',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/geoip/update',
+    handler: 'geoip.updateDatabase',
+    config: {
+      policies: adminPolicy(),
+      description: 'Download or update the local GeoIP database (admin)',
     },
   },
 

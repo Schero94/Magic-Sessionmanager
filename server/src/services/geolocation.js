@@ -3,22 +3,65 @@
 /**
  * IP Geolocation Service.
  *
- * Uses ipapi.co for address lookups with a strict timeout. Returns fallback
- * data for private IPs, rate-limited responses and transport failures so
- * callers can distinguish "trusted no-op" from "unknown-fail-closed".
+ * Uses a local MaxMind-compatible MMDB database when configured, with ipapi.co
+ * kept as the legacy remote provider. The local path is preferred for firewall
+ * decisions because it does not depend on network availability or API quotas.
  */
 
+const fs = require('node:fs');
+const path = require('node:path');
+const { getPluginSettings } = require('../utils/settings-loader');
+
 const GEO_API_TIMEOUT_MS = 4000;
+const DEFAULT_MMDB_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-Country.mmdb');
+const VALID_PROVIDERS = new Set(['auto', 'local-mmdb', 'ipapi', 'disabled']);
+
+const readerCache = new Map();
+
+function normalizeProvider(value) {
+  return VALID_PROVIDERS.has(value) ? value : 'auto';
+}
+
+function resolveDatabasePath(settings = {}) {
+  const configured =
+    settings.geoIpDatabasePath ||
+    process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
+    process.env.GEOLITE2_COUNTRY_MMDB ||
+    DEFAULT_MMDB_PATH;
+
+  if (typeof configured !== 'string' || configured.trim() === '') return '';
+
+  const trimmed = configured.trim();
+  return path.isAbsolute(trimmed) ? trimmed : path.resolve(process.cwd(), trimmed);
+}
+
+async function openLocalReader(databasePath) {
+  if (readerCache.has(databasePath)) {
+    return readerCache.get(databasePath);
+  }
+
+  const { Reader } = require('@maxmind/geoip2-node');
+  const readerPromise = Reader.open(databasePath, { watchForUpdates: true });
+  readerCache.set(databasePath, readerPromise);
+
+  try {
+    return await readerPromise;
+  } catch (err) {
+    readerCache.delete(databasePath);
+    throw err;
+  }
+}
 
 module.exports = ({ strapi }) => ({
   /**
    * Looks up geolocation data for an IP address.
    *
    * Returns a shape including `_status` with one of:
-   *   - 'ok'           successful remote lookup
+   *   - 'ok'           successful lookup
    *   - 'private'      private / localhost IP (no lookup needed)
    *   - 'rate_limited' remote API told us to back off
-   *   - 'error'        transport / parsing failure
+   *   - 'disabled'     provider disabled by config
+   *   - 'error'        transport / parsing / local DB failure
    *
    * Consumers that enforce security policies should treat anything other than
    * 'ok' and 'private' as potentially unsafe and make their own fail-closed
@@ -33,7 +76,7 @@ module.exports = ({ strapi }) => ({
         ip: ipAddress,
         country: 'Local Network',
         country_code: 'XX',
-        country_flag: '🏠',
+        country_flag: '',
         city: 'Localhost',
         region: 'Private Network',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -45,9 +88,114 @@ module.exports = ({ strapi }) => ({
         securityScore: 100,
         riskLevel: 'None',
         _status: 'private',
+        _source: 'local',
       };
     }
 
+    const settings = await this.getGeoSettings();
+    const provider = normalizeProvider(settings.geoIpProvider);
+
+    if (provider === 'disabled') {
+      return this.getFallbackData(ipAddress, 'disabled', 'disabled');
+    }
+
+    if (provider === 'local-mmdb') {
+      return this.getLocalMmdbIpInfo(ipAddress, settings);
+    }
+
+    if (provider === 'auto') {
+      const databasePath = resolveDatabasePath(settings);
+      if (databasePath && fs.existsSync(databasePath)) {
+        const localResult = await this.getLocalMmdbIpInfo(ipAddress, settings);
+        if (localResult?._status === 'ok') {
+          return localResult;
+        }
+        strapi.log.warn(`[magic-sessionmanager/geolocation] Local MMDB lookup failed (${localResult?._reason || localResult?._status}), falling back to ipapi.co`);
+      }
+    }
+
+    return this.getIpapiIpInfo(ipAddress);
+  },
+
+  /**
+   * Reads effective GEOIP provider settings.
+   * @returns {Promise<object>}
+   */
+  async getGeoSettings() {
+    try {
+      return await getPluginSettings(strapi);
+    } catch {
+      return strapi.config.get('plugin::magic-sessionmanager') || {};
+    }
+  },
+
+  /**
+   * Looks up country data from a local MaxMind-compatible MMDB file.
+   * @param {string} ipAddress
+   * @param {object} settings
+   * @returns {Promise<object>}
+   */
+  async getLocalMmdbIpInfo(ipAddress, settings = {}) {
+    const databasePath = resolveDatabasePath(settings);
+
+    if (!databasePath || !fs.existsSync(databasePath)) {
+      return this.getFallbackData(
+        ipAddress,
+        'error',
+        'local-mmdb',
+        databasePath ? `GeoIP database not found: ${databasePath}` : 'GeoIP database path missing'
+      );
+    }
+
+    try {
+      const reader = await openLocalReader(databasePath);
+      const data = reader.country(ipAddress);
+      const country = data.country || data.registeredCountry || data.representedCountry || {};
+      const countryCode = country.isoCode || data.registeredCountry?.isoCode || 'XX';
+      const countryNames = country.names || {};
+
+      const result = {
+        ip: ipAddress,
+        country: countryNames.en || countryNames.de || countryCode || 'Unknown',
+        country_code: countryCode,
+        country_flag: this.getCountryFlag(countryCode),
+        city: 'Unknown',
+        region: 'Unknown',
+        timezone: 'Unknown',
+        latitude: null,
+        longitude: null,
+        postal: null,
+        org: null,
+        asn: null,
+        network: data.traits?.network || null,
+
+        isVpn: false,
+        isProxy: false,
+        isThreat: false,
+        isAnonymous: false,
+        isTor: false,
+
+        securityScore: 100,
+        riskLevel: 'Low',
+
+        _status: 'ok',
+        _source: 'local-mmdb',
+      };
+
+      strapi.log.debug(`[magic-sessionmanager/geolocation] Local MMDB IP ${ipAddress}: ${result.country_code}`);
+      return result;
+    } catch (error) {
+      strapi.log.warn(`[magic-sessionmanager/geolocation] Local MMDB lookup failed for ${ipAddress}:`, error.message);
+      return this.getFallbackData(ipAddress, 'error', 'local-mmdb', error.message);
+    }
+  },
+
+  /**
+   * Looks up geolocation data through the legacy remote ipapi.co provider.
+   * @param {string} ipAddress
+   * @returns {Promise<object>}
+   */
+  async getIpapiIpInfo(ipAddress) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), GEO_API_TIMEOUT_MS);
 
@@ -60,7 +208,7 @@ module.exports = ({ strapi }) => ({
 
       if (!response.ok) {
         strapi.log.warn(`[magic-sessionmanager/geolocation] API returned HTTP ${response.status}`);
-        return this.getFallbackData(ipAddress, response.status === 429 ? 'rate_limited' : 'error');
+        return this.getFallbackData(ipAddress, response.status === 429 ? 'rate_limited' : 'error', 'ipapi');
       }
 
       const data = await response.json();
@@ -68,7 +216,7 @@ module.exports = ({ strapi }) => ({
       if (data.error) {
         strapi.log.warn(`[magic-sessionmanager/geolocation] API Error: ${data.reason}`);
         const reason = /rate/i.test(data.reason || '') ? 'rate_limited' : 'error';
-        return this.getFallbackData(ipAddress, reason);
+        return this.getFallbackData(ipAddress, reason, 'ipapi', data.reason);
       }
 
       const result = {
@@ -106,6 +254,7 @@ module.exports = ({ strapi }) => ({
         }),
 
         _status: 'ok',
+        _source: 'ipapi',
       };
 
       strapi.log.debug(`[magic-sessionmanager/geolocation] IP ${ipAddress}: ${result.city}, ${result.country} (Score: ${result.securityScore})`);
@@ -114,7 +263,7 @@ module.exports = ({ strapi }) => ({
     } catch (error) {
       const status = error?.name === 'AbortError' ? 'error' : 'error';
       strapi.log.error(`[magic-sessionmanager/geolocation] Error fetching IP info for ${ipAddress}:`, error.message);
-      return this.getFallbackData(ipAddress, status);
+      return this.getFallbackData(ipAddress, status, 'ipapi', error.message);
     } finally {
       clearTimeout(timer);
     }
@@ -191,9 +340,11 @@ module.exports = ({ strapi }) => ({
    *
    * @param {string} ipAddress
    * @param {string} [reason]
+   * @param {string} [source]
+   * @param {string} [detail]
    * @returns {object}
    */
-  getFallbackData(ipAddress, reason = 'error') {
+  getFallbackData(ipAddress, reason = 'error', source = 'ipapi', detail = '') {
     return {
       ip: ipAddress,
       country: 'Unknown',
@@ -210,6 +361,8 @@ module.exports = ({ strapi }) => ({
       securityScore: 50,
       riskLevel: 'Unknown',
       _status: reason,
+      _source: source,
+      _reason: detail,
     };
   },
 

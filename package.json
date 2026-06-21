@@ -11,6 +11,9 @@
     "activity-monitoring"
   ],
   "type": "commonjs",
+  "bin": {
+    "strapi-magic-sessionmanager-geoip": "./scripts/update-geoip-db.mjs"
+  },
   "exports": {
     "./package.json": "./package.json",
     "./strapi-admin": {
@@ -30,47 +33,55 @@
     "dist",
     "strapi-admin.js",
     "strapi-server.js",
+    "scripts/geoip-updater.cjs",
+    "scripts/update-geoip-db.mjs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
     "pics"
   ],
   "engines": {
-    "node": ">=18.0.0 <=22.x.x",
+    "node": ">=20.0.0 <=26.x.x",
     "npm": ">=6.0.0"
   },
   "scripts": {
-    "build": "strapi-plugin build",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "test": "node --test tests/*.test.js tests/*.test.mjs",
+    "build": "npm run clean && strapi-plugin build && node scripts/build-server-bundle.mjs",
     "watch": "strapi-plugin watch",
     "watch:link": "strapi-plugin watch:link",
-    "verify": "strapi-plugin verify"
+    "geoip:update": "node scripts/update-geoip-db.mjs",
+    "verify": "strapi-plugin verify",
+    "verify:runtime": "node scripts/verify-server-bundle.mjs",
+    "prepublishOnly": "npm test && npm run build && npm run verify && npm run verify:runtime"
   },
   "dependencies": {
-    "sanitize-html": "^2.17.3"
+    "@maxmind/geoip2-node": "^6.3.4",
+    "sanitize-html": "^2.17.5"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/commit-analyzer": "^13.0.0",
     "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^12.0.6",
+    "@semantic-release/github": "^12.0.8",
     "@semantic-release/npm": "^13.1.5",
-    "@semantic-release/release-notes-generator": "^14.0.1",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "@strapi/design-system": "^2.2.0",
     "@strapi/icons": "^2.2.0",
-    "@strapi/sdk-plugin": "^5.4.0",
-    "@strapi/strapi": "^5.36.0",
-    "prettier": "^3.8.3",
+    "@strapi/sdk-plugin": "^6.1.1",
+    "@strapi/strapi": "^5.48.1",
+    "esbuild": "^0.28.1",
+    "prettier": "^3.8.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-intl": "^7.1.14",
-    "react-router-dom": "^6.30.1",
-    "semantic-release": "^25.0.3",
-    "styled-components": "^6.3.9"
+    "react-router-dom": "^6.30.4",
+    "semantic-release": "^25.0.5",
+    "styled-components": "^6.4.2"
   },
   "peerDependencies": {
     "@strapi/design-system": "^2.0.0",
     "@strapi/icons": "^2.0.0",
-    "@strapi/sdk-plugin": "^5.3.2 || ^6.0.0",
     "@strapi/strapi": "^5.0.0",
     "@strapi/utils": "^5.0.0",
     "react": "^18.3.1",

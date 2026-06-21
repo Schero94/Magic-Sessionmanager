@@ -3,7 +3,10 @@
 const { hashToken } = require('../utils/encryption');
 const { enhanceSessions, enhanceSession } = require('../utils/enhance-session');
 const { resolveUserDocumentId } = require('../utils/resolve-user');
-const { getPluginSettings } = require('../utils/settings-loader');
+const {
+  getPluginSettings,
+  getSessionCreationGraceMs,
+} = require('../utils/settings-loader');
 const { extractBearerToken } = require('../utils/extract-token');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
@@ -373,7 +376,7 @@ module.exports = {
         // Check grace period — is this a freshly-issued JWT whose session
         // row may not have been committed yet?
         const settings = await getPluginSettings(strapi);
-        const gracePeriodMs = Math.max(0, Number(settings.sessionCreationGraceMs) || 5000);
+        const gracePeriodMs = getSessionCreationGraceMs(settings);
         const iat = ctx.state.user?.iat || ctx.state.auth?.credentials?.iat || null;
 
         if (gracePeriodMs > 0 && typeof iat === 'number') {
@@ -551,7 +554,7 @@ module.exports = {
   },
 
   /**
-   * Returns geolocation data for a specific IP address (Premium feature).
+   * Returns geolocation data for a specific IP address.
    */
   async getIpGeolocation(ctx) {
     try {
@@ -580,20 +583,6 @@ module.exports = {
 
       if (!isValidIpv4 && !isValidIpv6) {
         return ctx.badRequest('Invalid IP address format');
-      }
-
-      const licenseGuard = strapi.plugin('magic-sessionmanager').service('license-guard');
-      const pluginStore = strapi.store({ type: 'plugin', name: 'magic-sessionmanager' });
-      const licenseKey = await pluginStore.get({ key: 'licenseKey' });
-
-      if (!licenseKey) {
-        return ctx.forbidden('Premium license required for geolocation features');
-      }
-
-      const license = await licenseGuard.getLicenseByKey(licenseKey);
-
-      if (!license || !license.featurePremium) {
-        return ctx.forbidden('Premium license required for geolocation features');
       }
 
       const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');

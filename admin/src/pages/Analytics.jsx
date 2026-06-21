@@ -13,10 +13,8 @@ import {
   User,
   Monitor,
   Clock,
-  Crown,
 } from '@strapi/icons';
 import pluginId from '../pluginId';
-import { useLicense } from '../hooks/useLicense';
 
 // ================ THEME ================
 const theme = {
@@ -57,11 +55,6 @@ const slideIn = keyframes`
 const shimmer = keyframes`
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
-`;
-
-const float = keyframes`
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
 `;
 
 const pulse = keyframes`
@@ -319,28 +312,14 @@ const LoadingOverlay = styled.div`
   }
 `;
 
-const AnimatedIcon = styled.div`
-  ${css`animation: ${float} 3s ease-in-out infinite;`}
-  width: 96px;
-  height: 96px;
-  color: var(--colors-warning600, #D97706);
-  margin: 0 auto 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
 const AnalyticsPage = () => {
   const { get } = useFetchClient();
-  const { isPremium, loading: licenseLoading } = useLicense();
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => {
-    if (!licenseLoading) {
-      fetchAnalytics();
-    }
-  }, [licenseLoading]);
+    fetchAnalytics();
+  }, []);
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -444,117 +423,6 @@ const AnalyticsPage = () => {
       setLoading(false);
     }
   };
-
-  // Loading state während License-Check
-  if (licenseLoading) {
-    return (
-      <Container>
-        <LoadingOverlay>
-          <ChartBubble className="loader-icon" style={{ width: '64px', height: '64px', color: 'var(--colors-primary600, #0284C7)' }} />
-          <Loader>Checking license...</Loader>
-          <Typography variant="pi" textColor="neutral600">
-            Please wait while we verify your premium access
-          </Typography>
-        </LoadingOverlay>
-      </Container>
-    );
-  }
-
-  // Upgrade Screen für Free-User
-  if (!isPremium) {
-    return (
-      <Container>
-        <Box padding={8}>
-          <Box
-            padding={10}
-            style={{
-              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(234, 179, 8, 0.25) 100%)',
-              borderRadius: '20px',
-              border: '3px solid rgba(234, 179, 8, 0.4)',
-              textAlign: 'center',
-              boxShadow: '0 20px 40px rgba(245, 158, 11, 0.2)',
-              maxWidth: '800px',
-              margin: '60px auto',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Background Pattern */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundImage: 'radial-gradient(circle at 20% 80%, transparent 50%, rgba(255, 255, 255, 0.1) 50%)',
-              backgroundSize: '20px 20px',
-              opacity: 0.5,
-              zIndex: 0,
-            }} />
-            
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <AnimatedIcon as={Crown} />
-              
-              <Typography 
-                variant="alpha" 
-                style={{ 
-                  color: 'var(--colors-warning600, #92400e)', 
-                  fontWeight: '700', 
-                  marginBottom: '24px', 
-                  fontSize: '36px',
-                  display: 'block',
-                  textShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                }}
-              >
-                Analytics Dashboard
-              </Typography>
-              
-              <Typography 
-                variant="omega" 
-                style={{ 
-                  color: 'var(--colors-warning600, #78350f)', 
-                  lineHeight: '1.9', 
-                  marginBottom: '44px', 
-                  fontSize: '17px',
-                  display: 'block',
-                  maxWidth: '620px',
-                  margin: '0 auto 44px',
-                }}
-              >
-                Unlock premium analytics to get powerful insights about your user sessions, device statistics, browser trends, and activity patterns
-              </Typography>
-              
-              <button
-                onClick={() => window.open('https://magicapi.fitlex.me', '_blank')}
-                style={{
-                  background: 'linear-gradient(135deg, var(--colors-warning600, #f59e0b) 0%, var(--colors-warning600, #d97706) 100%)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '16px 48px',
-                  borderRadius: '12px',
-                  fontSize: '17px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  boxShadow: '0 6px 16px rgba(245, 158, 11, 0.4)',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-3px) scale(1.05)';
-                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(245, 158, 11, 0.5)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(245, 158, 11, 0.4)';
-                }}
-              >
-                Upgrade to Premium
-              </button>
-            </div>
-          </Box>
-        </Box>
-      </Container>
-    );
-  }
 
   // Loading analytics data
   if (loading) {

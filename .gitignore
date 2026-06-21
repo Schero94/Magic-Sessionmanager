@@ -10,6 +10,9 @@ test-*.ts
 *.test.ts
 *.spec.js
 *.spec.ts
+!tests/
+!tests/*.test.js
+!tests/*.test.mjs
 TEST_*.md
 TEST_RESULTS.md
 RELEASE_CHECKLIST.md
@@ -64,3 +67,6 @@ tmp/
 # Build artifacts
 *.map
 .cache/
+
+# Local agent archive
+.archive/

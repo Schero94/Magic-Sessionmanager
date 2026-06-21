@@ -19,7 +19,10 @@
  */
 
 const { resolveUserDocumentId } = require('../utils/resolve-user');
-const { getPluginSettings } = require('../utils/settings-loader');
+const {
+  getPluginSettings,
+  getSessionCreationGraceMs,
+} = require('../utils/settings-loader');
 const { extractBearerToken } = require('../utils/extract-token');
 const { hashToken } = require('../utils/encryption');
 
@@ -81,7 +84,7 @@ module.exports = ({ strapi, sessionService }) => {
 
     const settings = await getPluginSettings(strapi).catch(() => ({}));
     const strictMode = settings.strictSessionEnforcement === true;
-    const gracePeriodMs = Math.max(0, Number(settings.sessionCreationGraceMs) || 5000);
+    const gracePeriodMs = getSessionCreationGraceMs(settings);
 
     const token = extractBearerToken(ctx);
     const tokenHashValue = token ? hashToken(token) : null;

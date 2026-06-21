@@ -6,7 +6,6 @@ import {
   Box,
   Flex,
   Typography,
-  Badge,
   Divider,
 } from '@strapi/design-system';
 import {
@@ -17,19 +16,16 @@ import {
   Check,
   Clock,
   Information,
-  Crown,
   Earth,
   Shield,
 } from '@strapi/icons';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import parseUserAgent from '../utils/parseUserAgent';
 import pluginId from '../pluginId';
-import { useLicense } from '../hooks/useLicense';
 import { getTranslation } from '../utils/getTranslation';
-import { 
-  TertiaryButton, 
-  DangerButton, 
-  GradientButton,
+import {
+  TertiaryButton,
+  DangerButton,
   ShowHideButton,
 } from './StyledButtons';
 
@@ -37,7 +33,7 @@ const TwoColumnGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
-  
+
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
@@ -70,14 +66,14 @@ const ModalStatusBadge = styled.span`
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  
+
   ${props => props.$online && `
     background: linear-gradient(135deg, rgba(22, 163, 74, 0.12) 0%, rgba(34, 197, 94, 0.3) 100%);
     color: var(--colors-success600, #166534);
     border: 2px solid rgba(34, 197, 94, 0.3);
     box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
   `}
-  
+
   ${props => !props.$online && `
     background: linear-gradient(135deg, rgba(128, 128, 128, 0.08) 0%, rgba(128, 128, 128, 0.2) 100%);
     color: var(--colors-neutral600);
@@ -90,45 +86,20 @@ const StatusDot = styled.span`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  
+
   ${props => props.$online && `
     background: var(--colors-success600, #22C55E);
     box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
     animation: pulse-green 2s ease-in-out infinite;
   `}
-  
+
   ${props => !props.$online && `
     background: var(--colors-neutral500);
   `}
-  
+
   @keyframes pulse-green {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.7; transform: scale(1.15); }
-  }
-`;
-
-// Premium Upgrade Button
-const PremiumButton = styled.button`
-  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-  margin-top: 8px;
-  
-  &:hover {
-    background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
-  }
-  
-  &:active {
-    transform: translateY(0);
   }
 `;
 
@@ -136,50 +107,67 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   const { formatMessage } = useIntl();
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
-  const { isPremium, loading: licenseLoading } = useLicense();
   const [terminating, setTerminating] = useState(false);
   const [showUserAgent, setShowUserAgent] = useState(false);
   const [geoData, setGeoData] = useState(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
+  useEffect(() => {
+    let cancelled = false;
+    const ipAddress = session?.ipAddress;
+
+    if (!ipAddress) {
+      setGeoData(null);
+      setGeoLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const fetchGeolocationData = async () => {
+      setGeoData(null);
+      setGeoLoading(true);
+      try {
+        const { data } = await get(`/${pluginId}/geolocation/${encodeURIComponent(ipAddress)}`);
+        if (!cancelled) {
+          setGeoData(data.data);
+        }
+      } catch (err) {
+        console.error('[SessionDetailModal] Error fetching geolocation:', err);
+        if (!cancelled) {
+          setGeoData({
+            country_flag: '',
+            country: 'Unknown',
+            city: 'Unknown',
+            timezone: 'Unknown',
+            securityScore: 50,
+            riskLevel: 'Unknown',
+            isVpn: false,
+            isProxy: false,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setGeoLoading(false);
+        }
+      }
+    };
+
+    fetchGeolocationData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [get, session?.ipAddress]);
+
   if (!session) return null;
 
   const deviceInfo = parseUserAgent(session.userAgent);
   const isOnline = session.isTrulyActive;
 
-  // Fetch real geolocation data if premium
-  useEffect(() => {
-    if (isPremium && session.ipAddress && !geoData) {
-      fetchGeolocationData();
-    }
-  }, [isPremium, session.ipAddress]);
-
-  const fetchGeolocationData = async () => {
-    setGeoLoading(true);
-    try {
-      const { data } = await get(`/${pluginId}/geolocation/${session.ipAddress}`);
-      setGeoData(data.data);
-    } catch (err) {
-      console.error('[SessionDetailModal] Error fetching geolocation:', err);
-      // Fallback to mock data if API fails
-      setGeoData({
-        country_flag: '',
-        country: 'Unknown',
-        city: 'Unknown',
-        timezone: 'Unknown',
-        securityScore: 50,
-        riskLevel: 'Unknown',
-        isVpn: false,
-        isProxy: false,
-      });
-    } finally {
-      setGeoLoading(false);
-    }
-  };
-  
   // Use real data if available, otherwise fallback
-  const premiumData = geoData || {
+  const securityData = geoData || {
     country_flag: '',
     country: 'Loading...',
     city: 'Loading...',
@@ -189,13 +177,13 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
     isVpn: false,
     isProxy: false,
   };
-  
+
   const getDeviceIcon = (deviceType) => {
     if (deviceType === 'Mobile' || deviceType === 'Tablet') return Phone;
     if (deviceType === 'Desktop' || deviceType === 'Laptop') return Monitor;
     return Server;
   };
-  
+
   const DeviceIcon = getDeviceIcon(deviceInfo.device);
 
   const handleTerminate = async () => {
@@ -206,12 +194,12 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
     setTerminating(true);
     try {
       await post(`/${pluginId}/sessions/${session.id}/terminate`);
-      
+
       toggleNotification({
         type: 'success',
         message: t('notifications.success.terminated', 'Session terminated successfully'),
       });
-      
+
       onSessionTerminated();
       onClose();
     } catch (err) {
@@ -228,11 +216,11 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   const DetailRow = ({ label, value, icon: Icon, compact }) => (
     <Flex gap={3} alignItems="flex-start" style={{ marginBottom: compact ? '12px' : '16px' }}>
       {Icon && (
-        <Box style={{ 
-          width: '36px', 
-          height: '36px', 
-          display: 'flex', 
-          alignItems: 'center', 
+        <Box style={{
+          width: '36px',
+          height: '36px',
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           background: 'var(--colors-neutral100)',
           borderRadius: '8px',
@@ -300,7 +288,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   <SectionTitle>
                     {t('modal.section.user', 'User')}
                   </SectionTitle>
-                  
+
                   <DetailRow compact icon={Check} label={t('modal.user.username', 'Username')} value={session.user?.username || t('modal.user.na', 'N/A')} />
                   <DetailRow compact icon={Information} label={t('modal.user.email', 'Email')} value={session.user?.email || t('modal.user.na', 'N/A')} />
                   <DetailRow compact icon={Information} label={t('modal.user.id', 'User ID')} value={session.user?.id || t('modal.user.na', 'N/A')} />
@@ -311,7 +299,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   <SectionTitle>
                     {t('modal.section.device', 'Device')}
                   </SectionTitle>
-                  
+
                   <DetailRow compact icon={DeviceIcon} label={t('modal.device.device', 'Device')} value={deviceInfo.device} />
                   <DetailRow compact icon={Monitor} label={t('modal.device.browser', 'Browser')} value={`${deviceInfo.browser} ${deviceInfo.browserVersion || ''}`} />
                   <DetailRow compact icon={Server} label={t('modal.device.os', 'OS')} value={deviceInfo.os} />
@@ -325,128 +313,99 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   <SectionTitle>
                     {t('modal.section.timeline', 'Timeline')}
                   </SectionTitle>
-                
-                <DetailRow 
-                  compact 
-                  icon={Clock} 
+
+                <DetailRow
+                  compact
+                  icon={Clock}
                   label={t('modal.timeline.login', 'Login')}
-                  value={new Date(session.loginTime).toLocaleString('de-DE', { 
-                    day: '2-digit', 
-                    month: 'short', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })} 
+                  value={new Date(session.loginTime).toLocaleString('de-DE', {
+                    day: '2-digit',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
                 />
-                <DetailRow 
-                  compact 
-                  icon={Clock} 
+                <DetailRow
+                  compact
+                  icon={Clock}
                   label={t('modal.timeline.lastActive', 'Last Active')}
-                  value={new Date(session.lastActive || session.loginTime).toLocaleString('de-DE', { 
-                    day: '2-digit', 
-                    month: 'short', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })} 
+                  value={new Date(session.lastActive || session.loginTime).toLocaleString('de-DE', {
+                    day: '2-digit',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
                 />
-                <DetailRow 
-                  compact 
-                  icon={Clock} 
+                <DetailRow
+                  compact
+                  icon={Clock}
                   label={t('modal.timeline.idleTime', 'Idle Time')}
                   value={t('modal.timeline.minutes', '{minutes} min', { minutes: session.minutesSinceActive })}
                 />
                 {session.logoutTime && (
-                  <DetailRow 
-                    compact 
-                    icon={Cross} 
+                  <DetailRow
+                    compact
+                    icon={Cross}
                     label={t('modal.timeline.logout', 'Logout')}
-                    value={new Date(session.logoutTime).toLocaleString('de-DE', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })} 
+                    value={new Date(session.logoutTime).toLocaleString('de-DE', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   />
                 )}
                 </Section>
               </Box>
             </TwoColumnGrid>
 
-            {/* PREMIUM: Geolocation & Security Information */}
-            {isPremium ? (
-              <Section>
-                <SectionTitle>
-                  {t('modal.section.security', 'Location and Security')}
-                </SectionTitle>
-                
-                {geoLoading ? (
-                  <Box padding={4} style={{ textAlign: 'center' }}>
-                    <Typography variant="pi" textColor="neutral600">
-                      {t('modal.security.loading', 'Loading location data...')}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <TwoColumnGrid>
-                    <Box>
-                      <DetailRow 
-                        compact 
-                        icon={Earth} 
-                        label={t('modal.security.country', 'Country')}
-                        value={`${premiumData.country_flag || ''} ${premiumData.country}`.trim()} 
-                      />
-                      <DetailRow compact icon={Earth} label={t('modal.security.city', 'City')} value={premiumData.city} />
-                      <DetailRow compact icon={Clock} label={t('modal.security.timezone', 'Timezone')} value={premiumData.timezone} />
-                    </Box>
-                    <Box>
-                      <DetailRow 
-                        compact 
-                        icon={Shield} 
-                        label={t('modal.security.score', 'Security')}
-                        value={`${premiumData.securityScore}/100 (${premiumData.riskLevel})`} 
-                      />
-                      <DetailRow 
-                        compact 
-                        icon={Shield} 
-                        label={t('modal.security.vpn', 'VPN')}
-                        value={premiumData.isVpn ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')} 
-                      />
-                      <DetailRow 
-                        compact 
-                        icon={Shield} 
-                        label={t('modal.security.proxy', 'Proxy')}
-                        value={premiumData.isProxy ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')} 
-                      />
-                    </Box>
-                  </TwoColumnGrid>
-                )}
-              </Section>
-            ) : (
-              <Section>
-                <Box
-                  padding={5}
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(234, 179, 8, 0.25) 100%)',
-                    borderRadius: '12px',
-                    border: '2px solid rgba(234, 179, 8, 0.4)',
-                    textAlign: 'center',
-                  }}
-                >
-                  <Flex direction="column" alignItems="center" gap={3}>
-                    <Crown style={{ width: '40px', height: '40px', color: 'var(--colors-warning600, #d97706)' }} />
-                    <Typography variant="beta" style={{ color: 'var(--colors-warning600, #92400e)', fontWeight: '700' }}>
-                      {t('modal.premium.title', 'Location and Security Analysis')}
-                    </Typography>
-                    <Typography variant="omega" style={{ color: 'var(--colors-warning600, #78350f)', fontSize: '14px', lineHeight: '1.6' }}>
-                      {t('modal.premium.description', 'Unlock premium features to get IP geolocation, security scoring, and VPN/Proxy detection for every session')}
-                    </Typography>
-                    <PremiumButton
-                      onClick={() => window.open('https://magicapi.fitlex.me', '_blank')}
-                    >
-                      {t('modal.premium.upgrade', 'Upgrade to Premium')}
-                    </PremiumButton>
-                  </Flex>
+            {/* Geolocation & Security Information */}
+            <Section>
+              <SectionTitle>
+                {t('modal.section.security', 'Location and Security')}
+              </SectionTitle>
+
+              {geoLoading ? (
+                <Box padding={4} style={{ textAlign: 'center' }}>
+                  <Typography variant="pi" textColor="neutral600">
+                    {t('modal.security.loading', 'Loading location data...')}
+                  </Typography>
                 </Box>
-              </Section>
-            )}
+              ) : (
+                <TwoColumnGrid>
+                  <Box>
+                    <DetailRow
+                      compact
+                      icon={Earth}
+                      label={t('modal.security.country', 'Country')}
+                      value={`${securityData.country_flag || ''} ${securityData.country}`.trim()}
+                    />
+                    <DetailRow compact icon={Earth} label={t('modal.security.city', 'City')} value={securityData.city} />
+                    <DetailRow compact icon={Clock} label={t('modal.security.timezone', 'Timezone')} value={securityData.timezone} />
+                  </Box>
+                  <Box>
+                    <DetailRow
+                      compact
+                      icon={Shield}
+                      label={t('modal.security.score', 'Security')}
+                      value={`${securityData.securityScore}/100 (${securityData.riskLevel})`}
+                    />
+                    <DetailRow
+                      compact
+                      icon={Shield}
+                      label={t('modal.security.vpn', 'VPN')}
+                      value={securityData.isVpn ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')}
+                    />
+                    <DetailRow
+                      compact
+                      icon={Shield}
+                      label={t('modal.security.proxy', 'Proxy')}
+                      value={securityData.isProxy ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')}
+                    />
+                  </Box>
+                </TwoColumnGrid>
+              )}
+            </Section>
 
             {/* User Agent - Collapsible */}
             <Section>
@@ -461,15 +420,15 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   {showUserAgent ? t('modal.technical.hide', 'Hide Details') : t('modal.technical.show', 'Show Details')}
                 </ShowHideButton>
               </Flex>
-              
+
               {showUserAgent && (
-                <Box 
-                  padding={3} 
-                  background="neutral100" 
+                <Box
+                  padding={3}
+                  background="neutral100"
                   hasRadius
-                  style={{ 
-                    fontFamily: 'monospace', 
-                    fontSize: '10px', 
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: '10px',
                     wordBreak: 'break-all',
                     maxHeight: '80px',
                     overflow: 'auto',
@@ -491,7 +450,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
             <TertiaryButton onClick={onClose}>
               {t('modal.actions.close', 'Close')}
             </TertiaryButton>
-            <DangerButton 
+            <DangerButton
               onClick={handleTerminate}
               disabled={!session.isActive || terminating}
               loading={terminating}
@@ -507,4 +466,3 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
 };
 
 export default SessionDetailModal;
-

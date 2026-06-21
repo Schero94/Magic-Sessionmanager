@@ -1,6 +1,13 @@
 'use strict';
 
-const { invalidateSettingsCache } = require('../utils/settings-loader');
+const {
+  getSessionCreationGraceMs,
+  invalidateSettingsCache,
+  normalizeGeoIpDatabasePath,
+  normalizeGeoIpProvider,
+  normalizeGeoLookupFailureMode,
+  normalizeRetentionDays,
+} = require('../utils/settings-loader');
 
 /**
  * Allowed webhook URL domains to prevent SSRF attacks
@@ -192,6 +199,9 @@ module.exports = {
           enableGeofencing: false,
           allowedCountries: [],
           blockedCountries: [],
+          geoIpProvider: 'auto',
+          geoIpDatabasePath: '',
+          geoLookupFailureMode: 'auto',
 
           // Notifications
           enableEmailAlerts: false,
@@ -248,17 +258,18 @@ module.exports = {
       // (strictSessionEnforcement will block the very first request after login
       // if the session-create write has not propagated). Values > 30s are
       // rejected because they would silently defeat session revocation.
-      const graceRaw = body.sessionCreationGraceMs;
-      const grace = Number.isFinite(parseInt(graceRaw))
-        ? Math.max(0, Math.min(parseInt(graceRaw), 30000))
-        : 5000;
+      const grace = getSessionCreationGraceMs(body);
+      const maxFailedLoginsRaw = Number.parseInt(body.maxFailedLogins, 10);
+      const maxFailedLogins = Number.isFinite(maxFailedLoginsRaw)
+        ? Math.max(0, Math.min(maxFailedLoginsRaw, 100))
+        : 5;
 
       const sanitizedSettings = {
         // Timing & cleanup
         inactivityTimeout: Math.max(1, Math.min(parseInt(body.inactivityTimeout) || 15, 1440)),
         cleanupInterval: Math.max(5, Math.min(parseInt(body.cleanupInterval) || 30, 1440)),
         lastSeenRateLimit: Math.max(5, Math.min(parseInt(body.lastSeenRateLimit) || 30, 300)),
-        retentionDays: Math.max(1, Math.min(parseInt(body.retentionDays) || 90, 365)),
+        retentionDays: normalizeRetentionDays(body.retentionDays, 90),
         maxSessionAgeDays: Math.max(1, Math.min(parseInt(body.maxSessionAgeDays) || 30, 365)),
         sessionCreationGraceMs: grace,
         cleanupUseDbDirect: !!body.cleanupUseDbDirect,
@@ -267,10 +278,13 @@ module.exports = {
         enableGeolocation: !!body.enableGeolocation,
         enableSecurityScoring: !!body.enableSecurityScoring,
         blockSuspiciousSessions: !!body.blockSuspiciousSessions,
-        maxFailedLogins: Math.max(1, Math.min(parseInt(body.maxFailedLogins) || 5, 100)),
+        maxFailedLogins,
         enableGeofencing: !!body.enableGeofencing,
         allowedCountries: sanitizeCountryList(body.allowedCountries),
         blockedCountries: sanitizeCountryList(body.blockedCountries),
+        geoIpProvider: normalizeGeoIpProvider(body.geoIpProvider),
+        geoIpDatabasePath: normalizeGeoIpDatabasePath(body.geoIpDatabasePath),
+        geoLookupFailureMode: normalizeGeoLookupFailureMode(body.geoLookupFailureMode),
 
         // Notifications
         enableEmailAlerts: !!body.enableEmailAlerts,

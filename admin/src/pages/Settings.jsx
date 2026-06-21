@@ -20,19 +20,18 @@ import {
   NumberInput,
 } from '@strapi/design-system';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
-import { Check, Information, Duplicate, Trash, Mail, Code, Cog, Shield, Clock } from '@strapi/icons';
+import { Check, Duplicate, Trash, Mail, Code, Cog, Shield, Clock } from '@strapi/icons';
 import styled, { keyframes, css } from 'styled-components';
 import pluginId from '../pluginId';
-import { useLicense } from '../hooks/useLicense';
 import { getTranslation } from '../utils/getTranslation';
 import { COUNTRIES, normalizeCountryCode, formatCountry } from '../utils/countries';
-import { 
-  GradientButton, 
-  SecondaryButton, 
-  TertiaryButton, 
+import {
+  GradientButton,
+  SecondaryButton,
+  TertiaryButton,
   DangerButton,
   ShowHideButton,
-  CopyButton 
+  CopyButton
 } from '../components/StyledButtons';
 
 // ================ THEME ================
@@ -76,34 +75,34 @@ const StickySaveBar = styled(Box)`
 `;
 
 const ToggleCard = styled(Box)`
-  background: ${props => props.$active 
-    ? 'linear-gradient(135deg, rgba(22, 163, 74, 0.06) 0%, rgba(22, 163, 74, 0.12) 100%)' 
+  background: ${props => props.$active
+    ? 'linear-gradient(135deg, rgba(22, 163, 74, 0.06) 0%, rgba(22, 163, 74, 0.12) 100%)'
     : 'linear-gradient(135deg, rgba(128, 128, 128, 0.04) 0%, rgba(128, 128, 128, 0.08) 100%)'};
   border-radius: ${theme.borderRadius.lg};
   padding: 24px;
   min-height: 120px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid ${props => props.$active ? 'var(--colors-success600, #16A34A)' : 'rgba(128, 128, 128, 0.2)'};
-  box-shadow: ${props => props.$active 
-    ? '0 4px 20px rgba(34, 197, 94, 0.15)' 
+  box-shadow: ${props => props.$active
+    ? '0 4px 20px rgba(34, 197, 94, 0.15)'
     : '0 2px 8px rgba(0, 0, 0, 0.06)'};
   position: relative;
   cursor: pointer;
   display: flex;
   align-items: center;
-  
+
   &:hover {
     transform: translateY(-4px);
-    box-shadow: ${props => props.$active 
-      ? '0 8px 30px rgba(34, 197, 94, 0.25)' 
+    box-shadow: ${props => props.$active
+      ? '0 8px 30px rgba(34, 197, 94, 0.25)'
       : '0 6px 16px rgba(0, 0, 0, 0.12)'};
     border-color: ${props => props.$active ? 'var(--colors-success600, #15803D)' : 'rgba(128, 128, 128, 0.3)'};
   }
-  
+
   &:active {
     transform: translateY(-2px);
   }
-  
+
   ${props => props.$active && `
     &::before {
       content: 'ACTIVE';
@@ -120,7 +119,7 @@ const ToggleCard = styled(Box)`
       box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
     }
   `}
-  
+
   ${props => !props.$active && `
     &::before {
       content: 'INACTIVE';
@@ -144,29 +143,29 @@ const GreenToggle = styled.div`
     button[role="switch"] {
       background-color: var(--colors-success600, #16A34A) !important;
       border-color: var(--colors-success600, #16A34A) !important;
-      
+
       &:hover {
         background-color: var(--colors-success600, #15803D) !important;
         border-color: var(--colors-success600, #15803D) !important;
       }
-      
+
       &:focus {
         background-color: var(--colors-success600, #16A34A) !important;
         border-color: var(--colors-success600, #16A34A) !important;
         box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2) !important;
       }
     }
-    
+
     /* Toggle handle */
     button[role="switch"] > span {
       background-color: white !important;
     }
   `}
-  
+
   ${props => !props.$isActive && `
     button[role="switch"] {
       background-color: rgba(128, 128, 128, 0.2);
-      
+
       &:hover {
         background-color: rgba(128, 128, 128, 0.2);
       }
@@ -217,13 +216,13 @@ const TEMPLATE_VARIABLES = {
 const validateTemplate = (template, templateType) => {
   const requiredVars = TEMPLATE_VARIABLES[templateType];
   const foundVars = [];
-  
+
   requiredVars.forEach(({ var: variable }) => {
     if (template.includes(variable)) {
       foundVars.push(variable);
     }
   });
-  
+
   return {
     isValid: foundVars.length > 0,
     foundVars,
@@ -241,14 +240,14 @@ const getDefaultTemplates = () => ({
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 10px;">
     <h2 style="color: #dc2626;">[ALERT] Suspicious Login Detected</h2>
     <p>A potentially suspicious login was detected for your account.</p>
-    
+
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account Information:</h3>
       <ul>
         <li><strong>Email:</strong> {{user.email}}</li>
         <li><strong>Username:</strong> {{user.username}}</li>
       </ul>
-      
+
       <h3>Login Details:</h3>
       <ul>
         <li><strong>Time:</strong> {{session.loginTime}}</li>
@@ -257,7 +256,7 @@ const getDefaultTemplates = () => ({
         <li><strong>Timezone:</strong> {{geo.timezone}}</li>
         <li><strong>Device:</strong> {{session.userAgent}}</li>
       </ul>
-      
+
       <h3 style="color: #dc2626;">Security Alert:</h3>
       <ul>
         <li>VPN Detected: {{reason.isVpn}}</li>
@@ -266,9 +265,9 @@ const getDefaultTemplates = () => ({
         <li>Security Score: {{reason.securityScore}}/100</li>
       </ul>
     </div>
-    
+
     <p>If this was you, you can safely ignore this email. If you don't recognize this activity, please secure your account immediately.</p>
-    
+
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"/>
     <p style="color: #666; font-size: 12px;">This is an automated security notification from Magic Session Manager.</p>
   </div>
@@ -296,11 +295,11 @@ Security: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThre
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f0f9ff; border-radius: 10px;">
     <h2 style="color: #0284c7;">[LOCATION] Login from New Location</h2>
     <p>Your account was accessed from a new location.</p>
-    
+
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account:</h3>
       <p><strong>{{user.email}}</strong></p>
-      
+
       <h3>New Location Details:</h3>
       <ul>
         <li><strong>Time:</strong> {{session.loginTime}}</li>
@@ -309,9 +308,9 @@ Security: VPN={{reason.isVpn}}, Proxy={{reason.isProxy}}, Threat={{reason.isThre
         <li><strong>Device:</strong> {{session.userAgent}}</li>
       </ul>
     </div>
-    
+
     <p>If this was you, no action is needed. If you don't recognize this login, please secure your account.</p>
-    
+
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"/>
     <p style="color: #666; font-size: 12px;">Magic Session Manager notification</p>
   </div>
@@ -339,11 +338,11 @@ If this was you, no action is needed.`,
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fffbeb; border-radius: 10px;">
     <h2 style="color: #d97706;">[WARNING] VPN/Proxy Detected</h2>
     <p>A login from a VPN or proxy service was detected on your account.</p>
-    
+
     <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <h3 style="margin-top: 0;">Account:</h3>
       <p><strong>{{user.email}}</strong></p>
-      
+
       <h3>Login Details:</h3>
       <ul>
         <li><strong>Time:</strong> {{session.loginTime}}</li>
@@ -354,9 +353,9 @@ If this was you, no action is needed.`,
         <li><strong>Proxy:</strong> {{reason.isProxy}}</li>
       </ul>
     </div>
-    
+
     <p>VPN/Proxy usage may indicate suspicious activity. If this was you, you can safely ignore this email.</p>
-    
+
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"/>
     <p style="color: #666; font-size: 12px;">Magic Session Manager notification</p>
   </div>
@@ -382,11 +381,11 @@ const generateSecureKey = () => {
   let key = '';
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
-  
+
   for (let i = 0; i < 32; i++) {
     key += chars[array[i] % chars.length];
   }
-  
+
   return key;
 };
 
@@ -399,7 +398,19 @@ const generateSecureKey = () => {
  *
  * @param {{ settings: object, handleChange: Function, t: Function }} props
  */
-const GeofencingPanel = ({ settings, handleChange, t }) => {
+const GeofencingPanel = ({
+  settings,
+  handleChange,
+  t,
+  geoIpStatus,
+  geoIpCredentials,
+  setGeoIpCredentials,
+  onSaveGeoIpCredentials,
+  onUpdateGeoIp,
+  geoIpUpdating,
+  geoIpSavingCredentials,
+  hasChanges,
+}) => {
   const [pendingCode, setPendingCode] = useState('');
 
   const mode = (() => {
@@ -466,6 +477,156 @@ const GeofencingPanel = ({ settings, handleChange, t }) => {
               checked={!!settings.enableGeofencing}
               onChange={() => handleChange('enableGeofencing', !settings.enableGeofencing)}
             />
+          </Flex>
+        </Box>
+      </Grid.Item>
+
+      <Grid.Item col={6} s={12}>
+        <Box>
+          <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+            {t('settings.geofencing.provider.title', 'GeoIP Provider')}
+          </Typography>
+          <SingleSelect
+            value={settings.geoIpProvider || 'auto'}
+            onChange={(value) => handleChange('geoIpProvider', value)}
+          >
+            <SingleSelectOption value="auto">
+              {t('settings.geofencing.provider.auto', 'Auto')}
+            </SingleSelectOption>
+            <SingleSelectOption value="local-mmdb">
+              {t('settings.geofencing.provider.local', 'Local MMDB')}
+            </SingleSelectOption>
+            <SingleSelectOption value="ipapi">
+              {t('settings.geofencing.provider.ipapi', 'ipapi.co')}
+            </SingleSelectOption>
+            <SingleSelectOption value="disabled">
+              {t('settings.geofencing.provider.disabled', 'Disabled')}
+            </SingleSelectOption>
+          </SingleSelect>
+        </Box>
+      </Grid.Item>
+
+      <Grid.Item col={6} s={12}>
+        <Box>
+          <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+            {t('settings.geofencing.failureMode.title', 'Lookup Failure Mode')}
+          </Typography>
+          <SingleSelect
+            value={settings.geoLookupFailureMode || 'auto'}
+            onChange={(value) => handleChange('geoLookupFailureMode', value)}
+          >
+            <SingleSelectOption value="auto">
+              {t('settings.geofencing.failureMode.auto', 'Auto')}
+            </SingleSelectOption>
+            <SingleSelectOption value="allow">
+              {t('settings.geofencing.failureMode.allow', 'Allow')}
+            </SingleSelectOption>
+            <SingleSelectOption value="block">
+              {t('settings.geofencing.failureMode.block', 'Block')}
+            </SingleSelectOption>
+          </SingleSelect>
+        </Box>
+      </Grid.Item>
+
+      <Grid.Item col={12}>
+        <Box>
+          <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
+            {t('settings.geofencing.databasePath.title', 'Local MMDB Path')}
+          </Typography>
+          <TextInput
+            name="geoIpDatabasePath"
+            value={settings.geoIpDatabasePath || ''}
+            onChange={(e) => handleChange('geoIpDatabasePath', e.target.value)}
+            placeholder="/var/lib/strapi/GeoLite2-Country.mmdb"
+          />
+        </Box>
+      </Grid.Item>
+
+      <Grid.Item col={12}>
+        <Box padding={3} background="neutral100" hasRadius>
+          <Flex direction="column" gap={3} alignItems="stretch">
+            <Flex justifyContent="space-between" alignItems="center" gap={3}>
+              <Box>
+                <Typography variant="delta" style={{ display: 'block', marginBottom: '4px' }}>
+                  {t('settings.geofencing.database.title', 'Local GeoIP Database')}
+                </Typography>
+                <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
+                  {geoIpStatus?.exists
+                    ? t('settings.geofencing.database.exists', 'Database is installed locally.')
+                    : t('settings.geofencing.database.missing', 'No local database installed yet.')}
+                </Typography>
+              </Box>
+              <Badge backgroundColor={geoIpStatus?.exists ? 'success100' : 'warning100'}>
+                {geoIpStatus?.exists
+                  ? t('settings.geofencing.database.installed', 'Installed')
+                  : t('settings.geofencing.database.notInstalled', 'Missing')}
+              </Badge>
+            </Flex>
+
+            <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
+              {t('settings.geofencing.database.path', 'Path')}: {geoIpStatus?.databasePath || settings.geoIpDatabasePath || 'data/GeoLite2-Country.mmdb'}
+            </Typography>
+
+            {geoIpStatus?.metadata?.lastModified && (
+              <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
+                {t('settings.geofencing.database.lastModified', 'Last MaxMind update')}: {geoIpStatus.metadata.lastModified}
+              </Typography>
+            )}
+
+            <Grid.Root gap={3}>
+              <Grid.Item col={6} s={12}>
+                <TextInput
+                  name="maxmindAccountId"
+                  value={geoIpCredentials.accountId || ''}
+                  onChange={(e) => setGeoIpCredentials(prev => ({ ...prev, accountId: e.target.value }))}
+                  placeholder={t('settings.geofencing.maxmind.accountId', 'MaxMind Account ID')}
+                />
+              </Grid.Item>
+              <Grid.Item col={6} s={12}>
+                <TextInput
+                  name="maxmindLicenseKey"
+                  type="password"
+                  value={geoIpCredentials.licenseKey || ''}
+                  onChange={(e) => setGeoIpCredentials(prev => ({ ...prev, licenseKey: e.target.value }))}
+                  placeholder={geoIpStatus?.hasCredentials
+                    ? t('settings.geofencing.maxmind.licenseStored', 'License key stored')
+                    : t('settings.geofencing.maxmind.licenseKey', 'MaxMind License Key')}
+                />
+              </Grid.Item>
+            </Grid.Root>
+
+            <Flex gap={2} wrap="wrap">
+              <Button
+                variant="secondary"
+                onClick={onSaveGeoIpCredentials}
+                disabled={geoIpSavingCredentials || !geoIpCredentials.accountId || !geoIpCredentials.licenseKey}
+              >
+                {geoIpSavingCredentials
+                  ? t('settings.geofencing.credentials.saving', 'Saving...')
+                  : t('settings.geofencing.credentials.save', 'Save MaxMind Credentials')}
+              </Button>
+              <Button
+                onClick={() => onUpdateGeoIp(false)}
+                disabled={geoIpUpdating || !geoIpStatus?.hasCredentials || hasChanges}
+              >
+                {geoIpUpdating
+                  ? t('settings.geofencing.database.updating', 'Updating...')
+                  : t('settings.geofencing.database.update', 'Download / Update DB')}
+              </Button>
+              <Button
+                variant="tertiary"
+                onClick={() => onUpdateGeoIp(true)}
+                disabled={geoIpUpdating || !geoIpStatus?.hasCredentials || hasChanges}
+              >
+                {t('settings.geofencing.database.force', 'Force Refresh')}
+              </Button>
+            </Flex>
+
+            {hasChanges && (
+              <Alert variant="warning" closeLabel="" title="" onClose={() => {}}>
+                {t('settings.geofencing.database.saveFirst', 'Save settings before downloading so the server uses the latest database path.')}
+              </Alert>
+            )}
           </Flex>
         </Box>
       </Grid.Item>
@@ -604,7 +765,6 @@ const SettingsPage = () => {
   const { formatMessage } = useIntl();
   const { get, post, put } = useFetchClient();
   const { toggleNotification } = useNotification();
-  const { isPremium, isAdvanced, isEnterprise } = useLicense();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -613,7 +773,11 @@ const SettingsPage = () => {
   const [activeTemplateTab, setActiveTemplateTab] = useState('suspiciousLogin');
   const [encryptionKey, setEncryptionKey] = useState('');
   const [showEncryptionKey, setShowEncryptionKey] = useState(false);
-  
+  const [geoIpStatus, setGeoIpStatus] = useState(null);
+  const [geoIpCredentials, setGeoIpCredentials] = useState({ accountId: '', licenseKey: '' });
+  const [geoIpUpdating, setGeoIpUpdating] = useState(false);
+  const [geoIpSavingCredentials, setGeoIpSavingCredentials] = useState(false);
+
   const [settings, setSettings] = useState({
     inactivityTimeout: 15,
     cleanupInterval: 30,
@@ -644,6 +808,9 @@ const SettingsPage = () => {
     enableGeofencing: false,
     allowedCountries: [],
     blockedCountries: [],
+    geoIpProvider: 'auto',
+    geoIpDatabasePath: '',
+    geoLookupFailureMode: 'auto',
     emailTemplates: {
       suspiciousLogin: { subject: '', html: '', text: '' },
       newLocation: { subject: '', html: '', text: '' },
@@ -660,7 +827,7 @@ const SettingsPage = () => {
     try {
       // Load settings from backend API
       const response = await get(`/${pluginId}/settings`);
-      
+
       if (response?.data?.settings) {
         const loadedSettings = response.data.settings;
 
@@ -688,8 +855,10 @@ const SettingsPage = () => {
         // settings blob written by an older version still fall back to our
         // in-component defaults instead of undefined.
         setSettings(prev => ({ ...prev, ...loadedSettings }));
+        await fetchGeoIpStatus();
       } else {
         setSettings(prev => ({ ...prev, emailTemplates: getDefaultTemplates() }));
+        await fetchGeoIpStatus();
       }
     } catch (err) {
       console.error('[Settings] Error loading from backend:', err);
@@ -701,6 +870,22 @@ const SettingsPage = () => {
       setSettings(prev => ({ ...prev, emailTemplates: getDefaultTemplates() }));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGeoIpStatus = async () => {
+    try {
+      const response = await get(`/${pluginId}/geoip/status`);
+      if (response?.data?.status) {
+        const status = response.data.status;
+        setGeoIpStatus(status);
+        setGeoIpCredentials(prev => ({
+          accountId: prev.accountId || status.accountId || '',
+          licenseKey: '',
+        }));
+      }
+    } catch (err) {
+      console.error('[Settings] Error loading GeoIP status:', err);
     }
   };
 
@@ -718,15 +903,16 @@ const SettingsPage = () => {
     try {
       // Save to backend API using PUT
       const response = await put(`/${pluginId}/settings`, settings);
-      
+
       if (response?.data?.success) {
+        await fetchGeoIpStatus();
         toggleNotification({
           type: 'success',
           message: t('notifications.success.saved', 'Settings saved successfully to database!'),
         });
-        
+
         setHasChanges(false);
-        
+
         // Optional: Also save to localStorage as backup
         try {
           localStorage.setItem(`${pluginId}-settings`, JSON.stringify(settings));
@@ -747,6 +933,53 @@ const SettingsPage = () => {
     }
   };
 
+  const handleSaveGeoIpCredentials = async () => {
+    setGeoIpSavingCredentials(true);
+    try {
+      const response = await put(`/${pluginId}/geoip/credentials`, geoIpCredentials);
+      if (response?.data?.success) {
+        toggleNotification({
+          type: 'success',
+          message: t('notifications.success.geoipCredentialsSaved', 'MaxMind credentials saved.'),
+        });
+        setGeoIpCredentials(prev => ({ ...prev, licenseKey: '' }));
+        await fetchGeoIpStatus();
+      }
+    } catch (err) {
+      console.error('[Settings] Error saving GeoIP credentials:', err);
+      toggleNotification({
+        type: 'danger',
+        message: t('notifications.error.geoipCredentials', 'Failed to save MaxMind credentials.'),
+      });
+    } finally {
+      setGeoIpSavingCredentials(false);
+    }
+  };
+
+  const handleUpdateGeoIpDatabase = async (force = false) => {
+    setGeoIpUpdating(true);
+    try {
+      const response = await post(`/${pluginId}/geoip/update`, { force });
+      if (response?.data?.success) {
+        toggleNotification({
+          type: 'success',
+          message: response.data.result?.changed
+            ? t('notifications.success.geoipUpdated', 'GeoIP database updated.')
+            : t('notifications.success.geoipCurrent', 'GeoIP database is already current.'),
+        });
+        await fetchGeoIpStatus();
+      }
+    } catch (err) {
+      console.error('[Settings] Error updating GeoIP database:', err);
+      toggleNotification({
+        type: 'danger',
+        message: t('notifications.error.geoipUpdate', 'Failed to update GeoIP database.'),
+      });
+    } finally {
+      setGeoIpUpdating(false);
+    }
+  };
+
   const handleReset = () => {
     fetchSettings();
     setHasChanges(false);
@@ -760,7 +993,7 @@ const SettingsPage = () => {
     setCleaning(true);
     try {
       const { data } = await post(`/${pluginId}/sessions/clean-inactive`);
-      
+
       toggleNotification({
         type: 'success',
         message: t('notifications.success.cleaned', 'Successfully deleted {count} inactive sessions!', { count: data.deletedCount }),
@@ -810,7 +1043,7 @@ const SettingsPage = () => {
               disabled={!hasChanges || saving}
               style={{
                 background: hasChanges && !saving
-                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
                   : 'rgba(128, 128, 128, 0.2)',
                 color: hasChanges && !saving ? 'white' : 'var(--colors-neutral500)',
                 fontWeight: '600',
@@ -838,33 +1071,10 @@ const SettingsPage = () => {
 
       {/* Content */}
       <Box paddingTop={6} paddingLeft={6} paddingRight={6} paddingBottom={10}>
-        
-        {/* License Status Debug */}
-        <Box padding={4} background="primary50" hasRadius style={{ marginBottom: '24px', border: '1px solid rgba(14, 165, 233, 0.3)' }}>
-          <Flex gap={3} alignItems="center">
-            <Information style={{ width: '20px', height: '20px', color: 'var(--colors-primary600, #0284C7)' }} />
-            <Box>
-              <Typography variant="omega" fontWeight="bold" textColor="primary700" style={{ marginBottom: '4px' }}>
-                {t('settings.license.title', 'Current License Status')}
-              </Typography>
-              <Flex gap={3}>
-                <Badge backgroundColor={isPremium ? "success100" : "neutral100"} textColor={isPremium ? "success700" : "neutral600"}>
-                  {isPremium ? '✓' : '✗'} {t('settings.license.premium', 'Premium')}
-                </Badge>
-                <Badge backgroundColor={isAdvanced ? "primary100" : "neutral100"} textColor={isAdvanced ? "primary700" : "neutral600"}>
-                  {isAdvanced ? '✓' : '✗'} {t('settings.license.advanced', 'Advanced')}
-                </Badge>
-                <Badge backgroundColor={isEnterprise ? "secondary100" : "neutral100"} textColor={isEnterprise ? "secondary700" : "neutral600"}>
-                  {isEnterprise ? '✓' : '✗'} {t('settings.license.enterprise', 'Enterprise')}
-                </Badge>
-              </Flex>
-            </Box>
-          </Flex>
-        </Box>
 
         {/* Accordion Layout */}
         <Accordion.Root type="multiple" defaultValue={['general', 'security', 'email']}>
-          
+
           {/* General Settings */}
           <Accordion.Item value="general">
             <Accordion.Header>
@@ -877,7 +1087,7 @@ const SettingsPage = () => {
             </Accordion.Header>
             <Accordion.Content>
               <Box padding={6}>
-                
+
                 {/* Session Timeout */}
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   {t('settings.general.timeout.title', 'SESSION TIMEOUT')}
@@ -904,7 +1114,7 @@ const SettingsPage = () => {
                       </Typography>
                     </Box>
                   </Grid.Item>
-                  
+
                   <Grid.Item col={6} s={12}>
                     <Box>
                       <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
@@ -952,7 +1162,7 @@ const SettingsPage = () => {
                       </Typography>
                     </Box>
                   </Grid.Item>
-                  
+
                   <Grid.Item col={6} s={12}>
                     <Box>
                       <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '8px', display: 'block' }}>
@@ -971,7 +1181,7 @@ const SettingsPage = () => {
                         <SingleSelectOption value="-1">{t('settings.general.retention.forever', 'Forever')}</SingleSelectOption>
                       </SingleSelect>
                       <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', marginTop: '8px' }}>
-                        {settings.retentionDays === -1 
+                        {settings.retentionDays === -1
                           ? t('settings.general.retention.hintNever', 'Old sessions deleted after never')
                           : t('settings.general.retention.hint', 'Old sessions deleted after {days}', { days: `${settings.retentionDays} days` })
                         }
@@ -1070,17 +1280,17 @@ const SettingsPage = () => {
             </Accordion.Header>
             <Accordion.Content>
               <Box padding={6}>
-                
+
                 <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '16px', display: 'block', color: 'var(--colors-neutral700)' }}>
                   {t('settings.security.options', 'SECURITY OPTIONS')}
                 </Typography>
 
                 {/* Encryption Key Generator */}
-                <Box 
-                  background="neutral0" 
-                  padding={6} 
-                  style={{ 
-                    borderRadius: theme.borderRadius.lg, 
+                <Box
+                  background="neutral0"
+                  padding={6}
+                  style={{
+                    borderRadius: theme.borderRadius.lg,
                     marginBottom: '32px',
                     border: `2px solid ${'rgba(2, 132, 199, 0.12)'}`,
                     background: 'rgba(2, 132, 199, 0.04)'
@@ -1093,13 +1303,13 @@ const SettingsPage = () => {
                         {t('settings.security.encryption.title', 'JWT Encryption Key Generator')}
                       </Typography>
                     </Flex>
-                    
+
                     <Typography variant="omega" textColor="neutral600" style={{ lineHeight: 1.6 }}>
                       {t('settings.security.encryption.description', 'Generate a secure 32-character encryption key for JWT token storage. This key is used to encrypt tokens before saving them to the database.')}
                     </Typography>
 
-                    <Alert 
-                      variant="default" 
+                    <Alert
+                      variant="default"
                       title={t('settings.security.encryption.important', 'Important')}
                       style={{ marginTop: 8 }}
                     >
@@ -1140,7 +1350,7 @@ const SettingsPage = () => {
                       >
                         {t('settings.security.encryption.generate', 'Generate Key')}
                       </GradientButton>
-                      
+
                       <CopyButton
                         startIcon={<Duplicate />}
                         onClick={() => {
@@ -1178,10 +1388,10 @@ const SettingsPage = () => {
                     </Flex>
 
                     {encryptionKey && (
-                      <Box 
-                        padding={4} 
-                        background="neutral100" 
-                        style={{ 
+                      <Box
+                        padding={4}
+                        background="neutral100"
+                        style={{
                           borderRadius: theme.borderRadius.md,
                           border: '1px solid ' + 'rgba(128, 128, 128, 0.2)',
                           fontFamily: 'monospace',
@@ -1328,7 +1538,7 @@ const SettingsPage = () => {
                 <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>
                   <Grid.Root gap={4}>
                     <Grid.Item col={6} s={12}>
-                      <ToggleCard 
+                      <ToggleCard
                         $active={settings.blockSuspiciousSessions}
                         onClick={() => handleChange('blockSuspiciousSessions', !settings.blockSuspiciousSessions)}
                       >
@@ -1340,9 +1550,9 @@ const SettingsPage = () => {
                             />
                           </GreenToggle>
                           <Flex direction="column" gap={2} alignItems="center" style={{ textAlign: 'center' }}>
-                            <Typography 
-                              variant="delta" 
-                              fontWeight="bold" 
+                            <Typography
+                              variant="delta"
+                              fontWeight="bold"
                               textColor={settings.blockSuspiciousSessions ? 'success700' : 'neutral800'}
                               style={{ fontSize: '16px' }}
                             >
@@ -1355,68 +1565,64 @@ const SettingsPage = () => {
                         </Flex>
                       </ToggleCard>
                     </Grid.Item>
-                    
-                    {isPremium && (
-                      <>
-                        <Grid.Item col={6} s={12}>
-                          <ToggleCard 
-                            $active={settings.enableGeolocation}
-                            onClick={() => handleChange('enableGeolocation', !settings.enableGeolocation)}
-                          >
-                            <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
-                              <GreenToggle $isActive={settings.enableGeolocation}>
-                                <Toggle
-                                  checked={settings.enableGeolocation}
-                                  onChange={() => handleChange('enableGeolocation', !settings.enableGeolocation)}
-                                />
-                              </GreenToggle>
-                              <Flex direction="column" gap={2} alignItems="center" style={{ textAlign: 'center' }}>
-                                <Typography 
-                                  variant="delta" 
-                                  fontWeight="bold" 
-                                  textColor={settings.enableGeolocation ? 'success700' : 'neutral800'}
-                                  style={{ fontSize: '16px' }}
-                                >
-                                  {t('settings.security.geolocation.title', 'IP Geolocation')}
-                                </Typography>
-                                <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                                  {t('settings.security.geolocation.description', 'Fetch location data for each session (Premium)')}
-                                </Typography>
-                              </Flex>
-                            </Flex>
-                          </ToggleCard>
-                        </Grid.Item>
-                        
-                        <Grid.Item col={6} s={12}>
-                          <ToggleCard 
-                            $active={settings.enableSecurityScoring}
-                            onClick={() => handleChange('enableSecurityScoring', !settings.enableSecurityScoring)}
-                          >
-                            <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
-                              <GreenToggle $isActive={settings.enableSecurityScoring}>
-                                <Toggle
-                                  checked={settings.enableSecurityScoring}
-                                  onChange={() => handleChange('enableSecurityScoring', !settings.enableSecurityScoring)}
-                                />
-                              </GreenToggle>
-                              <Flex direction="column" gap={2} alignItems="center" style={{ textAlign: 'center' }}>
-                                <Typography 
-                                  variant="delta" 
-                                  fontWeight="bold" 
-                                  textColor={settings.enableSecurityScoring ? 'success700' : 'neutral800'}
-                                  style={{ fontSize: '16px' }}
-                                >
-                                  {t('settings.security.scoring.title', 'Security Scoring')}
-                                </Typography>
-                                <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                                  {t('settings.security.scoring.description', 'Calculate security scores and detect threats (Premium)')}
-                                </Typography>
-                              </Flex>
-                            </Flex>
-                          </ToggleCard>
-                        </Grid.Item>
-                      </>
-                    )}
+
+                    <Grid.Item col={6} s={12}>
+                      <ToggleCard
+                        $active={settings.enableGeolocation}
+                        onClick={() => handleChange('enableGeolocation', !settings.enableGeolocation)}
+                      >
+                        <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
+                          <GreenToggle $isActive={settings.enableGeolocation}>
+                            <Toggle
+                              checked={settings.enableGeolocation}
+                              onChange={() => handleChange('enableGeolocation', !settings.enableGeolocation)}
+                            />
+                          </GreenToggle>
+                          <Flex direction="column" gap={2} alignItems="center" style={{ textAlign: 'center' }}>
+                            <Typography
+                              variant="delta"
+                              fontWeight="bold"
+                              textColor={settings.enableGeolocation ? 'success700' : 'neutral800'}
+                              style={{ fontSize: '16px' }}
+                            >
+                              {t('settings.security.geolocation.title', 'IP Geolocation')}
+                            </Typography>
+                            <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                              {t('settings.security.geolocation.description', 'Fetch location data for each session')}
+                            </Typography>
+                          </Flex>
+                        </Flex>
+                      </ToggleCard>
+                    </Grid.Item>
+
+                    <Grid.Item col={6} s={12}>
+                      <ToggleCard
+                        $active={settings.enableSecurityScoring}
+                        onClick={() => handleChange('enableSecurityScoring', !settings.enableSecurityScoring)}
+                      >
+                        <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
+                          <GreenToggle $isActive={settings.enableSecurityScoring}>
+                            <Toggle
+                              checked={settings.enableSecurityScoring}
+                              onChange={() => handleChange('enableSecurityScoring', !settings.enableSecurityScoring)}
+                            />
+                          </GreenToggle>
+                          <Flex direction="column" gap={2} alignItems="center" style={{ textAlign: 'center' }}>
+                            <Typography
+                              variant="delta"
+                              fontWeight="bold"
+                              textColor={settings.enableSecurityScoring ? 'success700' : 'neutral800'}
+                              style={{ fontSize: '16px' }}
+                            >
+                              {t('settings.security.scoring.title', 'Security Scoring')}
+                            </Typography>
+                            <Typography variant="pi" textColor="neutral600" style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                              {t('settings.security.scoring.description', 'Calculate security scores and detect threats')}
+                            </Typography>
+                          </Flex>
+                        </Flex>
+                      </ToggleCard>
+                    </Grid.Item>
                   </Grid.Root>
                 </Box>
 
@@ -1430,12 +1636,14 @@ const SettingsPage = () => {
                       <NumberInput
                         value={settings.maxFailedLogins}
                         onValueChange={(val) => handleChange('maxFailedLogins', val)}
-                        min={1}
+                        min={0}
                         max={20}
                       />
                       <Box padding={2} background="warning50" style={{ borderRadius: '4px', marginTop: '8px' }}>
                         <Typography variant="pi" textColor="warning700" style={{ fontSize: '11px' }}>
-                          {t('settings.security.maxFailed.hint', 'User will be blocked after {count} failed attempts', { count: settings.maxFailedLogins })}
+                          {Number(settings.maxFailedLogins) === 0
+                            ? t('settings.security.maxFailed.disabled', 'Login lockout is disabled')
+                            : t('settings.security.maxFailed.hint', 'User will be blocked after {count} failed attempts', { count: settings.maxFailedLogins })}
                         </Typography>
                       </Box>
                     </Box>
@@ -1462,25 +1670,32 @@ const SettingsPage = () => {
                   settings={settings}
                   handleChange={handleChange}
                   t={t}
+                  geoIpStatus={geoIpStatus}
+                  geoIpCredentials={geoIpCredentials}
+                  setGeoIpCredentials={setGeoIpCredentials}
+                  onSaveGeoIpCredentials={handleSaveGeoIpCredentials}
+                  onUpdateGeoIp={handleUpdateGeoIpDatabase}
+                  geoIpUpdating={geoIpUpdating}
+                  geoIpSavingCredentials={geoIpSavingCredentials}
+                  hasChanges={hasChanges}
                 />
               </Box>
             </Accordion.Content>
           </Accordion.Item>
 
-          {/* Email Notifications - Advanced Only */}
-          {isAdvanced && (
-            <Accordion.Item value="email">
+          {/* Email Notifications */}
+          <Accordion.Item value="email">
               <Accordion.Header>
                 <Accordion.Trigger
                   icon={Mail}
                   description={t('settings.email.description', 'Email alerts for security events')}
                 >
-                  {t('settings.email.title', 'Email Notifications (Advanced)')}
+                  {t('settings.email.title', 'Email Notifications')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
                 <Box padding={6}>
-                  
+
                   {/* Email Alerts Toggle */}
                   <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>
                     <Typography variant="sigma" fontWeight="bold" style={{ marginBottom: '8px', display: 'block', textAlign: 'center', color: 'var(--colors-neutral700)' }}>
@@ -1491,7 +1706,7 @@ const SettingsPage = () => {
                     </Typography>
                     <Grid.Root gap={4}>
                       <Grid.Item col={12}>
-                        <ToggleCard 
+                        <ToggleCard
                           $active={settings.enableEmailAlerts}
                           onClick={() => handleChange('enableEmailAlerts', !settings.enableEmailAlerts)}
                         >
@@ -1503,9 +1718,9 @@ const SettingsPage = () => {
                               />
                             </GreenToggle>
                             <Flex direction="column" gap={2} alignItems="center" style={{ textAlign: 'center' }}>
-                              <Typography 
-                                variant="delta" 
-                                fontWeight="bold" 
+                              <Typography
+                                variant="delta"
+                                fontWeight="bold"
                                 textColor={settings.enableEmailAlerts ? 'success700' : 'neutral800'}
                                 style={{ fontSize: '16px' }}
                               >
@@ -1529,11 +1744,11 @@ const SettingsPage = () => {
                       </Typography>
                       <Grid.Root gap={4} style={{ marginBottom: '32px' }}>
                         <Grid.Item col={4} s={12}>
-                          <Box 
-                            padding={4} 
+                          <Box
+                            padding={4}
                             background={settings.alertOnSuspiciousLogin ? 'danger50' : 'neutral50'}
-                            style={{ 
-                              borderRadius: theme.borderRadius.md, 
+                            style={{
+                              borderRadius: theme.borderRadius.md,
                               border: `2px solid ${settings.alertOnSuspiciousLogin ? 'rgba(239, 68, 68, 0.4)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
                               cursor: 'pointer'
@@ -1551,11 +1766,11 @@ const SettingsPage = () => {
                           </Box>
                         </Grid.Item>
                         <Grid.Item col={4} s={12}>
-                          <Box 
-                            padding={4} 
+                          <Box
+                            padding={4}
                             background={settings.alertOnNewLocation ? 'primary50' : 'neutral50'}
-                            style={{ 
-                              borderRadius: theme.borderRadius.md, 
+                            style={{
+                              borderRadius: theme.borderRadius.md,
                               border: `2px solid ${settings.alertOnNewLocation ? 'rgba(14, 165, 233, 0.3)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
                               cursor: 'pointer'
@@ -1573,11 +1788,11 @@ const SettingsPage = () => {
                           </Box>
                         </Grid.Item>
                         <Grid.Item col={4} s={12}>
-                          <Box 
-                            padding={4} 
+                          <Box
+                            padding={4}
                             background={settings.alertOnVpnProxy ? 'warning50' : 'neutral50'}
-                            style={{ 
-                              borderRadius: theme.borderRadius.md, 
+                            style={{
+                              borderRadius: theme.borderRadius.md,
                               border: `2px solid ${settings.alertOnVpnProxy ? 'rgba(234, 179, 8, 0.4)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
                               cursor: 'pointer'
@@ -1604,7 +1819,7 @@ const SettingsPage = () => {
                       <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '20px', display: 'block', fontSize: '12px' }}>
                         {t('settings.email.templates.subtitle', 'Customize email notification templates with dynamic variables')}
                       </Typography>
-                      
+
                       {/* Template Tabs */}
                       <Tabs.Root value={activeTemplateTab} onValueChange={setActiveTemplateTab}>
                         <Tabs.List aria-label="Email Templates">
@@ -1612,7 +1827,7 @@ const SettingsPage = () => {
                           <Tabs.Trigger value="newLocation">{t('settings.email.templates.tab.newLocation', 'New Location')}</Tabs.Trigger>
                           <Tabs.Trigger value="vpnProxy">{t('settings.email.templates.tab.vpnProxy', 'VPN/Proxy')}</Tabs.Trigger>
                         </Tabs.List>
-                        
+
                         {Object.keys(settings.emailTemplates).map((templateKey) => (
                           <Tabs.Content key={templateKey} value={templateKey}>
                             <Box paddingTop={4}>
@@ -1631,11 +1846,11 @@ const SettingsPage = () => {
                                   placeholder={t('settings.email.templates.subjectPlaceholder', 'Enter email subject...')}
                                 />
                               </Box>
-                              
+
                               {/* Available Variables */}
-                              <Box 
-                                padding={3} 
-                                background="primary100" 
+                              <Box
+                                padding={3}
+                                background="primary100"
                                 style={{ borderRadius: theme.borderRadius.md, marginBottom: '20px', border: '2px solid rgba(14, 165, 233, 0.3)' }}
                               >
                                 <Flex direction="column" gap={2}>
@@ -1655,8 +1870,8 @@ const SettingsPage = () => {
                                           navigator.clipboard.writeText(variable);
                                           toggleNotification({ type: 'success', message: t('notifications.success.variableCopied', '{variable} copied!', { variable }) });
                                         }}
-                                        style={{ 
-                                          fontFamily: 'monospace', 
+                                        style={{
+                                          fontFamily: 'monospace',
                                           fontSize: '11px',
                                           padding: '4px 8px',
                                         }}
@@ -1668,11 +1883,11 @@ const SettingsPage = () => {
                                   </Flex>
                                 </Flex>
                               </Box>
-                              
+
                               {/* HTML Template - VS Code Style Editor */}
-                              <Box 
-                                background="neutral0" 
-                                padding={6} 
+                              <Box
+                                background="neutral0"
+                                padding={6}
                                 style={{ borderRadius: theme.borderRadius.lg, border: '2px solid rgba(128, 128, 128, 0.2)', width: '100%', marginBottom: '24px' }}
                               >
                                 <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '16px' }}>
@@ -1698,10 +1913,10 @@ const SettingsPage = () => {
                                 <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '16px', display: 'block', fontSize: '14px' }}>
                                   {t('settings.email.templates.html.description', 'HTML template for email notifications. Use variables like {{user.email}} for dynamic content.')}
                                 </Typography>
-                                <Box 
-                                  style={{ 
-                                    border: '2px solid rgba(128, 128, 128, 0.2)', 
-                                    borderRadius: '6px', 
+                                <Box
+                                  style={{
+                                    border: '2px solid rgba(128, 128, 128, 0.2)',
+                                    borderRadius: '6px',
                                     overflow: 'hidden',
                                     background: '#1e1e1e',
                                     height: '500px',
@@ -1709,9 +1924,9 @@ const SettingsPage = () => {
                                     flexDirection: 'column'
                                   }}
                                 >
-                                  <Box 
-                                    padding={2} 
-                                    background="neutral700" 
+                                  <Box
+                                    padding={2}
+                                    background="neutral700"
                                     style={{ borderBottom: '1px solid #333', flexShrink: 0 }}
                                   >
                                     <Typography variant="omega" style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace' }}>
@@ -1725,7 +1940,7 @@ const SettingsPage = () => {
                                       newTemplates[templateKey].html = e.target.value;
                                       handleChange('emailTemplates', newTemplates);
                                     }}
-                                    style={{ 
+                                    style={{
                                       fontFamily: 'Monaco, Consolas, "Courier New", monospace',
                                       height: '100%',
                                       fontSize: '14px',
@@ -1761,7 +1976,7 @@ const SettingsPage = () => {
                                       const validation = validateTemplate(settings.emailTemplates[templateKey].html, templateKey);
                                       toggleNotification({
                                         type: validation.isValid ? 'success' : 'warning',
-                                        message: validation.isValid 
+                                        message: validation.isValid
                                           ? t('notifications.success.validated', 'Template valid! Found {found}/{total} variables.', { found: validation.foundVars.length, total: validation.totalAvailable })
                                           : t('notifications.warning.noVariables', '[WARNING] No variables found. Add at least one variable.'),
                                       });
@@ -1774,8 +1989,8 @@ const SettingsPage = () => {
                                     onClick={() => {
                                       const lines = settings.emailTemplates[templateKey].html.split('\n').length;
                                       const chars = settings.emailTemplates[templateKey].html.length;
-                                      toggleNotification({ 
-                                        type: 'info', 
+                                      toggleNotification({
+                                        type: 'info',
                                         message: t('notifications.info.templateStats', 'Template has {lines} lines and {chars} characters', { lines, chars })
                                       });
                                     }}
@@ -1784,11 +1999,11 @@ const SettingsPage = () => {
                                   </TertiaryButton>
                                 </Flex>
                               </Box>
-                              
+
                               {/* Text Template - VS Code Style Editor */}
-                              <Box 
-                                background="neutral0" 
-                                padding={6} 
+                              <Box
+                                background="neutral0"
+                                padding={6}
                                 style={{ borderRadius: theme.borderRadius.lg, border: '2px solid rgba(128, 128, 128, 0.2)', width: '100%', marginBottom: '24px' }}
                               >
                                 <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '16px' }}>
@@ -1814,10 +2029,10 @@ const SettingsPage = () => {
                                 <Typography variant="pi" textColor="neutral600" style={{ marginBottom: '16px', display: 'block', fontSize: '14px' }}>
                                   {t('settings.email.templates.text.description', 'Plain text version (no HTML) as fallback for older email clients')}
                                 </Typography>
-                                <Box 
-                                  style={{ 
-                                    border: '2px solid rgba(128, 128, 128, 0.2)', 
-                                    borderRadius: '6px', 
+                                <Box
+                                  style={{
+                                    border: '2px solid rgba(128, 128, 128, 0.2)',
+                                    borderRadius: '6px',
                                     overflow: 'hidden',
                                     background: '#1e1e1e',
                                     height: '300px',
@@ -1825,9 +2040,9 @@ const SettingsPage = () => {
                                     flexDirection: 'column'
                                   }}
                                 >
-                                  <Box 
-                                    padding={2} 
-                                    background="neutral700" 
+                                  <Box
+                                    padding={2}
+                                    background="neutral700"
                                     style={{ borderBottom: '1px solid #333', flexShrink: 0 }}
                                   >
                                     <Typography variant="omega" style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace' }}>
@@ -1841,7 +2056,7 @@ const SettingsPage = () => {
                                       newTemplates[templateKey].text = e.target.value;
                                       handleChange('emailTemplates', newTemplates);
                                     }}
-                                    style={{ 
+                                    style={{
                                       fontFamily: 'Monaco, Consolas, "Courier New", monospace',
                                       height: '100%',
                                       fontSize: '14px',
@@ -1882,28 +2097,26 @@ const SettingsPage = () => {
 
                 </Box>
               </Accordion.Content>
-            </Accordion.Item>
-          )}
+          </Accordion.Item>
 
-          {/* Webhooks - Advanced Only */}
-          {isAdvanced && (
-            <Accordion.Item value="webhooks">
+          {/* Webhooks */}
+          <Accordion.Item value="webhooks">
               <Accordion.Header>
                 <Accordion.Trigger
                   icon={Code}
                   description={t('settings.webhooks.description', 'Discord & Slack integration')}
                 >
-                  {t('settings.webhooks.title', 'Webhook Integration (Advanced)')}
+                  {t('settings.webhooks.title', 'Webhook Integration')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
                 <Box padding={6}>
-                  
+
                   {/* Enable Webhooks Toggle */}
                   <Box background="neutral100" padding={5} style={{ borderRadius: theme.borderRadius.md, marginBottom: '32px' }}>
                     <Grid.Root gap={4}>
                       <Grid.Item col={12}>
-                        <ToggleCard 
+                        <ToggleCard
                           $active={settings.enableWebhooks}
                           onClick={() => handleChange('enableWebhooks', !settings.enableWebhooks)}
                         >
@@ -1915,9 +2128,9 @@ const SettingsPage = () => {
                               />
                             </GreenToggle>
                             <Flex direction="column" gap={2} alignItems="center" style={{ textAlign: 'center' }}>
-                              <Typography 
-                                variant="delta" 
-                                fontWeight="bold" 
+                              <Typography
+                                variant="delta"
+                                fontWeight="bold"
                                 textColor={settings.enableWebhooks ? 'success700' : 'neutral800'}
                                 style={{ fontSize: '16px' }}
                               >
@@ -1941,9 +2154,9 @@ const SettingsPage = () => {
                           <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '12px', display: 'block' }}>
                             🔗 {t('settings.webhooks.discord.title', 'Discord Webhook URL')}
                           </Typography>
-                          <Box 
-                            style={{ 
-                              border: '2px solid rgba(128, 128, 128, 0.2)', 
+                          <Box
+                            style={{
+                              border: '2px solid rgba(128, 128, 128, 0.2)',
                               borderRadius: theme.borderRadius.md,
                               overflow: 'hidden',
                               background: 'var(--colors-neutral100)'
@@ -1987,9 +2200,9 @@ const SettingsPage = () => {
                           <Typography variant="pi" fontWeight="bold" style={{ marginBottom: '12px', display: 'block' }}>
                             💬 {t('settings.webhooks.slack.title', 'Slack Webhook URL')}
                           </Typography>
-                          <Box 
-                            style={{ 
-                              border: '2px solid rgba(128, 128, 128, 0.2)', 
+                          <Box
+                            style={{
+                              border: '2px solid rgba(128, 128, 128, 0.2)',
                               borderRadius: theme.borderRadius.md,
                               overflow: 'hidden',
                               background: 'var(--colors-neutral100)'
@@ -2032,8 +2245,7 @@ const SettingsPage = () => {
 
                 </Box>
               </Accordion.Content>
-            </Accordion.Item>
-          )}
+          </Accordion.Item>
 
         </Accordion.Root>
 
@@ -2058,4 +2270,3 @@ const SettingsPage = () => {
 };
 
 export default SettingsPage;
-

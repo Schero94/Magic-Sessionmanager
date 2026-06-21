@@ -16,12 +16,16 @@ const getClientIp = require('./utils/getClientIp');
 const { encryptToken, hashToken } = require('./utils/encryption');
 const { createLogger } = require('./utils/logger');
 const { resolveUserDocumentId } = require('./utils/resolve-user');
-const { getPluginSettings } = require('./utils/settings-loader');
+const {
+  getPluginSettings,
+  getSessionCreationGraceMs,
+} = require('./utils/settings-loader');
 const { extractBearerToken } = require('./utils/extract-token');
 const {
   setSessionRejectionReason,
   consumeSessionRejectionReason,
 } = require('./utils/rejection-cache');
+const { evaluateGeoFirewall } = require('./utils/geo-firewall');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
@@ -74,52 +78,8 @@ module.exports = async ({ strapi }) => {
     await registerSessionAwareAuthStrategy(strapi, log);
 
     const licenseGuardService = strapi.plugin('magic-sessionmanager').service('license-guard');
-
-    setTimeout(async () => {
-      try {
-        const licenseStatus = await licenseGuardService.initialize();
-
-        if (!licenseStatus.valid) {
-          log.error('╔════════════════════════════════════════════════════════════════╗');
-          log.error('║  [ERROR] SESSION MANAGER - NO VALID LICENSE                    ║');
-          log.error('║                                                                ║');
-          log.error('║  This plugin requires a valid license to operate.              ║');
-          log.error('║  Please activate your license via Admin UI:                    ║');
-          log.error('║  Go to Settings → Sessions → License                           ║');
-          log.error('║                                                                ║');
-          log.error('║  The plugin will run with limited functionality until          ║');
-          log.error('║  a valid license is activated.                                 ║');
-          log.error('╚════════════════════════════════════════════════════════════════╝');
-        } else {
-          const pluginStore = strapi.store({
-            type: 'plugin',
-            name: 'magic-sessionmanager',
-          });
-          const storedKey = await pluginStore.get({ key: 'licenseKey' });
-
-          log.info('╔════════════════════════════════════════════════════════════════╗');
-          log.info('║  [SUCCESS] SESSION MANAGER LICENSE ACTIVE                      ║');
-          log.info('║                                                                ║');
-
-          if (licenseStatus.data) {
-            const maskedKey = licenseStatus.data.licenseKey
-              ? `${licenseStatus.data.licenseKey.substring(0, 8)}...`
-              : 'N/A';
-            log.info(`║  License: ${maskedKey}`.padEnd(66) + '║');
-            log.info(`║  User: ${licenseStatus.data.firstName} ${licenseStatus.data.lastName}`.padEnd(66) + '║');
-          } else if (storedKey) {
-            log.info(`║  License: ${storedKey.substring(0, 8)}... (Offline Mode)`.padEnd(66) + '║');
-            log.info('║  Status: Grace Period Active'.padEnd(66) + '║');
-          }
-
-          log.info('║                                                                ║');
-          log.info('║  [RELOAD] Auto-pinging every 15 minutes                        ║');
-          log.info('╚════════════════════════════════════════════════════════════════╝');
-        }
-      } catch (licErr) {
-        log.error('License initialization failed:', licErr);
-      }
-    }, 3000);
+    await licenseGuardService.initialize();
+    log.info('[SUCCESS] Session Manager active - all features are available without a license key');
 
     const sessionService = strapi.plugin('magic-sessionmanager').service('session');
 
@@ -277,68 +237,25 @@ function mountPreLoginGeoGuard({ strapi, log }) {
     try {
       const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
       const geoData = await geolocationService.getIpInfo(ip);
+      const decision = evaluateGeoFirewall(settings, geoData);
 
-      const geoStatus = geoData?._status || 'error';
-      const geoTrusted = geoStatus === 'ok' || geoStatus === 'private';
-
-      if (!geoTrusted && settings.blockSuspiciousSessions) {
-        log.warn(`[PRE-BLOCKED] Geo lookup unavailable (status=${geoStatus}) for ${ip} (fail-closed)`);
+      if (decision.blocked) {
+        log.warn(`[PRE-BLOCKED] Login rejected (${decision.reason}) from IP ${ip}`);
         ctx.status = 403;
         ctx.body = {
           error: {
             status: 403,
             name: 'ForbiddenError',
-            message: 'Login temporarily unavailable. Please contact support.',
-          },
-        };
-        return;
-      }
-
-      let blockReason = null;
-
-      if (settings.blockSuspiciousSessions && geoStatus === 'ok') {
-        if (geoData.isThreat) blockReason = 'threat_ip';
-        else if (geoData.isVpn && settings.alertOnVpnProxy) blockReason = 'vpn_detected';
-        else if (geoData.isProxy && settings.alertOnVpnProxy) blockReason = 'proxy_detected';
-        // The numeric security-score threshold is only applied when the
-        // admin has enabled score evaluation. Threat/VPN/Proxy always apply
-        // because those are unambiguous signals.
-        else if (
-          settings.enableSecurityScoring !== false &&
-          typeof geoData.securityScore === 'number' &&
-          geoData.securityScore < 50
-        ) {
-          blockReason = `low_security_score:${geoData.securityScore}`;
-        }
-      }
-
-      if (!blockReason && settings.enableGeofencing && geoStatus === 'ok' && geoData.country_code) {
-        const cc = geoData.country_code;
-        if (Array.isArray(settings.blockedCountries) && settings.blockedCountries.includes(cc)) {
-          blockReason = `country_blocked:${cc}`;
-        }
-        if (!blockReason && Array.isArray(settings.allowedCountries) && settings.allowedCountries.length > 0) {
-          if (!settings.allowedCountries.includes(cc)) {
-            blockReason = `country_not_allowed:${cc}`;
-          }
-        }
-      }
-
-      if (blockReason) {
-        log.warn(`[PRE-BLOCKED] Login rejected (${blockReason}) from IP ${ip}`);
-        ctx.status = 403;
-        ctx.body = {
-          error: {
-            status: 403,
-            name: 'ForbiddenError',
-            message: 'Login blocked for security reasons. Please contact support.',
+            message: decision.reason?.startsWith('geo_lookup_unavailable:')
+              ? 'Login temporarily unavailable. Please contact support.'
+              : 'Login blocked for security reasons. Please contact support.',
           },
         };
         ctx.state.__magicSessionGeoData = geoData;
         return;
       }
 
-      if (geoStatus === 'ok') {
+      if (decision.status === 'ok') {
         ctx.state.__magicSessionGeoData = geoData;
       }
     } catch (err) {
@@ -654,28 +571,54 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
         const isSuspicious = geoData.isVpn || geoData.isProxy || geoData.isThreat || lowScore;
 
         // New-location detection: compare to the user's previous sessions.
-        // "New" is defined as never having seen this country (or city, when
-        // the user has only one historical country) before. We swallow
-        // lookup errors — this is purely informational alerting.
+        // "New" is defined as never having seen this country before. We
+        // swallow lookup errors because this is purely informational alerting.
         let isNewLocation = false;
         if (settings.alertOnNewLocation && (geoData.country_code || geoData.country)) {
           try {
+            const normalizeCountryToken = (value) => {
+              if (typeof value !== 'string') return null;
+              const normalized = value.trim().toUpperCase();
+              return normalized.length > 0 ? normalized : null;
+            };
+
+            const countryTokensFromGeo = (rawGeo) => {
+              let parsedGeo = rawGeo;
+              if (typeof rawGeo === 'string') {
+                try {
+                  parsedGeo = JSON.parse(rawGeo);
+                } catch {
+                  parsedGeo = null;
+                }
+              }
+
+              if (!parsedGeo || typeof parsedGeo !== 'object') return [];
+
+              return [parsedGeo.country_code, parsedGeo.country]
+                .map(normalizeCountryToken)
+                .filter(Boolean);
+            };
+
             const previousSessions = await strapi.documents(SESSION_UID).findMany({
               filters: {
-                userId: userDocId,
+                user: { documentId: userDocId },
                 documentId: { $ne: newSession.documentId },
               },
-              fields: ['geoCountry', 'geoCity'],
-              sort: [{ createdAt: 'desc' }],
+              fields: ['geoLocation'],
+              sort: { loginTime: 'desc' },
               limit: 50,
             });
-            const countries = new Set(
-              (previousSessions || [])
-                .map((s) => s.geoCountry)
-                .filter((v) => typeof v === 'string' && v.length > 0)
+
+            const previousCountries = new Set(
+              (previousSessions || []).flatMap((session) => countryTokensFromGeo(session.geoLocation))
             );
-            const currentCountry = geoData.country_code || geoData.country || null;
-            if (currentCountry && countries.size > 0 && !countries.has(currentCountry)) {
+            const currentCountries = countryTokensFromGeo(geoData);
+
+            if (
+              currentCountries.length > 0 &&
+              previousCountries.size > 0 &&
+              !currentCountries.some((country) => previousCountries.has(country))
+            ) {
               isNewLocation = true;
             }
           } catch (locErr) {
@@ -1141,10 +1084,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
       // as "no matching session" even though a session is being created.
       // Configurable; defaults to 5s which comfortably covers DB commit +
       // network RTT on most stacks.
-      const gracePeriodMs = Math.max(
-        0,
-        Number(settings.sessionCreationGraceMs) || 5000
-      );
+      const gracePeriodMs = getSessionCreationGraceMs(settings);
 
       try {
         const userDocId = await resolveUserDocumentId(strapi, decoded.id);

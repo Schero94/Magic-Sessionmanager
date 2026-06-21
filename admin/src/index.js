@@ -40,16 +40,6 @@ export default {
       [
         {
           intlLabel: {
-            id: `${pluginId}.settings.upgrade`,
-            defaultMessage: 'Upgrade',
-          },
-          id: 'upgrade',
-          to: `${pluginId}/upgrade`,
-          Component: () => import('./pages/UpgradePage'),
-          permissions: pluginPermissions,
-        },
-        {
-          intlLabel: {
             id: `${pluginId}.settings.general`,
             defaultMessage: 'General',
           },
@@ -71,7 +61,7 @@ export default {
         {
           intlLabel: {
             id: `${pluginId}.settings.license`,
-            defaultMessage: 'License',
+            defaultMessage: 'Activation',
           },
           id: 'license',
           to: `${pluginId}/license`,

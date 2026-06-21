@@ -60,12 +60,15 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
 
     const thisSession = await strapi.documents(SESSION_UID).findFirst({
       filters: { user: { documentId: userDocId }, tokenHash: tokenHashValue },
-      fields: ['documentId', 'isActive', 'terminatedManually'],
+      fields: ['documentId', 'isActive', 'terminatedManually', 'terminationReason'],
     });
 
     if (thisSession) {
-      if (thisSession.terminatedManually === true) {
-        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] Session was manually terminated (user: ${userDocId.substring(0, 8)}...)`);
+      if (thisSession.isActive === false || thisSession.terminatedManually === true) {
+        const reason =
+          thisSession.terminationReason ||
+          (thisSession.terminatedManually === true ? 'manual' : 'inactive');
+        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] Session inactive (reason: ${reason}, user: ${userDocId.substring(0, 8)}...)`);
         throw new errors.UnauthorizedError('Session terminated. Please login again.');
       }
       return true;

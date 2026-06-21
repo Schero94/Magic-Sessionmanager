@@ -1,0 +1,146 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-20T22:04:41.326Z",
+  "source": "auto-postool",
+  "partial": false,
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "auto-checkpoint",
+  "completed_tasks": [],
+  "remaining_tasks": [],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [],
+  "uncommitted_files": [
+    {
+      "status": "M",
+      "path": "README.md"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/components/LicenseGuard.jsx"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/components/SessionDetailModal.jsx"
+    },
+    {
+      "status": "D",
+      "path": "admin/src/hooks/useLicense.js"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/index.js"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/pages/Analytics.jsx"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/pages/HomePage.jsx"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/pages/License.jsx"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/pages/Settings.jsx"
+    },
+    {
+      "status": "D",
+      "path": "admin/src/pages/UpgradePage.jsx"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/translations/de.json"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/translations/en.json"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/translations/es.json"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/translations/fr.json"
+    },
+    {
+      "status": "M",
+      "path": "admin/src/translations/pt.json"
+    },
+    {
+      "status": "M",
+      "path": "package-lock.json"
+    },
+    {
+      "status": "M",
+      "path": "package.json"
+    },
+    {
+      "status": "M",
+      "path": "server/src/bootstrap.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/controllers/license.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/controllers/session.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/controllers/settings.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/destroy.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/routes/admin.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/services/license-guard.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/services/session.js"
+    },
+    {
+      "status": "M",
+      "path": "server/src/utils/settings-loader.js"
+    },
+    {
+      "status": "M",
+      "path": "strapi-admin.js"
+    },
+    {
+      "status": "M",
+      "path": "strapi-server.js"
+    },
+    {
+      "status": "??",
+      "path": ".planning/"
+    },
+    {
+      "status": "??",
+      "path": "scripts/build-server-bundle.mjs"
+    },
+    {
+      "status": "??",
+      "path": "scripts/verify-server-bundle.mjs"
+    }
+  ],
+  "next_action": null,
+  "context_notes": "Recent commits:\n1402eef fix(build): use non-destructured require for @strapi/utils\n2100783 chore(release): 4.5.12 [skip ci]\n729e794 fix(build): declare @strapi/utils as peerDependency — preventive zod/v4 fix\nb165368 chore(release): 4.5.11 [skip ci]\n21779d8 fix(rbac): make plugin::magic-sessionmanager.access visible in role editor"
+}

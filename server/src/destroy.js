@@ -10,15 +10,6 @@ const { createLogger } = require('./utils/logger');
 module.exports = async ({ strapi }) => {
   const log = createLogger(strapi);
 
-  if (strapi.licenseGuard?.pingInterval) {
-    try {
-      clearInterval(strapi.licenseGuard.pingInterval);
-      log.info('[STOP] License pinging stopped');
-    } catch (err) {
-      log.warn('Failed to stop license ping interval:', err.message);
-    }
-  }
-
   if (strapi.sessionManagerIntervals) {
     // Both setInterval and setTimeout handles are tracked on the same
     // object. clearInterval / clearTimeout accept the other form on all

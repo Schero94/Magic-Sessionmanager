@@ -1,4 +1,5 @@
 'use strict';
 
-module.exports = require('./admin/src/index.js');
+const admin = require('./dist/admin/index.js');
 
+module.exports = admin.default || admin;

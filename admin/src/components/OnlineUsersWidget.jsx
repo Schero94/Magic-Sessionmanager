@@ -4,6 +4,7 @@ import { Box, Typography, Flex, Grid } from '@strapi/design-system';
 import { Check, Cross, Clock, User, Monitor } from '@strapi/icons';
 import { useFetchClient } from '@strapi/strapi/admin';
 import { getTranslation } from '../utils/getTranslation';
+import { computeOnlineUserStats } from '../utils/onlineStats.mjs';
 
 /**
  * Online Users Widget - Dashboard widget showing user activity statistics
@@ -26,60 +27,24 @@ const OnlineUsersWidget = () => {
   const fetchStats = useCallback(async () => {
     try {
       const { data } = await get('/magic-sessionmanager/sessions');
-        const sessions = data.data || [];
-        
-        const now = Date.now();
-        const fifteenMin = 15 * 60 * 1000;
-        const thirtyMin = 30 * 60 * 1000;
-        
-        const onlineNow = new Set();
-        const last15min = new Set();
-        const last30min = new Set();
-        
-        sessions.forEach(session => {
-          const userId = session.user?.id;
-          if (!userId) return;
-          
-          const lastActive = session.lastActive ? new Date(session.lastActive) : new Date(session.loginTime);
-          const timeSinceActive = now - lastActive.getTime();
-          
-          if (timeSinceActive < fifteenMin) {
-            onlineNow.add(userId);
-            last15min.add(userId);
-            last30min.add(userId);
-          } else if (timeSinceActive < thirtyMin) {
-            last15min.add(userId);
-            last30min.add(userId);
-          }
-        });
-        
-        try {
-          // Get total users
-          const { data: usersData } = await get('/content-manager/collection-types/plugin::users-permissions.user?pageSize=1');
-          const totalUsers = usersData?.pagination?.total || 0;
-          
-          // Get blocked users count
-          const { data: blockedData } = await get('/content-manager/collection-types/plugin::users-permissions.user?filters[$and][0][blocked][$eq]=true&pageSize=1');
-          const blockedUsers = blockedData?.pagination?.total || 0;
-          
-          setStats({
-            onlineNow: onlineNow.size,
-            last15min: last15min.size,
-            last30min: last30min.size,
-            offline: totalUsers - onlineNow.size,
-            totalUsers,
-            blocked: blockedUsers,
-          });
-        } catch (err) {
-          console.error('[OnlineUsersWidget] Error fetching user count:', err);
-          setStats({
-            onlineNow: onlineNow.size,
-            last15min: last15min.size,
-            last30min: last30min.size,
-            offline: 0,
-            totalUsers: onlineNow.size,
-            blocked: 0,
-          });
+      const sessions = data.data || [];
+
+      try {
+        // Get total users
+        const { data: usersData } = await get('/content-manager/collection-types/plugin::users-permissions.user?pageSize=1');
+        const totalUsers = usersData?.pagination?.total || 0;
+
+        // Get blocked users count
+        const { data: blockedData } = await get('/content-manager/collection-types/plugin::users-permissions.user?filters[$and][0][blocked][$eq]=true&pageSize=1');
+        const blockedUsers = blockedData?.pagination?.total || 0;
+
+        setStats(computeOnlineUserStats(sessions, {
+          totalUsers,
+          blockedUsers,
+        }));
+      } catch (err) {
+        console.error('[OnlineUsersWidget] Error fetching user count:', err);
+        setStats(computeOnlineUserStats(sessions));
       }
     } catch (err) {
       console.error('[OnlineUsersWidget] Error:', err);
