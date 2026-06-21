@@ -1,3 +1,10 @@
+## [4.6.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.0...v4.6.1) (2026-06-21)
+
+
+### Bug Fixes
+
+* **docs:** document MaxMind credentials required by geoip updater CLI ([863629b](https://github.com/Schero94/Magic-Sessionmanager/commit/863629b621c0a4047eb18dcac5755e4dd3560eaf))
+
 # [4.6.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.13...v4.6.0) (2026-06-21)
 
 
