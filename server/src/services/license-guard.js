@@ -139,7 +139,7 @@ module.exports = ({ strapi }) => {
 
         const data = await response.json();
         if (data.success) {
-          log.info('[SUCCESS] License created:', data.data.licenseKey);
+          log.info('[SUCCESS] License created');
           return data.data;
         }
         log.warn('[WARNING] License creation rejected by server:', data.message || 'unknown');
