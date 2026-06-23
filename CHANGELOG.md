@@ -1,3 +1,10 @@
+## [4.6.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.2...v4.6.3) (2026-06-23)
+
+
+### Bug Fixes
+
+* **session:** avoid touching sessions after logout ([a1791e5](https://github.com/Schero94/Magic-Sessionmanager/commit/a1791e5e953dc6075cd2d5a76ca1266f15f1dad2))
+
 ## [4.6.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.1...v4.6.2) (2026-06-23)
 
 
