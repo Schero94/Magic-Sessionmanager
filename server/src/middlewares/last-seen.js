@@ -43,6 +43,11 @@ const AUTH_PATH_PREFIXES = [
   '/admin/',
 ];
 
+const SELF_TERMINATING_PATHS = new Set([
+  '/api/magic-sessionmanager/logout',
+  '/api/magic-sessionmanager/logout-all',
+]);
+
 /**
  * @param {string} path
  * @returns {boolean}
@@ -50,6 +55,10 @@ const AUTH_PATH_PREFIXES = [
 function isAuthEndpoint(path) {
   if (!path) return false;
   return AUTH_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function isSelfTerminatingEndpoint(path) {
+  return SELF_TERMINATING_PATHS.has(path);
 }
 
 /**
@@ -114,6 +123,10 @@ module.exports = ({ strapi, sessionService }) => {
       ctx.state.__magicSessionId = thisSession.documentId;
 
       await next();
+
+      if (isSelfTerminatingEndpoint(ctx.path)) {
+        return;
+      }
 
       try {
         await sessionService.touch({
