@@ -1,4 +1,4 @@
-name: Release
+name: Publish Package
 
 on:
   push:
@@ -50,7 +50,7 @@ jobs:
       # No NPM_TOKEN: publish happens via OIDC Trusted Publishing.
       # Requires a Trusted Publisher configured on npmjs.com for this package
       # (Package > Settings > Trusted Publisher: this repo + semantic-release.yml).
-      - name: Release
+      - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
