@@ -1,3 +1,10 @@
+## [4.6.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.1...v4.6.2) (2026-06-23)
+
+
+### Bug Fixes
+
+* **security:** avoid logging license keys ([448717c](https://github.com/Schero94/Magic-Sessionmanager/commit/448717cdc1a549238b3696a765f3051112ef1049))
+
 ## [4.6.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.0...v4.6.1) (2026-06-21)
 
 
