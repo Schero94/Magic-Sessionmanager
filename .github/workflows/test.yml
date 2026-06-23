@@ -29,11 +29,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run regression test suite
+        run: npm test
+
       - name: Build plugin
         run: npm run build
 
       - name: Verify plugin integrity
         run: npm run verify
+
+      - name: Verify server runtime bundle
+        run: npm run verify:runtime
 
       - name: Verify build output
         run: |
@@ -73,4 +79,3 @@ jobs:
           test -f "README.md" && echo "✓ README.md found" || exit 1
           test -f "LICENSE" && echo "✓ LICENSE found" || exit 1
           echo "✓ All required files present"
-

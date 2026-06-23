@@ -41,11 +41,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run regression test suite
+        run: npm test
+
       - name: Build plugin
         run: npm run build
 
       - name: Verify plugin
         run: npm run verify
+
+      - name: Verify server runtime bundle
+        run: npm run verify:runtime
 
       # No NPM_TOKEN: publish happens via OIDC Trusted Publishing.
       # Requires a Trusted Publisher configured on npmjs.com for this package

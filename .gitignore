@@ -70,3 +70,8 @@ tmp/
 
 # Local agent archive
 .archive/
+.serena/
+
+# Local GeoIP databases downloaded from MaxMind
+*.mmdb
+*.mmdb.metadata.json
