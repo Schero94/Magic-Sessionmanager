@@ -283,17 +283,21 @@ Add to `config/plugins.ts`:
 
 ### Local GeoIP Firewall (Recommended)
 
-For login blocking, use a local MaxMind GeoLite2 Country database. This avoids
-remote API timeouts and rate limits in the login path.
+For login blocking and city-level session display, use a local MaxMind
+GeoLite2 City database. This avoids remote API timeouts and rate limits in the
+login path while still giving the admin UI city, region, timezone and
+coordinates. Existing GeoLite2 Country databases remain supported as a
+country-only fallback.
 
-1. Create a free MaxMind account and download `GeoLite2-Country.mmdb`:
+1. Create a free MaxMind account and download `GeoLite2-City.mmdb`:
    https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/
 2. Store the file on your Strapi server, for example:
-   `/var/lib/strapi/GeoLite2-Country.mmdb`
+   `/var/lib/strapi/GeoLite2-City.mmdb`
 3. Configure the plugin:
 
 ```bash
-MAGIC_SESSIONMANAGER_GEOIP_DATABASE=/var/lib/strapi/GeoLite2-Country.mmdb
+MAGIC_SESSIONMANAGER_GEOIP_DATABASE=/var/lib/strapi/GeoLite2-City.mmdb
+MAXMIND_EDITION_ID=GeoLite2-City
 MAXMIND_ACCOUNT_ID=your-account-id
 MAXMIND_LICENSE_KEY=your-license-key
 ```
@@ -311,6 +315,7 @@ Strapi plugin store instead):
 ```bash
 export MAXMIND_ACCOUNT_ID=your_account_id
 export MAXMIND_LICENSE_KEY=your_license_key
+export MAXMIND_EDITION_ID=GeoLite2-City
 npm run geoip:update
 ```
 
@@ -352,9 +357,11 @@ Provider options:
 - `ipapi`: legacy remote provider
 - `disabled`: no GEOIP lookup
 
-Country firewall rules use the local database. VPN/proxy/threat detection still
-requires a provider that supplies those risk signals; a free country database
-does not reliably identify VPNs or proxies.
+Local City and Country databases both support country firewall rules. City
+databases additionally populate city, region, timezone, coordinates and postal
+data for the admin UI. VPN/proxy/threat detection still requires a provider
+that supplies those risk signals; free GeoLite databases do not reliably
+identify VPNs or proxies.
 
 ### Threat Detection
 

@@ -52,6 +52,13 @@ test('buildDownloadUrl creates the MaxMind GeoLite2 Country permalink', () => {
   );
 });
 
+test('buildDownloadUrl creates the MaxMind GeoLite2 City permalink', () => {
+  assert.equal(
+    buildDownloadUrl('GeoLite2-City'),
+    'https://download.maxmind.com/geoip/databases/GeoLite2-City/download?suffix=tar.gz'
+  );
+});
+
 test('buildBasicAuthHeader encodes account id and license key', () => {
   assert.equal(
     buildBasicAuthHeader('12345', 'secret-key'),
@@ -70,6 +77,17 @@ test('resolveConfig reads credentials and output path from env', () => {
   assert.equal(config.licenseKey, 'license');
   assert.equal(config.editionId, 'GeoLite2-Country');
   assert.equal(config.outputPath, '/tmp/GeoLite2-Country.mmdb');
+});
+
+test('resolveConfig defaults to GeoLite2 City database', () => {
+  const config = resolveConfig({
+    MAXMIND_ACCOUNT_ID: '12345',
+    MAXMIND_LICENSE_KEY: 'license',
+  });
+
+  assert.equal(config.editionId, 'GeoLite2-City');
+  assert.match(config.outputPath, /GeoLite2-City\.mmdb$/);
+  assert.equal(config.mmdbFileName, 'GeoLite2-City.mmdb');
 });
 
 test('needsDownload skips when local metadata matches remote Last-Modified', () => {
@@ -94,4 +112,16 @@ test('extractMmdbFromTarGz returns the MMDB file from a MaxMind archive', async 
 
   assert.equal(extracted.name, 'GeoLite2-Country_20260620/GeoLite2-Country.mmdb');
   assert.equal(extracted.data.toString(), 'fake-mmdb-content');
+});
+
+test('extractMmdbFromTarGz returns the City MMDB file from a MaxMind archive', async () => {
+  const archive = createTarGz([
+    { name: 'GeoLite2-City_20260709/COPYRIGHT.txt', body: 'copyright' },
+    { name: 'GeoLite2-City_20260709/GeoLite2-City.mmdb', body: 'fake-city-mmdb-content' },
+  ]);
+
+  const extracted = await extractMmdbFromTarGz(archive, 'GeoLite2-City.mmdb');
+
+  assert.equal(extracted.name, 'GeoLite2-City_20260709/GeoLite2-City.mmdb');
+  assert.equal(extracted.data.toString(), 'fake-city-mmdb-content');
 });

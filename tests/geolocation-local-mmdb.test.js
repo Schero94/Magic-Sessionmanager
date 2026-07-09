@@ -102,6 +102,80 @@ test('local-mmdb provider returns normalized country data without remote fetch',
   }
 });
 
+test('local-mmdb provider returns city data from a GeoLite2 City database', async () => {
+  invalidateSettingsCache();
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'magic-sessionmanager-geoip-city-'));
+  const dbPath = path.join(tmpDir, 'GeoLite2-City.mmdb');
+  fs.writeFileSync(dbPath, 'fake-city-mmdb');
+
+  const fetchBefore = global.fetch;
+  global.fetch = async () => {
+    throw new Error('remote lookup should not be used for local city provider');
+  };
+
+  try {
+    await withFakeMaxmind({
+      Reader: {
+        open: async () => ({
+          metadata: { databaseType: 'GeoLite2-City' },
+          city(ip) {
+            assert.equal(ip, '8.8.8.8');
+            return {
+              country: {
+                isoCode: 'DE',
+                names: { en: 'Germany', de: 'Deutschland' },
+              },
+              city: {
+                names: { en: 'Eschborn', de: 'Eschborn' },
+              },
+              subdivisions: [
+                {
+                  isoCode: 'HE',
+                  names: { en: 'Hesse', de: 'Hessen' },
+                },
+              ],
+              location: {
+                latitude: 50.1433,
+                longitude: 8.5711,
+                timeZone: 'Europe/Berlin',
+                accuracyRadius: 20,
+              },
+              postal: { code: '65760' },
+              traits: { network: '8.8.8.0/24' },
+            };
+          },
+        }),
+      },
+    }, async () => {
+      const service = createGeolocationService({
+        strapi: createStrapi({
+          geoIpProvider: 'local-mmdb',
+          geoIpDatabasePath: dbPath,
+        }),
+      });
+
+      const result = await service.getIpInfo('8.8.8.8');
+
+      assert.equal(result._status, 'ok');
+      assert.equal(result._source, 'local-mmdb');
+      assert.equal(result._databaseType, 'city');
+      assert.equal(result.country_code, 'DE');
+      assert.equal(result.country, 'Germany');
+      assert.equal(result.city, 'Eschborn');
+      assert.equal(result.region, 'Hesse');
+      assert.equal(result.timezone, 'Europe/Berlin');
+      assert.equal(result.postal, '65760');
+      assert.equal(result.latitude, 50.1433);
+      assert.equal(result.longitude, 8.5711);
+      assert.equal(result.accuracyRadius, 20);
+    });
+  } finally {
+    global.fetch = fetchBefore;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('local-mmdb provider fails locally when configured database is missing', async () => {
   invalidateSettingsCache();
 

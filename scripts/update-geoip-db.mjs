@@ -13,6 +13,7 @@ export const buildBasicAuthHeader = updater.buildBasicAuthHeader;
 export const buildDownloadUrl = updater.buildDownloadUrl;
 export const extractMmdbFromTarGz = updater.extractMmdbFromTarGz;
 export const fileExists = updater.fileExists;
+export const inferEditionIdFromPath = updater.inferEditionIdFromPath;
 export const needsDownload = updater.needsDownload;
 export const readMetadata = updater.readMetadata;
 export const resolveConfig = updater.resolveConfig;

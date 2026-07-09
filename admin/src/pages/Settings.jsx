@@ -537,7 +537,7 @@ const GeofencingPanel = ({
             name="geoIpDatabasePath"
             value={settings.geoIpDatabasePath || ''}
             onChange={(e) => handleChange('geoIpDatabasePath', e.target.value)}
-            placeholder="/var/lib/strapi/GeoLite2-Country.mmdb"
+            placeholder="/var/lib/strapi/GeoLite2-City.mmdb"
           />
         </Box>
       </Grid.Item>
@@ -548,12 +548,12 @@ const GeofencingPanel = ({
             <Flex justifyContent="space-between" alignItems="center" gap={3}>
               <Box>
                 <Typography variant="delta" style={{ display: 'block', marginBottom: '4px' }}>
-                  {t('settings.geofencing.database.title', 'Local GeoIP Database')}
+                  {t('settings.geofencing.database.title', 'Local GeoIP Database (City recommended)')}
                 </Typography>
                 <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
                   {geoIpStatus?.exists
-                    ? t('settings.geofencing.database.exists', 'Database is installed locally.')
-                    : t('settings.geofencing.database.missing', 'No local database installed yet.')}
+                    ? t('settings.geofencing.database.exists', 'Database is installed locally. GeoLite2-City enables city-level lookup; Country remains supported.')
+                    : t('settings.geofencing.database.missing', 'No local database installed yet. GeoLite2-City is recommended for city-level lookup.')}
                 </Typography>
               </Box>
               <Badge backgroundColor={geoIpStatus?.exists ? 'success100' : 'warning100'}>
@@ -564,7 +564,11 @@ const GeofencingPanel = ({
             </Flex>
 
             <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-              {t('settings.geofencing.database.path', 'Path')}: {geoIpStatus?.databasePath || settings.geoIpDatabasePath || 'data/GeoLite2-Country.mmdb'}
+              {t('settings.geofencing.database.path', 'Path')}: {geoIpStatus?.databasePath || settings.geoIpDatabasePath || 'data/GeoLite2-City.mmdb'}
+            </Typography>
+
+            <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
+              {t('settings.geofencing.database.edition', 'Edition')}: {geoIpStatus?.editionId || 'GeoLite2-City'}
             </Typography>
 
             {geoIpStatus?.metadata?.lastModified && (

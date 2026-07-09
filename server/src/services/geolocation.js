@@ -20,7 +20,8 @@ const IPAPI_RATE_LIMIT_BACKOFF_MS = 15 * 60 * 1000;
 const IPAPI_RATE_LIMIT_LOG_INTERVAL_MS = 60 * 1000;
 const IPAPI_MAX_CONCURRENT_REQUESTS = 4;
 const IPAPI_MAX_QUEUE_SIZE = 50;
-const DEFAULT_MMDB_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-Country.mmdb');
+const DEFAULT_CITY_MMDB_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-City.mmdb');
+const DEFAULT_COUNTRY_MMDB_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-Country.mmdb');
 const VALID_PROVIDERS = new Set(['auto', 'local-mmdb', 'ipapi', 'disabled']);
 
 const readerCache = new Map();
@@ -35,17 +36,43 @@ function normalizeProvider(value) {
   return VALID_PROVIDERS.has(value) ? value : 'auto';
 }
 
-function resolveDatabasePath(settings = {}) {
-  const configured =
+function normalizeDatabasePath(value) {
+  if (typeof value !== 'string' || value.trim() === '') return '';
+
+  const trimmed = value.trim();
+  return path.isAbsolute(trimmed) ? trimmed : path.resolve(process.cwd(), trimmed);
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function resolveDatabaseCandidates(settings = {}) {
+  const configured = normalizeDatabasePath(
     settings.geoIpDatabasePath ||
     process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
-    process.env.GEOLITE2_COUNTRY_MMDB ||
-    DEFAULT_MMDB_PATH;
+    process.env.GEOIP_DATABASE_PATH
+  );
 
-  if (typeof configured !== 'string' || configured.trim() === '') return '';
+  if (configured) return [configured];
 
-  const trimmed = configured.trim();
-  return path.isAbsolute(trimmed) ? trimmed : path.resolve(process.cwd(), trimmed);
+  return uniqueValues([
+    normalizeDatabasePath(process.env.GEOLITE2_CITY_MMDB),
+    normalizeDatabasePath(process.env.GEOIP_CITY_DATABASE_PATH),
+    normalizeDatabasePath(process.env.GEOLITE2_COUNTRY_MMDB),
+    normalizeDatabasePath(process.env.GEOIP_COUNTRY_DATABASE_PATH),
+    DEFAULT_CITY_MMDB_PATH,
+    DEFAULT_COUNTRY_MMDB_PATH,
+  ]);
+}
+
+function resolveDatabasePath(settings = {}) {
+  return resolveDatabaseCandidates(settings)[0] || '';
+}
+
+function resolveExistingDatabasePath(settings = {}) {
+  const candidates = resolveDatabaseCandidates(settings);
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0] || '';
 }
 
 async function openLocalReader(databasePath) {
@@ -153,6 +180,99 @@ function releaseIpapiSlot() {
     ipapiActiveRequests++;
     next(releaseIpapiSlot);
   }
+}
+
+function getName(names = {}, fallback = '') {
+  return names.en || names.de || names.fr || names.es || names.pt || fallback;
+}
+
+function getReaderDatabaseType(reader, databasePath) {
+  const metadataType =
+    reader?.metadata?.databaseType ||
+    reader?.metadata?.database_type ||
+    reader?.metadata?.database_type_name;
+
+  if (typeof metadataType === 'string' && metadataType.trim()) {
+    return metadataType;
+  }
+
+  return path.basename(databasePath || '');
+}
+
+function isCityDatabase(reader, databasePath) {
+  return /(?:^|[-_])City(?:\.|[-_]|$)/i.test(getReaderDatabaseType(reader, databasePath));
+}
+
+function normalizeLocalCountryResult(data, lookupIp, getCountryFlag) {
+  const country = data.country || data.registeredCountry || data.representedCountry || {};
+  const countryCode = country.isoCode || data.registeredCountry?.isoCode || 'XX';
+
+  return {
+    ip: lookupIp,
+    country: getName(country.names, countryCode || 'Unknown'),
+    country_code: countryCode,
+    country_flag: getCountryFlag(countryCode),
+    city: 'Unknown',
+    region: 'Unknown',
+    timezone: 'Unknown',
+    latitude: null,
+    longitude: null,
+    postal: null,
+    org: null,
+    asn: null,
+    network: data.traits?.network || null,
+
+    isVpn: false,
+    isProxy: false,
+    isThreat: false,
+    isAnonymous: false,
+    isTor: false,
+
+    securityScore: 100,
+    riskLevel: 'Low',
+
+    _status: 'ok',
+    _source: 'local-mmdb',
+    _databaseType: 'country',
+  };
+}
+
+function normalizeLocalCityResult(data, lookupIp, getCountryFlag) {
+  const country = data.country || data.registeredCountry || data.representedCountry || {};
+  const countryCode = country.isoCode || data.registeredCountry?.isoCode || 'XX';
+  const region = Array.isArray(data.subdivisions) && data.subdivisions.length > 0
+    ? data.subdivisions[0]
+    : null;
+
+  return {
+    ip: lookupIp,
+    country: getName(country.names, countryCode || 'Unknown'),
+    country_code: countryCode,
+    country_flag: getCountryFlag(countryCode),
+    city: getName(data.city?.names, 'Unknown'),
+    region: getName(region?.names, region?.isoCode || 'Unknown'),
+    timezone: data.location?.timeZone || 'Unknown',
+    latitude: data.location?.latitude ?? null,
+    longitude: data.location?.longitude ?? null,
+    accuracyRadius: data.location?.accuracyRadius ?? null,
+    postal: data.postal?.code || null,
+    org: null,
+    asn: null,
+    network: data.traits?.network || null,
+
+    isVpn: false,
+    isProxy: false,
+    isThreat: false,
+    isAnonymous: false,
+    isTor: false,
+
+    securityScore: 100,
+    riskLevel: 'Low',
+
+    _status: 'ok',
+    _source: 'local-mmdb',
+    _databaseType: 'city',
+  };
 }
 
 function normalizeLookupIp(ipAddress) {
@@ -289,7 +409,7 @@ module.exports = ({ strapi }) => ({
     }
 
     if (provider === 'auto') {
-      const databasePath = resolveDatabasePath(settings);
+      const databasePath = resolveExistingDatabasePath(settings);
       if (databasePath && fs.existsSync(databasePath)) {
         const localResult = await this.getLocalMmdbIpInfo(lookupIp, settings);
         if (localResult?._status === 'ok' || settings.geoLookupFailureMode === 'block') {
@@ -315,7 +435,9 @@ module.exports = ({ strapi }) => ({
   },
 
   /**
-   * Looks up country data from a local MaxMind-compatible MMDB file.
+   * Looks up geolocation data from a local MaxMind-compatible MMDB file.
+   * GeoLite2-City is preferred for city-level data; GeoLite2-Country remains
+   * supported for existing installations and country-only firewall decisions.
    * @param {string} ipAddress
    * @param {object} settings
    * @returns {Promise<object>}
@@ -326,7 +448,7 @@ module.exports = ({ strapi }) => ({
       return this.getFallbackData(ipAddress, 'error', 'validation', 'Invalid IP address');
     }
 
-    const databasePath = resolveDatabasePath(settings);
+    const databasePath = resolveExistingDatabasePath(settings);
 
     if (!databasePath || !fs.existsSync(databasePath)) {
       return this.getFallbackData(
@@ -339,40 +461,15 @@ module.exports = ({ strapi }) => ({
 
     try {
       const reader = await openLocalReader(databasePath);
-      const data = reader.country(lookupIp);
-      const country = data.country || data.registeredCountry || data.representedCountry || {};
-      const countryCode = country.isoCode || data.registeredCountry?.isoCode || 'XX';
-      const countryNames = country.names || {};
+      const useCityLookup = isCityDatabase(reader, databasePath) && typeof reader.city === 'function';
+      const data = useCityLookup ? reader.city(lookupIp) : reader.country(lookupIp);
+      const result = useCityLookup
+        ? normalizeLocalCityResult(data, lookupIp, this.getCountryFlag.bind(this))
+        : normalizeLocalCountryResult(data, lookupIp, this.getCountryFlag.bind(this));
 
-      const result = {
-        ip: lookupIp,
-        country: countryNames.en || countryNames.de || countryCode || 'Unknown',
-        country_code: countryCode,
-        country_flag: this.getCountryFlag(countryCode),
-        city: 'Unknown',
-        region: 'Unknown',
-        timezone: 'Unknown',
-        latitude: null,
-        longitude: null,
-        postal: null,
-        org: null,
-        asn: null,
-        network: data.traits?.network || null,
-
-        isVpn: false,
-        isProxy: false,
-        isThreat: false,
-        isAnonymous: false,
-        isTor: false,
-
-        securityScore: 100,
-        riskLevel: 'Low',
-
-        _status: 'ok',
-        _source: 'local-mmdb',
-      };
-
-      strapi.log.debug(`[magic-sessionmanager/geolocation] Local MMDB IP ${lookupIp}: ${result.country_code}`);
+      strapi.log.debug(
+        `[magic-sessionmanager/geolocation] Local MMDB ${result._databaseType} IP ${lookupIp}: ${result.city}, ${result.country_code}`
+      );
       return result;
     } catch (error) {
       strapi.log.warn(`[magic-sessionmanager/geolocation] Local MMDB lookup failed for ${lookupIp}:`, error.message);

@@ -8,9 +8,33 @@ const { promisify } = require('node:util');
 
 const gunzip = promisify(zlib.gunzip);
 
-const DEFAULT_EDITION_ID = 'GeoLite2-Country';
-const DEFAULT_MMDB_NAME = 'GeoLite2-Country.mmdb';
+const DEFAULT_EDITION_ID = 'GeoLite2-City';
+const DEFAULT_MMDB_NAME = `${DEFAULT_EDITION_ID}.mmdb`;
 const DEFAULT_OUTPUT_PATH = path.resolve(process.cwd(), 'data', DEFAULT_MMDB_NAME);
+const SUPPORTED_EDITION_IDS = new Set([
+  'GeoLite2-City',
+  'GeoLite2-Country',
+  'GeoIP2-City',
+  'GeoIP2-Country',
+]);
+
+function normalizeEditionId(value, fallback = DEFAULT_EDITION_ID) {
+  return SUPPORTED_EDITION_IDS.has(value) ? value : fallback;
+}
+
+function inferEditionIdFromPath(filePath) {
+  if (typeof filePath !== 'string' || filePath.trim() === '') return '';
+
+  const basename = path.basename(filePath.trim());
+  if (/GeoIP2-City\.mmdb$/i.test(basename)) return 'GeoIP2-City';
+  if (/GeoIP2-Country\.mmdb$/i.test(basename)) return 'GeoIP2-Country';
+  if (/GeoLite2-City\.mmdb$/i.test(basename)) return 'GeoLite2-City';
+  if (/GeoLite2-Country\.mmdb$/i.test(basename)) return 'GeoLite2-Country';
+  if (/city/i.test(basename)) return 'GeoLite2-City';
+  if (/country/i.test(basename)) return 'GeoLite2-Country';
+
+  return '';
+}
 
 function buildDownloadUrl(editionId = DEFAULT_EDITION_ID) {
   return `https://download.maxmind.com/geoip/databases/${encodeURIComponent(editionId)}/download?suffix=tar.gz`;
@@ -22,8 +46,18 @@ function buildBasicAuthHeader(accountId, licenseKey) {
 
 function resolveConfig(env = process.env, argv = process.argv.slice(2), overrides = {}) {
   const force = argv.includes('--force') || overrides.force === true;
-  const editionId = overrides.editionId || env.MAXMIND_EDITION_ID || DEFAULT_EDITION_ID;
-  const outputPath = overrides.outputPath || env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE || env.GEOIP_DATABASE_PATH || DEFAULT_OUTPUT_PATH;
+  const configuredOutputPath =
+    overrides.outputPath ||
+    env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
+    env.GEOIP_DATABASE_PATH ||
+    '';
+  const editionId = normalizeEditionId(
+    overrides.editionId ||
+    env.MAXMIND_EDITION_ID ||
+    inferEditionIdFromPath(configuredOutputPath) ||
+    DEFAULT_EDITION_ID
+  );
+  const outputPath = configuredOutputPath || path.resolve(process.cwd(), 'data', `${editionId}.mmdb`);
 
   return {
     accountId: overrides.accountId || env.MAXMIND_ACCOUNT_ID || env.MAXMIND_USER_ID || '',
@@ -213,6 +247,7 @@ module.exports = {
   buildDownloadUrl,
   extractMmdbFromTarGz,
   fileExists,
+  inferEditionIdFromPath,
   needsDownload,
   readMetadata,
   resolveConfig,

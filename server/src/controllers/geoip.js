@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
 const {
   fileExists,
@@ -14,6 +15,8 @@ const {
 } = require('../utils/settings-loader');
 
 const CREDENTIALS_KEY = 'geoipCredentials';
+const DEFAULT_CITY_DATABASE_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-City.mmdb');
+const DEFAULT_COUNTRY_DATABASE_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-Country.mmdb');
 
 function getGeoIpStore(strapi) {
   return strapi.store({
@@ -54,10 +57,16 @@ function getCredentialSource(storedCredentials) {
 
 function buildUpdaterConfig(settings, storedCredentials, force = false) {
   const outputPath = normalizeGeoIpDatabasePath(settings.geoIpDatabasePath);
+  const existingDefaultPath = !outputPath && fs.existsSync(DEFAULT_CITY_DATABASE_PATH)
+    ? DEFAULT_CITY_DATABASE_PATH
+    : !outputPath && fs.existsSync(DEFAULT_COUNTRY_DATABASE_PATH)
+      ? DEFAULT_COUNTRY_DATABASE_PATH
+      : '';
+
   return resolveConfig(process.env, force ? ['--force'] : [], {
     accountId: process.env.MAXMIND_ACCOUNT_ID || storedCredentials.accountId || '',
     licenseKey: process.env.MAXMIND_LICENSE_KEY || storedCredentials.licenseKey || '',
-    outputPath: outputPath || undefined,
+    outputPath: outputPath || existingDefaultPath || undefined,
     force,
   });
 }
@@ -84,6 +93,7 @@ module.exports = {
         success: true,
         status: {
           provider: settings.geoIpProvider || 'auto',
+          editionId: config.editionId,
           databasePath: config.outputPath,
           databaseDirectory: path.dirname(config.outputPath),
           exists,
