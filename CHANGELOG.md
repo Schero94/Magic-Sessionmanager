@@ -1,3 +1,10 @@
+## [4.6.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.3...v4.6.4) (2026-07-09)
+
+
+### Bug Fixes
+
+* harden geoip and session handling ([22729d4](https://github.com/Schero94/Magic-Sessionmanager/commit/22729d4fde406d62fe6f61e0a048903c7071b062))
+
 ## [4.6.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.2...v4.6.3) (2026-06-23)
 
 
