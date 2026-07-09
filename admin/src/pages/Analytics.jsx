@@ -62,6 +62,11 @@ const pulse = keyframes`
   50% { opacity: 0.8; }
 `;
 
+const float = keyframes`
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+`;
+
 const growBar = keyframes`
   from { width: 0; }
   to { width: var(--bar-width); }
