@@ -97,11 +97,36 @@ const StatusDot = styled.span`
     background: var(--colors-neutral500);
   `}
 
-  @keyframes pulse-green {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(1.15); }
+	  @keyframes pulse-green {
+	    0%, 100% { opacity: 1; transform: scale(1); }
+	    50% { opacity: 0.7; transform: scale(1.15); }
+	  }
+	`;
+
+const getStoredGeoData = (session) => {
+  let geoLocation = session?.geoLocation;
+  if (typeof geoLocation === 'string') {
+    try {
+      geoLocation = JSON.parse(geoLocation);
+    } catch {
+      geoLocation = null;
+    }
   }
-`;
+
+  if (!geoLocation || typeof geoLocation !== 'object') return null;
+  if (!geoLocation.country && !geoLocation.country_code && !geoLocation.city) return null;
+
+  return {
+    country_flag: geoLocation.country_flag || '',
+    country: geoLocation.country || geoLocation.country_code || 'Unknown',
+    city: geoLocation.city || 'Unknown',
+    timezone: geoLocation.timezone || 'Unknown',
+    securityScore: typeof session.securityScore === 'number' ? session.securityScore : 100,
+    riskLevel: typeof session.securityScore === 'number' && session.securityScore < 50 ? 'High' : 'Low',
+    isVpn: false,
+    isProxy: false,
+  };
+};
 
 const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   const { formatMessage } = useIntl();
@@ -116,9 +141,18 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   useEffect(() => {
     let cancelled = false;
     const ipAddress = session?.ipAddress;
+    const storedGeoData = getStoredGeoData(session);
 
     if (!ipAddress) {
       setGeoData(null);
+      setGeoLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (storedGeoData) {
+      setGeoData(storedGeoData);
       setGeoLoading(false);
       return () => {
         cancelled = true;
@@ -159,7 +193,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
     return () => {
       cancelled = true;
     };
-  }, [get, session?.ipAddress]);
+  }, [get, session]);
 
   if (!session) return null;
 

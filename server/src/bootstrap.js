@@ -56,6 +56,21 @@ function isLoginPath(path, method) {
   return false;
 }
 
+async function getRequestSettings(strapi, ctx) {
+  let settings = {};
+  try {
+    settings = await getPluginSettings(strapi);
+  } catch {
+    settings = {};
+  }
+
+  if (ctx && ctx.state) {
+    ctx.state.__magicSessionSettings = settings;
+  }
+
+  return settings;
+}
+
 module.exports = async ({ strapi }) => {
   const log = createLogger(strapi);
 
@@ -213,12 +228,7 @@ function mountPreLoginGeoGuard({ strapi, log }) {
       return next();
     }
 
-    let settings = {};
-    try {
-      settings = await getPluginSettings(strapi);
-    } catch {
-      settings = {};
-    }
+    const settings = await getRequestSettings(strapi, ctx);
 
     const needsGeoCheck =
       settings.blockSuspiciousSessions ||
@@ -413,13 +423,8 @@ function mountFailedLoginLockout({ strapi, log }) {
   strapi.server.use(async (ctx, next) => {
     if (!isLoginPath(ctx.path, ctx.method)) return next();
 
-    let maxFailed = 0;
-    try {
-      const settings = await getPluginSettings(strapi);
-      maxFailed = Number(settings.maxFailedLogins) || 0;
-    } catch {
-      maxFailed = 0;
-    }
+    const settings = await getRequestSettings(strapi, ctx);
+    const maxFailed = Number(settings.maxFailedLogins) || 0;
     if (maxFailed <= 0) return next();
 
     const ip = getClientIp(ctx);
@@ -518,6 +523,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 
     try {
       const user = ctx.body.user;
+      await getRequestSettings(strapi, ctx);
       const ip = getClientIp(ctx);
       const headers = ctx.request.headers || ctx.request.header || {};
       const userAgent = headers['user-agent'] || 'unknown';

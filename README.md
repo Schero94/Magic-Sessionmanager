@@ -491,7 +491,7 @@ Authorization: Bearer <JWT>
 {
   "data": [
     {
-      "id": 41,
+      "id": "abc123xyz",
       "documentId": "abc123xyz",
       "sessionId": "sess_m5k2h_8a3b1c2d_f9e8d7c6",
       "ipAddress": "192.168.1.100",
@@ -510,7 +510,7 @@ Authorization: Bearer <JWT>
       "minutesSinceActive": 2
     },
     {
-      "id": 40,
+      "id": "def456uvw",
       "documentId": "def456uvw",
       "sessionId": "sess_m5k1g_7b2a0c1d_e8d7c6b5",
       "ipAddress": "10.0.0.50",
@@ -549,7 +549,7 @@ Authorization: Bearer <JWT>
 ```json
 {
   "data": {
-    "id": 41,
+    "id": "abc123xyz",
     "documentId": "abc123xyz",
     "sessionId": "sess_m5k2h_8a3b1c2d_f9e8d7c6",
     "ipAddress": "192.168.1.100",
@@ -605,9 +605,10 @@ Authorization: Bearer <JWT>
 ### Terminate Specific Session
 
 Terminates a specific session (not the current one). Useful for "Log out other devices".
+Use the `id` / `documentId` value from the session response. The separate `sessionId` field is a tracking identifier stored on the session record.
 
 ```bash
-DELETE /api/magic-sessionmanager/my-sessions/:sessionId
+DELETE /api/magic-sessionmanager/my-sessions/:documentId
 Authorization: Bearer <JWT>
 ```
 

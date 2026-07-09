@@ -912,13 +912,6 @@ const SettingsPage = () => {
         });
 
         setHasChanges(false);
-
-        // Optional: Also save to localStorage as backup
-        try {
-          localStorage.setItem(`${pluginId}-settings`, JSON.stringify(settings));
-        } catch (localErr) {
-          console.warn('[Settings] Could not save to localStorage:', localErr);
-        }
       } else {
         throw new Error('Save failed');
       }
