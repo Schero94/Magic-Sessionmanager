@@ -1,3 +1,15 @@
+# [4.7.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.4...v4.7.0) (2026-07-09)
+
+
+### Bug Fixes
+
+* define analytics float animation ([e248680](https://github.com/Schero94/Magic-Sessionmanager/commit/e248680989e68b4cf082d50b565e978ce50d316d))
+
+
+### Features
+
+* support local GeoLite2 City database ([298d2a0](https://github.com/Schero94/Magic-Sessionmanager/commit/298d2a0948dd1a08f06ee70ada3953ed7d4dd2e6))
+
 ## [4.6.4](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.3...v4.6.4) (2026-07-09)
 
 
