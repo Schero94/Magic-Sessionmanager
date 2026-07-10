@@ -1,3 +1,10 @@
+## [4.7.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.0...v4.7.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* harden session lifecycle and admin analytics ([8f32862](https://github.com/Schero94/Magic-Sessionmanager/commit/8f328626460988b1c75a10e580ad300bc81ccb0b))
+
 # [4.7.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.6.4...v4.7.0) (2026-07-09)
 
 
