@@ -35,7 +35,7 @@ const prune = () => {
  * Records why a token was rejected by the JWT-verify wrapper.
  *
  * @param {string} tokenHash  SHA-256 hex digest of the raw JWT
- * @param {'manual'|'idle'|'expired'|'blocked'} reason
+ * @param {'logout'|'manual'|'idle'|'expired'|'blocked'} reason
  */
 function setSessionRejectionReason(tokenHash, reason) {
   if (!tokenHash || !reason) return;

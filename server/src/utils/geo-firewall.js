@@ -47,10 +47,10 @@ function evaluateGeoFirewall(settings = {}, geoData = {}) {
     if (geoData.isThreat) {
       return { blocked: true, reason: 'threat_ip', status };
     }
-    if (geoData.isVpn && settings.alertOnVpnProxy !== false) {
+    if (geoData.isVpn) {
       return { blocked: true, reason: 'vpn_detected', status };
     }
-    if (geoData.isProxy && settings.alertOnVpnProxy !== false) {
+    if (geoData.isProxy) {
       return { blocked: true, reason: 'proxy_detected', status };
     }
     if (

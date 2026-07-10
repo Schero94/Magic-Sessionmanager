@@ -4,7 +4,7 @@ const { encryptToken, generateSessionId, hashToken } = require('../utils/encrypt
 const { createLogger } = require('../utils/logger');
 const { parseUserAgent } = require('../utils/user-agent-parser');
 const { resolveUserDocumentId } = require('../utils/resolve-user');
-const { enhanceSessions } = require('../utils/enhance-session');
+const { enhanceSessions, shouldResolveGeoData } = require('../utils/enhance-session');
 const { getPluginSettings } = require('../utils/settings-loader');
 
 /**
@@ -29,7 +29,9 @@ module.exports = ({ strapi }) => {
     const settings = await getPluginSettings(strapi);
     return {
       inactivityTimeout: settings.inactivityTimeout || 15 * 60 * 1000,
-      geolocationService: strapi.plugin('magic-sessionmanager').service('geolocation'),
+      geolocationService: shouldResolveGeoData(settings)
+        ? strapi.plugin('magic-sessionmanager').service('geolocation')
+        : null,
       strapi,
     };
   }
@@ -96,7 +98,7 @@ module.exports = ({ strapi }) => {
                   timezone: geoData.timezone,
                 }
               : null,
-            securityScore: geoData?.securityScore || null,
+            securityScore: geoData?.securityScore ?? null,
           },
         });
 
@@ -109,18 +111,76 @@ module.exports = ({ strapi }) => {
     },
 
     /**
+     * Atomically replaces the stored tokens only while the caller still owns
+     * the expected active token. This prevents two concurrent refresh
+     * requests from both committing a rotation.
+     *
+     * @returns {Promise<boolean>} Whether exactly one session was rotated
+     */
+    async rotateSessionTokens({
+      sessionId,
+      expectedAccessToken,
+      expectedRefreshToken,
+      accessToken,
+      refreshToken,
+    }) {
+      if (!sessionId || !accessToken || (!expectedAccessToken && !expectedRefreshToken)) {
+        return false;
+      }
+
+      const where = { documentId: sessionId, isActive: true };
+      if (expectedAccessToken) where.tokenHash = hashToken(expectedAccessToken);
+      if (expectedRefreshToken) where.refreshTokenHash = hashToken(expectedRefreshToken);
+
+      const data = {
+        token: encryptToken(accessToken),
+        tokenHash: hashToken(accessToken),
+        lastActive: new Date(),
+      };
+      if (refreshToken) {
+        data.refreshToken = encryptToken(refreshToken);
+        data.refreshTokenHash = hashToken(refreshToken);
+      }
+
+      const result = await strapi.db.query(SESSION_UID).updateMany({ where, data });
+      return result?.count === 1;
+    },
+
+    /**
+     * Terminates the active session identified by a raw refresh token.
+     * Used by Strapi's built-in cookie/body logout endpoint.
+     */
+    async terminateSessionByRefreshToken(refreshToken) {
+      if (!refreshToken) return false;
+      const result = await strapi.db.query(SESSION_UID).updateMany({
+        where: {
+          refreshTokenHash: hashToken(refreshToken),
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+          terminatedManually: false,
+          terminationReason: 'logout',
+          logoutTime: new Date(),
+        },
+      });
+      return result?.count === 1;
+    },
+
+    /**
      * Terminates a single session, all sessions of a user, or all sessions
      * of a user EXCEPT one with a typed reason so the JWT-verify wrapper
      * can communicate the cause to the client.
      *
      * Supported reasons:
-     *   - 'manual':   user clicked logout, or admin terminated a session
+     *   - 'logout':   user clicked logout
+     *   - 'manual':   admin terminated a session
      *   - 'idle':     inactivity timeout cleanup
      *   - 'expired':  maxSessionAgeDays exceeded
      *   - 'blocked':  the owning user was marked blocked
      *
      * For backwards compatibility `terminatedManually` is still set true
-     * only when reason === 'manual'; idle/expired/blocked paths set it
+     * only when reason === 'manual'; logout/idle/expired/blocked paths set it
      * false so reporting dashboards that queried that boolean continue
      * to work, while new code relies on `terminationReason`.
      *
@@ -133,13 +193,13 @@ module.exports = ({ strapi }) => {
      *                                           `userId`. Used by
      *                                           /logout-other-devices so
      *                                           the caller stays logged in.
-     * @param {'manual'|'idle'|'expired'|'blocked'} [params.reason='manual']
+     * @param {'logout'|'manual'|'idle'|'expired'|'blocked'} [params.reason='manual']
      * @returns {Promise<{terminatedCount: number}>}
      */
     async terminateSession({ sessionId, userId, exceptSessionId = null, reason = 'manual' }) {
       try {
         const now = new Date();
-        const validReasons = ['manual', 'idle', 'expired', 'blocked'];
+        const validReasons = ['logout', 'manual', 'idle', 'expired', 'blocked'];
         const finalReason = validReasons.includes(reason) ? reason : 'manual';
 
         const updateData = {
@@ -178,22 +238,35 @@ module.exports = ({ strapi }) => {
             filters.documentId = { $ne: exceptSessionId };
           }
 
-          const activeSessions = await strapi.documents(SESSION_UID).findMany({
-            filters,
-            fields: ['documentId'],
-            limit: MAX_SESSIONS_QUERY,
-          });
-
           let terminatedCount = 0;
-          for (const session of activeSessions) {
-            try {
-              await strapi.documents(SESSION_UID).update({
-                documentId: session.documentId,
-                data: updateData,
-              });
-              terminatedCount++;
-            } catch (err) {
-              log.debug(`Failed to terminate session ${session.documentId}:`, err.message);
+          const batchSize = 500;
+
+          while (true) {
+            const activeSessions = await strapi.documents(SESSION_UID).findMany({
+              filters,
+              fields: ['documentId'],
+              limit: batchSize,
+            });
+
+            if (!activeSessions || activeSessions.length === 0) break;
+
+            let batchTerminated = 0;
+            for (const session of activeSessions) {
+              try {
+                await strapi.documents(SESSION_UID).update({
+                  documentId: session.documentId,
+                  data: updateData,
+                });
+                terminatedCount++;
+                batchTerminated++;
+              } catch (err) {
+                log.debug(`Failed to terminate session ${session.documentId}:`, err.message);
+              }
+            }
+
+            if (batchTerminated === 0) {
+              log.warn(`Could not terminate remaining active sessions for user ${userDocumentId}`);
+              break;
             }
           }
 

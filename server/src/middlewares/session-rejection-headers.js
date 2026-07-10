@@ -27,6 +27,7 @@ const HEADER = 'X-Session-Terminated-Reason';
  * with the enum values on the Session content type.
  */
 const REASON_MESSAGES = {
+  logout: 'You have logged out. Please log in again.',
   manual: 'Your session was terminated. Please log in again.',
   idle: 'Your session expired due to inactivity. Please log in again.',
   expired: 'Your session has reached its maximum age. Please log in again.',

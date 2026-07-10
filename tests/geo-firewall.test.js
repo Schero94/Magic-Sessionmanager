@@ -70,3 +70,16 @@ test('geo firewall preserves suspicious-session fail-closed behavior', () => {
   assert.equal(decision.blocked, true);
   assert.equal(decision.reason, 'geo_lookup_unavailable:rate_limited');
 });
+
+test('VPN blocking is independent from the email alert toggle', () => {
+  const decision = evaluateGeoFirewall(
+    {
+      blockSuspiciousSessions: true,
+      alertOnVpnProxy: false,
+    },
+    { _status: 'ok', isVpn: true }
+  );
+
+  assert.equal(decision.blocked, true);
+  assert.equal(decision.reason, 'vpn_detected');
+});

@@ -39,7 +39,6 @@ export function computeOnlineUserStats(sessions, {
       last15min.add(userKey);
       last30min.add(userKey);
     } else if (timeSinceActive < thirtyMin) {
-      last15min.add(userKey);
       last30min.add(userKey);
     }
   }

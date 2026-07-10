@@ -127,3 +127,29 @@ test('updateSettings stores local GEOIP firewall settings', async () => {
   assert.equal(storedSettings.geoLookupFailureMode, 'block');
   assert.deepEqual(storedSettings.blockedCountries, ['RU']);
 });
+
+test('getSettings merges old partial settings with every current default', async () => {
+  let response;
+  global.strapi = {
+    store: () => ({
+      get: async () => ({ enableGeolocation: false }),
+    }),
+    log: { error() {} },
+  };
+  const ctx = {
+    send(payload) {
+      response = payload;
+    },
+    badRequest(message) {
+      throw new Error(message);
+    },
+  };
+
+  await settingsController.getSettings(ctx);
+
+  assert.equal(response.settings.enableGeolocation, false);
+  assert.equal(response.settings.inactivityTimeout, 15);
+  assert.equal(response.settings.maxFailedLogins, 5);
+  assert.equal(response.settings.sessionCreationGraceMs, 5000);
+  assert.equal(response.settings.cleanupUseDbDirect, false);
+});

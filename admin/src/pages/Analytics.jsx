@@ -15,6 +15,7 @@ import {
   Clock,
 } from '@strapi/icons';
 import pluginId from '../pluginId';
+import { computeSessionAnalytics } from '../utils/sessionAnalytics.mjs';
 
 // ================ THEME ================
 const theme = {
@@ -331,97 +332,7 @@ const AnalyticsPage = () => {
     try {
       const { data } = await get(`/${pluginId}/sessions`);
       const sessions = data.data || [];
-      
-      const now = Date.now();
-      const dayAgo = now - (24 * 60 * 60 * 1000);
-      const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
-      
-      const todayLogins = sessions.filter(s => new Date(s.loginTime).getTime() > dayAgo);
-      const weekLogins = sessions.filter(s => new Date(s.loginTime).getTime() > weekAgo);
-      
-      const devices = {};
-      const browsers = {};
-      const operatingSystems = {};
-      const countries = {};
-      const loginHours = Array(24).fill(0);
-      const uniqueUsers = new Set();
-      const uniqueIPs = new Set();
-      
-      sessions.forEach(session => {
-        const ua = session.userAgent.toLowerCase();
-        
-        // Devices
-        if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
-          devices['Mobile'] = (devices['Mobile'] || 0) + 1;
-        } else if (ua.includes('tablet') || ua.includes('ipad')) {
-          devices['Tablet'] = (devices['Tablet'] || 0) + 1;
-        } else {
-          devices['Desktop'] = (devices['Desktop'] || 0) + 1;
-        }
-        
-        // Browsers
-        if (ua.includes('chrome') && !ua.includes('edg')) browsers['Chrome'] = (browsers['Chrome'] || 0) + 1;
-        else if (ua.includes('firefox')) browsers['Firefox'] = (browsers['Firefox'] || 0) + 1;
-        else if (ua.includes('safari') && !ua.includes('chrome')) browsers['Safari'] = (browsers['Safari'] || 0) + 1;
-        else if (ua.includes('edg')) browsers['Edge'] = (browsers['Edge'] || 0) + 1;
-        else if (ua.includes('postman') || ua.includes('curl')) browsers['API Client'] = (browsers['API Client'] || 0) + 1;
-        else browsers['Other'] = (browsers['Other'] || 0) + 1;
-        
-        // Operating Systems
-        if (ua.includes('windows') || ua.includes('win32') || ua.includes('win64')) {
-          operatingSystems['Windows'] = (operatingSystems['Windows'] || 0) + 1;
-        } else if (ua.includes('mac') || ua.includes('darwin')) {
-          operatingSystems['macOS'] = (operatingSystems['macOS'] || 0) + 1;
-        } else if (ua.includes('linux')) {
-          operatingSystems['Linux'] = (operatingSystems['Linux'] || 0) + 1;
-        } else if (ua.includes('android')) {
-          operatingSystems['Android'] = (operatingSystems['Android'] || 0) + 1;
-        } else if (ua.includes('ios') || ua.includes('iphone') || ua.includes('ipad')) {
-          operatingSystems['iOS'] = (operatingSystems['iOS'] || 0) + 1;
-        } else {
-          operatingSystems['Other'] = (operatingSystems['Other'] || 0) + 1;
-        }
-        
-        // Login Hours (24h distribution)
-        const loginHour = new Date(session.loginTime).getHours();
-        loginHours[loginHour]++;
-        
-        // Unique tracking
-        if (session.user?.id) uniqueUsers.add(session.user.id);
-        if (session.ipAddress) uniqueIPs.add(session.ipAddress);
-      });
-      
-      // Calculate peak hour
-      const peakHour = loginHours.indexOf(Math.max(...loginHours));
-      
-      // Calculate logout vs timeout ratio
-      const loggedOut = sessions.filter(s => !s.isActive && s.logoutTime).length;
-      const terminated = sessions.filter(s => !s.isActive && !s.logoutTime).length;
-      
-      // Calculate mobile vs desktop ratio
-      const mobileCount = (devices['Mobile'] || 0) + (devices['Tablet'] || 0);
-      const desktopCount = devices['Desktop'] || 0;
-      const mobileRatio = sessions.length > 0 ? Math.round((mobileCount / sessions.length) * 100) : 0;
-      
-      setAnalytics({
-        totalSessions: sessions.length,
-        activeSessions: sessions.filter(s => s.isActive && s.isTrulyActive).length,
-        todayLogins: todayLogins.length,
-        weekLogins: weekLogins.length,
-        devices,
-        browsers,
-        operatingSystems,
-        loginHours,
-        peakHour,
-        uniqueUsers: uniqueUsers.size,
-        uniqueIPs: uniqueIPs.size,
-        loggedOut,
-        terminated,
-        mobileRatio,
-        avgSessionDuration: sessions.length > 0 
-          ? Math.floor(sessions.reduce((sum, s) => sum + (s.minutesSinceActive || 0), 0) / sessions.length)
-          : 0,
-      });
+      setAnalytics(computeSessionAnalytics(sessions));
     } catch (err) {
       console.error('[Analytics] Error:', err);
     } finally {

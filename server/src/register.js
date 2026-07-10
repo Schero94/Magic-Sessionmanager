@@ -3,7 +3,6 @@
 const { createLogger } = require('./utils/logger');
 
 const USER_UID = 'plugin::users-permissions.user';
-const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
 /**
  * Plugin register hook.
@@ -76,36 +75,11 @@ module.exports = async ({ strapi }) => {
           const userDocId = result.documentId;
           if (!userDocId) return;
 
-          const activeSessions = await strapi.documents(SESSION_UID).findMany({
-            filters: { user: { documentId: userDocId }, isActive: true },
-            fields: ['documentId'],
-            limit: 1000,
+          const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+          const { terminatedCount: terminated } = await sessionService.terminateSession({
+            userId: userDocId,
+            reason: 'blocked',
           });
-
-          if (!activeSessions || activeSessions.length === 0) return;
-
-          const now = new Date();
-          let terminated = 0;
-          for (const session of activeSessions) {
-            try {
-              await strapi.documents(SESSION_UID).update({
-                documentId: session.documentId,
-                data: {
-                  isActive: false,
-                  // Blocked users are NOT a "manual" self-logout — mark
-                  // this distinctly so the client receives a different
-                  // error message ("account blocked") rather than
-                  // "session terminated".
-                  terminatedManually: false,
-                  terminationReason: 'blocked',
-                  logoutTime: now,
-                },
-              });
-              terminated++;
-            } catch (updateErr) {
-              log.warn(`[lifecycle] failed to terminate session ${session.documentId}:`, updateErr.message);
-            }
-          }
 
           if (terminated > 0) {
             log.info(`[lifecycle] Terminated ${terminated} session(s) for blocked user ${userDocId.substring(0, 8)}...`);

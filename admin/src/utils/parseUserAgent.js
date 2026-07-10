@@ -55,16 +55,16 @@ export const parseUserAgent = (userAgent) => {
 
   // OS detection
   let os = 'Unknown';
-  if (ua.includes('windows')) {
+  if (ua.includes('android')) {
+    os = 'Android';
+  } else if (ua.includes('iphone') || ua.includes('ipad')) {
+    os = 'iOS';
+  } else if (ua.includes('windows')) {
     os = 'Windows';
   } else if (ua.includes('mac os x') || ua.includes('macintosh')) {
     os = 'macOS';
   } else if (ua.includes('linux')) {
     os = 'Linux';
-  } else if (ua.includes('android')) {
-    os = 'Android';
-  } else if (ua.includes('iphone') || ua.includes('ipad')) {
-    os = 'iOS';
   }
 
   return {
@@ -76,4 +76,3 @@ export const parseUserAgent = (userAgent) => {
 };
 
 export default parseUserAgent;
-

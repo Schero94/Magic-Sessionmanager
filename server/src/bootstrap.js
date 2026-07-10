@@ -26,35 +26,21 @@ const {
   consumeSessionRejectionReason,
 } = require('./utils/rejection-cache');
 const { evaluateGeoFirewall } = require('./utils/geo-firewall');
+const {
+  classifyJwtIssuingRequest,
+  isFailedLoginTrackedPath,
+  shouldRunPreAuthGeoGuard,
+} = require('./utils/auth-routes');
+const {
+  getRefreshCookieName,
+  getIncomingRefreshToken,
+  getOutgoingRefreshToken,
+  stripAuthTokensFromResponse,
+} = require('./utils/refresh-token');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
 const JWT_WRAPPED_FLAG = Symbol.for('magic-sessionmanager.jwt.wrapped');
-
-/**
- * Pre-check paths that should be geo-checked BEFORE the login proceeds.
- * Returning true for a path indicates an incoming login/MFA step that we want
- * to block at the network layer if the IP is suspicious.
- */
-const LOGIN_PATHS = new Set([
-  '/api/auth/local',
-  '/api/magic-link/login-totp',
-  '/api/magic-link/otp/verify',
-  '/api/magic-link/verify-mfa-totp',
-]);
-
-/**
- * Dynamic login path matcher for paths that include dynamic segments or query.
- * @param {string} path
- * @param {string} method
- * @returns {boolean}
- */
-function isLoginPath(path, method) {
-  if (!path) return false;
-  if (LOGIN_PATHS.has(path)) return true;
-  if (path.startsWith('/api/magic-link/login') && (method === 'GET' || method === 'POST')) return true;
-  return false;
-}
 
 async function getRequestSettings(strapi, ctx) {
   let settings = {};
@@ -88,7 +74,7 @@ module.exports = async ({ strapi }) => {
   }
 
   try {
-    await ensureTokenHashIndex(strapi, log);
+    await ensureSessionLookupIndexes(strapi, log);
 
     await registerSessionAwareAuthStrategy(strapi, log);
 
@@ -187,7 +173,9 @@ module.exports = async ({ strapi }) => {
 
     mountLoginInterceptor({ strapi, log, sessionService });
 
-    mountRefreshTokenInterceptor({ strapi, log });
+    mountRefreshTokenInterceptor({ strapi, log, sessionService });
+
+    mountLogoutInterceptor({ strapi, log, sessionService });
 
     // Mount response decorator BEFORE last-seen so it wraps every request
     // and can write a structured reason header/body on 401s produced by
@@ -224,7 +212,7 @@ module.exports = async ({ strapi }) => {
  */
 function mountPreLoginGeoGuard({ strapi, log }) {
   strapi.server.use(async (ctx, next) => {
-    if (!isLoginPath(ctx.path, ctx.method)) {
+    if (!shouldRunPreAuthGeoGuard(ctx.path, ctx.method)) {
       return next();
     }
 
@@ -269,7 +257,20 @@ function mountPreLoginGeoGuard({ strapi, log }) {
         ctx.state.__magicSessionGeoData = geoData;
       }
     } catch (err) {
-      log.debug('Pre-login geo guard error (allowing):', err.message);
+      const failureDecision = evaluateGeoFirewall(settings, { _status: 'error' });
+      if (failureDecision.blocked) {
+        log.warn(`[PRE-BLOCKED] Login rejected because GeoIP lookup failed for ${ip}`);
+        ctx.status = 403;
+        ctx.body = {
+          error: {
+            status: 403,
+            name: 'ForbiddenError',
+            message: 'Login temporarily unavailable. Please contact support.',
+          },
+        };
+        return;
+      }
+      log.debug('Pre-login geo guard error (allowing by configured policy):', err.message);
     }
 
     await next();
@@ -289,6 +290,11 @@ function mountPreLoginGeoGuard({ strapi, log }) {
  * @param {{strapi: object, log: object, sessionService: object}} deps
  */
 function mountLogoutRoute({ strapi, log, sessionService }) {
+  if (hasRegisteredRoute(strapi, 'POST', '/api/auth/logout')) {
+    log.debug('[LOGOUT] Using the users-permissions logout route');
+    return;
+  }
+
   let jwt = null;
   try {
     jwt = require('jsonwebtoken');
@@ -353,7 +359,10 @@ function mountLogoutRoute({ strapi, log, sessionService }) {
         });
 
         if (matchingSession && matchingSession.isActive) {
-          await sessionService.terminateSession({ sessionId: matchingSession.documentId });
+          await sessionService.terminateSession({
+            sessionId: matchingSession.documentId,
+            reason: 'logout',
+          });
           log.info(`[LOGOUT] Session ${matchingSession.documentId} terminated (expiredButValid=${expiredButValid})`);
         }
 
@@ -371,6 +380,40 @@ function mountLogoutRoute({ strapi, log, sessionService }) {
   }]);
 
   log.info('[SUCCESS] /api/auth/logout route registered (auth-verified)');
+}
+
+function hasRegisteredRoute(strapi, method, path) {
+  try {
+    const apiPrefix = strapi.config.get('api.rest.prefix', '/api');
+    const directRoutes = strapi.server.listRoutes?.() || [];
+    const contentRoutes = strapi.server.api?.('content-api')?.listRoutes?.() || [];
+
+    return [...directRoutes, ...contentRoutes].some((route) => {
+      const methods = route.methods || (Array.isArray(route.method) ? route.method : [route.method]);
+      const routePaths = new Set([
+        route.path,
+        route.path?.startsWith(apiPrefix) ? route.path : `${apiPrefix}${route.path}`,
+      ]);
+      return routePaths.has(path) &&
+        methods.some((value) => String(value).toUpperCase() === method);
+    });
+  } catch {
+    return false;
+  }
+}
+
+function failClosedAuthResponse({ ctx, strapi, log, operation, error }) {
+  stripAuthTokensFromResponse(ctx, getRefreshCookieName(strapi));
+  ctx.status = 503;
+  if (typeof ctx.set === 'function') ctx.set('Retry-After', '1');
+  ctx.body = {
+    error: {
+      status: 503,
+      name: 'ServiceUnavailableError',
+      message: 'Authentication temporarily unavailable. Please try again.',
+    },
+  };
+  log.error(`[AUTH-FAIL-CLOSED] ${operation}:`, error?.message || error || 'session persistence failed');
 }
 
 /**
@@ -421,7 +464,7 @@ function mountFailedLoginLockout({ strapi, log }) {
   const clearFailures = (ip) => failed.delete(ip);
 
   strapi.server.use(async (ctx, next) => {
-    if (!isLoginPath(ctx.path, ctx.method)) return next();
+    if (!isFailedLoginTrackedPath(ctx.path, ctx.method)) return next();
 
     const settings = await getRequestSettings(strapi, ctx);
     const maxFailed = Number(settings.maxFailedLogins) || 0;
@@ -475,54 +518,47 @@ function mountFailedLoginLockout({ strapi, log }) {
  *
  * @param {{strapi: object, log: object, sessionService: object}} deps
  */
-/**
- * Returns true for any users-permissions / magic-link endpoint that is
- * expected to mint a fresh JWT on success. Keeping this as an explicit
- * whitelist (rather than "any path that returns a jwt") prevents us
- * from accidentally creating sessions for unrelated endpoints that
- * might include a jwt field in their response for some reason.
- *
- * @param {string} path
- * @param {string} method
- * @returns {boolean}
- */
-function isJwtIssuingPath(path, method) {
-  if (!path) return false;
-  const get = method === 'GET';
-  const post = method === 'POST';
-
-  // users-permissions core
-  if (post && path === '/api/auth/local') return true;
-  if (post && path === '/api/auth/local/register') return true;
-  if (post && path === '/api/auth/reset-password') return true;
-  if ((get || post) && path === '/api/auth/email-confirmation') return true;
-
-  // users-permissions OAuth flow: /api/auth/:provider/callback
-  // The provider segment is any non-empty alnum/dash token.
-  if (get && /^\/api\/auth\/[a-z0-9-]+\/callback$/i.test(path)) return true;
-
-  // magic-link
-  if ((get || post) && path.startsWith('/api/magic-link/login')) return true;
-  if (post && path === '/api/magic-link/verify-mfa-totp') return true;
-  if (post && path === '/api/magic-link/otp/verify') return true;
-  if (post && path === '/api/magic-link/login-totp') return true;
-
-  // passwordless-compat alias that ships with magic-link v5
-  if ((get || post) && path.startsWith('/api/passwordless/')) return true;
-
-  return false;
-}
-
 function mountLoginInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
+    const requestType = classifyJwtIssuingRequest(ctx.path, ctx.method);
+    const previousAccessToken = requestType === 'rotate-current' ? extractBearerToken(ctx) : null;
     await next();
 
-    if (!isJwtIssuingPath(ctx.path, ctx.method)) return;
-    if (ctx.status !== 200) return;
-    if (!ctx.body || !ctx.body.jwt || !ctx.body.user) return;
+    if (requestType !== 'new-session' && requestType !== 'rotate-current') return;
+    if (ctx.status < 200 || ctx.status >= 300) return;
+    if (!ctx.body || !ctx.body.jwt) return;
+
+    const refreshCookieName = getRefreshCookieName(strapi);
+
+    if (requestType === 'rotate-current') {
+      try {
+        if (!previousAccessToken) throw new Error('current access token is missing');
+        const matchingSession = await strapi.documents(SESSION_UID).findFirst({
+          filters: {
+            tokenHash: hashToken(previousAccessToken),
+            isActive: true,
+          },
+          fields: ['documentId'],
+        });
+        if (!matchingSession) throw new Error('current session was not found');
+
+        const rotated = await sessionService.rotateSessionTokens({
+          sessionId: matchingSession.documentId,
+          expectedAccessToken: previousAccessToken,
+          accessToken: ctx.body.jwt,
+          refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
+        });
+        if (!rotated) throw new Error('current session changed before token rotation');
+        log.info(`[PASSWORD] Tokens rotated for session ${matchingSession.documentId}`);
+      } catch (err) {
+        failClosedAuthResponse({ ctx, strapi, log, operation: 'change-password rotation failed', error: err });
+      }
+      return;
+    }
 
     try {
       const user = ctx.body.user;
+      if (!user) throw new Error('authentication response contains no user');
       await getRequestSettings(strapi, ctx);
       const ip = getClientIp(ctx);
       const headers = ctx.request.headers || ctx.request.header || {};
@@ -536,8 +572,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
       }
 
       if (!userDocId) {
-        log.error(`[ERROR] Could not resolve documentId for user ${user.id || 'unknown'} - session NOT created!`);
-        return;
+        throw new Error(`could not resolve documentId for user ${user.id || 'unknown'}`);
       }
 
       const geoData = ctx.state?.__magicSessionGeoData || null;
@@ -547,13 +582,12 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
         ip,
         userAgent,
         token: ctx.body.jwt,
-        refreshToken: ctx.body.refreshToken,
+        refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
         geoData,
       });
 
       if (!newSession?.documentId) {
-        log.error(`[ERROR] Session creation returned no documentId for user ${userDocId}`);
-        return;
+        throw new Error(`session creation returned no documentId for user ${userDocId}`);
       }
 
       log.info(`[SUCCESS] Session ${newSession.documentId} created for user ${userDocId} (IP: ${ip})`);
@@ -633,6 +667,18 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
         }
 
         if (settings.enableEmailAlerts) {
+          if (settings.alertOnVpnProxy && (geoData.isVpn || geoData.isProxy)) {
+            await notificationService.sendVpnProxyAlert({
+              user,
+              session: newSession,
+              reason: {
+                isVpn: geoData.isVpn,
+                isProxy: geoData.isProxy,
+              },
+              geoData,
+            });
+          }
+
           if (settings.alertOnSuspiciousLogin && isSuspicious) {
             await notificationService.sendSuspiciousLoginAlert({
               user,
@@ -703,7 +749,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
         log.warn('Notification failed:', notifErr.message);
       }
     } catch (err) {
-      log.error('[ERROR] Error creating session:', err);
+      failClosedAuthResponse({ ctx, strapi, log, operation: 'session creation failed', error: err });
     }
   });
 
@@ -713,108 +759,95 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 /**
  * Refresh-token interceptor.
  *
- * NOTE ON APPLICABILITY:
- *   Strapi's default users-permissions plugin does NOT ship a
- *   POST /api/auth/refresh endpoint. This middleware only does something
- *   when a refresh-token plugin (e.g. strapi-plugin-jwt-refresh) or a
- *   custom controller is installed that exposes that route. Otherwise
- *   the middleware is a pure passthrough — mounting it unconditionally
- *   is safe and prepares the installation for future refresh-token
- *   support without requiring a second plugin install/restart cycle.
- *
- * Responsibilities when a refresh endpoint IS present:
+ * Supports Strapi's body and HttpOnly-cookie refresh modes.
+ * Responsibilities:
  *   1. Block incoming requests whose refreshToken does not match an
  *      active session (defence against stale/stolen refresh tokens).
  *   2. After a successful refresh, atomically rotate the stored token +
  *      refreshToken hashes on the session so the new JWT can be
  *      validated by magicSessionAwareVerify.
  *
- * @param {{strapi: object, log: object}} deps
+ * @param {{strapi: object, log: object, sessionService: object}} deps
  */
-function mountRefreshTokenInterceptor({ strapi, log }) {
+function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
     const isRefreshToken = ctx.path === '/api/auth/refresh' && ctx.method === 'POST';
+    if (!isRefreshToken) return next();
 
-    if (isRefreshToken) {
-      try {
-        const body = ctx.request.body;
-        const refreshToken = typeof body?.refreshToken === 'string' ? body.refreshToken : null;
+    const cookieName = getRefreshCookieName(strapi);
+    const oldRefreshToken = getIncomingRefreshToken(ctx, cookieName);
+    let matchingSession = null;
 
-        if (refreshToken) {
-          const refreshTokenHashValue = hashToken(refreshToken);
-          const matchingSession = await strapi.documents(SESSION_UID).findFirst({
-            filters: {
-              refreshTokenHash: refreshTokenHashValue,
-              isActive: true,
+    try {
+      if (oldRefreshToken) {
+        matchingSession = await strapi.documents(SESSION_UID).findFirst({
+          filters: {
+            refreshTokenHash: hashToken(oldRefreshToken),
+            isActive: true,
+          },
+          fields: ['documentId'],
+        });
+
+        if (!matchingSession) {
+          log.warn('[BLOCKED] Blocked refresh token request - no active session');
+          ctx.status = 401;
+          ctx.body = {
+            error: {
+              status: 401,
+              name: 'UnauthorizedError',
+              message: 'Session terminated. Please login again.',
             },
-            fields: ['documentId'],
-          });
-
-          if (!matchingSession) {
-            log.warn('[BLOCKED] Blocked refresh token request - no active session');
-            ctx.status = 401;
-            ctx.body = {
-              error: {
-                status: 401,
-                name: 'UnauthorizedError',
-                message: 'Session terminated. Please login again.',
-              }
-            };
-            return;
-          }
-          log.info(`[SUCCESS] Refresh token allowed for session ${matchingSession.documentId}`);
+          };
+          return;
         }
-      } catch (err) {
-        log.error('Error checking refresh token:', err);
       }
+    } catch (err) {
+      failClosedAuthResponse({ ctx, strapi, log, operation: 'refresh validation failed', error: err });
+      return;
     }
 
     await next();
 
-    if (isRefreshToken && ctx.status === 200 && ctx.body && ctx.body.jwt) {
+    if (ctx.status >= 200 && ctx.status < 300 && ctx.body && ctx.body.jwt) {
       try {
-        const body = ctx.request.body;
-        const oldRefreshToken = typeof body?.refreshToken === 'string' ? body.refreshToken : null;
-        const newAccessToken = ctx.body.jwt;
-        const newRefreshToken = ctx.body.refreshToken;
-
-        if (!oldRefreshToken) return;
-
-        const oldRefreshTokenHash = hashToken(oldRefreshToken);
-        const matchingSession = await strapi.documents(SESSION_UID).findFirst({
-          filters: {
-            refreshTokenHash: oldRefreshTokenHash,
-            isActive: true,
-          },
-          fields: ['documentId', 'token', 'tokenHash', 'refreshToken', 'refreshTokenHash'],
+        if (!oldRefreshToken || !matchingSession) {
+          throw new Error('refresh response issued without a tracked input token');
+        }
+        const rotated = await sessionService.rotateSessionTokens({
+          sessionId: matchingSession.documentId,
+          expectedRefreshToken: oldRefreshToken,
+          accessToken: ctx.body.jwt,
+          refreshToken: getOutgoingRefreshToken(ctx, cookieName),
         });
-
-        if (!matchingSession) return;
-
-        const encryptedToken = newAccessToken ? encryptToken(newAccessToken) : matchingSession.token;
-        const encryptedRefreshToken = newRefreshToken ? encryptToken(newRefreshToken) : matchingSession.refreshToken;
-        const newTokenHash = newAccessToken ? hashToken(newAccessToken) : matchingSession.tokenHash;
-        const newRefreshTokenHash = newRefreshToken ? hashToken(newRefreshToken) : matchingSession.refreshTokenHash;
-
-        await strapi.documents(SESSION_UID).update({
-          documentId: matchingSession.documentId,
-          data: {
-            token: encryptedToken,
-            tokenHash: newTokenHash,
-            refreshToken: encryptedRefreshToken,
-            refreshTokenHash: newRefreshTokenHash,
-            lastActive: new Date(),
-          },
-        });
-
+        if (!rotated) throw new Error('refresh token was already consumed');
         log.info(`[REFRESH] Tokens refreshed for session ${matchingSession.documentId}`);
       } catch (err) {
-        log.error('Error updating refreshed tokens:', err);
+        failClosedAuthResponse({ ctx, strapi, log, operation: 'refresh rotation failed', error: err });
       }
     }
   });
 
   log.info('[SUCCESS] Refresh token interceptor middleware mounted');
+}
+
+function mountLogoutInterceptor({ strapi, log, sessionService }) {
+  strapi.server.use(async (ctx, next) => {
+    if (ctx.path !== '/api/auth/logout' || ctx.method !== 'POST') return next();
+
+    const refreshToken = getIncomingRefreshToken(ctx, getRefreshCookieName(strapi));
+    if (refreshToken) {
+      try {
+        await sessionService.terminateSessionByRefreshToken(refreshToken);
+      } catch (err) {
+        failClosedAuthResponse({ ctx, strapi, log, operation: 'logout termination failed', error: err });
+        return;
+      }
+    }
+
+    await next();
+  });
+
+  log.info('[SUCCESS] Logout interceptor middleware mounted');
 }
 
 /**
@@ -915,54 +948,57 @@ async function ensureContentApiPermissions(strapi, log) {
 }
 
 /**
- * Creates a composite DB index on (tokenHash, isActive) for O(1) session lookup.
+ * Creates composite DB indexes for access- and refresh-token session lookups.
  * Safe to call repeatedly — existing indexes are skipped.
  *
  * @param {object} strapi - Strapi instance
  * @param {object} log - Logger instance
  */
-async function ensureTokenHashIndex(strapi, log) {
+async function ensureSessionLookupIndexes(strapi, log) {
   try {
     const knex = strapi.db.connection;
     const tableName = 'magic_sessions';
-    const indexName = 'idx_magic_sessions_token_hash';
+    const definitions = [
+      { column: 'token_hash', name: 'idx_magic_sessions_token_hash' },
+      { column: 'refresh_token_hash', name: 'idx_magic_sessions_refresh_hash' },
+    ];
 
-    const hasIndex = await knex.schema.hasTable(tableName).then(async (exists) => {
-      if (!exists) return false;
+    if (!(await knex.schema.hasTable(tableName))) return;
+
+    for (const definition of definitions) {
       const dialect = strapi.db.dialect.client;
+      let hasIndex = false;
 
       if (dialect === 'postgres') {
         const result = await knex.raw(
           'SELECT indexname FROM pg_indexes WHERE tablename = ? AND indexname = ?',
-          [tableName, indexName]
+          [tableName, definition.name]
         );
-        return result.rows.length > 0;
+        hasIndex = result.rows.length > 0;
       } else if (dialect === 'mysql' || dialect === 'mysql2') {
-        const result = await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [tableName, indexName]);
-        return result[0].length > 0;
+        const result = await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [tableName, definition.name]);
+        hasIndex = result[0].length > 0;
       } else if (dialect === 'sqlite' || dialect === 'better-sqlite3') {
         const result = await knex.raw(
           "SELECT name FROM sqlite_master WHERE type='index' AND name = ?",
-          [indexName]
+          [definition.name]
         );
-        return result.length > 0;
+        hasIndex = result.length > 0;
       }
 
-      return false;
-    });
+      if (hasIndex) {
+        log.debug(`[INDEX] ${definition.name} already exists`);
+        continue;
+      }
 
-    if (hasIndex) {
-      log.debug('[INDEX] tokenHash index already exists');
-      return;
+      await knex.schema.alterTable(tableName, (table) => {
+        table.index([definition.column, 'is_active'], definition.name);
+      });
+
+      log.info(`[INDEX] Created ${definition.name}`);
     }
-
-    await knex.schema.alterTable(tableName, (table) => {
-      table.index(['token_hash', 'is_active'], indexName);
-    });
-
-    log.info('[INDEX] Created tokenHash index for O(1) session lookup');
   } catch (err) {
-    log.debug('[INDEX] Could not create tokenHash index (will retry on next startup):', err.message);
+    log.debug('[INDEX] Could not create session lookup indexes (will retry on next startup):', err.message);
   }
 }
 
@@ -1127,6 +1163,23 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
         });
 
         if (thisSession) {
+          // Preserve an existing terminal reason. A manually terminated
+          // session must not later be relabelled as expired merely because it
+          // also crossed the maximum-age threshold.
+          if (thisSession.isActive === false) {
+            const reason =
+              thisSession.terminationReason ||
+              (thisSession.terminatedManually === true ? 'manual' : null);
+
+            if (reason) {
+              strapi.log.info(
+                `[magic-sessionmanager] [JWT-REJECTED] Session inactive (reason: ${reason}) for user ${userDocId.substring(0, 8)}...`
+              );
+              setSessionRejectionReason(tokenHashValue, reason);
+              return null;
+            }
+          }
+
           if (isSessionExpired(thisSession, maxSessionAgeDays)) {
             strapi.log.info(
               `[magic-sessionmanager] [JWT-EXPIRED] Session exceeded max age of ${maxSessionAgeDays} days (user: ${userDocId.substring(0, 8)}...)`
@@ -1144,32 +1197,6 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             return null;
           }
 
-          // Terminated session — surface the real reason to the caller so
-          // the client can show "You were logged out" vs "Your session
-          // expired due to inactivity" vs "Your account was blocked".
-          if (thisSession.isActive === false) {
-            const reason =
-              thisSession.terminationReason ||
-              (thisSession.terminatedManually === true ? 'manual' : null);
-
-            if (reason) {
-              strapi.log.info(
-                `[magic-sessionmanager] [JWT-REJECTED] Session inactive (reason: ${reason}) for user ${userDocId.substring(0, 8)}...`
-              );
-              setSessionRejectionReason(tokenHashValue, reason);
-              return null;
-            }
-          }
-
-          if (thisSession.isActive) {
-            resetErrorCounter();
-            return decoded;
-          }
-
-          // Inactive-but-no-reason (legacy rows from pre-terminationReason
-          // cleanup, or rare races) can still be reactivated, but only if
-          // the inactivity window has not elapsed. Otherwise the cleanup
-          // job's purpose (idle logout) would be silently defeated.
           const inactivityTimeout = settings.inactivityTimeout || 15 * 60 * 1000;
           const lastActiveMs = thisSession.lastActive
             ? new Date(thisSession.lastActive).getTime()
@@ -1185,6 +1212,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             await strapi.documents(SESSION_UID).update({
               documentId: thisSession.documentId,
               data: {
+                isActive: false,
                 terminatedManually: false,
                 terminationReason: 'idle',
                 logoutTime: new Date(),
@@ -1194,6 +1222,13 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             return null;
           }
 
+          if (thisSession.isActive) {
+            resetErrorCounter();
+            return decoded;
+          }
+
+          // An inactive legacy row without a reason may be reactivated only
+          // while it is still inside the inactivity window.
           await strapi.documents(SESSION_UID).update({
             documentId: thisSession.documentId,
             data: { isActive: true, lastActive: new Date() },
@@ -1254,3 +1289,12 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
     strapi.log.warn('[magic-sessionmanager] [AUTH] Session validation will only work via middleware (plugin endpoints)');
   }
 }
+
+module.exports.__private = {
+  registerSessionAwareAuthStrategy,
+  mountPreLoginGeoGuard,
+  mountLoginInterceptor,
+  mountRefreshTokenInterceptor,
+  mountLogoutInterceptor,
+  mountLogoutRoute,
+};

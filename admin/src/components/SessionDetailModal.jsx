@@ -325,7 +325,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
 
                   <DetailRow compact icon={Check} label={t('modal.user.username', 'Username')} value={session.user?.username || t('modal.user.na', 'N/A')} />
                   <DetailRow compact icon={Information} label={t('modal.user.email', 'Email')} value={session.user?.email || t('modal.user.na', 'N/A')} />
-                  <DetailRow compact icon={Information} label={t('modal.user.id', 'User ID')} value={session.user?.id || t('modal.user.na', 'N/A')} />
+                  <DetailRow compact icon={Information} label={t('modal.user.id', 'User ID')} value={session.user?.documentId || session.user?.id || t('modal.user.na', 'N/A')} />
                 </Section>
 
                 {/* Device Information */}

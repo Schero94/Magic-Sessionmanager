@@ -80,7 +80,7 @@
     },
     "terminationReason": {
       "type": "enumeration",
-      "enum": ["manual", "idle", "expired", "blocked"],
+      "enum": ["logout", "manual", "idle", "expired", "blocked"],
       "required": false
     },
     "geoLocation": {
@@ -102,4 +102,3 @@
     }
   }
 }
-

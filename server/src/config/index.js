@@ -16,6 +16,12 @@ module.exports = {
     cleanupInterval: 30 * 60 * 1000,
     retentionDays: 90,
     maxSessionAgeDays: 30,
+    maxFailedLogins: 5,
+    sessionCreationGraceMs: 5000,
+    cleanupUseDbDirect: false,
+    rateLimitWriteMax: 10,
+    rateLimitReadMax: 120,
+    rateLimitWindowSeconds: 60,
 
     strictSessionEnforcement: false,
 

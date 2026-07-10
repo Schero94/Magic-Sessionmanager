@@ -3,26 +3,14 @@
 /**
  * lastSeen Middleware
  *
- * Runs on every authenticated request. Responsibilities:
- *   1. Validates that the user's JWT corresponds to a still-valid session
- *      (the JWT-verify wrapper is the primary line of defense; this is a
- *      safety net for code paths that bypass the wrapper).
- *   2. In strict mode, blocks requests when no session exists AND the JWT
- *      is not inside the post-login grace window.
- *   3. Updates `lastActive` on the matching session (rate-limited,
- *      coalesced by the service).
- *
- * Reactivation is intentionally handled by the JWT verify wrapper (which
- * can atomically reactivate based on tokenHash). This middleware NEVER
- * reactivates sessions without tokenHash match to avoid the
- * "concurrent-reactivates-multiple-sessions" race.
+ * Runs after each ordinary request and updates `lastActive` on the exact
+ * authenticated session when the response succeeded. Session validation,
+ * inactivity enforcement and legacy reactivation live in the wrapped
+ * users-permissions JWT verifier, where they run after Strapi authenticates
+ * the token and before the controller is allowed to execute.
  */
 
 const { resolveUserDocumentId } = require('../utils/resolve-user');
-const {
-  getPluginSettings,
-  getSessionCreationGraceMs,
-} = require('../utils/settings-loader');
 const { extractBearerToken } = require('../utils/extract-token');
 const { hashToken } = require('../utils/encryption');
 
@@ -73,8 +61,16 @@ module.exports = ({ strapi, sessionService }) => {
       return next();
     }
 
+    // Strapi authenticates inside the matched route. Global middleware runs
+    // before that route, so ctx.state.user only becomes available after next().
+    await next();
+
+    if (isSelfTerminatingEndpoint(ctx.path) || (ctx.status || 200) >= 400) {
+      return;
+    }
+
     if (!ctx.state.user) {
-      return next();
+      return;
     }
 
     let userDocId = ctx.state.user.documentId;
@@ -83,84 +79,44 @@ module.exports = ({ strapi, sessionService }) => {
         userDocId = await resolveUserDocumentId(strapi, ctx.state.user.id);
       } catch (err) {
         strapi.log.debug('[magic-sessionmanager] user doc-id lookup failed:', err.message);
-        return next();
+        return;
       }
     }
 
     if (!userDocId) {
-      return next();
+      return;
     }
-
-    const settings = await getPluginSettings(strapi).catch(() => ({}));
-    const strictMode = settings.strictSessionEnforcement === true;
-    const gracePeriodMs = getSessionCreationGraceMs(settings);
 
     const token = extractBearerToken(ctx);
     const tokenHashValue = token ? hashToken(token) : null;
 
-    let thisSession = null;
-    if (tokenHashValue) {
-      try {
-        thisSession = await strapi.documents(SESSION_UID).findFirst({
-          filters: { user: { documentId: userDocId }, tokenHash: tokenHashValue },
-          fields: ['documentId', 'isActive', 'terminatedManually', 'terminationReason'],
-        });
-      } catch (err) {
-        strapi.log.debug('[magic-sessionmanager] session lookup failed:', err.message);
-      }
-    }
-
-    if (thisSession) {
-      // Terminated sessions are already rejected by the JWT-verify wrapper
-      // via the rejection cache. This branch only runs when that wrapper
-      // is somehow bypassed or the session was terminated between its
-      // check and now.
-      if (thisSession.isActive === false) {
-        return ctx.unauthorized('Session terminated. Please login again.');
-      }
-
-      ctx.state.userDocumentId = userDocId;
-      ctx.state.__magicSessionId = thisSession.documentId;
-
-      await next();
-
-      if (isSelfTerminatingEndpoint(ctx.path)) {
-        return;
-      }
-
-      try {
-        await sessionService.touch({
-          userId: userDocId,
-          sessionId: thisSession.documentId,
-        });
-      } catch (err) {
-        strapi.log.debug('[magic-sessionmanager] Error updating lastSeen:', err.message);
-      }
+    if (!tokenHashValue) {
       return;
     }
 
-    // No session record. If strict mode is on, reject immediately —
-    // unless the JWT is inside the post-login grace window (the session
-    // create-write may not be visible yet).
-    if (strictMode) {
-      const iat = ctx.state.user?.iat;
-      if (gracePeriodMs > 0 && typeof iat === 'number') {
-        const ageMs = Date.now() - iat * 1000;
-        if (ageMs >= 0 && ageMs < gracePeriodMs) {
-          ctx.state.userDocumentId = userDocId;
-          return next();
-        }
-      }
-      strapi.log.info(
-        `[magic-sessionmanager] [BLOCKED] No session matches this token (user: ${userDocId.substring(0, 8)}..., strictMode)`
-      );
-      return ctx.unauthorized('No valid session. Please login again.');
+    let thisSession = null;
+    try {
+      thisSession = await strapi.documents(SESSION_UID).findFirst({
+        filters: { user: { documentId: userDocId }, tokenHash: tokenHashValue },
+        fields: ['documentId', 'isActive'],
+      });
+    } catch (err) {
+      strapi.log.debug('[magic-sessionmanager] session lookup failed:', err.message);
+      return;
     }
 
-    strapi.log.debug(
-      `[magic-sessionmanager] [WARN] No session for token (user: ${userDocId.substring(0, 8)}...) - allowing in non-strict mode`
-    );
+    if (!thisSession || thisSession.isActive !== true) return;
+
     ctx.state.userDocumentId = userDocId;
-    return next();
+    ctx.state.__magicSessionId = thisSession.documentId;
+
+    try {
+      await sessionService.touch({
+        userId: userDocId,
+        sessionId: thisSession.documentId,
+      });
+    } catch (err) {
+      strapi.log.debug('[magic-sessionmanager] Error updating lastSeen:', err.message);
+    }
   };
 };

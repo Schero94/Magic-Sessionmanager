@@ -157,6 +157,61 @@ function sanitizeEmailTemplates(templates) {
   return result;
 }
 
+const DEFAULT_EMAIL_TEMPLATES = {
+  suspiciousLogin: { subject: '', html: '', text: '' },
+  newLocation: { subject: '', html: '', text: '' },
+  vpnProxy: { subject: '', html: '', text: '' },
+};
+
+const DEFAULT_SETTINGS = {
+  inactivityTimeout: 15,
+  cleanupInterval: 30,
+  lastSeenRateLimit: 30,
+  retentionDays: 90,
+  maxSessionAgeDays: 30,
+  sessionCreationGraceMs: 5000,
+  cleanupUseDbDirect: false,
+  rateLimitWriteMax: 10,
+  rateLimitReadMax: 120,
+  rateLimitWindowSeconds: 60,
+  enableGeolocation: true,
+  enableSecurityScoring: true,
+  blockSuspiciousSessions: false,
+  maxFailedLogins: 5,
+  enableGeofencing: false,
+  allowedCountries: [],
+  blockedCountries: [],
+  geoIpProvider: 'auto',
+  geoIpDatabasePath: '',
+  geoLookupFailureMode: 'auto',
+  enableEmailAlerts: false,
+  alertOnSuspiciousLogin: true,
+  alertOnNewLocation: true,
+  alertOnVpnProxy: true,
+  enableWebhooks: false,
+  discordWebhookUrl: '',
+  slackWebhookUrl: '',
+  strictSessionEnforcement: false,
+  trustedProxies: false,
+  emailTemplates: DEFAULT_EMAIL_TEMPLATES,
+};
+
+function mergeSettingsWithDefaults(stored) {
+  const safeStored = stored && typeof stored === 'object' ? stored : {};
+  const storedTemplates = safeStored.emailTemplates && typeof safeStored.emailTemplates === 'object'
+    ? safeStored.emailTemplates
+    : {};
+
+  return {
+    ...DEFAULT_SETTINGS,
+    ...safeStored,
+    emailTemplates: {
+      ...DEFAULT_EMAIL_TEMPLATES,
+      ...storedTemplates,
+    },
+  };
+}
+
 /**
  * Settings controller
  * Manages plugin settings stored in Strapi database
@@ -174,56 +229,8 @@ module.exports = {
         name: 'magic-sessionmanager',
       });
 
-      let settings = await pluginStore.get({ key: 'settings' });
-
-      if (!settings) {
-        settings = {
-          // Timing & cleanup
-          inactivityTimeout: 15,
-          cleanupInterval: 30,
-          lastSeenRateLimit: 30,
-          retentionDays: 90,
-          maxSessionAgeDays: 30,
-          // Grace window (ms) during which a freshly-issued JWT is accepted
-          // without a matching session row — see JWT-verify wrapper in bootstrap.
-          sessionCreationGraceMs: 5000,
-          // Opt-in: use a single SQL UPDATE for idle-session cleanup
-          // (bypasses Document Service lifecycle, required for very large installs).
-          cleanupUseDbDirect: false,
-
-          // Geo / security
-          enableGeolocation: true,
-          enableSecurityScoring: true,
-          blockSuspiciousSessions: false,
-          maxFailedLogins: 5,
-          enableGeofencing: false,
-          allowedCountries: [],
-          blockedCountries: [],
-          geoIpProvider: 'auto',
-          geoIpDatabasePath: '',
-          geoLookupFailureMode: 'auto',
-
-          // Notifications
-          enableEmailAlerts: false,
-          alertOnSuspiciousLogin: true,
-          alertOnNewLocation: true,
-          alertOnVpnProxy: true,
-          enableWebhooks: false,
-          discordWebhookUrl: '',
-          slackWebhookUrl: '',
-
-          // Session policy
-          strictSessionEnforcement: false,
-          trustedProxies: false,
-
-          // Email templates
-          emailTemplates: {
-            suspiciousLogin: { subject: '', html: '', text: '' },
-            newLocation: { subject: '', html: '', text: '' },
-            vpnProxy: { subject: '', html: '', text: '' },
-          },
-        };
-      }
+      const storedSettings = await pluginStore.get({ key: 'settings' });
+      const settings = mergeSettingsWithDefaults(storedSettings);
 
       ctx.send({
         settings,
@@ -273,6 +280,9 @@ module.exports = {
         maxSessionAgeDays: Math.max(1, Math.min(parseInt(body.maxSessionAgeDays) || 30, 365)),
         sessionCreationGraceMs: grace,
         cleanupUseDbDirect: !!body.cleanupUseDbDirect,
+        rateLimitWriteMax: Math.max(1, Math.min(parseInt(body.rateLimitWriteMax) || 10, 1000)),
+        rateLimitReadMax: Math.max(1, Math.min(parseInt(body.rateLimitReadMax) || 120, 10000)),
+        rateLimitWindowSeconds: Math.max(10, Math.min(parseInt(body.rateLimitWindowSeconds) || 60, 3600)),
 
         // Geo / security
         enableGeolocation: !!body.enableGeolocation,
@@ -322,4 +332,6 @@ module.exports = {
       ctx.badRequest('Error saving settings');
     }
   },
+  DEFAULT_SETTINGS,
+  mergeSettingsWithDefaults,
 };

@@ -1,7 +1,11 @@
 'use strict';
 
 const { hashToken } = require('../utils/encryption');
-const { enhanceSessions, enhanceSession } = require('../utils/enhance-session');
+const {
+  enhanceSessions,
+  enhanceSession,
+  shouldResolveGeoData,
+} = require('../utils/enhance-session');
 const { resolveUserDocumentId } = require('../utils/resolve-user');
 const {
   getPluginSettings,
@@ -113,7 +117,9 @@ module.exports = {
       const settings = await getPluginSettings(strapi);
       const enhanceOpts = {
         inactivityTimeout: settings.inactivityTimeout || 15 * 60 * 1000,
-        geolocationService: strapi.plugin('magic-sessionmanager').service('geolocation'),
+        geolocationService: shouldResolveGeoData(settings)
+          ? strapi.plugin('magic-sessionmanager').service('geolocation')
+          : null,
         strapi,
       };
 
@@ -211,7 +217,7 @@ module.exports = {
       if (matchingSession) {
         await sessionService.terminateSession({
           sessionId: matchingSession.documentId,
-          reason: 'manual',
+          reason: 'logout',
         });
         terminated = true;
         strapi.log.info(`[magic-sessionmanager] User ${userDocId} logged out (session ${matchingSession.documentId})`);
@@ -237,7 +243,7 @@ module.exports = {
    * Terminates EVERY session of the authenticated user — including the
    * current one. After this call the caller will also be logged out on
    * the next request (their own JWT is rejected by the JWT-verify wrapper
-   * with reason=manual).
+   * with reason=logout).
    *
    * For the "log me out everywhere ELSE but keep me here" flow, use
    * `/logout-others` below.
@@ -254,7 +260,7 @@ module.exports = {
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
       const { terminatedCount } = await sessionService.terminateSession({
         userId: userDocId,
-        reason: 'manual',
+        reason: 'logout',
       });
 
       strapi.log.info(
@@ -308,7 +314,7 @@ module.exports = {
         // gets told so they can re-login if needed.
         const { terminatedCount } = await sessionService.terminateSession({
           userId: userDocId,
-          reason: 'manual',
+          reason: 'logout',
         });
         strapi.log.warn(
           `[magic-sessionmanager] logoutOthers fell back to logoutAll for user ${userDocId} (no current session match)`
@@ -324,7 +330,7 @@ module.exports = {
       const { terminatedCount } = await sessionService.terminateSession({
         userId: userDocId,
         exceptSessionId: currentSession.documentId,
-        reason: 'manual',
+        reason: 'logout',
       });
 
       strapi.log.info(
@@ -397,7 +403,9 @@ module.exports = {
       const settings = await getPluginSettings(strapi);
       const enhanced = await enhanceSession(currentSession, {
         inactivityTimeout: settings.inactivityTimeout || 15 * 60 * 1000,
-        geolocationService: strapi.plugin('magic-sessionmanager').service('geolocation'),
+        geolocationService: shouldResolveGeoData(settings)
+          ? strapi.plugin('magic-sessionmanager').service('geolocation')
+          : null,
         geoCounter: { remaining: 1 },
         strapi,
       });

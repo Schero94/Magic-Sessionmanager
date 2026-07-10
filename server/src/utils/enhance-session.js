@@ -4,6 +4,12 @@ const { parseUserAgent } = require('./user-agent-parser');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
+function shouldResolveGeoData(settings = {}) {
+  return settings.enableGeolocation === true ||
+    settings.enableGeofencing === true ||
+    settings.blockSuspiciousSessions === true;
+}
+
 /**
  * Enhances a raw session record with computed display fields and strips all
  * sensitive tokens and internal metadata before returning.
@@ -93,7 +99,7 @@ async function enhanceSession(session, opts = {}) {
               documentId: session.documentId,
               data: {
                 geoLocation,
-                securityScore: geoData.securityScore || null,
+                securityScore: geoData.securityScore ?? null,
               },
             })
             .catch(() => { /* fire-and-forget */ });
@@ -145,4 +151,4 @@ async function enhanceSessions(sessions, opts = {}, maxGeoLookups = 20) {
   );
 }
 
-module.exports = { enhanceSession, enhanceSessions };
+module.exports = { enhanceSession, enhanceSessions, shouldResolveGeoData };

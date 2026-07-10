@@ -36,6 +36,7 @@ import {
 } from '@strapi/icons';
 import pluginId from '../pluginId';
 import parseUserAgent from '../utils/parseUserAgent';
+import { getSessionStatus } from '../utils/sessionStatus.mjs';
 import SessionDetailModal from '../components/SessionDetailModal';
 import { 
   IconButtonPrimary, 
@@ -653,7 +654,7 @@ const HomePage = () => {
             id: session.id,
             status: getSessionStatus(session),
             user: {
-              id: session.user?.id,
+              id: session.user?.documentId || session.user?.id,
               email: session.user?.email,
               username: session.user?.username,
             },
@@ -701,9 +702,9 @@ const HomePage = () => {
 
   // Calculate stats based on new 4-status logic
   const activeSessions = sessions.filter(s => s.isActive && s.isTrulyActive);
-  const idleSessions = sessions.filter(s => s.isActive && !s.isTrulyActive);
-  const loggedOutSessions = sessions.filter(s => !s.isActive && s.logoutTime);
-  const terminatedSessions = sessions.filter(s => !s.isActive && !s.logoutTime);
+  const idleSessions = sessions.filter(s => getSessionStatus(s) === 'idle');
+  const loggedOutSessions = sessions.filter(s => getSessionStatus(s) === 'loggedout');
+  const terminatedSessions = sessions.filter(s => getSessionStatus(s) === 'terminated');
 
   const handleSessionClick = (session) => {
     setSelectedSession(session);
@@ -717,14 +718,6 @@ const HomePage = () => {
 
   const handleSessionTerminated = () => {
     fetchSessions();
-  };
-
-  // Helper function to get session status
-  const getSessionStatus = (session) => {
-    if (!session.isActive) {
-      return session.logoutTime ? 'loggedout' : 'terminated';
-    }
-    return session.isTrulyActive ? 'active' : 'idle';
   };
 
   // Filter sessions
@@ -885,8 +878,8 @@ const HomePage = () => {
                 size="S"
               >
                 <SingleSelectOption value="all">{t('homepage.filter.all', 'All Sessions')}</SingleSelectOption>
-                <SingleSelectOption value="active">{t('homepage.filter.active', 'Active (less than 15 min)')}</SingleSelectOption>
-                <SingleSelectOption value="idle">{t('homepage.filter.idle', 'Idle (more than 15 min)')}</SingleSelectOption>
+                <SingleSelectOption value="active">{t('homepage.filter.active', 'Currently active')}</SingleSelectOption>
+                <SingleSelectOption value="idle">{t('homepage.filter.idle', 'Inactive')}</SingleSelectOption>
                 <SingleSelectOption value="loggedout">{t('homepage.filter.loggedout', 'Logged Out')}</SingleSelectOption>
                 <SingleSelectOption value="terminated">{t('homepage.filter.terminated', 'Terminated')}</SingleSelectOption>
               </SingleSelect>
