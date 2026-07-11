@@ -1,3 +1,10 @@
+## [4.7.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.1...v4.7.2) (2026-07-11)
+
+
+### Bug Fixes
+
+* **auth:** restore reliable session logout ([dcade5f](https://github.com/Schero94/Magic-Sessionmanager/commit/dcade5fd98d4a10e969ce26625c86c2711fc8cb1))
+
 ## [4.7.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.0...v4.7.1) (2026-07-10)
 
 
