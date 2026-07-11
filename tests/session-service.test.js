@@ -20,6 +20,44 @@ function createLogger() {
   };
 }
 
+function createSessionLockTransaction(onLock = async () => {}) {
+  return async (callback) => {
+    let lockedDocumentId = null;
+    const trx = (tableName) => {
+      assert.equal(tableName, 'magic_sessions');
+      let forUpdateCalled = false;
+      return {
+        where(criteria) {
+          lockedDocumentId = criteria.document_id;
+          return this;
+        },
+        forUpdate() {
+          forUpdateCalled = true;
+          return this;
+        },
+        async first(column) {
+          assert.equal(column, 'document_id');
+          assert.ok(forUpdateCalled, 'SELECT lock requires FOR UPDATE');
+          await onLock(lockedDocumentId);
+          return { document_id: lockedDocumentId };
+        },
+      };
+    };
+    return callback({ trx });
+  };
+}
+
+test('session lock transaction mock rejects SELECT without FOR UPDATE', async () => {
+  await assert.rejects(
+    createSessionLockTransaction()(async ({ trx }) =>
+      trx('magic_sessions')
+        .where({ document_id: 'unlocked-session' })
+        .first('document_id')
+    ),
+    /FOR UPDATE/
+  );
+});
+
 test('deleteOldSessions stops after repeated no-progress delete batches', async () => {
   let findManyCalls = 0;
   let deleteCalls = 0;
@@ -254,6 +292,433 @@ test('terminateSessionByRefreshToken atomically logs out an active session', asy
   });
   assert.equal(updateArgs.data.isActive, false);
   assert.equal(updateArgs.data.terminationReason, 'logout');
+});
+
+test('terminateAuthenticatedSession selects only the authenticated user session by refresh token alone', async () => {
+  const { hashToken } = require('../server/src/utils/encryption');
+  const refreshToken = `shared-refresh-${'c'.repeat(32)}`;
+  const refreshTokenHash = hashToken(refreshToken);
+  const sessions = [
+    {
+      documentId: 'other-user-session',
+      user: { documentId: 'other-user' },
+      isActive: true,
+      refreshTokenHash,
+    },
+    {
+      documentId: 'authenticated-user-session',
+      user: { documentId: 'authenticated-user' },
+      isActive: true,
+      refreshTokenHash,
+    },
+  ];
+  const lookupArgs = [];
+  let updateArgs;
+
+  const strapi = {
+    db: {
+      transaction: createSessionLockTransaction(),
+    },
+    documents: (uid) => {
+      assert.equal(uid, SESSION_UID);
+      return {
+        findFirst: async (args) => {
+          lookupArgs.push(args);
+          return sessions.find(
+            (session) =>
+              session.user.documentId === args.filters.user.documentId &&
+              session.isActive === args.filters.isActive &&
+              session.refreshTokenHash === args.filters.refreshTokenHash
+          );
+        },
+        findOne: async ({ documentId }) =>
+          sessions.find((session) => session.documentId === documentId),
+        update: async (args) => {
+          updateArgs = args;
+        },
+      };
+    },
+    log: createLogger(),
+  };
+
+  const service = createSessionService({ strapi });
+  const terminated = await service.terminateAuthenticatedSession({
+    userDocumentId: 'authenticated-user',
+    refreshToken,
+  });
+
+  assert.equal(terminated, true);
+  assert.deepEqual(lookupArgs, [
+    {
+      filters: {
+        user: { documentId: 'authenticated-user' },
+        isActive: true,
+        refreshTokenHash,
+      },
+      fields: ['documentId'],
+    },
+    {
+      filters: {
+        documentId: 'authenticated-user-session',
+        user: { documentId: 'authenticated-user' },
+        isActive: true,
+        refreshTokenHash,
+      },
+      fields: ['documentId'],
+    },
+  ]);
+  assert.equal(updateArgs.documentId, 'authenticated-user-session');
+  assert.equal(updateArgs.data.terminationReason, 'logout');
+});
+
+test('terminateAuthenticatedSession selects only the authenticated user session by access token', async () => {
+  const { hashToken } = require('../server/src/utils/encryption');
+  const accessToken = `shared-access-${'f'.repeat(32)}`;
+  const accessTokenHash = hashToken(accessToken);
+  const sessions = [
+    {
+      documentId: 'other-user-session',
+      user: { documentId: 'other-user' },
+      isActive: true,
+      tokenHash: accessTokenHash,
+    },
+    {
+      documentId: 'authenticated-user-session',
+      user: { documentId: 'authenticated-user' },
+      isActive: true,
+      tokenHash: accessTokenHash,
+    },
+  ];
+  const lookupArgs = [];
+  let updatedDocumentId;
+
+  const strapi = {
+    db: {
+      transaction: createSessionLockTransaction(),
+    },
+    documents: (uid) => {
+      assert.equal(uid, SESSION_UID);
+      return {
+        findFirst: async (args) => {
+          lookupArgs.push(args);
+          const hashField = Object.hasOwn(args.filters, 'refreshTokenHash')
+            ? 'refreshTokenHash'
+            : 'tokenHash';
+          return sessions.find(
+            (session) =>
+              session.user.documentId === args.filters.user.documentId &&
+              session.isActive === args.filters.isActive &&
+              session[hashField] === args.filters[hashField]
+          );
+        },
+        findOne: async ({ documentId }) =>
+          sessions.find((session) => session.documentId === documentId),
+        update: async ({ documentId }) => {
+          updatedDocumentId = documentId;
+        },
+      };
+    },
+    log: createLogger(),
+  };
+
+  const service = createSessionService({ strapi });
+  const terminated = await service.terminateAuthenticatedSession({
+    userDocumentId: 'authenticated-user',
+    accessToken,
+  });
+
+  assert.equal(terminated, true);
+  assert.deepEqual(
+    lookupArgs.map(({ filters }) => filters),
+    [
+      {
+        user: { documentId: 'authenticated-user' },
+        isActive: true,
+        tokenHash: accessTokenHash,
+      },
+      {
+        documentId: 'authenticated-user-session',
+        user: { documentId: 'authenticated-user' },
+        isActive: true,
+        tokenHash: accessTokenHash,
+      },
+    ]
+  );
+  assert.equal(updatedDocumentId, 'authenticated-user-session');
+});
+
+test('terminateAuthenticatedSession rejects mismatched access and refresh credentials for the same user', async () => {
+  const { hashToken } = require('../server/src/utils/encryption');
+  const accessToken = `session-a-access-${'1'.repeat(32)}`;
+  const refreshToken = `session-b-refresh-${'2'.repeat(32)}`;
+  const sessions = [
+    {
+      documentId: 'session-a',
+      user: { documentId: 'authenticated-user' },
+      isActive: true,
+      tokenHash: hashToken(accessToken),
+      refreshTokenHash: hashToken(`session-a-refresh-${'3'.repeat(32)}`),
+    },
+    {
+      documentId: 'session-b',
+      user: { documentId: 'authenticated-user' },
+      isActive: true,
+      tokenHash: hashToken(`session-b-access-${'4'.repeat(32)}`),
+      refreshTokenHash: hashToken(refreshToken),
+    },
+  ];
+  const lookupArgs = [];
+  let updatedDocumentId = null;
+
+  const strapi = {
+    db: {
+      transaction: createSessionLockTransaction(),
+    },
+    documents: (uid) => {
+      assert.equal(uid, SESSION_UID);
+      return {
+        findFirst: async (args) => {
+          lookupArgs.push(args);
+          return sessions.find(
+            (session) =>
+              session.user.documentId === args.filters.user.documentId &&
+              session.isActive === args.filters.isActive &&
+              (!args.filters.tokenHash || session.tokenHash === args.filters.tokenHash) &&
+              (!args.filters.refreshTokenHash ||
+                session.refreshTokenHash === args.filters.refreshTokenHash)
+          );
+        },
+        findOne: async ({ documentId }) =>
+          sessions.find((session) => session.documentId === documentId),
+        update: async ({ documentId }) => {
+          updatedDocumentId = documentId;
+        },
+      };
+    },
+    log: createLogger(),
+  };
+
+  const service = createSessionService({ strapi });
+  const terminated = await service.terminateAuthenticatedSession({
+    userDocumentId: 'authenticated-user',
+    refreshToken,
+    accessToken,
+  });
+
+  assert.equal(terminated, false);
+  assert.deepEqual(lookupArgs, [
+    {
+      filters: {
+        user: { documentId: 'authenticated-user' },
+        isActive: true,
+        tokenHash: hashToken(accessToken),
+        refreshTokenHash: hashToken(refreshToken),
+      },
+      fields: ['documentId'],
+    },
+  ]);
+  assert.equal(updatedDocumentId, null);
+});
+
+test('terminateAuthenticatedSession preserves a terminal reason when the session becomes inactive', async () => {
+  const { hashToken } = require('../server/src/utils/encryption');
+  const accessToken = `racing-access-${'5'.repeat(32)}`;
+  const state = {
+    documentId: 'racing-session',
+    user: { documentId: 'authenticated-user' },
+    isActive: true,
+    tokenHash: hashToken(accessToken),
+    terminationReason: null,
+  };
+  let updateCalls = 0;
+  let transactionCalls = 0;
+
+  const makeInactive = () => {
+    state.isActive = false;
+    state.terminationReason = 'blocked';
+  };
+  const strapi = {
+    db: {
+      transaction: async (callback) => {
+        transactionCalls++;
+        makeInactive();
+        return createSessionLockTransaction()(callback);
+      },
+    },
+    documents: (uid) => {
+      assert.equal(uid, SESSION_UID);
+      return {
+        findFirst: async ({ filters }) => {
+          const matches =
+            state.documentId === (filters.documentId || state.documentId) &&
+            state.user.documentId === filters.user.documentId &&
+            state.isActive === filters.isActive &&
+            state.tokenHash === filters.tokenHash;
+          return matches ? { documentId: state.documentId } : null;
+        },
+        findOne: async () => {
+          makeInactive();
+          return state;
+        },
+        update: async ({ data }) => {
+          updateCalls++;
+          Object.assign(state, data);
+        },
+      };
+    },
+    log: createLogger(),
+  };
+
+  const service = createSessionService({ strapi });
+  const terminated = await service.terminateAuthenticatedSession({
+    userDocumentId: 'authenticated-user',
+    accessToken,
+  });
+
+  assert.equal(terminated, false);
+  assert.equal(transactionCalls, 1);
+  assert.equal(updateCalls, 0);
+  assert.equal(state.isActive, false);
+  assert.equal(state.terminationReason, 'blocked');
+});
+
+test('terminateAuthenticatedSession locks the row before revalidation so a waiting stronger termination wins', async () => {
+  const { hashToken } = require('../server/src/utils/encryption');
+  const accessToken = `locked-access-${'6'.repeat(32)}`;
+  const state = {
+    documentId: 'locked-session',
+    user: { documentId: 'authenticated-user' },
+    isActive: true,
+    tokenHash: hashToken(accessToken),
+    terminationReason: null,
+  };
+  const events = [];
+  let lookupCalls = 0;
+  let lockHeld = false;
+  let releaseWaitingTermination;
+  let competingTermination;
+
+  const runCompetingTermination = async () => {
+    events.push('competing-attempt');
+    if (lockHeld) {
+      await new Promise((resolve) => {
+        releaseWaitingTermination = resolve;
+      });
+    }
+    state.isActive = false;
+    state.terminationReason = 'blocked';
+    events.push('competing-commit');
+  };
+
+  const strapi = {
+    db: {
+      transaction: async (callback) => {
+        let lockedDocumentId = null;
+        const trx = (tableName) => {
+          assert.equal(tableName, 'magic_sessions');
+          let forUpdateCalled = false;
+          return {
+            where(criteria) {
+              lockedDocumentId = criteria.document_id;
+              return this;
+            },
+            forUpdate() {
+              forUpdateCalled = true;
+              return this;
+            },
+            async first(column) {
+              assert.equal(column, 'document_id');
+              assert.equal(lockedDocumentId, state.documentId);
+              assert.ok(forUpdateCalled, 'SELECT lock requires FOR UPDATE');
+              lockHeld = true;
+              events.push('lock-acquired');
+              return { document_id: lockedDocumentId };
+            },
+          };
+        };
+
+        const result = await callback({ trx });
+        events.push('logout-commit');
+        lockHeld = false;
+        releaseWaitingTermination?.();
+        await competingTermination;
+        return result;
+      },
+    },
+    documents: (uid) => {
+      assert.equal(uid, SESSION_UID);
+      return {
+        findFirst: async ({ filters }) => {
+          lookupCalls++;
+          if (lookupCalls === 1) {
+            events.push('initial-selection');
+          } else {
+            events.push('predicate-revalidation');
+            competingTermination = runCompetingTermination();
+          }
+
+          const matches =
+            state.documentId === (filters.documentId || state.documentId) &&
+            state.user.documentId === filters.user.documentId &&
+            state.isActive === filters.isActive &&
+            state.tokenHash === filters.tokenHash;
+          return matches ? { documentId: state.documentId } : null;
+        },
+        update: async ({ data }) => {
+          events.push('logout-update');
+          Object.assign(state, data);
+        },
+      };
+    },
+    log: createLogger(),
+  };
+
+  const service = createSessionService({ strapi });
+  const terminated = await service.terminateAuthenticatedSession({
+    userDocumentId: 'authenticated-user',
+    accessToken,
+  });
+
+  assert.equal(terminated, true);
+  assert.deepEqual(events, [
+    'initial-selection',
+    'lock-acquired',
+    'predicate-revalidation',
+    'competing-attempt',
+    'logout-update',
+    'logout-commit',
+    'competing-commit',
+  ]);
+  const lockIndex = events.indexOf('lock-acquired');
+  assert.ok(lockIndex < events.indexOf('predicate-revalidation'));
+  assert.ok(lockIndex < events.indexOf('logout-update'));
+  assert.equal(state.isActive, false);
+  assert.equal(state.terminationReason, 'blocked');
+});
+
+test('terminateAuthenticatedSession returns false when no owned active session matches', async () => {
+  let updateCalls = 0;
+  const strapi = {
+    documents: (uid) => {
+      assert.equal(uid, SESSION_UID);
+      return {
+        findFirst: async () => null,
+        update: async () => {
+          updateCalls++;
+        },
+      };
+    },
+    log: createLogger(),
+  };
+
+  const service = createSessionService({ strapi });
+  const terminated = await service.terminateAuthenticatedSession({
+    userDocumentId: 'authenticated-user',
+    refreshToken: `unknown-refresh-${'a'.repeat(32)}`,
+  });
+
+  assert.equal(terminated, false);
+  assert.equal(updateCalls, 0);
 });
 
 test('terminateSession drains more than 1000 active sessions for one user', async () => {

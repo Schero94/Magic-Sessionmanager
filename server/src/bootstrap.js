@@ -317,7 +317,6 @@ function mountLogoutRoute({ strapi, log, sessionService }) {
 
         const jwtService = strapi.plugin('users-permissions').service('jwt');
         let decoded = null;
-        let expiredButValid = false;
 
         try {
           decoded = await jwtService.verify(token);
@@ -328,7 +327,6 @@ function mountLogoutRoute({ strapi, log, sessionService }) {
               const jwtSecret = strapi.config.get('plugin::users-permissions.jwtSecret');
               if (jwtSecret) {
                 decoded = jwt.verify(token, jwtSecret, { ignoreExpiration: true });
-                expiredButValid = !!decoded;
               }
             } catch {
               decoded = null;
@@ -347,29 +345,23 @@ function mountLogoutRoute({ strapi, log, sessionService }) {
           return;
         }
 
-        const userDocId = await resolveUserDocumentId(strapi, decoded.id);
-
-        const tokenHashValue = hashToken(token);
-        const matchingSession = await strapi.documents(SESSION_UID).findFirst({
-          filters: {
-            tokenHash: tokenHashValue,
-            ...(userDocId ? { user: { documentId: userDocId } } : {}),
-          },
-          fields: ['documentId', 'isActive'],
-        });
-
-        if (matchingSession && matchingSession.isActive) {
-          await sessionService.terminateSession({
-            sessionId: matchingSession.documentId,
-            reason: 'logout',
-          });
-          log.info(`[LOGOUT] Session ${matchingSession.documentId} terminated (expiredButValid=${expiredButValid})`);
+        const userDocumentId = await resolveUserDocumentId(strapi, decoded.id);
+        if (!userDocumentId) {
+          ctx.status = 401;
+          ctx.body = { error: { status: 401, name: 'UnauthorizedError', message: 'Invalid token' } };
+          return;
         }
 
+        await sessionService.terminateAuthenticatedSession({
+          userDocumentId,
+          accessToken: token,
+          refreshToken: null,
+        });
+
         ctx.status = 200;
-        ctx.body = { message: 'Logged out successfully' };
+        ctx.body = { ok: true, message: 'Logged out successfully' };
       } catch (err) {
-        log.error('Logout error:', err);
+        log.error('Logout error:', err?.name || 'Error');
         ctx.status = 500;
         ctx.body = { error: { status: 500, name: 'InternalServerError', message: 'Logout failed' } };
       }
@@ -830,21 +822,63 @@ function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
   log.info('[SUCCESS] Refresh token interceptor middleware mounted');
 }
 
+/**
+ * Synchronizes a successful users-permissions logout with the authenticated
+ * user's plugin session after downstream authentication has completed.
+ *
+ * @param {{strapi: object, log: object, sessionService: object}} deps
+ * @returns {void}
+ */
 function mountLogoutInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
     if (ctx.path !== '/api/auth/logout' || ctx.method !== 'POST') return next();
 
     const refreshToken = getIncomingRefreshToken(ctx, getRefreshCookieName(strapi));
-    if (refreshToken) {
-      try {
-        await sessionService.terminateSessionByRefreshToken(refreshToken);
-      } catch (err) {
-        failClosedAuthResponse({ ctx, strapi, log, operation: 'logout termination failed', error: err });
-        return;
-      }
-    }
+    const accessToken = extractBearerToken(ctx);
+    const jwtManagement = strapi.config.get(
+      'plugin::users-permissions.jwtManagement',
+      'legacy-support'
+    );
 
     await next();
+
+    const isUsersPermissionsLogoutRoute =
+      ctx.state?.route?.handler === 'auth.logout' &&
+      ctx.state?.route?.info?.pluginName === 'users-permissions';
+    const isSuccessful =
+      isUsersPermissionsLogoutRoute &&
+      ctx.status >= 200 &&
+      ctx.status < 300;
+    const isLegacyMissingRoute =
+      jwtManagement === 'legacy-support' &&
+      ctx.status === 404 &&
+      isUsersPermissionsLogoutRoute;
+    const authenticatedUser = ctx.state?.user;
+
+    if (!authenticatedUser || (!isSuccessful && !isLegacyMissingRoute)) return;
+
+    try {
+      const userDocumentId = authenticatedUser.documentId ||
+        await resolveUserDocumentId(strapi, authenticatedUser.id);
+
+      if (!userDocumentId) {
+        throw new Error('authenticated logout user has no resolvable documentId');
+      }
+
+      await sessionService.terminateAuthenticatedSession({
+        userDocumentId,
+        refreshToken,
+        accessToken,
+      });
+
+      ctx.status = 200;
+      ctx.body = {
+        ok: true,
+        message: 'Logged out successfully',
+      };
+    } catch (err) {
+      failClosedAuthResponse({ ctx, strapi, log, operation: 'logout termination failed', error: err });
+    }
   });
 
   log.info('[SUCCESS] Logout interceptor middleware mounted');

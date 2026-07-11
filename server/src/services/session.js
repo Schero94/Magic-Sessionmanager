@@ -18,6 +18,26 @@ const { getPluginSettings } = require('../utils/settings-loader');
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const MAX_SESSIONS_QUERY = 1000;
 
+/**
+ * Holds a physical row lock for a selected session until the surrounding
+ * Strapi transaction completes. The physical table and column are used only
+ * for locking; session reads and writes continue through Document Service.
+ *
+ * @param {Function} trx - Strapi transaction's Knex query builder
+ * @param {string} documentId - Selected session documentId
+ * @returns {Promise<void>}
+ */
+async function lockSessionRow(trx, documentId) {
+  // PostgreSQL/MySQL hold this explicit row lock. Knex strips FOR UPDATE on
+  // SQLite, which serializes writes at database level: after a read snapshot,
+  // a competing commit makes the stale transaction's later write block/fail
+  // instead of overwriting that committed result.
+  await trx('magic_sessions')
+    .where({ document_id: documentId })
+    .forUpdate()
+    .first('document_id');
+}
+
 module.exports = ({ strapi }) => {
   const log = createLogger(strapi);
 
@@ -168,6 +188,57 @@ module.exports = ({ strapi }) => {
     },
 
     /**
+     * Terminates the authenticated user's active session. A raw access token
+     * is authoritative when present, and a supplied refresh token must match
+     * the same row. Refresh-token-only lookup is used when access is absent.
+     *
+     * @param {Object} params
+     * @param {string} params.userDocumentId - Authenticated user's documentId
+     * @param {string|null} [params.refreshToken=null] - Raw refresh token
+     * @param {string|null} [params.accessToken=null] - Raw access token
+     * @returns {Promise<boolean>} Whether one owned active session was terminated
+     * @throws {Error} When the Document Service lookup or termination fails
+     * @sideeffect Marks the matching session inactive with logout metadata
+     */
+    async terminateAuthenticatedSession({
+      userDocumentId,
+      refreshToken = null,
+      accessToken = null,
+    }) {
+      if (!userDocumentId || (!refreshToken && !accessToken)) return false;
+
+      const selectedTokenFilters = {
+        user: { documentId: userDocumentId },
+        isActive: true,
+      };
+      if (accessToken) {
+        selectedTokenFilters.tokenHash = hashToken(accessToken);
+        if (refreshToken) {
+          selectedTokenFilters.refreshTokenHash = hashToken(refreshToken);
+        }
+      } else {
+        selectedTokenFilters.refreshTokenHash = hashToken(refreshToken);
+      }
+
+      const session = await strapi.documents(SESSION_UID).findFirst({
+        filters: selectedTokenFilters,
+        fields: ['documentId'],
+      });
+      if (!session) return false;
+
+      return strapi.db.transaction(async ({ trx }) => {
+        await lockSessionRow(trx, session.documentId);
+
+        const result = await this.terminateSession({
+          sessionId: session.documentId,
+          reason: 'logout',
+          expectedFilters: selectedTokenFilters,
+        });
+        return result?.terminatedCount === 1;
+      });
+    },
+
+    /**
      * Terminates a single session, all sessions of a user, or all sessions
      * of a user EXCEPT one with a typed reason so the JWT-verify wrapper
      * can communicate the cause to the client.
@@ -193,10 +264,19 @@ module.exports = ({ strapi }) => {
      *                                           `userId`. Used by
      *                                           /logout-other-devices so
      *                                           the caller stays logged in.
+     * @param {object} [params.expectedFilters]  Internal predicates that must
+     *                                           still match before a
+     *                                           single-session update.
      * @param {'logout'|'manual'|'idle'|'expired'|'blocked'} [params.reason='manual']
      * @returns {Promise<{terminatedCount: number}>}
      */
-    async terminateSession({ sessionId, userId, exceptSessionId = null, reason = 'manual' }) {
+    async terminateSession({
+      sessionId,
+      userId,
+      exceptSessionId = null,
+      reason = 'manual',
+      expectedFilters = null,
+    }) {
       try {
         const now = new Date();
         const validReasons = ['logout', 'manual', 'idle', 'expired', 'blocked'];
@@ -210,10 +290,18 @@ module.exports = ({ strapi }) => {
         };
 
         if (sessionId) {
-          const existing = await strapi.documents(SESSION_UID).findOne({
-            documentId: sessionId,
-            fields: ['documentId'],
-          });
+          const existing = expectedFilters
+            ? await strapi.documents(SESSION_UID).findFirst({
+                filters: {
+                  ...expectedFilters,
+                  documentId: sessionId,
+                },
+                fields: ['documentId'],
+              })
+            : await strapi.documents(SESSION_UID).findOne({
+                documentId: sessionId,
+                fields: ['documentId'],
+              });
 
           if (!existing) {
             log.warn(`Session ${sessionId} not found for termination`);
