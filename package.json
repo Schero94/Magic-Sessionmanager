@@ -41,12 +41,14 @@
     "pics"
   ],
   "engines": {
-    "node": ">=20.0.0 <=26.x.x",
+    "node": "^22.22.2 || >=24.15.0",
     "npm": ">=6.0.0"
   },
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "test": "node --test tests/*.test.js tests/*.test.mjs",
+    "test:ts:front": "tsc --noEmit --allowJs --jsx react-jsx --moduleResolution bundler --module esnext -p admin/jsconfig.json",
+    "test:ts:back": "tsc --noEmit --allowJs --moduleResolution node --module commonjs -p server/jsconfig.json",
     "build": "npm run clean && strapi-plugin build && node scripts/build-server-bundle.mjs",
     "watch": "strapi-plugin watch",
     "watch:link": "strapi-plugin watch:link",
@@ -56,28 +58,28 @@
     "prepublishOnly": "npm test && npm run build && npm run verify && npm run verify:runtime"
   },
   "dependencies": {
-    "@maxmind/geoip2-node": "^6.3.4",
-    "sanitize-html": "^2.17.6"
+    "@maxmind/geoip2-node": "^7.1.0",
+    "sanitize-html": "^2.18.0"
   },
   "devDependencies": {
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/commit-analyzer": "^13.0.0",
-    "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^12.0.9",
-    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/changelog": "^7.0.0",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^11.0.1",
+    "@semantic-release/github": "^12.0.10",
+    "@semantic-release/npm": "^13.2.0",
     "@semantic-release/release-notes-generator": "^14.1.1",
-    "@strapi/design-system": "^2.2.2",
-    "@strapi/icons": "^2.2.2",
+    "@strapi/design-system": "^2.2.4",
+    "@strapi/icons": "^2.2.4",
     "@strapi/sdk-plugin": "^6.1.1",
-    "@strapi/strapi": "^5.50.1",
-    "esbuild": "^0.28.1",
-    "prettier": "^3.9.5",
+    "@strapi/strapi": "^5.57.0",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-intl": "^7.1.14",
-    "react-router-dom": "^6.30.4",
-    "semantic-release": "^25.0.5",
-    "styled-components": "^6.4.3"
+    "react-intl": "^6.8.9",
+    "react-router-dom": "^6.30.6",
+    "semantic-release": "^25.0.9",
+    "styled-components": "^6.6.0"
   },
   "peerDependencies": {
     "@strapi/design-system": "^2.0.0",
@@ -86,7 +88,7 @@
     "@strapi/utils": "^5.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-intl": "^7.0.0",
+    "react-intl": "^6.0.0",
     "react-router-dom": "^6.0.0",
     "styled-components": "^6.0.0"
   },

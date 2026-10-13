@@ -56,6 +56,10 @@ function sanitizeCountryList(list) {
     .map(code => code.trim().toUpperCase());
 }
 
+function sanitizeBoolean(value) {
+  return value === true;
+}
+
 /**
  * Sanitizes email templates using a conservative allowlist strategy.
  * Strips all HTML tags except a small safe subset and removes all event handlers
@@ -252,8 +256,8 @@ module.exports = {
     try {
       const { body } = ctx.request;
 
-      if (!body) {
-        return ctx.badRequest('Settings data is required');
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return ctx.badRequest('Settings data must be an object');
       }
 
       const pluginStore = strapi.store({
@@ -279,17 +283,17 @@ module.exports = {
         retentionDays: normalizeRetentionDays(body.retentionDays, 90),
         maxSessionAgeDays: Math.max(1, Math.min(parseInt(body.maxSessionAgeDays) || 30, 365)),
         sessionCreationGraceMs: grace,
-        cleanupUseDbDirect: !!body.cleanupUseDbDirect,
+        cleanupUseDbDirect: sanitizeBoolean(body.cleanupUseDbDirect),
         rateLimitWriteMax: Math.max(1, Math.min(parseInt(body.rateLimitWriteMax) || 10, 1000)),
         rateLimitReadMax: Math.max(1, Math.min(parseInt(body.rateLimitReadMax) || 120, 10000)),
         rateLimitWindowSeconds: Math.max(10, Math.min(parseInt(body.rateLimitWindowSeconds) || 60, 3600)),
 
         // Geo / security
-        enableGeolocation: !!body.enableGeolocation,
-        enableSecurityScoring: !!body.enableSecurityScoring,
-        blockSuspiciousSessions: !!body.blockSuspiciousSessions,
+        enableGeolocation: sanitizeBoolean(body.enableGeolocation),
+        enableSecurityScoring: sanitizeBoolean(body.enableSecurityScoring),
+        blockSuspiciousSessions: sanitizeBoolean(body.blockSuspiciousSessions),
         maxFailedLogins,
-        enableGeofencing: !!body.enableGeofencing,
+        enableGeofencing: sanitizeBoolean(body.enableGeofencing),
         allowedCountries: sanitizeCountryList(body.allowedCountries),
         blockedCountries: sanitizeCountryList(body.blockedCountries),
         geoIpProvider: normalizeGeoIpProvider(body.geoIpProvider),
@@ -297,17 +301,17 @@ module.exports = {
         geoLookupFailureMode: normalizeGeoLookupFailureMode(body.geoLookupFailureMode),
 
         // Notifications
-        enableEmailAlerts: !!body.enableEmailAlerts,
-        alertOnSuspiciousLogin: !!body.alertOnSuspiciousLogin,
-        alertOnNewLocation: !!body.alertOnNewLocation,
-        alertOnVpnProxy: !!body.alertOnVpnProxy,
-        enableWebhooks: !!body.enableWebhooks,
+        enableEmailAlerts: sanitizeBoolean(body.enableEmailAlerts),
+        alertOnSuspiciousLogin: sanitizeBoolean(body.alertOnSuspiciousLogin),
+        alertOnNewLocation: sanitizeBoolean(body.alertOnNewLocation),
+        alertOnVpnProxy: sanitizeBoolean(body.alertOnVpnProxy),
+        enableWebhooks: sanitizeBoolean(body.enableWebhooks),
         discordWebhookUrl: sanitizeWebhookUrl(body.discordWebhookUrl, 'discord'),
         slackWebhookUrl: sanitizeWebhookUrl(body.slackWebhookUrl, 'slack'),
 
         // Session policy
-        strictSessionEnforcement: !!body.strictSessionEnforcement,
-        trustedProxies: !!body.trustedProxies,
+        strictSessionEnforcement: sanitizeBoolean(body.strictSessionEnforcement),
+        trustedProxies: sanitizeBoolean(body.trustedProxies),
 
         // Email templates
         emailTemplates: sanitizeEmailTemplates(body.emailTemplates),

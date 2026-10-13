@@ -9,6 +9,8 @@ Free and open under the MIT license. All features are available without a paid l
 [![NPM](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+[Project site](https://schero94.github.io/Magic-Sessionmanager/)
+
 ---
 
 ## 📸 What It Looks Like

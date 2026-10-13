@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Track and manage user sessions in Strapi 5, with owner-scoped APIs and permission-protected admin controls.">
+    <title>Magic Session Manager for Strapi 5</title>
+    <link rel="stylesheet" href="./site.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="#main-content" aria-label="Magic Sessionmanager home">
+          <span class="brand-mark" aria-hidden="true">MS</span>
+          <span>Magic Session Manager</span>
+        </a>
+        <nav class="top-links" aria-label="Project links">
+          <a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub</a>
+          <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm</a>
+          <a href="https://github.com/Schero94/Magic-Sessionmanager/releases">Releases</a>
+        </nav>
+      </div>
+    </header>
+
+    <div class="hero-wrap">
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero-copy">
+          <span class="eyebrow">Strapi 5 plugin</span>
+          <h1 id="page-title">Know which sessions are active. Stay in control.</h1>
+          <p>Magic Sessionmanager records user sessions, shows activity in the Strapi admin, and lets authorized admins or users end sessions.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#install">Install the plugin</a>
+            <a class="button" href="https://github.com/Schero94/Magic-Sessionmanager">View source</a>
+          </div>
+          <div class="badges" aria-label="Package details">
+            <span class="badge">Strapi 5</span>
+            <span class="badge">Node.js 22.22.2 or 24.15.0+</span>
+            <span class="badge">MIT license</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="layout">
+      <nav class="side-nav" aria-label="Page sections">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#configuration">Configuration</a>
+        <a href="#security">Security</a>
+        <a href="#api">API</a>
+        <a href="#releases">Releases</a>
+      </nav>
+
+      <main class="content" id="main-content" tabindex="-1">
+        <section class="section" id="features" aria-labelledby="features-title">
+          <h2 id="features-title">Features</h2>
+          <p class="section-lead">The plugin tracks logins and session activity and provides controls in the Strapi admin.</p>
+          <div class="card-grid">
+            <article class="card">
+              <h3>Session overview</h3>
+              <p>Review active and inactive sessions, login and last-active times, device details, IP address, and available location data.</p>
+            </article>
+            <article class="card">
+              <h3>Session controls</h3>
+              <p>Admins with plugin access can terminate sessions, end a user's sessions, block or unblock a user, and clean up inactive records. Older records can be removed according to the retention setting.</p>
+            </article>
+            <article class="card">
+              <h3>Account security</h3>
+              <p>Session validation integrates with Users &amp; Permissions JWT handling. Optional settings cover geofencing, security scoring, email alerts, and Discord or Slack webhooks.</p>
+            </article>
+            <article class="card">
+              <h3>Multiple sessions per user</h3>
+              <p>Authenticated users can inspect and end their own sessions. Session queries are scoped to the authenticated account.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="install" aria-labelledby="install-title">
+          <h2 id="install-title">Install</h2>
+          <p class="section-lead">Install the published package, enable the plugin, then rebuild the Strapi admin.</p>
+          <div class="code-card">
+            <div class="code-label"><span>Terminal</span></div>
+            <pre><code>npm install strapi-plugin-magic-sessionmanager</code></pre>
+          </div>
+          <div class="code-card">
+            <div class="code-label"><span>config/plugins.ts</span></div>
+            <pre><code>export default () =&gt; ({
+  'magic-sessionmanager': {
+    enabled: true,
+  },
+});</code></pre>
+          </div>
+          <div class="code-card">
+            <div class="code-label"><span>Terminal</span></div>
+            <pre><code>npm run build
+npm run develop</code></pre>
+          </div>
+          <p>After startup, open the Strapi admin and select Sessions in the plugin navigation.</p>
+        </section>
+
+        <section class="section" id="configuration" aria-labelledby="configuration-title">
+          <h2 id="configuration-title">Configuration</h2>
+          <p class="section-lead">Enable the plugin in <code>config/plugins.ts</code>. Plugin settings can also be managed in the admin settings page.</p>
+          <div class="code-card">
+            <div class="code-label"><span>Optional Strapi configuration</span></div>
+            <pre><code>export default () =&gt; ({
+  'magic-sessionmanager': {
+    enabled: true,
+    config: {
+      lastSeenRateLimit: 30000,
+      inactivityTimeout: 900000,
+      geoIpProvider: 'local-mmdb',
+      geoIpDatabasePath: process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE,
+    },
+  },
+});</code></pre>
+          </div>
+          <p><code>lastSeenRateLimit</code> and <code>inactivityTimeout</code> are milliseconds. For local GeoIP data, configure a MaxMind-compatible database path. GeoIP, geofencing, alerts, and webhooks are optional.</p>
+        </section>
+
+        <section class="section" id="security" aria-labelledby="security-title">
+          <h2 id="security-title">Security and permissions</h2>
+          <div class="callout warning"><strong>Production requirement:</strong> set <code>SESSION_ENCRYPTION_KEY</code> before starting Strapi in production. The plugin fails startup when it is missing.</div>
+          <div class="card-grid">
+            <article class="card">
+              <h3>Admin API</h3>
+              <p>Admin routes require an authenticated Strapi admin and the <code>plugin::magic-sessionmanager.access</code> permission. Grant that permission through Strapi admin roles.</p>
+            </article>
+            <article class="card">
+              <h3>Content API</h3>
+              <p>Content API routes require Users &amp; Permissions authentication and are rate-limited. Session reads and termination are restricted to the authenticated user's own sessions.</p>
+            </article>
+            <article class="card">
+              <h3>Stored tokens</h3>
+              <p>Session tokens are encrypted at rest with AES-256-GCM. The encryption key must remain stable because changing it prevents existing encrypted tokens from being decrypted.</p>
+            </article>
+            <article class="card">
+              <h3>GeoIP credentials</h3>
+              <p>MaxMind credentials entered in the admin are stored in the Strapi plugin store. The license key is not returned to the browser after saving.</p>
+            </article>
+          </div>
+          <p>Use the repository README for detailed GeoIP setup and configuration options. Do not expose secrets in client-side code or commit them to source control.</p>
+        </section>
+
+        <section class="section" id="api" aria-labelledby="api-title">
+          <h2 id="api-title">API</h2>
+          <p class="section-lead">Content API routes are prefixed with <code>/api/magic-sessionmanager</code> and require a Users &amp; Permissions JWT. Admin routes use the Strapi admin API and require the plugin access permission.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Access</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>GET</td><td><code>/my-sessions</code></td><td>Authenticated user, own sessions</td></tr>
+                <tr><td>GET</td><td><code>/current-session</code></td><td>Authenticated user, current session</td></tr>
+                <tr><td>POST</td><td><code>/logout</code></td><td>Authenticated user, current session</td></tr>
+                <tr><td>POST</td><td><code>/logout-all</code></td><td>Authenticated user, all own sessions</td></tr>
+                <tr><td>POST</td><td><code>/logout-others</code></td><td>Authenticated user, other own sessions</td></tr>
+                <tr><td>DELETE</td><td><code>/my-sessions/:sessionId</code></td><td>Authenticated user, own session</td></tr>
+                <tr><td>GET</td><td><code>/sessions</code></td><td>Admin with plugin access</td></tr>
+                <tr><td>GET</td><td><code>/sessions/active</code></td><td>Admin with plugin access</td></tr>
+                <tr><td>POST</td><td><code>/sessions/:sessionId/terminate</code></td><td>Admin with plugin access</td></tr>
+                <tr><td>PUT</td><td><code>/settings</code></td><td>Admin with plugin access</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>See the README for request examples and the full route set, including GeoIP and settings routes.</p>
+        </section>
+
+        <section class="section" id="releases" aria-labelledby="releases-title">
+          <h2 id="releases-title">Releases and testing</h2>
+          <p class="section-lead">The project uses Conventional Commits and semantic-release on Node.js 22. Releases run the test suite, production build, and package verification before publishing to npm.</p>
+          <div class="code-card">
+            <div class="code-label"><span>Local checks</span></div>
+            <pre><code>npm ci
+npm test
+npm run build
+npm run verify</code></pre>
+          </div>
+          <div class="link-list">
+            <a href="https://github.com/Schero94/Magic-Sessionmanager/releases">Release history</a>
+            <a href="https://github.com/Schero94/Magic-Sessionmanager">Source repository</a>
+            <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm package</a>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="footer">
+      <p>Magic Sessionmanager is released under the MIT License.</p>
+      <p><a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub repository</a> · <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm package</a></p>
+    </footer>
+  </body>
+</html>

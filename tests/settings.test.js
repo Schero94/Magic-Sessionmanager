@@ -18,7 +18,8 @@ function createSettingsCtx(body) {
       this.sent = payload;
     },
     badRequest(message) {
-      throw new Error(message);
+      this.error = { status: 400, message };
+      return this.error;
     },
   };
 }
@@ -152,4 +153,53 @@ test('getSettings merges old partial settings with every current default', async
   assert.equal(response.settings.maxFailedLogins, 5);
   assert.equal(response.settings.sessionCreationGraceMs, 5000);
   assert.equal(response.settings.cleanupUseDbDirect, false);
+});
+
+test('updateSettings treats string booleans as invalid instead of enabling features', async () => {
+  let storedSettings;
+  global.strapi = {
+    store: () => ({
+      set: async ({ value }) => {
+        storedSettings = value;
+      },
+    }),
+    log: { info() {}, error() {} },
+  };
+
+  const ctx = createSettingsCtx({
+    strictSessionEnforcement: 'false',
+    trustedProxies: 'false',
+    enableGeolocation: 'false',
+    enableWebhooks: 'false',
+    blockSuspiciousSessions: 'false',
+    enableEmailAlerts: 'false',
+    emailTemplates: {},
+  });
+
+  await settingsController.updateSettings(ctx);
+
+  assert.equal(storedSettings.strictSessionEnforcement, false);
+  assert.equal(storedSettings.trustedProxies, false);
+  assert.equal(storedSettings.enableGeolocation, false);
+  assert.equal(storedSettings.enableWebhooks, false);
+  assert.equal(storedSettings.blockSuspiciousSessions, false);
+  assert.equal(storedSettings.enableEmailAlerts, false);
+});
+
+test('updateSettings rejects a non-object settings payload without persisting it', async () => {
+  let persisted = false;
+  global.strapi = {
+    store: () => ({
+      set: async () => {
+        persisted = true;
+      },
+    }),
+    log: { info() {}, error() {} },
+  };
+  const ctx = createSettingsCtx('not-an-object');
+
+  await settingsController.updateSettings(ctx);
+
+  assert.equal(persisted, false);
+  assert.equal(ctx.error.status, 400);
 });

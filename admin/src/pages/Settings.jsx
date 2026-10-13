@@ -18,6 +18,7 @@ import {
   Grid,
   Toggle,
   NumberInput,
+  Field,
 } from '@strapi/design-system';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import { Check, Duplicate, Trash, Mail, Code, Cog, Shield, Clock } from '@strapi/icons';
@@ -87,20 +88,14 @@ const ToggleCard = styled(Box)`
     ? '0 4px 20px rgba(34, 197, 94, 0.15)'
     : '0 2px 8px rgba(0, 0, 0, 0.06)'};
   position: relative;
-  cursor: pointer;
   display: flex;
   align-items: center;
 
   &:hover {
-    transform: translateY(-4px);
     box-shadow: ${props => props.$active
-      ? '0 8px 30px rgba(34, 197, 94, 0.25)'
-      : '0 6px 16px rgba(0, 0, 0, 0.12)'};
+      ? '0 4px 20px rgba(34, 197, 94, 0.15)'
+      : '0 2px 8px rgba(0, 0, 0, 0.06)'};
     border-color: ${props => props.$active ? 'var(--colors-success600, #15803D)' : 'rgba(128, 128, 128, 0.3)'};
-  }
-
-  &:active {
-    transform: translateY(-2px);
   }
 
   ${props => props.$active && `
@@ -472,6 +467,7 @@ const GeofencingPanel = ({
               </Typography>
             </Box>
             <Toggle
+              aria-label={t('settings.geofencing.enable.title', 'Enable Geofencing')}
               onLabel="On"
               offLabel="Off"
               checked={!!settings.enableGeofencing}
@@ -1070,7 +1066,7 @@ const SettingsPage = () => {
       <Box paddingTop={6} paddingLeft={6} paddingRight={6} paddingBottom={10}>
 
         {/* Accordion Layout */}
-        <Accordion.Root type="multiple" defaultValue={['general', 'security', 'email']}>
+        <Accordion.Root defaultValue="general">
 
           {/* General Settings */}
           <Accordion.Item value="general">
@@ -1307,6 +1303,7 @@ const SettingsPage = () => {
 
                     <Alert
                       variant="default"
+                      closeLabel={t('settings.common.close', 'Close')}
                       title={t('settings.security.encryption.important', 'Important')}
                       style={{ marginTop: 8 }}
                     >
@@ -1315,13 +1312,17 @@ const SettingsPage = () => {
 
                     <Flex gap={3} alignItems="flex-end">
                       <Box style={{ flex: 1 }}>
-                        <TextInput
-                          label={t('settings.security.encryption.label', 'Generated Encryption Key')}
-                          value={encryptionKey}
-                          onChange={(e) => setEncryptionKey(e.target.value)}
-                          placeholder={t('settings.security.encryption.placeholder', "Click 'Generate Key' to create a secure key")}
-                          type={showEncryptionKey ? 'text' : 'password'}
-                        />
+                        <Field.Root id="session-encryption-key" name="sessionEncryptionKey">
+                          <Field.Label>
+                            {t('settings.security.encryption.label', 'Generated Encryption Key')}
+                          </Field.Label>
+                          <TextInput
+                            value={encryptionKey}
+                            onChange={(e) => setEncryptionKey(e.target.value)}
+                            placeholder={t('settings.security.encryption.placeholder', "Click 'Generate Key' to create a secure key")}
+                            type={showEncryptionKey ? 'text' : 'password'}
+                          />
+                        </Field.Root>
                       </Box>
                       <ShowHideButton
                         onClick={() => setShowEncryptionKey(!showEncryptionKey)}
@@ -1439,11 +1440,13 @@ const SettingsPage = () => {
                       <Grid.Item col={12} s={12}>
                         <ToggleCard
                           $active={settings.strictSessionEnforcement}
-                          onClick={() => handleChange('strictSessionEnforcement', !settings.strictSessionEnforcement)}
                         >
                           <Flex direction="row" gap={4} style={{ width: '100%' }} alignItems="center">
                             <GreenToggle $isActive={settings.strictSessionEnforcement}>
                               <Toggle
+                                aria-label={t('settings.security.enforcement.strict.title', 'Strict Session Enforcement')}
+                                onLabel="On"
+                                offLabel="Off"
                                 checked={settings.strictSessionEnforcement}
                                 onChange={() => handleChange('strictSessionEnforcement', !settings.strictSessionEnforcement)}
                               />
@@ -1493,11 +1496,13 @@ const SettingsPage = () => {
                       <Grid.Item col={6} s={12}>
                         <ToggleCard
                           $active={settings.trustedProxies}
-                          onClick={() => handleChange('trustedProxies', !settings.trustedProxies)}
                         >
                           <Flex direction="row" gap={4} style={{ width: '100%' }} alignItems="center">
                             <GreenToggle $isActive={settings.trustedProxies}>
                               <Toggle
+                                aria-label={t('settings.security.enforcement.trustedProxies.title', 'Trust Upstream Proxy')}
+                                onLabel="On"
+                                offLabel="Off"
                                 checked={settings.trustedProxies}
                                 onChange={() => handleChange('trustedProxies', !settings.trustedProxies)}
                               />
@@ -1523,6 +1528,7 @@ const SettingsPage = () => {
                     {!settings.strictSessionEnforcement && (
                       <Alert
                         variant="warning"
+                        closeLabel={t('settings.common.close', 'Close')}
                         title={t('settings.security.enforcement.warning.title', 'Running in Relaxed Mode')}
                       >
                         {t('settings.security.enforcement.warning.body', 'Tokens without a matching session record are allowed through. Manual session termination is still enforced via the token hash, but we strongly recommend enabling strict mode in production.')}
@@ -1537,11 +1543,13 @@ const SettingsPage = () => {
                     <Grid.Item col={6} s={12}>
                       <ToggleCard
                         $active={settings.blockSuspiciousSessions}
-                        onClick={() => handleChange('blockSuspiciousSessions', !settings.blockSuspiciousSessions)}
                       >
                         <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
                           <GreenToggle $isActive={settings.blockSuspiciousSessions}>
                             <Toggle
+                              aria-label={t('settings.security.blockSuspicious.title', 'Block Suspicious Sessions')}
+                              onLabel="On"
+                              offLabel="Off"
                               checked={settings.blockSuspiciousSessions}
                               onChange={() => handleChange('blockSuspiciousSessions', !settings.blockSuspiciousSessions)}
                             />
@@ -1566,11 +1574,13 @@ const SettingsPage = () => {
                     <Grid.Item col={6} s={12}>
                       <ToggleCard
                         $active={settings.enableGeolocation}
-                        onClick={() => handleChange('enableGeolocation', !settings.enableGeolocation)}
                       >
                         <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
                           <GreenToggle $isActive={settings.enableGeolocation}>
                             <Toggle
+                              aria-label={t('settings.security.geolocation.title', 'IP Geolocation')}
+                              onLabel="On"
+                              offLabel="Off"
                               checked={settings.enableGeolocation}
                               onChange={() => handleChange('enableGeolocation', !settings.enableGeolocation)}
                             />
@@ -1595,11 +1605,13 @@ const SettingsPage = () => {
                     <Grid.Item col={6} s={12}>
                       <ToggleCard
                         $active={settings.enableSecurityScoring}
-                        onClick={() => handleChange('enableSecurityScoring', !settings.enableSecurityScoring)}
                       >
                         <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
                           <GreenToggle $isActive={settings.enableSecurityScoring}>
                             <Toggle
+                              aria-label={t('settings.security.scoring.title', 'Security Scoring')}
+                              onLabel="On"
+                              offLabel="Off"
                               checked={settings.enableSecurityScoring}
                               onChange={() => handleChange('enableSecurityScoring', !settings.enableSecurityScoring)}
                             />
@@ -1705,11 +1717,13 @@ const SettingsPage = () => {
                       <Grid.Item col={12}>
                         <ToggleCard
                           $active={settings.enableEmailAlerts}
-                          onClick={() => handleChange('enableEmailAlerts', !settings.enableEmailAlerts)}
                         >
                           <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
                             <GreenToggle $isActive={settings.enableEmailAlerts}>
                               <Toggle
+                                aria-label={t('settings.email.enable.title', 'Enable Email Alerts')}
+                                onLabel="On"
+                                offLabel="Off"
                                 checked={settings.enableEmailAlerts}
                                 onChange={() => handleChange('enableEmailAlerts', !settings.enableEmailAlerts)}
                               />
@@ -1748,9 +1762,7 @@ const SettingsPage = () => {
                               borderRadius: theme.borderRadius.md,
                               border: `2px solid ${settings.alertOnSuspiciousLogin ? 'rgba(239, 68, 68, 0.4)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
-                              cursor: 'pointer'
                             }}
-                            onClick={() => handleChange('alertOnSuspiciousLogin', !settings.alertOnSuspiciousLogin)}
                           >
                             <Checkbox
                               checked={settings.alertOnSuspiciousLogin}
@@ -1770,9 +1782,7 @@ const SettingsPage = () => {
                               borderRadius: theme.borderRadius.md,
                               border: `2px solid ${settings.alertOnNewLocation ? 'rgba(14, 165, 233, 0.3)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
-                              cursor: 'pointer'
                             }}
-                            onClick={() => handleChange('alertOnNewLocation', !settings.alertOnNewLocation)}
                           >
                             <Checkbox
                               checked={settings.alertOnNewLocation}
@@ -1792,9 +1802,7 @@ const SettingsPage = () => {
                               borderRadius: theme.borderRadius.md,
                               border: `2px solid ${settings.alertOnVpnProxy ? 'rgba(234, 179, 8, 0.4)' : 'rgba(128, 128, 128, 0.2)'}`,
                               transition: 'all 0.2s',
-                              cursor: 'pointer'
                             }}
-                            onClick={() => handleChange('alertOnVpnProxy', !settings.alertOnVpnProxy)}
                           >
                             <Checkbox
                               checked={settings.alertOnVpnProxy}
@@ -2115,11 +2123,13 @@ const SettingsPage = () => {
                       <Grid.Item col={12}>
                         <ToggleCard
                           $active={settings.enableWebhooks}
-                          onClick={() => handleChange('enableWebhooks', !settings.enableWebhooks)}
                         >
                           <Flex direction="column" gap={3} style={{ width: '100%' }} alignItems="center">
                             <GreenToggle $isActive={settings.enableWebhooks}>
                               <Toggle
+                                aria-label={t('settings.webhooks.enable.title', 'Enable Webhooks')}
+                                onLabel="On"
+                                offLabel="Off"
                                 checked={settings.enableWebhooks}
                                 onChange={() => handleChange('enableWebhooks', !settings.enableWebhooks)}
                               />
