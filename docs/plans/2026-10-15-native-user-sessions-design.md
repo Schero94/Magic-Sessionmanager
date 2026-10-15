@@ -11,6 +11,7 @@ Use Strapi's native session manager as the authority for end-user session validi
 
 - The local integration host pins Strapi `5.58.0`; `npm view @strapi/strapi@5 version` also reports `5.58.0` as the newest published Strapi 5 version checked on 2026-10-15.
 - The local host configures Users & Permissions with `jwtManagement: 'refresh'` and `sessions.httpOnly: true`.
+- Strapi 5.58.0 runs plugin bootstrap lifecycles in registered module order, and Users & Permissions defines its native session origin during its own bootstrap. Since Magic may bootstrap first, the plugin must not require `hasOrigin('users-permissions')` during its own bootstrap. Resolve/check the origin lazily on auth and session operations, which run only after Strapi has completed plugin bootstrapping; if it is still missing then, fail the request closed.
 - Strapi's installed `@strapi/core` session manager is exposed as `strapi.sessionManager`. The Users & Permissions plugin registers the `users-permissions` origin. Its origin-scoped public methods include `validateAccessToken`, `validateRefreshToken`, `isSessionActive`, `listSessions`, `revokeSessionById`, and `invalidateRefreshToken`.
 - In the installed Strapi 5.58.0 source, `validateAccessToken` checks the JWT signature and token type but does not check whether its session row still exists. The integration must follow it with `isSessionActive(sessionId)` so revoking the current native session also rejects its still-unexpired access token. Access tokens from rotated ancestors retain Strapi's short-lived access-token behavior; the plugin must not invent a different refresh-family policy.
 - `listSessions(userId)` lists active sessions for one end-user and origin. There is no public global list method, so the Magic admin dashboard must aggregate over paged Users & Permissions users with bounded concurrency. The implementation must not read or write Strapi's internal `admin::session` table directly.
@@ -29,7 +30,7 @@ Use Strapi's native session manager as the authority for end-user session validi
 
 - Read `plugin::users-permissions.jwtManagement`, defaulting to `legacy-support` as Strapi does.
 - In `legacy-support`, keep existing plugin JWT hooks and session service behavior.
-- In `refresh`, use the native `users-permissions` session manager. Verify both that `strapi.sessionManager` exists and that `hasOrigin('users-permissions')` is true. If refresh mode is configured but this API is unavailable, fail startup with an actionable error. Never silently fall back to plugin-only JWT validation in a mode that issued native tokens.
+- In `refresh`, use the native `users-permissions` session manager. Verify the manager exists and check `hasOrigin('users-permissions')` lazily when a native operation runs, after plugin bootstrapping. If refresh mode is configured but the API/origin is still unavailable then, fail that auth/session request closed with an actionable error. Never silently fall back to plugin-only JWT validation in a mode that issued native tokens.
 - Do not mutate the host application's Users & Permissions configuration or migrate/delete old session records automatically.
 
 ### Session ownership and retained metadata
