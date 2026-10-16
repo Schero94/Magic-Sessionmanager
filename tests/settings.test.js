@@ -117,16 +117,65 @@ test('updateSettings stores local GEOIP firewall settings', async () => {
     emailTemplates: {},
     enableGeofencing: true,
     geoIpProvider: 'local-mmdb',
-    geoIpDatabasePath: '/var/lib/GeoLite2-Country.mmdb',
+    geoIpDatabasePath: 'GeoLite2-Country.mmdb',
     geoLookupFailureMode: 'block',
   });
 
   await settingsController.updateSettings(ctx);
 
   assert.equal(storedSettings.geoIpProvider, 'local-mmdb');
-  assert.equal(storedSettings.geoIpDatabasePath, '/var/lib/GeoLite2-Country.mmdb');
+  assert.equal(storedSettings.geoIpDatabasePath, 'GeoLite2-Country.mmdb');
   assert.equal(storedSettings.geoLookupFailureMode, 'block');
   assert.deepEqual(storedSettings.blockedCountries, ['RU']);
+});
+
+test('updateSettings rejects GeoIP paths outside the dedicated MMDB directory', async () => {
+  let storedSettings = null;
+  global.strapi = {
+    store: () => ({
+      set: async ({ value }) => {
+        storedSettings = value;
+      },
+    }),
+    log: { info() {}, error() {} },
+  };
+
+  const ctx = createSettingsCtx({
+    inactivityTimeout: 15,
+    cleanupInterval: 30,
+    lastSeenRateLimit: 30,
+    retentionDays: 90,
+    maxSessionAgeDays: 30,
+    sessionCreationGraceMs: 5000,
+    maxFailedLogins: 5,
+    allowedCountries: [],
+    blockedCountries: [],
+    emailTemplates: {},
+    geoIpDatabasePath: '../GeoLite2-City.mmdb',
+  });
+
+  await settingsController.updateSettings(ctx);
+
+  assert.equal(ctx.error.status, 400);
+  assert.equal(storedSettings, null);
+});
+
+test('updateSettings rejects non-string GeoIP database paths without writing settings', async () => {
+  let storedSettings = null;
+  global.strapi = {
+    store: () => ({
+      set: async ({ value }) => {
+        storedSettings = value;
+      },
+    }),
+    log: { info() {}, error() {} },
+  };
+  const ctx = createSettingsCtx({ geoIpDatabasePath: null });
+
+  await settingsController.updateSettings(ctx);
+
+  assert.equal(ctx.error.status, 400);
+  assert.equal(storedSettings, null);
 });
 
 test('getSettings merges old partial settings with every current default', async () => {

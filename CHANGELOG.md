@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Added
+
+* Add native Strapi Users & Permissions end-user session support for `jwtManagement: 'refresh'` while retaining `legacy-support`, Magic session metadata and history, and existing endpoint contracts. The plugin does not change host authentication configuration. Strapi administrator-account sessions remain out of scope.
+
 ## [4.7.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.1...v4.7.2) (2026-07-11)
 
 

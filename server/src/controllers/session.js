@@ -16,6 +16,37 @@ const { extractBearerToken } = require('../utils/extract-token');
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
 const OWN_SESSIONS_LIMIT = 200;
+const NATIVE_SESSION_KEY_PREFIX = 'native_';
+const JWT_MANAGEMENT_CONFIG = 'plugin::users-permissions.jwtManagement';
+const LEGACY_JWT_MANAGEMENT = 'legacy-support';
+
+/**
+ * Returns the standard unknown-location shape without invoking a GeoIP
+ * provider when administrators disable geolocation.
+ *
+ * @param {string} ipAddress Validated IP address
+ * @returns {object} Disabled lookup result for the admin detail panel
+ */
+function createDisabledGeolocationResult(ipAddress) {
+  return {
+    ip: ipAddress,
+    country: 'Unknown',
+    country_code: 'XX',
+    country_flag: '',
+    city: 'Unknown',
+    region: 'Unknown',
+    timezone: 'Unknown',
+    latitude: null,
+    longitude: null,
+    isVpn: false,
+    isProxy: false,
+    isThreat: false,
+    securityScore: 50,
+    riskLevel: 'Unknown',
+    _status: 'disabled',
+    _source: 'disabled',
+  };
+}
 
 /**
  * Resolves the authenticated user's documentId, falling back to the numeric
@@ -30,6 +61,126 @@ async function resolveAuthUserDocId(ctx) {
   if (u.documentId) return u.documentId;
   if (u.id) return resolveUserDocumentId(strapi, u.id);
   return null;
+}
+
+/**
+ * Returns only the numeric identity authenticated by Users & Permissions.
+ * Native session-manager ownership is keyed by this ID; document IDs and
+ * administrator identities are never substituted for it.
+ *
+ * @param {object} ctx - Koa context
+ * @returns {string|null} Native Users & Permissions owner ID
+ */
+function getAuthenticatedNativeUserId(ctx) {
+  const id = ctx?.state?.user?.id;
+  return id === undefined || id === null ? null : String(id);
+}
+
+/**
+ * Checks whether Users & Permissions owns session lifecycle for this request.
+ * The controller uses this only to select its compatibility flow; all native
+ * session reads and writes remain delegated to the session service.
+ *
+ * @returns {boolean} Whether native refresh-token session management is active
+ */
+function isNativeSessionMode() {
+  return strapi?.config?.get?.(JWT_MANAGEMENT_CONFIG, LEGACY_JWT_MANAGEMENT) === 'refresh';
+}
+
+/**
+ * Reads the current native session ID from Strapi's verified request state.
+ * It deliberately does not decode or trust a caller-supplied request value.
+ *
+ * @param {object} ctx - Authenticated Koa context
+ * @returns {string|null} Native session ID from verified credentials
+ */
+function getCurrentNativeSessionId(ctx) {
+  const value = ctx?.state?.session?.id ?? ctx?.state?.auth?.credentials?.sessionId;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * Returns the stable key that existing Magic session actions can pass to the
+ * session service for a native-only session row.
+ *
+ * @param {object} session - Normalized session view
+ * @returns {string|null} Public session key
+ */
+function getSessionViewKey(session) {
+  const key = session?.documentId ?? session?.id ?? session?.sessionId;
+  return key === undefined || key === null ? null : String(key);
+}
+
+/**
+ * Finds a native-only row by its explicit public key within the authenticated
+ * user's own service result. No cross-user ID lookup is performed.
+ *
+ * @param {object[]} sessions - Sessions already scoped to one authenticated user
+ * @param {string} publicKey - Requested `native_` session key
+ * @returns {object|undefined} Matching native session view
+ */
+function findOwnedNativeSession(sessions, publicKey) {
+  if (typeof publicKey !== 'string' || !publicKey.startsWith(NATIVE_SESSION_KEY_PREFIX)) {
+    return undefined;
+  }
+
+  return sessions.find((session) =>
+    getSessionViewKey(session) === publicKey &&
+    typeof session?.nativeSessionId === 'string' &&
+    session.nativeSessionId.length > 0
+  );
+}
+
+/**
+ * Tests whether a service-provided row represents the current verified native
+ * session, whether it is linked to a Magic sidecar or native-only.
+ *
+ * @param {object} session - Normalized session view
+ * @param {string|null} nativeSessionId - Verified session ID from auth context
+ * @returns {boolean} Whether this row is the current request's session
+ */
+function isCurrentNativeSession(session, nativeSessionId) {
+  if (!nativeSessionId) return false;
+  return session?.nativeSessionId === nativeSessionId;
+}
+
+/**
+ * Exposes the session service's bounded-result signal without changing the
+ * established metadata envelope when a result is complete.
+ *
+ * @param {object[]} sessions Session rows returned by the session service
+ * @returns {{truncated: true}|{}} Optional public truncation metadata
+ */
+function getTruncationMeta(sessions) {
+  return sessions?.truncated === true ? { truncated: true } : {};
+}
+
+/**
+ * Preserves the existing post-login pending response when a session record is
+ * not yet visible in either the Magic history or native session view.
+ *
+ * @param {object} ctx - Koa context
+ * @returns {Promise<boolean>} True when the pending response was written
+ */
+async function respondIfSessionCreationPending(ctx) {
+  const settings = await getPluginSettings(strapi);
+  const gracePeriodMs = getSessionCreationGraceMs(settings);
+  const iat = ctx.state.user?.iat || ctx.state.auth?.credentials?.iat || null;
+
+  if (gracePeriodMs > 0 && typeof iat === 'number') {
+    const ageMs = Date.now() - iat * 1000;
+    if (ageMs >= 0 && ageMs < gracePeriodMs) {
+      ctx.status = 202;
+      ctx.body = {
+        data: null,
+        meta: { pending: true, retryAfterMs: gracePeriodMs - ageMs },
+        message: 'Session is still being created — please retry shortly.',
+      };
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -48,6 +199,35 @@ async function resolveAuthUserDocId(ctx) {
  */
 module.exports = {
   /**
+   * Returns aggregate Users & Permissions counts without exposing user rows.
+   * The admin route is protected by the plugin's existing authentication and
+   * access policies; only the two non-identifying totals cross the API.
+   *
+   * @route GET /magic-sessionmanager/users/stats
+   * @param {object} ctx Koa response context
+   * @returns {Promise<object>} Count-only success envelope or stable error
+   */
+  async getUserStatsAdmin(ctx) {
+    try {
+      const [totalUsers, blockedUsers] = await Promise.all([
+        strapi.db.query(USER_UID).count(),
+        strapi.db.query(USER_UID).count({ where: { blocked: true } }),
+      ]);
+
+      return ctx.send({
+        success: true,
+        data: { totalUsers, blockedUsers },
+      });
+    } catch (error) {
+      strapi.log.error(
+        '[magic-sessionmanager] getUserStatsAdmin failed:',
+        error?.name || 'Error'
+      );
+      return ctx.internalServerError('Unable to load end-user counts');
+    }
+  },
+
+  /**
    * Lists all sessions (active + inactive) for admin overviews.
    * @route GET /magic-sessionmanager/sessions
    */
@@ -62,10 +242,11 @@ module.exports = {
           count: sessions.length,
           active: sessions.filter((s) => s.isTrulyActive).length,
           inactive: sessions.filter((s) => !s.isTrulyActive).length,
+          ...getTruncationMeta(sessions),
         },
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] getAllSessionsAdmin error:', err);
+      strapi.log.error('[magic-sessionmanager] getAllSessionsAdmin failed:', err?.name || 'Error');
       return ctx.internalServerError('Error fetching sessions');
     }
   },
@@ -81,10 +262,10 @@ module.exports = {
 
       ctx.body = {
         data: sessions,
-        meta: { count: sessions.length },
+        meta: { count: sessions.length, ...getTruncationMeta(sessions) },
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] getActiveSessions error:', err);
+      strapi.log.error('[magic-sessionmanager] getActiveSessions failed:', err?.name || 'Error');
       return ctx.internalServerError('Error fetching active sessions');
     }
   },
@@ -98,6 +279,44 @@ module.exports = {
       const userDocId = await resolveAuthUserDocId(ctx);
       if (!userDocId) {
         return ctx.unauthorized('Authentication required');
+      }
+
+      if (isNativeSessionMode()) {
+        const userId = getAuthenticatedNativeUserId(ctx);
+        if (!userId) return ctx.unauthorized('Authentication required');
+
+        const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+        const allSessions = await sessionService.getUserSessions(userId);
+        if (!Array.isArray(allSessions)) {
+          throw new Error('Session service returned an invalid native session list');
+        }
+
+        const truncated = allSessions.truncated === true;
+        const hasMore = allSessions.length > OWN_SESSIONS_LIMIT || truncated;
+        const paged = allSessions.slice(0, OWN_SESSIONS_LIMIT);
+        const currentNativeSessionId = getCurrentNativeSessionId(ctx);
+        const sessionsWithCurrent = paged.map((session) => ({
+          ...session,
+          isCurrentSession: isCurrentNativeSession(session, currentNativeSessionId),
+        }));
+
+        sessionsWithCurrent.sort((a, b) => {
+          if (a.isCurrentSession) return -1;
+          if (b.isCurrentSession) return 1;
+          return new Date(b.loginTime || 0) - new Date(a.loginTime || 0);
+        });
+
+        ctx.body = {
+          data: sessionsWithCurrent,
+          meta: {
+            count: sessionsWithCurrent.length,
+            active: sessionsWithCurrent.filter((session) => session.isTrulyActive).length,
+            hasMore,
+            limit: OWN_SESSIONS_LIMIT,
+            ...(truncated ? { truncated: true } : {}),
+          },
+        };
+        return;
       }
 
       const currentToken = extractBearerToken(ctx);
@@ -147,7 +366,7 @@ module.exports = {
         },
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error fetching own sessions:', err);
+      strapi.log.error('[magic-sessionmanager] Error fetching own sessions:', err?.name || 'Error');
       return ctx.internalServerError('Error fetching sessions');
     }
   },
@@ -165,26 +384,29 @@ module.exports = {
 
       if (!isAdminRequest) {
         if (!requestingUserDocId) {
-          strapi.log.warn(`[magic-sessionmanager] Security: Request without documentId tried to access sessions of user ${userId}`);
+          strapi.log.warn('[magic-sessionmanager] Denied a session lookup without a verifiable user identity');
           return ctx.forbidden('Cannot verify user identity');
         }
 
         const requestedDocId = await resolveUserDocumentId(strapi, userId);
         if (!requestedDocId || String(requestingUserDocId) !== String(requestedDocId)) {
-          strapi.log.warn(`[magic-sessionmanager] Security: User ${requestingUserDocId} tried to access sessions of user ${userId}`);
+          strapi.log.warn('[magic-sessionmanager] Denied a cross-user session lookup');
           return ctx.forbidden('You can only access your own sessions');
         }
       }
 
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
-      const sessions = await sessionService.getUserSessions(userId);
+      const serviceUserId =
+        !isAdminRequest && isNativeSessionMode() ? getAuthenticatedNativeUserId(ctx) : userId;
+      if (!serviceUserId) return ctx.forbidden('Cannot verify user identity');
+      const sessions = await sessionService.getUserSessions(serviceUserId);
 
       ctx.body = {
         data: sessions,
-        meta: { count: sessions.length },
+        meta: { count: sessions.length, ...getTruncationMeta(sessions) },
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] getUserSessions error:', err);
+      strapi.log.error('[magic-sessionmanager] getUserSessions failed:', err?.name || 'Error');
       return ctx.internalServerError('Error fetching user sessions');
     }
   },
@@ -203,6 +425,50 @@ module.exports = {
       }
 
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+
+      if (isNativeSessionMode()) {
+        const userId = getAuthenticatedNativeUserId(ctx);
+        if (!userId) return ctx.unauthorized('Authentication required');
+
+        const nativeSessionId = getCurrentNativeSessionId(ctx);
+        if (!nativeSessionId) {
+          throw new Error(
+            'Authenticated native session ID is missing from Users & Permissions credentials'
+          );
+        }
+
+        const ownedSessions = await sessionService.getUserSessions(userId);
+        if (!Array.isArray(ownedSessions)) {
+          throw new Error('Session service returned an invalid native session list');
+        }
+        const currentSession = ownedSessions.find((session) =>
+          isCurrentNativeSession(session, nativeSessionId)
+        );
+        const currentSessionKey = getSessionViewKey(currentSession);
+        if (!currentSessionKey) {
+          ctx.body = {
+            message: 'No active session found — you are already logged out',
+            terminated: false,
+          };
+          return;
+        }
+
+        const { terminatedCount = 0 } = await sessionService.terminateSession({
+          sessionId: currentSessionKey,
+          userId,
+          reason: 'logout',
+        });
+        const terminated = terminatedCount > 0;
+
+        ctx.body = {
+          message: terminated
+            ? 'Logged out successfully'
+            : 'No active session found — you are already logged out',
+          terminated,
+        };
+        return;
+      }
+
       const currentTokenHash = hashToken(token);
       const matchingSession = await strapi.documents(SESSION_UID).findFirst({
         filters: {
@@ -220,7 +486,7 @@ module.exports = {
           reason: 'logout',
         });
         terminated = true;
-        strapi.log.info(`[magic-sessionmanager] User ${userDocId} logged out (session ${matchingSession.documentId})`);
+        strapi.log.info('[magic-sessionmanager] Current user logged out of one session');
       }
 
       // Message must reflect reality: "Logged out successfully" when we
@@ -234,7 +500,7 @@ module.exports = {
         terminated,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Logout error:', err);
+      strapi.log.error('[magic-sessionmanager] Logout failed:', err?.name || 'Error');
       return ctx.internalServerError('Error during logout');
     }
   },
@@ -258,13 +524,15 @@ module.exports = {
       }
 
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+      const serviceUserId = isNativeSessionMode() ? getAuthenticatedNativeUserId(ctx) : userDocId;
+      if (!serviceUserId) return ctx.unauthorized('Authentication required');
       const { terminatedCount } = await sessionService.terminateSession({
-        userId: userDocId,
+        userId: serviceUserId,
         reason: 'logout',
       });
 
       strapi.log.info(
-        `[magic-sessionmanager] User ${userDocId} logged out from all devices (${terminatedCount})`
+        `[magic-sessionmanager] Current user logged out from all devices (${terminatedCount} sessions)`
       );
 
       ctx.body = {
@@ -272,7 +540,7 @@ module.exports = {
         terminatedCount,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Logout-all error:', err);
+      strapi.log.error('[magic-sessionmanager] Logout-all failed:', err?.name || 'Error');
       return ctx.internalServerError('Error during logout');
     }
   },
@@ -300,13 +568,60 @@ module.exports = {
         return ctx.unauthorized('Authentication required');
       }
 
+      const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+
+      if (isNativeSessionMode()) {
+        const userId = getAuthenticatedNativeUserId(ctx);
+        if (!userId) return ctx.unauthorized('Authentication required');
+
+        const currentNativeSessionId = getCurrentNativeSessionId(ctx);
+        const ownedSessions = await sessionService.getUserSessions(userId);
+        if (!Array.isArray(ownedSessions)) {
+          throw new Error('Session service returned an invalid native session list');
+        }
+        const currentSession = currentNativeSessionId
+          ? ownedSessions.find((session) => isCurrentNativeSession(session, currentNativeSessionId))
+          : null;
+        const currentSessionKey = getSessionViewKey(currentSession);
+
+        if (!currentSessionKey) {
+          const { terminatedCount } = await sessionService.terminateSession({
+            userId,
+            reason: 'logout',
+          });
+          strapi.log.warn(
+            '[magic-sessionmanager] logoutOthers fell back to logoutAll (no current session match)'
+          );
+          ctx.body = {
+            message: 'All sessions terminated (could not preserve current session)',
+            terminatedCount,
+            fellBackToLogoutAll: true,
+          };
+          return;
+        }
+
+        const { terminatedCount } = await sessionService.terminateSession({
+          userId,
+          exceptSessionId: currentSessionKey,
+          reason: 'logout',
+        });
+
+        ctx.body = {
+          message:
+            terminatedCount === 0
+              ? 'No other active sessions to terminate'
+              : `${terminatedCount} other session(s) terminated`,
+          terminatedCount,
+          currentSessionPreserved: true,
+        };
+        return;
+      }
+
       const currentTokenHash = hashToken(token);
       const currentSession = await strapi.documents(SESSION_UID).findFirst({
         filters: { user: { documentId: userDocId }, tokenHash: currentTokenHash },
         fields: ['documentId'],
       });
-
-      const sessionService = strapi.plugin('magic-sessionmanager').service('session');
 
       if (!currentSession) {
         // No current-session record to preserve — falling back to logoutAll
@@ -317,7 +632,7 @@ module.exports = {
           reason: 'logout',
         });
         strapi.log.warn(
-          `[magic-sessionmanager] logoutOthers fell back to logoutAll for user ${userDocId} (no current session match)`
+          '[magic-sessionmanager] logoutOthers fell back to logoutAll (no current session match)'
         );
         ctx.body = {
           message: 'All sessions terminated (could not preserve current session)',
@@ -334,7 +649,7 @@ module.exports = {
       });
 
       strapi.log.info(
-        `[magic-sessionmanager] User ${userDocId} logged out ${terminatedCount} other device(s)`
+        `[magic-sessionmanager] Current user logged out ${terminatedCount} other device(s)`
       );
 
       ctx.body = {
@@ -345,7 +660,7 @@ module.exports = {
         currentSessionPreserved: true,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Logout-others error:', err);
+      strapi.log.error('[magic-sessionmanager] Logout-others failed:', err?.name || 'Error');
       return ctx.internalServerError('Error terminating other sessions');
     }
   },
@@ -369,6 +684,31 @@ module.exports = {
         return ctx.unauthorized('Authentication required');
       }
 
+      if (isNativeSessionMode()) {
+        const userId = getAuthenticatedNativeUserId(ctx);
+        if (!userId) return ctx.unauthorized('Authentication required');
+
+        const nativeSessionId = getCurrentNativeSessionId(ctx);
+        const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+        const sessions = await sessionService.getUserSessions(userId);
+        if (!Array.isArray(sessions)) {
+          throw new Error('Session service returned an invalid native session list');
+        }
+
+        const currentSession = sessions.find((session) =>
+          isCurrentNativeSession(session, nativeSessionId)
+        );
+        if (!currentSession) {
+          if (await respondIfSessionCreationPending(ctx)) return;
+          return ctx.notFound('Current session not found');
+        }
+
+        ctx.body = {
+          data: { ...currentSession, isCurrentSession: true },
+        };
+        return;
+      }
+
       const currentTokenHash = hashToken(token);
       const currentSession = await strapi.documents(SESSION_UID).findFirst({
         filters: {
@@ -381,22 +721,7 @@ module.exports = {
       if (!currentSession) {
         // Check grace period — is this a freshly-issued JWT whose session
         // row may not have been committed yet?
-        const settings = await getPluginSettings(strapi);
-        const gracePeriodMs = getSessionCreationGraceMs(settings);
-        const iat = ctx.state.user?.iat || ctx.state.auth?.credentials?.iat || null;
-
-        if (gracePeriodMs > 0 && typeof iat === 'number') {
-          const ageMs = Date.now() - iat * 1000;
-          if (ageMs >= 0 && ageMs < gracePeriodMs) {
-            ctx.status = 202;
-            ctx.body = {
-              data: null,
-              meta: { pending: true, retryAfterMs: gracePeriodMs - ageMs },
-              message: 'Session is still being created — please retry shortly.',
-            };
-            return;
-          }
-        }
+        if (await respondIfSessionCreationPending(ctx)) return;
         return ctx.notFound('Current session not found');
       }
 
@@ -414,7 +739,7 @@ module.exports = {
         data: { ...enhanced, isCurrentSession: true },
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error getting current session:', err);
+      strapi.log.error('[magic-sessionmanager] Error getting current session:', err?.name || 'Error');
       return ctx.internalServerError('Error fetching current session');
     }
   },
@@ -438,6 +763,51 @@ module.exports = {
         return ctx.badRequest('Session ID is required');
       }
 
+      const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+
+      if (isNativeSessionMode() && sessionId.startsWith(NATIVE_SESSION_KEY_PREFIX)) {
+        const serviceUserId = getAuthenticatedNativeUserId(ctx);
+        if (!serviceUserId) return ctx.unauthorized('Authentication required');
+
+        const ownedSessions = await sessionService.getUserSessions(serviceUserId);
+        if (!Array.isArray(ownedSessions)) {
+          throw new Error('Session service returned an invalid native session list');
+        }
+
+        const sessionToTerminate = findOwnedNativeSession(ownedSessions, sessionId);
+        if (!sessionToTerminate) return ctx.notFound('Session not found');
+
+        if (isCurrentNativeSession(sessionToTerminate, getCurrentNativeSessionId(ctx))) {
+          return ctx.badRequest('Cannot terminate the current session. Use /logout instead.');
+        }
+
+        const alreadyTerminated = sessionToTerminate.isActive === false;
+        if (!alreadyTerminated) {
+          const result = await sessionService.terminateSession({
+            sessionId,
+            userId: serviceUserId,
+            reason: 'manual',
+          });
+          if (result?.terminatedCount === 0) {
+            ctx.body = {
+              message: `Session ${sessionId} was already terminated`,
+              success: true,
+              alreadyTerminated: true,
+            };
+            return;
+          }
+        }
+
+        ctx.body = {
+          message: alreadyTerminated
+            ? `Session ${sessionId} was already terminated`
+            : `Session ${sessionId} terminated successfully`,
+          success: true,
+          alreadyTerminated,
+        };
+        return;
+      }
+
       const sessionToTerminate = await strapi.documents(SESSION_UID).findOne({
         documentId: sessionId,
         populate: { user: { fields: ['documentId'] } },
@@ -449,7 +819,7 @@ module.exports = {
 
       const sessionUserId = sessionToTerminate.user?.documentId;
       if (sessionUserId !== userDocId) {
-        strapi.log.warn(`[magic-sessionmanager] Security: User ${userDocId} tried to terminate session ${sessionId} of user ${sessionUserId}`);
+        strapi.log.warn('[magic-sessionmanager] Denied an attempt to terminate another user session');
         return ctx.forbidden('You can only terminate your own sessions');
       }
 
@@ -462,9 +832,8 @@ module.exports = {
       const alreadyTerminated = sessionToTerminate.isActive === false;
 
       if (!alreadyTerminated) {
-        const sessionService = strapi.plugin('magic-sessionmanager').service('session');
         await sessionService.terminateSession({ sessionId, reason: 'manual' });
-        strapi.log.info(`[magic-sessionmanager] User ${userDocId} terminated own session ${sessionId}`);
+        strapi.log.info('[magic-sessionmanager] Current user terminated one own session');
       }
 
       ctx.body = {
@@ -475,7 +844,7 @@ module.exports = {
         alreadyTerminated,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error terminating own session:', err);
+      strapi.log.error('[magic-sessionmanager] Error terminating own session:', err?.name || 'Error');
       return ctx.internalServerError('Error terminating session');
     }
   },
@@ -511,14 +880,14 @@ module.exports = {
         },
       });
 
-      strapi.log.info(`[magic-sessionmanager] [TEST] Session ${sessionId} simulated timeout`);
+      strapi.log.info('[magic-sessionmanager] [TEST] Session timeout simulated');
 
       ctx.body = {
         message: `Session ${sessionId} marked as timed out`,
         success: true,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error simulating timeout:', err);
+      strapi.log.error('[magic-sessionmanager] Error simulating timeout:', err?.name || 'Error');
       return ctx.internalServerError('Error simulating session timeout');
     }
   },
@@ -537,7 +906,7 @@ module.exports = {
         success: true,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error terminating session:', err);
+      strapi.log.error('[magic-sessionmanager] Error terminating session:', err?.name || 'Error');
       return ctx.internalServerError('Error terminating session');
     }
   },
@@ -556,13 +925,16 @@ module.exports = {
         success: true,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error terminating all user sessions:', err);
+      strapi.log.error('[magic-sessionmanager] Error terminating all user sessions:', err?.name || 'Error');
       return ctx.internalServerError('Error terminating all user sessions');
     }
   },
 
   /**
-   * Returns geolocation data for a specific IP address.
+   * Returns geolocation data for a specific IP address. Disabled settings
+   * return a local placeholder without contacting the configured provider.
+   *
+   * @route GET /magic-sessionmanager/geolocation/:ipAddress
    */
   async getIpGeolocation(ctx) {
     try {
@@ -593,6 +965,15 @@ module.exports = {
         return ctx.badRequest('Invalid IP address format');
       }
 
+      const settings = await getPluginSettings(strapi);
+      if (settings.enableGeolocation === false || settings.geoIpProvider === 'disabled') {
+        ctx.body = {
+          success: true,
+          data: createDisabledGeolocationResult(ipAddress),
+        };
+        return;
+      }
+
       const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
       const ipData = await geolocationService.getIpInfo(ipAddress);
 
@@ -601,32 +982,41 @@ module.exports = {
         data: ipData,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error getting IP geolocation:', err);
+      strapi.log.error('[magic-sessionmanager] Error getting IP geolocation:', err?.name || 'Error');
       return ctx.internalServerError('Error fetching IP geolocation data');
     }
   },
 
   /**
-   * Permanently deletes a session (admin action).
+   * Removes session details after preserving an access-token revocation hash.
+   *
+   * @route DELETE /magic-sessionmanager/sessions/:sessionId
+   * @sideeffect Deletes the session row and keeps a minimal deny record until
+   *   any unexpired JWT expires
    */
   async deleteSession(ctx) {
     try {
       const { sessionId } = ctx.params;
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
-      await sessionService.deleteSession(sessionId);
+      const removed = await sessionService.deleteSession(sessionId);
+      if (!removed) return ctx.notFound('Session not found');
 
       ctx.body = {
-        message: `Session ${sessionId} permanently deleted`,
+        message: 'Session details removed; access-token revocation preserved',
         success: true,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error deleting session:', err);
+      strapi.log.error('[magic-sessionmanager] Error deleting session:', err?.name || 'Error');
       return ctx.internalServerError('Error deleting session');
     }
   },
 
   /**
-   * Deletes all inactive sessions (admin action).
+   * Removes inactive session rows after preserving hashes for unexpired JWTs.
+   *
+   * @route POST /magic-sessionmanager/sessions/clean-inactive
+   * @sideeffect Deletes inactive session rows and retains token deny records
+   *   until expiry
    */
   async cleanInactiveSessions(ctx) {
     try {
@@ -634,12 +1024,12 @@ module.exports = {
       const deletedCount = await sessionService.deleteInactiveSessions();
 
       ctx.body = {
-        message: `Successfully deleted ${deletedCount} inactive sessions`,
+        message: `Removed ${deletedCount} inactive session records; access-token revocation preserved`,
         success: true,
         deletedCount,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error cleaning inactive sessions:', err);
+      strapi.log.error('[magic-sessionmanager] Error cleaning inactive sessions:', err?.name || 'Error');
       return ctx.internalServerError('Error deleting inactive sessions');
     }
   },
@@ -692,7 +1082,7 @@ module.exports = {
         success: true,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error toggling user block:', err);
+      strapi.log.error('[magic-sessionmanager] Error toggling user block:', err?.name || 'Error');
       return ctx.internalServerError('Error toggling user block status');
     }
   },

@@ -25,6 +25,11 @@
       "unique": true,
       "required": true
     },
+    "nativeSessionId": {
+      "type": "string",
+      "configurable": false,
+      "private": true
+    },
     "user": {
       "type": "relation",
       "relation": "manyToOne",

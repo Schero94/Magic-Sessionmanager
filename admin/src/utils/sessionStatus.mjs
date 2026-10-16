@@ -1,3 +1,9 @@
+/**
+ * Normalizes the supported session lifecycle fields into a dashboard status.
+ *
+ * @param {object} session Session view-model row.
+ * @returns {'active'|'idle'|'loggedout'|'terminated'} Display status.
+ */
 export function getSessionStatus(session = {}) {
   if (session.isActive) {
     return session.isTrulyActive ? 'active' : 'idle';

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Flex, Badge } from '@strapi/design-system';
 import { useFetchClient } from '@strapi/strapi/admin';
+import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
 /**
  * Session Info Card - shows user's session status and history
@@ -33,7 +34,7 @@ const SessionInfoCard = ({ id, model }) => {
         const { data } = await get(`/magic-sessionmanager/user/${id}/sessions`);
           setSessions(data.data || []);
       } catch (err) {
-        console.error('[SessionInfoCard] Error fetching sessions:', err);
+        logSafeAdminError('userSessions.cardLoad', err);
       } finally {
         setLoading(false);
       }

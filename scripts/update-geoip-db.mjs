@@ -7,15 +7,18 @@ const require = createRequire(import.meta.url);
 const updater = require('./geoip-updater.cjs');
 
 export const DEFAULT_EDITION_ID = updater.DEFAULT_EDITION_ID;
+export const DEFAULT_GEOIP_DIRECTORY = updater.DEFAULT_GEOIP_DIRECTORY;
 export const DEFAULT_MMDB_NAME = updater.DEFAULT_MMDB_NAME;
 export const DEFAULT_OUTPUT_PATH = updater.DEFAULT_OUTPUT_PATH;
 export const buildBasicAuthHeader = updater.buildBasicAuthHeader;
 export const buildDownloadUrl = updater.buildDownloadUrl;
+export const canonicalizeDatabaseTarget = updater.canonicalizeDatabaseTarget;
 export const extractMmdbFromTarGz = updater.extractMmdbFromTarGz;
 export const fileExists = updater.fileExists;
 export const inferEditionIdFromPath = updater.inferEditionIdFromPath;
 export const needsDownload = updater.needsDownload;
 export const readMetadata = updater.readMetadata;
+export const resolveDatabaseTarget = updater.resolveDatabaseTarget;
 export const resolveConfig = updater.resolveConfig;
 export const updateGeoIpDatabase = updater.updateGeoIpDatabase;
 

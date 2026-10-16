@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
+import { useIntl } from 'react-intl';
 import { useFetchClient } from '@strapi/strapi/admin';
-import styled, { keyframes, css } from 'styled-components';
+import styled from 'styled-components';
 import {
   Box,
   Typography,
   Flex,
   Loader,
   Badge,
+  Alert,
+  Button,
+  EmptyStateLayout,
 } from '@strapi/design-system';
 import { 
   ChartBubble,
@@ -16,325 +20,139 @@ import {
 } from '@strapi/icons';
 import pluginId from '../pluginId';
 import { computeSessionAnalytics } from '../utils/sessionAnalytics.mjs';
+import PluginPageLayout from '../components/PluginPageLayout';
+import ReadableText from '../components/ReadableText';
+import { getTranslation } from '../utils/getTranslation';
+import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
-// ================ THEME ================
-const theme = {
-  colors: {
-    primary: { 50: '#F0F9FF', 100: '#E0F2FE', 500: '#0EA5E9', 600: '#0284C7', 700: '#0369A1' },
-    secondary: { 50: '#F5F3FF', 100: '#EDE9FE', 500: '#A855F7', 600: '#9333EA' },
-    success: { 50: '#DCFCE7', 100: '#DCFCE7', 500: '#22C55E', 600: '#16A34A', 700: '#15803D' },
-    warning: { 50: '#FEF3C7', 100: '#FEF3C7', 500: '#F59E0B', 600: '#D97706' },
-    danger: { 50: '#FEE2E2', 100: '#FEE2E2', 500: '#EF4444', 600: '#DC2626' },
-    neutral: { 0: '#FFFFFF', 50: '#F9FAFB', 100: '#F3F4F6', 200: '#E5E7EB', 600: '#4B5563', 700: '#374151', 800: '#1F2937' }
-  },
-  shadows: {
-    sm: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-    md: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-    xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-  },
-  transitions: {
-    fast: '150ms cubic-bezier(0.4, 0, 0.2, 1)',
-    normal: '300ms cubic-bezier(0.4, 0, 0.2, 1)',
-    slow: '500ms cubic-bezier(0.4, 0, 0.2, 1)',
-  },
-  spacing: { xl: '32px', '2xl': '48px' },
-  borderRadius: { lg: '12px', xl: '16px' },
-};
-
-// ================ ANIMATIONS ================
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-const slideIn = keyframes`
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
-`;
-
-const shimmer = keyframes`
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-`;
-
-const pulse = keyframes`
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
-`;
-
-const float = keyframes`
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-5px); }
-`;
-
-const growBar = keyframes`
-  from { width: 0; }
-  to { width: var(--bar-width); }
-`;
-
-// ================ STYLED COMPONENTS ================
+// ================ STRAPI DESIGN SYSTEM LAYOUT ================
 const Container = styled(Box)`
-  ${css`animation: ${fadeIn} 0.6s;`}
-  min-height: 100vh;
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: ${theme.spacing.xl} 24px 0;
-`;
-
-const Header = styled(Box)`
-  background: linear-gradient(135deg, ${'var(--colors-primary600, #0284C7)'} 0%, ${'var(--colors-secondary600, #9333EA)'} 100%);
-  border-radius: ${theme.borderRadius.xl};
-  padding: ${theme.spacing.xl} ${theme.spacing['2xl']};
-  margin-bottom: ${theme.spacing.xl};
-  position: relative;
-  overflow: hidden;
-  box-shadow: ${theme.shadows.xl};
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 200%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-    ${css`animation: ${shimmer} 3s infinite;`}
-  }
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 100%;
-    height: 100%;
-    background-image: radial-gradient(circle at 20% 80%, transparent 50%, rgba(255, 255, 255, 0.1) 50%);
-    background-size: 15px 15px;
-    opacity: 0.3;
-  }
-`;
-
-const HeaderContent = styled(Flex)`
-  position: relative;
-  z-index: 1;
-`;
-
-const Title = styled(Typography)`
-  color: ${(p) => p.theme.colors.neutral0};
-  font-size: 2.25rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 8px;
-  
-  svg {
-    width: 32px;
-    height: 32px;
-    ${css`animation: ${float} 3s ease-in-out infinite;`}
-  }
-`;
-
-const Subtitle = styled(Typography)`
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 1rem;
-  font-weight: 400;
-  letter-spacing: 0.01em;
+  width: 100%;
+  min-width: 0;
 `;
 
 const StatsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 24px;
-  margin-bottom: 40px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 16px;
 `;
 
 const StatCard = styled(Box)`
   background: ${(p) => p.theme.colors.neutral0};
-  border-radius: ${theme.borderRadius.lg};
-  padding: 32px;
-  position: relative;
-  overflow: hidden;
-  transition: all ${theme.transitions.normal};
-  ${css`animation: ${fadeIn} ${theme.transitions.slow} backwards;`}
-  animation-delay: ${props => props.$delay || '0s'};
-  box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${'rgba(128, 128, 128, 0.2)'};
-  text-align: center;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
+  border-top: 3px solid ${(p) => p.theme.colors.primary600};
+  border-radius: 4px;
+  min-width: 0;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  
-  &:hover {
-    transform: translateY(-6px);
-    box-shadow: ${theme.shadows.xl};
-    border-color: ${props => props.$borderColor || 'var(--colors-primary600, #0EA5E9)'};
-    
-    .stat-icon {
-      transform: scale(1.15) rotate(5deg);
-    }
-    
-    .stat-value {
-      transform: scale(1.08);
-      color: ${props => props.$accentColor || 'var(--colors-primary600, #0284C7)'};
-    }
+  align-items: flex-start;
+  gap: 4px;
+
+  && > p {
+    max-width: none;
+    margin: 0;
+    line-height: 1.25;
+  }
+
+  && > p + p {
+    margin-block-start: 0;
   }
 `;
 
 const StatIcon = styled(Box)`
-  width: 80px;
-  height: 80px;
-  border-radius: ${theme.borderRadius.lg};
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${props => props.$bg || 'rgba(2, 132, 199, 0.12)'};
-  transition: all ${theme.transitions.normal};
-  margin: 0 auto 24px;
-  box-shadow: ${theme.shadows.sm};
-  
+  background: ${(p) => p.theme.colors.primary100};
+  color: ${(p) => p.theme.colors.primary600};
+  margin-bottom: 8px;
+
   svg {
-    width: 40px;
-    height: 40px;
-    color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
+    width: 20px;
+    height: 20px;
   }
-`;
-
-const StatValue = styled(Typography)`
-  font-size: 3.5rem;
-  font-weight: 700;
-  color: ${'var(--colors-neutral800)'};
-  line-height: 1;
-  margin-bottom: 12px;
-  transition: all ${theme.transitions.normal};
-  text-align: center;
-`;
-
-const StatLabel = styled(Typography)`
-  font-size: 1rem;
-  color: ${'var(--colors-neutral600)'};
-  font-weight: 500;
-  text-align: center;
 `;
 
 const ChartCard = styled(Box)`
   background: ${(p) => p.theme.colors.neutral0};
-  border-radius: ${theme.borderRadius.lg};
-  padding: 36px;
-  box-shadow: ${theme.shadows.md};
-  border: 1px solid ${'rgba(128, 128, 128, 0.2)'};
-  margin-bottom: 28px;
-  ${css`animation: ${slideIn} ${theme.transitions.slow};`}
-  transition: all ${theme.transitions.normal};
-  
-  &:hover {
-    box-shadow: ${theme.shadows.lg};
-    border-color: ${'rgba(2, 132, 199, 0.2)'};
-  }
-`;
-
-const ChartTitle = styled(Typography)`
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: ${'var(--colors-neutral800)'};
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  
-  svg {
-    width: 24px;
-    height: 24px;
-    color: ${'var(--colors-primary600, #0284C7)'};
-  }
+  border-radius: 4px;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
+  min-width: 0;
+  padding: 20px;
 `;
 
 const BarChart = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
+  min-width: 0;
 `;
 
 const BarRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 20px;
-  ${css`animation: ${fadeIn} 0.6s backwards;`}
-  animation-delay: ${props => props.$delay || '0s'};
-`;
-
-const BarLabel = styled(Typography)`
-  min-width: 110px;
-  font-size: 15px;
-  font-weight: 600;
-  color: ${'var(--colors-neutral700)'};
+  gap: 12px;
+  min-width: 0;
 `;
 
 const BarContainer = styled.div`
   flex: 1;
-  height: 40px;
-  background: ${'var(--colors-neutral100)'};
-  border-radius: 10px;
+  min-width: 0;
+  height: 28px;
+  background: ${(p) => p.theme.colors.neutral100};
+  border-radius: 4px;
   overflow: hidden;
   position: relative;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
 `;
 
 const BarFill = styled.div`
   height: 100%;
-  background: linear-gradient(90deg, ${props => props.$color1 || 'var(--colors-primary600, #0EA5E9)'}, ${props => props.$color2 || 'var(--colors-primary600, #0284C7)'});
-  border-radius: 10px;
-  --bar-width: ${props => props.$percentage || 0}%;
-  ${css`animation: ${growBar} 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;`}
-  animation-delay: ${props => props.$delay || '0s'};
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  width: ${props => `${Math.max(0, Math.min(100, props.$percentage || 0))}%`};
+  background: ${(p) => p.theme.colors.primary600};
+  border-radius: 4px;
 `;
 
-const BarValue = styled(Typography)`
-  color: white;
-  font-size: 15px;
-  font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-`;
-
-const LoadingOverlay = styled.div`
-  display: flex;
-  flex-direction: column;
+const LoadingOverlay = styled(Flex)`
+  min-height: 240px;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
-  gap: 24px;
-  
-  .loader-icon {
-    ${css`animation: ${pulse} 2s ease-in-out infinite;`}
-  }
 `;
 
 const AnalyticsPage = () => {
+  const { formatMessage } = useIntl();
   const { get } = useFetchClient();
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     fetchAnalytics();
   }, []);
 
+  /**
+   * Loads the session collection and derives analytics locally. Failures switch
+   * the page to its retry state without exposing response data in the console.
+   *
+   * @returns {Promise<void>}
+   */
   const fetchAnalytics = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const { data } = await get(`/${pluginId}/sessions`);
       const sessions = data.data || [];
       setAnalytics(computeSessionAnalytics(sessions));
     } catch (err) {
-      console.error('[Analytics] Error:', err);
+      setLoadError(true);
+      logSafeAdminError('analytics.load', err);
     } finally {
       setLoading(false);
     }
@@ -343,108 +161,110 @@ const AnalyticsPage = () => {
   // Loading analytics data
   if (loading) {
     return (
-      <Container>
+      <PluginPageLayout
+        headingId="magic-sessionmanager-analytics-title"
+        title={t('analytics.title', 'Session Analytics')}
+        subtitle={t('analytics.subtitle', 'Session activity and device trends')}
+      >
         <LoadingOverlay>
-          <ChartBubble className="loader-icon" style={{ width: '64px', height: '64px', color: 'var(--colors-primary600, #0284C7)' }} />
-          <Loader>Loading analytics data...</Loader>
+          <Loader>{t('analytics.loading', 'Loading analytics data...')}</Loader>
         </LoadingOverlay>
-      </Container>
+      </PluginPageLayout>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <PluginPageLayout
+        headingId="magic-sessionmanager-analytics-title"
+        title={t('analytics.title', 'Session Analytics')}
+        subtitle={t('analytics.subtitle', 'Session activity and device trends')}
+      >
+        <Alert
+          variant="danger"
+          title={t('analytics.error.title', 'Analytics could not be loaded')}
+          closeLabel={t('common.close', 'Close')}
+          action={<Button variant="secondary" onClick={fetchAnalytics}>{t('common.retry', 'Retry')}</Button>}
+        >
+          <ReadableText variant="pi" textColor="neutral700" tag="span">
+            {t('analytics.error.description', 'Try again. If the problem continues, check session API access and permissions.')}
+          </ReadableText>
+        </Alert>
+      </PluginPageLayout>
     );
   }
 
   const maxDevices = Math.max(...Object.values(analytics?.devices || {}), 1);
   const maxBrowsers = Math.max(...Object.values(analytics?.browsers || {}), 1);
-  const maxOS = Math.max(...Object.values(analytics?.operatingSystems || {}), 1);
-  const maxLoginHour = Math.max(...(analytics?.loginHours || []), 1);
-
-  const deviceColors = {
-    'Desktop': ['var(--colors-primary600, #0EA5E9)', 'var(--colors-primary600, #0284C7)'],
-    'Mobile': ['var(--colors-success600, #22C55E)', 'var(--colors-success600, #16A34A)'],
-    'Tablet': ['var(--colors-warning600, #F59E0B)', 'var(--colors-warning600, #D97706)'],
-  };
-
-  const browserColors = {
-    'Chrome': ['var(--colors-success600, #22C55E)', 'var(--colors-success600, #16A34A)'],
-    'Firefox': ['var(--colors-warning600, #F59E0B)', 'var(--colors-warning600, #D97706)'],
-    'Safari': ['var(--colors-primary600, #0EA5E9)', 'var(--colors-primary600, #0284C7)'],
-    'Edge': ['var(--colors-secondary500, #A855F7)', 'var(--colors-secondary600, #9333EA)'],
-    'API Client': ['var(--colors-neutral600)', 'var(--colors-neutral700)'],
-    'Other': ['var(--colors-neutral500)', 'var(--colors-neutral600)'],
-  };
+  const hasSessions = Number(analytics?.totalSessions) > 0;
 
   return (
-    <Container>
-      {/* Gradient Header */}
-      <Header>
-        <HeaderContent direction="column" alignItems="flex-start" gap={2}>
-          <Title>
-            <ChartBubble /> Session Analytics
-          </Title>
-          <Subtitle>
-            Comprehensive insights and statistics about user sessions
-          </Subtitle>
-        </HeaderContent>
-      </Header>
-
+    <PluginPageLayout
+      headingId="magic-sessionmanager-analytics-title"
+      title={t('analytics.title', 'Session Analytics')}
+      subtitle={t('analytics.subtitle', 'Session activity and device trends')}
+    >
+      <Container>
       {/* Overview Stats */}
       <StatsGrid>
-        <StatCard $delay="0.1s" $borderColor={'var(--colors-primary600, #0EA5E9)'} $accentColor={'var(--colors-primary600, #0284C7)'}>
-          <StatIcon className="stat-icon" $bg={'rgba(2, 132, 199, 0.12)'} $color={'var(--colors-primary600, #0284C7)'}>
+        <StatCard padding={4} background="neutral0">
+          <StatIcon aria-hidden="true">
             <ChartBubble />
           </StatIcon>
-          <StatValue className="stat-value">{analytics?.totalSessions || 0}</StatValue>
-          <StatLabel>Total Sessions</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.totalSessions || 0}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.total', 'Total sessions')}</Typography>
         </StatCard>
 
-        <StatCard $delay="0.2s" $borderColor={'var(--colors-success600, #22C55E)'} $accentColor={'var(--colors-success600, #16A34A)'}>
-          <StatIcon className="stat-icon" $bg={'rgba(22, 163, 74, 0.12)'} $color={'var(--colors-success600, #16A34A)'}>
+        <StatCard padding={4} background="neutral0">
+          <StatIcon aria-hidden="true">
             <User />
           </StatIcon>
-          <StatValue className="stat-value">{analytics?.activeSessions || 0}</StatValue>
-          <StatLabel>Active Now</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.activeSessions || 0}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.active', 'Online now')}</Typography>
         </StatCard>
 
-        <StatCard $delay="0.3s" $borderColor={'var(--colors-warning600, #F59E0B)'} $accentColor={'var(--colors-warning600, #D97706)'}>
-          <StatIcon className="stat-icon" $bg={'rgba(234, 179, 8, 0.12)'} $color={'var(--colors-warning600, #D97706)'}>
+        <StatCard padding={4} background="neutral0">
+          <StatIcon aria-hidden="true">
             <Clock />
           </StatIcon>
-          <StatValue className="stat-value">{analytics?.todayLogins || 0}</StatValue>
-          <StatLabel>Today's Logins</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.todayLogins || 0}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.today', 'Logins today')}</Typography>
         </StatCard>
 
-        <StatCard $delay="0.4s" $borderColor={'var(--colors-secondary500, #A855F7)'} $accentColor={'var(--colors-secondary600, #9333EA)'}>
-          <StatIcon className="stat-icon" $bg={'rgba(139, 92, 246, 0.12)'} $color={'var(--colors-secondary600, #9333EA)'}>
+        <StatCard padding={4} background="neutral0">
+          <StatIcon aria-hidden="true">
             <Clock />
           </StatIcon>
-          <StatValue className="stat-value">{analytics?.weekLogins || 0}</StatValue>
-          <StatLabel>This Week</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.weekLogins || 0}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.week', 'Logins this week')}</Typography>
         </StatCard>
       </StatsGrid>
 
+      {hasSessions ? (
+        <>
       {/* Charts Row */}
       <Flex gap={4} wrap="wrap" style={{ marginBottom: '28px' }}>
         {/* Devices Chart */}
-        <Box style={{ flex: 1, minWidth: '450px' }}>
+        <Box style={{ flex: '1 1 320px', minWidth: 0 }}>
           <ChartCard>
-            <ChartTitle>
+            <Flex gap={2} alignItems="center" style={{ marginBottom: 16 }}>
               <Monitor />
-              Device Distribution
-            </ChartTitle>
+              <Typography variant="epsilon" fontWeight="semiBold" tag="h2">
+                {t('analytics.devices.title', 'Devices')}
+              </Typography>
+            </Flex>
             <BarChart>
               {analytics?.devices && Object.entries(analytics.devices)
                 .sort(([, a], [, b]) => b - a)
-                .map(([device, count], idx) => (
-                  <BarRow key={device} $delay={`${0.5 + idx * 0.1}s`}>
-                    <BarLabel>{device}</BarLabel>
+                .map(([device, count]) => (
+                  <BarRow key={device}>
+                    <Typography variant="pi" textColor="neutral700" style={{ flex: '0 0 96px', minWidth: 0, overflowWrap: 'anywhere' }}>{device}</Typography>
                     <BarContainer>
                       <BarFill 
                         $percentage={(count / maxDevices) * 100}
-                        $color1={deviceColors[device]?.[0] || 'var(--colors-neutral500)'}
-                        $color2={deviceColors[device]?.[1] || 'var(--colors-neutral600)'}
-                        $delay={`${0.5 + idx * 0.1}s`}
                       >
-                        <BarValue>{count}</BarValue>
                       </BarFill>
+                      <Typography variant="pi" fontWeight="semiBold" textColor="neutral800" style={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', fontVariantNumeric: 'tabular-nums' }}>{count}</Typography>
                     </BarContainer>
                   </BarRow>
                 ))}
@@ -453,27 +273,26 @@ const AnalyticsPage = () => {
         </Box>
 
         {/* Browsers Chart */}
-        <Box style={{ flex: 1, minWidth: '450px' }}>
+        <Box style={{ flex: '1 1 320px', minWidth: 0 }}>
           <ChartCard>
-            <ChartTitle>
+            <Flex gap={2} alignItems="center" style={{ marginBottom: 16 }}>
               <Monitor />
-              Browser Usage
-            </ChartTitle>
+              <Typography variant="epsilon" fontWeight="semiBold" tag="h2">
+                {t('analytics.browsers.title', 'Browsers')}
+              </Typography>
+            </Flex>
             <BarChart>
               {analytics?.browsers && Object.entries(analytics.browsers)
                 .sort(([, a], [, b]) => b - a)
-                .map(([browser, count], idx) => (
-                  <BarRow key={browser} $delay={`${0.5 + idx * 0.1}s`}>
-                    <BarLabel>{browser}</BarLabel>
+                .map(([browser, count]) => (
+                  <BarRow key={browser}>
+                    <Typography variant="pi" textColor="neutral700" style={{ flex: '0 0 96px', minWidth: 0, overflowWrap: 'anywhere' }}>{browser}</Typography>
                     <BarContainer>
                       <BarFill 
                         $percentage={(count / maxBrowsers) * 100}
-                        $color1={browserColors[browser]?.[0] || 'var(--colors-neutral500)'}
-                        $color2={browserColors[browser]?.[1] || 'var(--colors-neutral600)'}
-                        $delay={`${0.5 + idx * 0.1}s`}
                       >
-                        <BarValue>{count}</BarValue>
                       </BarFill>
+                      <Typography variant="pi" fontWeight="semiBold" textColor="neutral800" style={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', fontVariantNumeric: 'tabular-nums' }}>{count}</Typography>
                     </BarContainer>
                   </BarRow>
                 ))}
@@ -485,34 +304,34 @@ const AnalyticsPage = () => {
       {/* Average Session Duration */}
       <ChartCard>
         <Flex alignItems="center" justifyContent="space-between">
-          <ChartTitle style={{ marginBottom: 0 }}>
+          <Flex gap={2} alignItems="center">
             <Clock />
-            Average Session Duration
-          </ChartTitle>
-          <Badge 
-            backgroundColor="primary600" 
-            textColor="neutral0"
-            style={{ 
-              fontSize: '18px', 
-              fontWeight: '700', 
-              padding: '12px 24px',
-              boxShadow: theme.shadows.md,
-            }}
-          >
-            {analytics?.avgSessionDuration || 0} minutes
+            <Typography variant="epsilon" fontWeight="semiBold" tag="h2">
+              {t('analytics.duration.title', 'Average session duration')}
+            </Typography>
+          </Flex>
+          <Badge variant="primary" size="M">
+            {t('analytics.duration.minutes', '{count} min', { count: analytics?.avgSessionDuration || 0 })}
           </Badge>
         </Flex>
         
         {analytics?.avgSessionDuration > 0 && (
-          <Box marginTop={5} padding={5} background="primary50" hasRadius style={{ border: `1px solid ${'rgba(2, 132, 199, 0.12)'}` }}>
-            <Typography variant="omega" textColor="primary700" style={{ fontSize: '14px', lineHeight: '1.8', fontWeight: '500' }}>
-              ℹ️ Average time between login and last activity across all sessions. 
-              Lower values indicate more frequent activity, higher values may indicate idle or abandoned sessions.
-            </Typography>
+          <Box marginTop={4} padding={4} background="neutral100" hasRadius>
+            <ReadableText variant="pi" textColor="neutral700" tag="p">
+              {t('analytics.duration.description', 'Average time between login and last activity. Higher values can indicate idle or abandoned sessions.')}
+            </ReadableText>
           </Box>
         )}
       </ChartCard>
-    </Container>
+        </>
+      ) : (
+        <EmptyStateLayout
+          icon={<ChartBubble aria-hidden="true" />}
+          content={t('analytics.empty', 'Session analytics will appear here after end users sign in.')}
+        />
+      )}
+      </Container>
+    </PluginPageLayout>
   );
 };
 

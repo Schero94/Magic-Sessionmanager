@@ -1,9 +1,11 @@
 import { getSessionStatus } from './sessionStatus.mjs';
 
+/** Increments one named count in an analytics accumulator. */
 function increment(target, key) {
   target[key] = (target[key] || 0) + 1;
 }
 
+/** Returns a stable, non-secret identity key for user de-duplication. */
 function getUserKey(session) {
   return session?.user?.documentId ||
     session?.user?.id ||
@@ -12,6 +14,7 @@ function getUserKey(session) {
     null;
 }
 
+/** Returns a non-negative duration in minutes, or null for invalid dates. */
 function getDurationMinutes(session, now) {
   const start = Date.parse(session?.loginTime);
   if (!Number.isFinite(start)) return null;
@@ -22,6 +25,14 @@ function getDurationMinutes(session, now) {
   return Math.max(0, Math.floor((end - start) / 60000));
 }
 
+/**
+ * Aggregates device, browser, user, login and lifecycle metrics from session
+ * rows without making network requests.
+ *
+ * @param {object[]} sessions Normalized session rows.
+ * @param {{now?: number}} options Injectable clock for stable tests.
+ * @returns {object} Counts and distributions consumed by the analytics page.
+ */
 export function computeSessionAnalytics(sessions = [], { now = Date.now() } = {}) {
   const dayAgo = now - 24 * 60 * 60 * 1000;
   const weekAgo = now - 7 * 24 * 60 * 60 * 1000;

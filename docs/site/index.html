@@ -170,7 +170,8 @@ npm run develop</code></pre>
 
         <section class="section" id="releases" aria-labelledby="releases-title">
           <h2 id="releases-title">Releases and testing</h2>
-          <p class="section-lead">The project uses Conventional Commits and semantic-release on Node.js 22. Releases run the test suite, production build, and package verification before publishing to npm.</p>
+          <p class="section-lead">The project uses Conventional Commits and semantic-release on Node.js 22. Releases run tests, the production build, and package verification before publishing to npm with GitHub OIDC.</p>
+          <p>Before the first release, configure npm Trusted Publishing for <code>Schero94/Magic-Sessionmanager</code> and the <code>release.yml</code> workflow. No long-lived npm write token is used.</p>
           <div class="code-card">
             <div class="code-label"><span>Local checks</span></div>
             <pre><code>npm ci --legacy-peer-deps

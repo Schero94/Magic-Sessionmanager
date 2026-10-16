@@ -142,10 +142,10 @@ module.exports = ({ strapi }) => {
           log.info('[SUCCESS] License created');
           return data.data;
         }
-        log.warn('[WARNING] License creation rejected by server:', data.message || 'unknown');
+        log.warn('[WARNING] License creation rejected by server');
         return null;
       } catch (error) {
-        log.warn('[WARNING] Error creating license:', error.message);
+        log.warn('[WARNING] Error creating license:', error?.name || 'Error');
         return null;
       }
     },
@@ -171,7 +171,7 @@ module.exports = ({ strapi }) => {
         return { valid: false, data: null };
       } catch (error) {
         log.warn(
-          `[WARNING] License server unreachable during optional activation: ${error.message}. ` +
+          `[WARNING] License server unreachable during optional activation (${error?.name || 'Error'}). ` +
             'This does not block the plugin.'
         );
         return { valid: false, data: null, networkError: true };
@@ -190,7 +190,7 @@ module.exports = ({ strapi }) => {
         if (data.success && data.data) return data.data;
         return null;
       } catch (error) {
-        log.warn('[WARNING] Could not fetch license by key:', error.message);
+        log.warn('[WARNING] Could not fetch license by key:', error?.name || 'Error');
         return null;
       }
     },

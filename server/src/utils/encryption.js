@@ -83,9 +83,8 @@ function encryptToken(token) {
     // Format: iv:authTag:encryptedData
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Unknown encryption error';
     if (typeof strapi !== 'undefined' && strapi?.log) {
-      strapi.log.error('[magic-sessionmanager/encryption] Encryption failed:', errMsg);
+      strapi.log.error('[magic-sessionmanager/encryption] Encryption failed:', err?.name || 'Error');
     }
     throw new Error('Failed to encrypt token');
   }
@@ -121,9 +120,8 @@ function decryptToken(encryptedToken) {
     
     return decrypted;
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Unknown decryption error';
     if (typeof strapi !== 'undefined' && strapi?.log) {
-      strapi.log.error('[magic-sessionmanager/encryption] Decryption failed:', errMsg);
+      strapi.log.error('[magic-sessionmanager/encryption] Decryption failed:', err?.name || 'Error');
     }
     return null;
   }

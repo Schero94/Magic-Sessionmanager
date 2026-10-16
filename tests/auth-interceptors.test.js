@@ -29,11 +29,22 @@ function createStrapi({
   findSession,
   settings = {},
   notifications = {},
-  jwtManagement = 'refresh',
+  jwtManagement = 'legacy-support',
+  nativeSessionManager,
+  nativeOriginAvailable = true,
 } = {}) {
   invalidateSettingsCache();
   const middleware = [];
   const log = { debug() {}, error() {}, info() {}, warn() {} };
+  const nativeSessionApi = {
+    validateAccessToken: () => ({ isValid: false, payload: null }),
+    validateRefreshToken: async () => ({ isValid: false }),
+    isSessionActive: async () => true,
+    listSessions: async () => [],
+    revokeSessionById: async () => true,
+    invalidateRefreshToken: async () => {},
+    ...nativeSessionManager,
+  };
 
   return {
     middleware,
@@ -55,6 +66,13 @@ function createStrapi({
         if (key === 'plugin::magic-sessionmanager') return settings;
         return fallback;
       },
+    },
+    sessionManager: Object.assign(
+      () => nativeSessionApi,
+      { hasOrigin: () => nativeOriginAvailable }
+    ),
+    entityService: {
+      findOne: async () => ({ documentId: 'user-42' }),
     },
     store: () => ({ get: async () => null }),
     plugin(name) {
@@ -83,6 +101,7 @@ function createContext({
   requestBody = {},
   cookies = {},
   authenticatedUser,
+  nativeSession,
   downstreamStatus = 200,
   downstreamRoute,
   events,
@@ -93,7 +112,7 @@ function createContext({
     method: 'POST',
     status: 404,
     body: null,
-    state: {},
+    state: nativeSession ? { session: nativeSession } : {},
     request: {
       body: requestBody,
       headers: {
@@ -701,4 +720,411 @@ test('pre-login GeoIP guard fails closed when lookup throws in block mode', asyn
 
   assert.equal(ctx.status, 403);
   assert.equal(reachedAuth, false);
+});
+
+test('native login links its sidecar to the session validated from the issued refresh token', async () => {
+  let created;
+  const sessionService = {
+    createSession: async (data) => {
+      created = data;
+      return { documentId: 'sidecar-login' };
+    },
+  };
+  const nativeSessionManager = {
+    validateRefreshToken: async (token) => {
+      assert.equal(token, 'issued-refresh');
+      return { isValid: true, userId: '42', sessionId: 'native-login' };
+    },
+    revokeSessionById: async () => true,
+  };
+  const strapi = createStrapi({ sessionService, nativeSessionManager, jwtManagement: 'refresh' });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: {
+      jwt: 'issued-access',
+      refreshToken: 'issued-refresh',
+      user: { id: 42, documentId: 'user-42' },
+    },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(created.userId, 'user-42');
+  assert.equal(created.nativeSessionId, 'native-login');
+  assert.equal(created.token, 'issued-access');
+  assert.equal(created.refreshToken, 'issued-refresh');
+});
+
+test('native login extracts an HttpOnly refresh cookie before linking the sidecar', async () => {
+  let created;
+  const sessionService = {
+    createSession: async (data) => {
+      created = data;
+      return { documentId: 'sidecar-cookie-login' };
+    },
+  };
+  const nativeSessionManager = {
+    validateRefreshToken: async (token) => {
+      assert.equal(token, 'cookie-login-refresh');
+      return { isValid: true, userId: '42', sessionId: 'native-cookie-login' };
+    },
+  };
+  const strapi = createStrapi({ sessionService, nativeSessionManager, jwtManagement: 'refresh' });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: { jwt: 'cookie-login-access', user: { id: 42, documentId: 'user-42' } },
+  });
+  await strapi.middleware[0](ctx, async () => {
+    await ctx.downstream();
+    ctx.response.headers['set-cookie'] =
+      'strapi_up_refresh=cookie-login-refresh; Path=/; HttpOnly; SameSite=Lax';
+  });
+
+  assert.equal(created.nativeSessionId, 'native-cookie-login');
+});
+
+test('native login fails closed when the Users & Permissions origin is missing', async () => {
+  let createCalls = 0;
+  const sessionService = {
+    createSession: async () => {
+      createCalls++;
+      return { documentId: 'should-not-exist' };
+    },
+  };
+  const nativeSessionManager = { validateRefreshToken: async () => ({ isValid: true }) };
+  const strapi = createStrapi({
+    sessionService,
+    nativeSessionManager,
+    nativeOriginAvailable: false,
+    jwtManagement: 'refresh',
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: { jwt: 'untracked-access', refreshToken: 'untracked-refresh', user: { id: 42 } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(ctx.status, 503);
+  assert.equal(ctx.body?.jwt, undefined);
+  assert.equal(ctx.body?.refreshToken, undefined);
+  assert.equal(createCalls, 0);
+});
+
+test('native login compensates a failed sidecar write by revoking only the new native session', async () => {
+  const revocations = [];
+  const sessionService = {
+    createSession: async () => {
+      throw new Error('sidecar write failed');
+    },
+  };
+  const nativeSessionManager = {
+    validateRefreshToken: async () => ({ isValid: true, userId: '42', sessionId: 'native-orphan' }),
+    revokeSessionById: async (...args) => {
+      revocations.push(args);
+      return true;
+    },
+  };
+  const strapi = createStrapi({ sessionService, nativeSessionManager, jwtManagement: 'refresh' });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: { jwt: 'orphan-access', refreshToken: 'orphan-refresh', user: { id: 42 } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.deepEqual(revocations, [['42', 'native-orphan']]);
+  assert.equal(ctx.status, 503);
+  assert.equal(ctx.body?.jwt, undefined);
+  assert.equal(ctx.body?.refreshToken, undefined);
+});
+
+test('native refresh lets Strapi rotate a session even when no Magic sidecar exists', async () => {
+  let downstreamCalls = 0;
+  let created;
+  const validations = [];
+  let rotateCalls = 0;
+  const sessionService = {
+    createSession: async (data) => {
+      created = data;
+      return { documentId: 'sidecar-after-native-refresh' };
+    },
+    rotateSessionTokens: async () => {
+      rotateCalls++;
+      return true;
+    },
+  };
+  const nativeSessionManager = {
+    validateRefreshToken: async (token) => {
+      validations.push(token);
+      return token === 'old-native-refresh'
+        ? { isValid: true, userId: '42', sessionId: 'native-parent' }
+        : { isValid: true, userId: '42', sessionId: 'native-child' };
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    nativeSessionManager,
+    findSession: () => null,
+    jwtManagement: 'refresh',
+  });
+  bootstrap.__private.mountRefreshTokenInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/refresh',
+    requestBody: { refreshToken: 'old-native-refresh' },
+    body: { jwt: 'new-native-access', refreshToken: 'new-native-refresh' },
+  });
+  await strapi.middleware[0](ctx, async () => {
+    downstreamCalls++;
+    await ctx.downstream();
+  });
+
+  assert.equal(downstreamCalls, 1);
+  assert.deepEqual(validations, ['old-native-refresh', 'new-native-refresh']);
+  assert.equal(created.nativeSessionId, 'native-child');
+  assert.equal(created.userId, 'user-42');
+  assert.equal(rotateCalls, 0);
+});
+
+test('native refresh links a sidecar to the rotated child without rotating native tokens twice', async () => {
+  let rotation;
+  let nativeRotationCalls = 0;
+  const sessionService = {
+    createSession: async () => {
+      throw new Error('an existing sidecar must be updated');
+    },
+    rotateSessionTokens: async (args) => {
+      rotation = args;
+      return true;
+    },
+  };
+  const nativeSessionManager = {
+    validateRefreshToken: async (token) => ({
+      isValid: true,
+      userId: '42',
+      sessionId: token === 'old-refresh' ? 'native-parent' : 'native-child',
+    }),
+    rotateRefreshToken: async () => {
+      nativeRotationCalls++;
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    nativeSessionManager,
+    findSession: () => ({ documentId: 'sidecar-1', isActive: true }),
+    jwtManagement: 'refresh',
+  });
+  bootstrap.__private.mountRefreshTokenInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/refresh',
+    cookies: { strapi_up_refresh: 'old-refresh' },
+    body: { jwt: 'new-access' },
+  });
+  await strapi.middleware[0](ctx, async () => {
+    await ctx.downstream();
+    ctx.response.headers['set-cookie'] =
+      'strapi_up_refresh=new-refresh; Path=/; HttpOnly; SameSite=Lax';
+  });
+
+  assert.equal(rotation.sessionId, 'sidecar-1');
+  assert.equal(rotation.expectedRefreshToken, 'old-refresh');
+  assert.equal(rotation.accessToken, 'new-access');
+  assert.equal(rotation.refreshToken, 'new-refresh');
+  assert.equal(rotation.nativeSessionId, 'native-child');
+  assert.equal(nativeRotationCalls, 0);
+});
+
+test('native refresh strips tokens and revokes the child when sidecar persistence fails', async () => {
+  const revocations = [];
+  const sessionService = {
+    createSession: async () => {
+      throw new Error('sidecar write failed');
+    },
+  };
+  const nativeSessionManager = {
+    validateRefreshToken: async (token) => ({
+      isValid: true,
+      userId: '42',
+      sessionId: token === 'old-refresh-failure' ? 'native-parent-failure' : 'native-child-failure',
+    }),
+    revokeSessionById: async (...args) => {
+      revocations.push(args);
+      return true;
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    nativeSessionManager,
+    findSession: () => null,
+    jwtManagement: 'refresh',
+  });
+  bootstrap.__private.mountRefreshTokenInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/refresh',
+    cookies: { strapi_up_refresh: 'old-refresh-failure' },
+    body: { jwt: 'orphaned-access' },
+  });
+  await strapi.middleware[0](ctx, async () => {
+    await ctx.downstream();
+    ctx.response.headers['set-cookie'] =
+      'strapi_up_refresh=orphaned-refresh; Path=/; HttpOnly; SameSite=Lax';
+  });
+
+  assert.deepEqual(revocations, [['42', 'native-child-failure']]);
+  assert.equal(ctx.status, 503);
+  assert.equal(ctx.body?.jwt, undefined);
+  assert.equal(ctx.body?.refreshToken, undefined);
+  assert.equal(ctx.response.headers['set-cookie'], undefined);
+});
+
+test('native refresh and password-change fallback fail closed when sidecar creation returns no row', async () => {
+  const cases = [
+    {
+      path: '/api/auth/refresh',
+      context: {
+        requestBody: { refreshToken: 'old-native-refresh' },
+        body: { jwt: 'new-native-access', refreshToken: 'new-native-refresh' },
+      },
+      newRefreshToken: 'new-native-refresh',
+    },
+    {
+      path: '/api/auth/change-password',
+      context: {
+        authorization: `Bearer ${BEARER_ONLY_ACCESS_TOKEN}`,
+        authenticatedUser: { id: 42, documentId: 'user-42' },
+        body: { jwt: 'new-password-access', refreshToken: 'new-password-refresh' },
+      },
+      newRefreshToken: 'new-password-refresh',
+    },
+  ];
+
+  for (const scenario of cases) {
+    const revocations = [];
+    const sessionService = {
+      createSession: async () => null,
+    };
+    const nativeSessionManager = {
+      validateRefreshToken: async (token) => ({
+        isValid: true,
+        userId: '42',
+        sessionId: token === scenario.newRefreshToken ? 'native-child-without-row' : 'native-parent',
+      }),
+      revokeSessionById: async (...args) => {
+        revocations.push(args);
+        return true;
+      },
+    };
+    const strapi = createStrapi({
+      sessionService,
+      nativeSessionManager,
+      findSession: () => null,
+      jwtManagement: 'refresh',
+    });
+    const interceptor = scenario.path === '/api/auth/refresh'
+      ? bootstrap.__private.mountRefreshTokenInterceptor
+      : bootstrap.__private.mountLoginInterceptor;
+    interceptor({ strapi, log: strapi.log, sessionService });
+
+    const ctx = createContext({ path: scenario.path, ...scenario.context });
+    await strapi.middleware[0](ctx, () => ctx.downstream());
+
+    assert.deepEqual(revocations, [['42', 'native-child-without-row']], scenario.path);
+    assert.equal(ctx.status, 503, scenario.path);
+    assert.equal(ctx.body?.jwt, undefined, scenario.path);
+    assert.equal(ctx.body?.refreshToken, undefined, scenario.path);
+  }
+});
+
+test('native password change replaces the sidecar link without issuing or rotating tokens itself', async () => {
+  let rotation;
+  const sessionService = {
+    rotateSessionTokens: async (args) => {
+      rotation = args;
+      return true;
+    },
+  };
+  const nativeSessionManager = {
+    validateRefreshToken: async (token) => {
+      assert.equal(token, 'password-change-refresh');
+      return { isValid: true, userId: '42', sessionId: 'password-change-session' };
+    },
+    generateRefreshToken: async () => {
+      throw new Error('Magic must not issue native refresh tokens');
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    nativeSessionManager,
+    findSession: () => ({ documentId: 'password-sidecar', isActive: true }),
+    jwtManagement: 'refresh',
+  });
+  const errors = [];
+  strapi.log.error = (...args) => errors.push(args);
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/change-password',
+    authorization: `Bearer ${BEARER_ONLY_ACCESS_TOKEN}`,
+    body: { jwt: 'password-change-access', refreshToken: 'password-change-refresh' },
+    authenticatedUser: { id: 42, documentId: 'user-42' },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(errors.length, 0, String(errors[0] || ''));
+  assert.equal(rotation.sessionId, 'password-sidecar');
+  assert.equal(rotation.expectedAccessToken, BEARER_ONLY_ACCESS_TOKEN);
+  assert.equal(rotation.accessToken, 'password-change-access');
+  assert.equal(rotation.nativeSessionId, 'password-change-session');
+});
+
+test('native logout syncs an already-revoked native session without revoking it twice', async () => {
+  let syncArgs;
+  let revokeCalls = 0;
+  let nativeChecks = 0;
+  const sessionService = {
+    terminateAuthenticatedSession: async (args) => {
+      syncArgs = args;
+      return true;
+    },
+  };
+  const nativeSessionManager = {
+    isSessionActive: async (sessionId) => {
+      nativeChecks++;
+      assert.equal(sessionId, 'native-logout-session');
+      return false;
+    },
+    revokeSessionById: async () => {
+      revokeCalls++;
+      return false;
+    },
+  };
+  const strapi = createStrapi({ sessionService, nativeSessionManager, jwtManagement: 'refresh' });
+  bootstrap.__private.mountLogoutInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/logout',
+    authorization: `Bearer ${LOGOUT_ACCESS_TOKEN}`,
+    cookies: { strapi_up_refresh: 'logout-refresh' },
+    body: { ok: true },
+    authenticatedUser: { documentId: 'user-1', id: 1 },
+    nativeSession: { id: 'native-logout-session' },
+    downstreamRoute: BUILT_IN_LOGOUT_ROUTE,
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(syncArgs.userDocumentId, 'user-1');
+  assert.equal(syncArgs.accessToken, LOGOUT_ACCESS_TOKEN);
+  assert.equal(syncArgs.refreshToken, 'logout-refresh');
+  assert.equal(nativeChecks, 1);
+  assert.equal(revokeCalls, 0);
+  assert.equal(ctx.status, 200);
+  assert.equal(ctx.body?.ok, true);
 });

@@ -131,9 +131,7 @@ const rateLimit = (cfg = {}, { strapi }) => {
     if (entry.count > max) {
       const retryAfterSec = Math.ceil((entry.expiresAt - now) / 1000);
       ctx.set('Retry-After', String(retryAfterSec));
-      strapi.log.warn(
-        `[magic-sessionmanager] Rate limit exceeded on ${ctx.path} for ${callerKey(ctx)} (${entry.count}/${max})`
-      );
+      strapi.log.warn('[magic-sessionmanager] Content API rate limit exceeded');
       ctx.status = 429;
       ctx.body = {
         data: null,

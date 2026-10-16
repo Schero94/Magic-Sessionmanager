@@ -10,6 +10,7 @@ const createSessionService = require('../server/src/services/session');
 const { invalidateSettingsCache } = require('../server/src/utils/settings-loader');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
+const REVOCATION_UID = 'plugin::magic-sessionmanager.revoked-token';
 
 function createLogger() {
   return {
@@ -50,9 +51,7 @@ function createSessionLockTransaction(onLock = async () => {}) {
 test('session lock transaction mock rejects SELECT without FOR UPDATE', async () => {
   await assert.rejects(
     createSessionLockTransaction()(async ({ trx }) =>
-      trx('magic_sessions')
-        .where({ document_id: 'unlocked-session' })
-        .first('document_id')
+      trx('magic_sessions').where({ document_id: 'unlocked-session' }).first('document_id')
     ),
     /FOR UPDATE/
   );
@@ -67,26 +66,32 @@ test('deleteOldSessions stops after repeated no-progress delete batches', async 
 
   const strapi = {
     config: {
-      get() {
+      get(key, fallback) {
+        if (key === 'plugin::users-permissions.jwtManagement') return fallback;
         return { retentionDays: 1 };
       },
     },
     store: () => ({
       get: async () => null,
     }),
-    documents: () => ({
-      findMany: async () => {
-        findManyCalls++;
-        if (findManyCalls > 3) {
-          throw new Error('retention loop should have stopped after repeated no-progress batches');
-        }
-        return batch;
-      },
-      delete: async () => {
-        deleteCalls++;
-        throw new Error('delete failed');
-      },
-    }),
+    documents: (uid) => {
+      if (uid === REVOCATION_UID) return { findMany: async () => [] };
+      return {
+        findMany: async () => {
+          findManyCalls++;
+          if (findManyCalls > 3) {
+            throw new Error(
+              'retention loop should have stopped after repeated no-progress batches'
+            );
+          }
+          return batch;
+        },
+        delete: async () => {
+          deleteCalls++;
+          throw new Error('delete failed');
+        },
+      };
+    },
     db: { connection: {} },
     plugin: () => ({
       service: () => ({}),
@@ -225,24 +230,35 @@ test('rotateSessionTokens allows only one concurrent rotation for the old refres
 
 test('rotateSessionTokens handles 30 users refreshing concurrently', async () => {
   const { hashToken } = require('../server/src/utils/encryption');
-  const sessions = new Map(Array.from({ length: 30 }, (_, index) => {
-    const number = index + 1;
-    return [`session-${number}`, {
-      documentId: `session-${number}`,
-      isActive: true,
-      refreshTokenHash: hashToken(`old-refresh-${number}`),
-    }];
-  }));
+  const sessions = new Map(
+    Array.from({ length: 30 }, (_, index) => {
+      const number = index + 1;
+      return [
+        `session-${number}`,
+        {
+          documentId: `session-${number}`,
+          isActive: true,
+          refreshTokenHash: hashToken(`old-refresh-${number}`),
+        },
+      ];
+    })
+  );
   const strapi = {
     db: {
       query: () => ({
         updateMany: async ({ where, data }) => {
           const session = sessions.get(where.documentId);
-          if (!session || !session.isActive || session.refreshTokenHash !== where.refreshTokenHash) {
+          if (
+            !session ||
+            !session.isActive ||
+            session.refreshTokenHash !== where.refreshTokenHash
+          ) {
             return { count: 0 };
           }
           Object.assign(session, data);
-          await new Promise((resolve) => setTimeout(resolve, Number(where.documentId.split('-')[1]) % 4));
+          await new Promise((resolve) =>
+            setTimeout(resolve, Number(where.documentId.split('-')[1]) % 4)
+          );
           return { count: 1 };
         },
       }),
@@ -251,15 +267,17 @@ test('rotateSessionTokens handles 30 users refreshing concurrently', async () =>
   };
 
   const service = createSessionService({ strapi });
-  const results = await Promise.all(Array.from({ length: 30 }, (_, index) => {
-    const number = index + 1;
-    return service.rotateSessionTokens({
-      sessionId: `session-${number}`,
-      expectedRefreshToken: `old-refresh-${number}`,
-      accessToken: `new-access-${number}`,
-      refreshToken: `new-refresh-${number}`,
-    });
-  }));
+  const results = await Promise.all(
+    Array.from({ length: 30 }, (_, index) => {
+      const number = index + 1;
+      return service.rotateSessionTokens({
+        sessionId: `session-${number}`,
+        expectedRefreshToken: `old-refresh-${number}`,
+        accessToken: `new-access-${number}`,
+        refreshToken: `new-refresh-${number}`,
+      });
+    })
+  );
 
   assert.equal(results.filter(Boolean).length, 30);
   assert.equal(new Set([...sessions.values()].map((session) => session.tokenHash)).size, 30);
@@ -751,6 +769,7 @@ test('session lists do not perform GeoIP lookups when all geo features are disab
   const strapi = {
     config: {
       get(key) {
+        if (key === 'plugin::users-permissions.jwtManagement') return 'legacy-support';
         if (key === 'plugin::magic-sessionmanager') {
           return {
             enableGeolocation: false,
@@ -763,14 +782,16 @@ test('session lists do not perform GeoIP lookups when all geo features are disab
     },
     store: () => ({ get: async () => null }),
     documents: () => ({
-      findMany: async () => [{
-        documentId: 'session-no-geo',
-        ipAddress: '8.8.8.8',
-        userAgent: 'Test/1.0',
-        loginTime: new Date(),
-        lastActive: new Date(),
-        isActive: true,
-      }],
+      findMany: async () => [
+        {
+          documentId: 'session-no-geo',
+          ipAddress: '8.8.8.8',
+          userAgent: 'Test/1.0',
+          loginTime: new Date(),
+          lastActive: new Date(),
+          isActive: true,
+        },
+      ],
     }),
     plugin: () => ({
       service: () => ({
