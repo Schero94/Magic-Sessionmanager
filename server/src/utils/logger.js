@@ -12,8 +12,9 @@ const PLUGIN_NAME = 'magic-sessionmanager';
 const PREFIX = '[magic-sessionmanager]';
 
 /**
- * Formats a message prefix and args into a single string suitable for the
- * Strapi logger. Non-string args are JSON-stringified.
+ * Formats a message prefix and non-sensitive scalar arguments for Strapi.
+ * Exception details and arbitrary objects are omitted because they can hold
+ * credentials, request data, or personal identifiers.
  *
  * @param {string} prefix
  * @param {Array<unknown>} args
@@ -23,12 +24,9 @@ function formatMessage(prefix, args) {
   if (args.length === 0) return prefix;
   const parts = args.map(arg => {
     if (typeof arg === 'string') return arg;
-    if (arg instanceof Error) return arg.stack || arg.message;
-    try {
-      return JSON.stringify(arg);
-    } catch {
-      return String(arg);
-    }
+    if (arg instanceof Error) return '[Error]';
+    if (arg === null || ['number', 'boolean'].includes(typeof arg)) return String(arg);
+    return '[non-scalar omitted]';
   });
   return `${prefix} ${parts.join(' ')}`;
 }

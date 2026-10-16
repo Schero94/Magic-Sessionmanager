@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useIntl } from 'react-intl';
 import {
   Box,
   Typography,
@@ -19,81 +20,32 @@ import {
   Duplicate,
   Download,
 } from '@strapi/icons';
-import styled, { keyframes, css } from 'styled-components';
+import styled from 'styled-components';
 import pluginId from '../pluginId';
+import PluginPageLayout from '../components/PluginPageLayout';
+import ReadableText from '../components/ReadableText';
+import { getTranslation } from '../utils/getTranslation';
+import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
+import { maskSensitiveValue } from '../utils/maskSensitiveValue.mjs';
+import { copyText } from '../utils/copyText.mjs';
 
-// ================ THEME ================
-const theme = {
-  colors: {
-    primary: { 600: '#0284C7', 100: '#E0F2FE', 50: '#F0F9FF' },
-    success: { 600: '#16A34A', 50: '#DCFCE7' },
-    warning: { 50: '#FEF3C7' },
-    danger: { 50: '#FEE2E2' },
-    neutral: { 0: '#FFFFFF', 100: '#F3F4F6', 200: '#E5E7EB', 600: '#4B5563', 800: '#1F2937' }
-  },
-  shadows: { sm: '0 1px 3px rgba(0,0,0,0.1)' },
-  borderRadius: { lg: '12px' }
-};
-
-// ================ ANIMATIONS ================
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-const shimmer = keyframes`
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-`;
-
-// ================ STYLED COMPONENTS ================
+// ================ LAYOUT ================
 const Container = styled(Box)`
-  ${css`animation: ${fadeIn} 0.5s;`}
-  max-width: 1400px;
-  margin: 0 auto;
-`;
-
-const StickySaveBar = styled(Box)`
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: ${(p) => p.theme.colors.neutral0};
-  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  width: 100%;
+  min-width: 0;
 `;
 
 const LicenseKeyBanner = styled(Box)`
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: ${theme.borderRadius.lg};
-  padding: 28px 32px;
-  color: white;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
-  margin-bottom: 24px;
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -50%;
-    width: 200%;
-    height: 200%;
-    background: linear-gradient(
-      45deg,
-      transparent,
-      rgba(255, 255, 255, 0.08),
-      transparent
-    );
-    ${css`animation: ${shimmer} 3s infinite;`}
-    pointer-events: none;
-    z-index: 0;
-  }
-  
-  & > * {
-    position: relative;
-    z-index: 1;
-  }
+  background: ${(p) => p.theme.colors.neutral0};
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
+  border-radius: 4px;
+  min-width: 0;
+  padding: 20px;
+  margin-bottom: 16px;
+`;
+
+const FeaturePanel = styled(Box)`
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
 `;
 
 const LoaderContainer = styled(Flex)`
@@ -106,42 +58,63 @@ const LoaderContainer = styled(Flex)`
 
 // ================ MAIN COMPONENT ================
 const LicensePage = () => {
+  const { formatMessage, locale } = useIntl();
   const { get } = useFetchClient();
   const { toggleNotification } = useNotification();
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [loading, setLoading] = useState(true);
   const [licenseData, setLicenseData] = useState(null);
+  const [showLicenseKey, setShowLicenseKey] = useState(false);
   const [error, setError] = useState(null);
 
+  /**
+   * Reloads optional activation status from the protected plugin endpoint.
+   *
+   * @returns {Promise<void>}
+   */
   const fetchLicenseStatus = async () => {
     setLoading(true);
+    setShowLicenseKey(false);
     setError(null);
     
     try {
       const response = await get(`/${pluginId}/license/status`);
       setLicenseData(response.data);
     } catch (err) {
-      console.error('[magic-sessionmanager/License] Error fetching license:', err);
-      setError('Failed to load activation information');
+      logSafeAdminError('activation.load', err);
+      setError(t('license.error.load', 'Activation information could not be loaded.'));
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Copies the locally stored activation key when one is available.
+   *
+   * @returns {Promise<void>}
+   */
   const handleCopyLicenseKey = async () => {
     try {
-      await navigator.clipboard.writeText(licenseData?.data?.licenseKey || '');
+      await copyText(licenseData?.data?.licenseKey || '');
       toggleNotification({
         type: 'success',
-        message: 'Activation key copied to clipboard!',
+        message: t('license.success.copied', 'Activation key copied to clipboard.'),
       });
     } catch (err) {
+      logSafeAdminError('activation.copyKey', err);
       toggleNotification({
         type: 'danger',
-        message: 'Failed to copy activation key',
+        message: t('license.error.copy', 'Could not copy the activation key.'),
       });
     }
   };
 
+  /**
+   * Downloads a text file containing the activation key and holder details.
+   *
+   * @returns {void}
+   */
   const handleDownloadLicenseKey = () => {
     try {
       const data = licenseData?.data || {};
@@ -178,7 +151,7 @@ Generated:   ${new Date().toLocaleString()}
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `session-manager-activation-${licenseKey.substring(0, 8)}.txt`;
+      link.download = 'session-manager-activation.txt';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -186,12 +159,12 @@ Generated:   ${new Date().toLocaleString()}
 
       toggleNotification({
         type: 'success',
-        message: 'Activation key downloaded successfully!',
+        message: t('license.success.downloaded', 'Activation key downloaded.'),
       });
     } catch (err) {
       toggleNotification({
         type: 'danger',
-        message: 'Failed to download activation key',
+        message: t('license.error.download', 'Could not download the activation key.'),
       });
     }
   };
@@ -202,23 +175,42 @@ Generated:   ${new Date().toLocaleString()}
 
   if (loading) {
     return (
-      <Container>
+      <PluginPageLayout
+        headingId="magic-sessionmanager-activation-title"
+        title={t('license.title', 'Optional activation')}
+        subtitle={t('license.subtitle', 'An activation key is optional. All features remain available without one.')}
+      >
         <LoaderContainer>
-          <Loader>Loading activation information...</Loader>
+          <Loader>{t('license.loading', 'Loading activation information...')}</Loader>
         </LoaderContainer>
-      </Container>
+      </PluginPageLayout>
     );
   }
 
   if (error) {
     return (
-      <Container>
+      <PluginPageLayout
+        headingId="magic-sessionmanager-activation-title"
+        title={t('license.title', 'Optional activation')}
+        subtitle={t('license.subtitle', 'An activation key is optional. All features remain available without one.')}
+      >
         <Box padding={8}>
-          <Alert variant="danger" title="Error" closeLabel="Close">
-            {error}
+          <Alert
+            variant="danger"
+            title={t('common.error', 'Error')}
+            closeLabel={t('common.close', 'Close')}
+            action={(
+              <Button variant="secondary" onClick={fetchLicenseStatus}>
+                {t('common.retry', 'Retry')}
+              </Button>
+            )}
+          >
+            <ReadableText variant="pi" textColor="neutral700" tag="span">
+              {error}
+            </ReadableText>
           </Alert>
         </Box>
-      </Container>
+      </PluginPageLayout>
     );
   }
 
@@ -232,48 +224,36 @@ Generated:   ${new Date().toLocaleString()}
   const hasKey = licenseData?.hasKey ?? Boolean(data.licenseKey);
 
   return (
-    <Container>
-      {/* Sticky Header */}
-      <StickySaveBar paddingTop={5} paddingBottom={5} paddingLeft={6} paddingRight={6}>
-        <Flex justifyContent="space-between" alignItems="center">
-          <Flex direction="column" gap={1}>
-            <Typography variant="alpha" fontWeight="bold">
-              Optional Activation
-            </Typography>
-            <Typography variant="epsilon" textColor="neutral600">
-              Store and inspect an optional activation key. All features work without one.
-            </Typography>
-          </Flex>
-          <Button
-            startIcon={<ArrowClockwise />}
-            onClick={fetchLicenseStatus}
-            size="L"
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              fontWeight: '600',
-              border: 'none',
-            }}
-          >
-            Refresh Status
-          </Button>
-        </Flex>
-      </StickySaveBar>
-
-      {/* Content */}
-      <Box paddingTop={6} paddingLeft={6} paddingRight={6} paddingBottom={10}>
+    <PluginPageLayout
+      headingId="magic-sessionmanager-activation-title"
+      title={t('license.title', 'Optional activation')}
+      subtitle={t('license.subtitle', 'An activation key is optional. All features remain available without one.')}
+      primaryAction={(
+        <Button startIcon={<ArrowClockwise />} onClick={fetchLicenseStatus} variant="secondary">
+          {t('license.refresh', 'Refresh status')}
+        </Button>
+      )}
+    >
+      <Container>
+      <Box>
         {/* Status Alert */}
         {!hasKey ? (
-          <Alert variant="default" title="No Activation Key Stored" closeLabel="Close">
-            All Session Manager features are available. An activation key is optional and only used for install tracking or display.
+          <Alert variant="default" title={t('license.status.noKey.title', 'No activation key stored')} closeLabel={t('common.close', 'Close')}>
+            <ReadableText variant="pi" textColor="neutral700" tag="span">
+              {t('license.status.noKey.description', 'All Session Manager features are available. An activation key is optional and only used for install tracking or display.')}
+            </ReadableText>
           </Alert>
         ) : isValid ? (
-          <Alert variant="success" title="Activation Key Stored" closeLabel="Close">
-            Your optional activation key is stored. All features remain available with or without this key.
+          <Alert variant="success" title={t('license.status.stored.title', 'Activation key stored')} closeLabel={t('common.close', 'Close')}>
+            <ReadableText variant="pi" textColor="neutral700" tag="span">
+              {t('license.status.stored.description', 'Your optional activation key is stored. All features remain available with or without this key.')}
+            </ReadableText>
           </Alert>
         ) : (
-          <Alert variant="warning" title="Activation Check Failed" closeLabel="Close">
-            The activation server could not verify this key. The plugin still keeps all features available.
+          <Alert variant="warning" title={t('license.status.failed.title', 'Activation check failed')} closeLabel={t('common.close', 'Close')}>
+            <ReadableText variant="pi" textColor="neutral700" tag="span">
+              {t('license.status.failed.description', 'The activation server could not verify this key. The plugin still keeps all features available.')}
+            </ReadableText>
           </Alert>
         )}
 
@@ -281,51 +261,53 @@ Generated:   ${new Date().toLocaleString()}
         {data.licenseKey && (
           <Box marginTop={6}>
             <LicenseKeyBanner>
-              <Flex justifyContent="space-between" alignItems="flex-start">
-                <Box style={{ flex: 1 }}>
-                  <Typography variant="pi" style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '12px', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px', display: 'block' }}>
-                    Activation Key
+              <Flex justifyContent="space-between" alignItems="flex-start" gap={4} wrap="wrap">
+                <Box style={{ flex: '1 1 240px', minWidth: 0 }}>
+                  <Typography variant="sigma" textColor="neutral600" style={{ marginBottom: '8px', display: 'block' }}>
+                    {t('license.key.label', 'Activation key')}
                   </Typography>
-                  <Typography style={{ color: 'white', fontFamily: 'monospace', fontSize: '28px', fontWeight: 'bold', wordBreak: 'break-all', marginBottom: '16px' }}>
-                    {data.licenseKey}
-                  </Typography>
-                  <Flex gap={2}>
+                  <Flex alignItems="center" gap={2} wrap="wrap" style={{ marginBottom: '16px' }}>
+                    <Typography
+                      variant="epsilon"
+                      fontWeight="semiBold"
+                      style={{ fontFamily: 'monospace', overflowWrap: 'anywhere', minWidth: 0 }}
+                    >
+                      {showLicenseKey ? data.licenseKey : maskSensitiveValue(data.licenseKey)}
+                    </Typography>
+                    <Button
+                      type="button"
+                      variant="tertiary"
+                      size="S"
+                      aria-label={t(
+                        showLicenseKey ? 'license.key.hide' : 'license.key.show',
+                        showLicenseKey ? 'Hide key' : 'Show key'
+                      )}
+                      onClick={() => setShowLicenseKey((visible) => !visible)}
+                    >
+                      {t(showLicenseKey ? 'license.key.hide' : 'license.key.show', showLicenseKey ? 'Hide key' : 'Show key')}
+                    </Button>
+                  </Flex>
+                  <Flex gap={2} wrap="wrap">
                     <Button
                       onClick={handleCopyLicenseKey}
                       startIcon={<Duplicate />}
                       size="S"
                       variant="secondary"
-                      style={{
-                        backgroundColor: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        border: '1px solid rgba(255,255,255,0.3)',
-                        fontWeight: '600',
-                      }}
                     >
-                      Copy Key
+                      {t('license.key.copy', 'Copy key')}
                     </Button>
                     <Button
                       onClick={handleDownloadLicenseKey}
                       startIcon={<Download />}
                       size="S"
                       variant="secondary"
-                      style={{
-                        backgroundColor: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        border: '1px solid rgba(255,255,255,0.3)',
-                        fontWeight: '600',
-                      }}
                     >
-                      Download as TXT
+                      {t('license.key.download', 'Download as TXT')}
                     </Button>
                   </Flex>
                 </Box>
-                <Badge
-                  backgroundColor={data.isActive ? "success100" : "danger100"}
-                  textColor={data.isActive ? "success700" : "danger700"}
-                  style={{ fontSize: '11px', fontWeight: '700', padding: '6px 12px', marginLeft: '16px', flexShrink: 0 }}
-                >
-                  {data.isActive ? 'ACTIVE' : 'INACTIVE'}
+                <Badge variant={data.isActive ? 'success' : 'neutral'} size="S">
+                  {data.isActive ? t('license.active', 'Active') : t('license.inactive', 'Inactive')}
                 </Badge>
               </Flex>
             </LicenseKeyBanner>
@@ -339,7 +321,7 @@ Generated:   ${new Date().toLocaleString()}
             <Accordion.Item value="account">
               <Accordion.Header>
                 <Accordion.Trigger icon={User}>
-                  Account Information
+                  {t('license.account.title', 'Account information')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
@@ -347,20 +329,20 @@ Generated:   ${new Date().toLocaleString()}
                   <Flex gap={8} wrap="wrap">
                     <Box style={{ flex: '1', minWidth: '200px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        Email Address
+                        {t('license.account.email', 'Email address')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
-                        {data.email || 'Not provided'}
+                        {data.email || t('license.value.notProvided', 'Not provided')}
                       </Typography>
                     </Box>
                     <Box style={{ flex: '1', minWidth: '200px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        Activation Holder
+                        {t('license.account.holder', 'Activation holder')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
                         {data.firstName && data.lastName 
                           ? `${data.firstName} ${data.lastName}`
-                          : 'Not specified'
+                          : t('license.value.notSpecified', 'Not specified')
                         }
                       </Typography>
                     </Box>
@@ -373,7 +355,7 @@ Generated:   ${new Date().toLocaleString()}
             <Accordion.Item value="details">
               <Accordion.Header>
                 <Accordion.Trigger icon={Shield}>
-                  Activation Details
+                  {t('license.details.title', 'Activation details')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
@@ -381,32 +363,34 @@ Generated:   ${new Date().toLocaleString()}
                   <Flex gap={8} wrap="wrap">
                     <Box style={{ flex: '1', minWidth: '180px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        {data.isExpired ? 'Expired On' : 'Expires On'}
+                        {data.isExpired
+                          ? t('license.details.expiredOn', 'Expired on')
+                          : t('license.details.expiresOn', 'Expires on')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
                         {data.expiresAt 
-                          ? new Date(data.expiresAt).toLocaleDateString('en-US', {
+                          ? new Date(data.expiresAt).toLocaleDateString(locale, {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric',
                             })
-                          : 'Never'}
+                          : t('license.value.never', 'Never')}
                       </Typography>
                     </Box>
                     <Box style={{ flex: '1', minWidth: '180px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        Device Name
+                        {t('license.details.deviceName', 'Device name')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
-                        {data.deviceName || 'Unknown'}
+                        {data.deviceName || t('license.value.unknown', 'Unknown')}
                       </Typography>
                     </Box>
                     <Box style={{ flex: '1', minWidth: '180px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        IP Address
+                        {t('license.details.ipAddress', 'IP address')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
-                        {data.ipAddress || 'Not detected'}
+                        {data.ipAddress || t('license.value.notDetected', 'Not detected')}
                       </Typography>
                     </Box>
                   </Flex>
@@ -418,30 +402,30 @@ Generated:   ${new Date().toLocaleString()}
             <Accordion.Item value="features">
               <Accordion.Header>
                 <Accordion.Trigger icon={Sparkle}>
-                  Features & Capabilities
+                  {t('license.features.title', 'Features and capabilities')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
                 <Box padding={6}>
-                  <Box padding={5} background="success50" hasRadius style={{ border: '2px solid rgba(34, 197, 94, 0.3)' }}>
-                    <Typography variant="delta" fontWeight="bold" textColor="success700" style={{ marginBottom: '16px', display: 'block' }}>
-                      All Features Included
+                  <FeaturePanel padding={5} background="neutral0" hasRadius>
+                    <Typography variant="delta" fontWeight="semiBold" textColor="neutral800" style={{ marginBottom: '16px', display: 'block' }}>
+                      {t('license.features.included', 'All features included')}
                     </Typography>
-                    <Flex direction="column" gap={2}>
-                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
-                        IP geolocation tracking with country, city, and timezone
-                      </Typography>
-                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
-                        Security scoring, VPN/proxy detection, and threat analysis
-                      </Typography>
-                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
-                        Session analytics, CSV/JSON export, and real-time monitoring
-                      </Typography>
-                      <Typography variant="omega" textColor="success700" style={{ fontSize: '14px' }}>
-                        Email alerts, Discord/Slack webhooks, and geofencing
-                      </Typography>
+                    <Flex direction="column" gap={0}>
+                      <ReadableText variant="pi" textColor="neutral700" tag="p">
+                        {t('license.features.geolocation', 'IP geolocation with country, city, and timezone')}
+                      </ReadableText>
+                      <ReadableText variant="pi" textColor="neutral700" tag="p">
+                        {t('license.features.security', 'Security scoring, VPN and proxy detection, and threat analysis')}
+                      </ReadableText>
+                      <ReadableText variant="pi" textColor="neutral700" tag="p">
+                        {t('license.features.analytics', 'Session analytics, CSV and JSON export, and real-time monitoring')}
+                      </ReadableText>
+                      <ReadableText variant="pi" textColor="neutral700" tag="p">
+                        {t('license.features.alerts', 'Email alerts, Discord and Slack webhooks, and geofencing')}
+                      </ReadableText>
                     </Flex>
-                  </Box>
+                  </FeaturePanel>
                 </Box>
               </Accordion.Content>
             </Accordion.Item>
@@ -450,7 +434,7 @@ Generated:   ${new Date().toLocaleString()}
             <Accordion.Item value="status">
               <Accordion.Header>
                 <Accordion.Trigger icon={ChartBubble}>
-                  System Status
+                  {t('license.system.title', 'System status')}
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content>
@@ -458,33 +442,33 @@ Generated:   ${new Date().toLocaleString()}
                   <Flex gap={8} wrap="wrap">
                     <Box style={{ flex: '1', minWidth: '150px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        Activation Status
+                        {t('license.system.activation', 'Activation status')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
-                        {data.isActive ? 'Active' : 'Inactive'}
+                        {data.isActive ? t('license.active', 'Active') : t('license.inactive', 'Inactive')}
                       </Typography>
                     </Box>
                     <Box style={{ flex: '1', minWidth: '150px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        Connection
+                        {t('license.system.connection', 'Connection')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
-                        {data.isOnline ? 'Online' : 'Offline'}
+                        {data.isOnline ? t('license.system.online', 'Online') : t('license.system.offline', 'Offline')}
                       </Typography>
                     </Box>
                     <Box style={{ flex: '1', minWidth: '150px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        Last Sync
+                        {t('license.system.lastSync', 'Last sync')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
                         {data.lastPingAt 
-                          ? new Date(data.lastPingAt).toLocaleTimeString()
-                          : 'Never'}
+                          ? new Date(data.lastPingAt).toLocaleTimeString(locale)
+                          : t('license.value.never', 'Never')}
                       </Typography>
                     </Box>
                     <Box style={{ flex: '1', minWidth: '150px' }}>
                       <Typography variant="sigma" textColor="neutral600" textTransform="uppercase" style={{ marginBottom: '8px', display: 'block' }}>
-                        Device Limit
+                        {t('license.system.deviceLimit', 'Device limit')}
                       </Typography>
                       <Typography variant="omega" fontWeight="semiBold">
                         {data.currentDevices || 0} / {data.maxDevices || 1}
@@ -497,7 +481,8 @@ Generated:   ${new Date().toLocaleString()}
           </Accordion.Root>
         </Box>
       </Box>
-    </Container>
+      </Container>
+    </PluginPageLayout>
   );
 };
 

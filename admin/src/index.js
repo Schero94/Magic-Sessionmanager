@@ -3,6 +3,7 @@ import pluginId from './pluginId';
 import Initializer from './components/Initializer';
 import PluginIcon from './components/PluginIcon';
 import SessionInfoPanel from './components/SessionInfoPanel';
+import { logSafeAdminError } from './utils/safeAdminLog.mjs';
 
 // Manual fallback for prefixPluginTranslations if helper-plugin is not available
 const prefixPluginTranslations = (data, pluginId) => {
@@ -30,12 +31,11 @@ export default {
       permissions: pluginPermissions,
     });
 
-    // Settings section - paths should be relative to /settings (no /settings/ prefix)
-    app.createSettingSection(
+    // Settings paths stay relative to /settings (never include that prefix).
+    app.addSettingsLink(
       {
-        intlLabel: { id: `${pluginId}.settings.section`, defaultMessage: 'Sessions' },
         id: pluginId,
-        to: pluginId,
+        intlLabel: { id: `${pluginId}.settings.section`, defaultMessage: 'Session Manager' },
       },
       [
         {
@@ -92,6 +92,7 @@ export default {
         },
         id: 'online-users-widget',
         pluginId: pluginId,
+        permissions: pluginPermissions,
       });
       console.log(`[${pluginId}] [SUCCESS] Online Users Widget registered`);
     }
@@ -111,7 +112,7 @@ export default {
         console.warn(`[${pluginId}] Content Manager plugin or APIs not available`);
       }
     } catch (error) {
-      console.error(`[${pluginId}] Error injecting SessionInfoPanel:`, error);
+      logSafeAdminError('plugin.bootstrap', error);
     }
   },
 

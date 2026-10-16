@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "magic_session_revocations",
+  "info": {
+    "singularName": "revoked-token",
+    "pluralName": "revoked-tokens",
+    "displayName": "Revoked Session Token",
+    "description": "Access-token hashes retained until JWT expiry"
+  },
+  "options": {
+    "draftAndPublish": false,
+    "comment": ""
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": false
+    },
+    "content-type-builder": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "tokenHash": {
+      "type": "string",
+      "unique": true,
+      "required": true,
+      "private": true,
+      "configurable": false
+    },
+    "expiresAt": {
+      "type": "datetime"
+    },
+    "revokedAt": {
+      "type": "datetime",
+      "required": true
+    }
+  }
+}

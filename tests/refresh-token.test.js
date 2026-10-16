@@ -48,6 +48,22 @@ test('reads a rotated refresh token from Set-Cookie', () => {
   assert.equal(getOutgoingRefreshToken(ctx, 'strapi_up_refresh'), 'cookie-refresh.value');
 });
 
+test('cookie extraction matches the configured native refresh-cookie name exactly', () => {
+  const ctx = {
+    body: { jwt: 'new-access' },
+    response: {
+      headers: {
+        'set-cookie': [
+          'strapi_up_refresh_backup=wrong-cookie; Path=/; HttpOnly',
+          'custom_native_refresh=right%2Ecookie; Path=/; HttpOnly; SameSite=Strict',
+        ],
+      },
+    },
+  };
+
+  assert.equal(getOutgoingRefreshToken(ctx, 'custom_native_refresh'), 'right.cookie');
+});
+
 test('strips access and refresh tokens from body and Set-Cookie', () => {
   const headers = {
     'set-cookie': [

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useIntl } from 'react-intl';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
-import styled, { keyframes, css } from 'styled-components';
+import styled from 'styled-components';
 import { getTranslation } from '../utils/getTranslation';
+import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 import { theme } from '../utils/theme';
 import {
   Box,
@@ -17,6 +18,9 @@ import {
   Td,
   Th,
   Badge,
+  TextInput,
+  Alert,
+  EmptyStateLayout,
   SingleSelect,
   SingleSelectOption,
 } from '@strapi/design-system';
@@ -37,42 +41,13 @@ import {
 import pluginId from '../pluginId';
 import parseUserAgent from '../utils/parseUserAgent';
 import { getSessionStatus } from '../utils/sessionStatus.mjs';
+import { DEFAULT_SESSION_FILTER, filterSessionsByStatus } from '../utils/sessionFilters.mjs';
+import { paginateSessions } from '../utils/sessionPagination.mjs';
+import { buildSessionCsv, buildSessionJson } from '../utils/sessionExports.mjs';
 import SessionDetailModal from '../components/SessionDetailModal';
-import { 
-  IconButtonPrimary, 
-  IconButtonWarning, 
-  IconButtonDanger 
-} from '../components/StyledButtons';
-
-// ================ ANIMATIONS ================
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-const shimmer = keyframes`
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-`;
-
-const float = keyframes`
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-5px); }
-`;
-
-const pulse = keyframes`
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-`;
-
-const FloatingEmoji = styled.div`
-  position: absolute;
-  bottom: 40px;
-  right: 40px;
-  font-size: 72px;
-  opacity: 0.08;
-  ${css`animation: ${float} 4s ease-in-out infinite;`}
-`;
+import PluginPageLayout from '../components/PluginPageLayout';
+import FormField from '../components/FormField';
+import ReadableText from '../components/ReadableText';
 
 // ================ RESPONSIVE BREAKPOINTS ================
 const breakpoints = {
@@ -80,439 +55,164 @@ const breakpoints = {
   tablet: '1024px',
 };
 
+/**
+ * Parses available device metadata without treating missing native fields as a desktop device.
+ * @param {object} session Normalized Magic or native session row.
+ * @param {string} unavailableValue Localized fallback for missing details.
+ * @returns {{device: string, browser: string, browserVersion: string, os: string, hasDeviceType: boolean}}
+ */
+const getSessionDeviceInfo = (session, unavailableValue) => {
+  const normalize = (value) =>
+    typeof value === 'string' && value.trim() && value.trim().toLowerCase() !== 'unknown'
+      ? value.trim()
+      : '';
+  const userAgent = typeof session?.userAgent === 'string' ? session.userAgent.trim() : '';
+  if (userAgent && userAgent.toLowerCase() !== 'unknown') {
+    const parsed = parseUserAgent(userAgent);
+    const device = normalize(parsed.device);
+    return {
+      device: device || unavailableValue,
+      browser: normalize(parsed.browser) || unavailableValue,
+      browserVersion: '',
+      os: normalize(parsed.os) || unavailableValue,
+      hasDeviceType: Boolean(device),
+    };
+  }
+
+  const deviceName = normalize(session?.deviceName);
+  const deviceType = normalize(session?.deviceType);
+  const browserName = normalize(session?.browserName);
+  const osName = normalize(session?.osName);
+
+  return {
+    device: deviceName || deviceType || unavailableValue,
+    browser: browserName || unavailableValue,
+    browserVersion: '',
+    os: osName || unavailableValue,
+    hasDeviceType: Boolean(deviceType),
+  };
+};
+
+/**
+ * Returns the same accessible badge presentation for table rows and mobile cards.
+ * @param {string} status Normalized session status.
+ * @param {(id: string, fallback: string) => string} translate Translation helper.
+ * @returns {{variant: string, label: string}} Strapi badge presentation.
+ */
+const getStatusPresentation = (status, translate) => {
+  const labels = {
+    active: ['success', 'homepage.status.active', 'Active'],
+    idle: ['warning', 'homepage.status.idle', 'Idle'],
+    loggedout: ['neutral', 'homepage.status.loggedOut', 'Logged Out'],
+    terminated: ['neutral', 'homepage.status.terminated', 'Terminated'],
+  };
+  const [variant, id, fallback] = labels[status] || labels.terminated;
+  return { variant, label: translate(id, fallback) };
+};
+
 // ================ STYLED COMPONENTS ================
-const Container = styled(Box)`
-  ${css`animation: ${fadeIn} ${theme.transitions.slow};`}
-  min-height: 100vh;
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: ${theme.spacing.xl} ${theme.spacing.lg} 0;
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    padding: 16px 12px 0;
-  }
-`;
-
-const Header = styled(Box)`
-  background: linear-gradient(135deg, 
-    ${'var(--colors-primary600, #0284C7)'} 0%, 
-    ${'#9333EA'} 100%
-  );
-  border-radius: ${theme.borderRadius.xl};
-  padding: ${theme.spacing.xl} ${theme.spacing['2xl']};
-  margin-bottom: ${theme.spacing.xl};
-  position: relative;
-  overflow: hidden;
-  box-shadow: ${theme.shadows.xl};
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    padding: 24px 20px;
-    border-radius: 12px;
-  }
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 200%;
-    height: 100%;
-    background: linear-gradient(
-      90deg, 
-      transparent, 
-      rgba(255, 255, 255, 0.15), 
-      transparent
-    );
-    ${css`animation: ${shimmer} 3s infinite;`}
-  }
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 100%;
-    height: 100%;
-    background-image: radial-gradient(circle at 20% 80%, transparent 50%, rgba(255, 255, 255, 0.1) 50%);
-    background-size: 15px 15px;
-    opacity: 0.3;
-  }
-`;
-
-const HeaderContent = styled(Flex)`
-  position: relative;
-  z-index: 1;
-`;
-
-const Title = styled(Typography)`
-  color: white;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  gap: ${theme.spacing.sm};
-  
-  svg {
-    width: 28px;
-    height: 28px;
-    ${css`animation: ${float} 3s ease-in-out infinite;`}
-  }
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    font-size: 1.5rem;
-    
-    svg {
-      width: 22px;
-      height: 22px;
-    }
-  }
-`;
-
-const Subtitle = styled(Typography)`
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 0.95rem;
-  font-weight: 400;
-  margin-top: ${theme.spacing.xs};
-  letter-spacing: 0.01em;
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    font-size: 0.85rem;
-  }
-`;
-
 const StatsGrid = styled.div`
-  margin-bottom: ${theme.spacing.xl};
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: ${theme.spacing.lg};
-  justify-content: center;
-  max-width: 1200px;
-  margin-left: auto;
-  margin-right: auto;
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-bottom: 24px;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: ${theme.spacing.md};
+  width: 100%;
+  min-width: 0;
+  margin-bottom: ${theme.spacing.lg};
 `;
 
-const StatCard = styled(Box)`
+const StatCard = styled.div`
   background: ${(p) => p.theme.colors.neutral0};
-  border-radius: ${theme.borderRadius.lg};
-  padding: 28px ${theme.spacing.lg};
-  position: relative;
-  overflow: hidden;
-  transition: all ${theme.transitions.normal};
-  ${css`animation: ${fadeIn} ${theme.transitions.slow} backwards;`}
-  animation-delay: ${props => props.$delay || '0s'};
-  box-shadow: ${theme.shadows.sm};
-  border: 1px solid rgba(128, 128, 128, 0.2);
-  min-width: 200px;
-  flex: 1;
-  text-align: center;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
+  border-top: 3px solid ${(p) => p.theme.colors.primary600};
+  border-radius: 4px;
+  min-width: 0;
+  padding: ${theme.spacing.md};
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    min-width: unset;
-    padding: 20px 12px;
-    
-    &:hover {
-      transform: none;
-    }
-  }
-  
-  &:hover {
-    transform: translateY(-6px);
-    box-shadow: ${theme.shadows.xl};
-    border-color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
-    
-    .stat-icon {
-      transform: scale(1.15) rotate(5deg);
-    }
-    
-    .stat-value {
-      transform: scale(1.08);
-      color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
-    }
-  }
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 112px;
 `;
 
-const StatIcon = styled(Box)`
-  width: 68px;
-  height: 68px;
-  border-radius: ${theme.borderRadius.lg};
+const StatIcon = styled.div`
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${props => props.$bg || 'rgba(2, 132, 199, 0.12)'};
-  transition: all ${theme.transitions.normal};
-  margin: 0 auto 20px;
-  box-shadow: ${theme.shadows.sm};
+  background: ${(p) => p.theme.colors.primary100};
+  color: ${(p) => p.theme.colors.primary600};
+  margin-bottom: ${theme.spacing.sm};
   
   svg {
-    width: 34px;
-    height: 34px;
-    color: ${props => props.$color || 'var(--colors-primary600, #0284C7)'};
-  }
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    width: 48px;
-    height: 48px;
-    margin-bottom: 12px;
-    
-    svg {
-      width: 24px;
-      height: 24px;
-    }
+    width: 20px;
+    height: 20px;
   }
 `;
 
-const StatValue = styled(Typography)`
-  font-size: 2.75rem;
-  font-weight: 700;
-  color: var(--colors-neutral800);
-  line-height: 1;
-  margin-bottom: 10px;
-  transition: all ${theme.transitions.normal};
-  text-align: center;
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    font-size: 2rem;
-    margin-bottom: 6px;
-  }
-`;
-
-const StatLabel = styled(Typography)`
-  font-size: 0.95rem;
-  color: var(--colors-neutral600);
-  font-weight: 500;
-  letter-spacing: 0.025em;
-  text-align: center;
-  
-  @media screen and (max-width: ${breakpoints.mobile}) {
-    font-size: 0.8rem;
-  }
-`;
-
-const DataTable = styled(Box)`
+const DataTable = styled.div`
   background: ${(p) => p.theme.colors.neutral0};
-  border-radius: ${theme.borderRadius.lg};
-  overflow: hidden;
-  box-shadow: ${theme.shadows.sm};
-  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 4px;
+  overflow: auto;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
+  min-width: 0;
+  max-width: 100%;
   margin-bottom: ${theme.spacing.xl};
 `;
 
-const StyledTable = styled(Table)`
-  thead {
-    background: var(--colors-neutral100);
-    border-bottom: 2px solid rgba(128, 128, 128, 0.2);
-    
-    th {
-      font-weight: 600;
-      color: var(--colors-neutral800);
-      font-size: 0.875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.025em;
-      padding: ${theme.spacing.lg} ${theme.spacing.lg};
-    }
-  }
-  
-  tbody tr {
-    transition: all ${theme.transitions.fast};
-    border-bottom: 1px solid rgba(128, 128, 128, 0.15);
-    
-    &:last-child {
-      border-bottom: none;
-    }
-    
-    &:hover {
-      background: rgba(2, 132, 199, 0.12);
-      
-      .action-buttons {
-        opacity: 1;
-      }
-    }
-    
-    td {
-      padding: ${theme.spacing.lg} ${theme.spacing.lg};
-      color: var(--colors-neutral800);
-      vertical-align: middle;
-    }
-  }
-`;
-
-const OnlineIndicator = styled.div`
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: ${props => props.$online ? 'var(--colors-success600, #22C55E)' : 'rgba(128, 128, 128, 0.4)'};
-  display: inline-block;
-  margin-right: 8px;
-  ${css`animation: ${props => props.$online ? pulse : 'none'} 2s ease-in-out infinite;`}
-`;
-
-const FilterBar = styled(Flex)`
+const FilterBar = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   background: ${(p) => p.theme.colors.neutral0};
   padding: ${theme.spacing.md} ${theme.spacing.lg};
-  border-radius: ${theme.borderRadius.lg};
+  border-radius: 4px;
   margin-bottom: ${theme.spacing.lg};
-  box-shadow: ${theme.shadows.sm};
-  border: 1px solid rgba(128, 128, 128, 0.2);
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
   gap: ${theme.spacing.md};
-  align-items: center;
+  min-width: 0;
+
+  @media screen and (max-width: ${breakpoints.mobile}) {
+    grid-template-columns: minmax(0, 1fr);
+    padding: ${theme.spacing.md};
+  }
 `;
 
-const SearchInputWrapper = styled.div`
-  position: relative;
-  flex: 1;
+const ActionButtons = styled.div`
   display: flex;
-  align-items: center;
-`;
-
-const SearchIcon = styled(Search)`
-  position: absolute;
-  left: 12px;
-  width: 16px;
-  height: 16px;
-  color: var(--colors-neutral600);
-  pointer-events: none;
-`;
-
-const StyledSearchInput = styled.input`
-  width: 100%;
-  padding: ${theme.spacing.sm} ${theme.spacing.sm} ${theme.spacing.sm} 36px;
-  border: 1px solid rgba(128, 128, 128, 0.2);
-  border-radius: ${theme.borderRadius.md};
-  font-size: 0.875rem;
-  transition: all ${theme.transitions.fast};
-  background: ${(p) => p.theme.colors.neutral0};
-  color: var(--colors-neutral800);
-  
-  &:focus {
-    outline: none;
-    border-color: var(--colors-primary600, #0284C7);
-    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
-  }
-  
-  &::placeholder {
-    color: var(--colors-neutral500);
-  }
-`;
-
-const ActionButtons = styled(Flex)`
-  opacity: 0.85;
-  transition: all ${theme.transitions.fast};
-  gap: 8px;
+  gap: ${theme.spacing.xs};
   justify-content: flex-end;
 `;
 
-// Status Badge - pill shaped with subtle gradient
-const StatusBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  transition: all 0.2s ease;
-  
-  ${props => props.$status === 'active' && `
-    background: linear-gradient(135deg, rgba(22, 163, 74, 0.12) 0%, rgba(34, 197, 94, 0.3) 100%);
-    color: var(--colors-success700, #15803D);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-  `}
-  
-  ${props => props.$status === 'idle' && `
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(234, 179, 8, 0.4) 100%);
-    color: var(--colors-warning600, #A16207);
-    border: 1px solid rgba(234, 179, 8, 0.4);
-  `}
-  
-  ${props => props.$status === 'loggedout' && `
-    background: linear-gradient(135deg, rgba(220, 38, 38, 0.12) 0%, rgba(239, 68, 68, 0.4) 100%);
-    color: var(--colors-danger600, #B91C1C);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-  `}
-  
-  ${props => props.$status === 'terminated' && `
-    background: linear-gradient(135deg, var(--colors-neutral100) 0%, rgba(128, 128, 128, 0.2) 100%);
-    color: var(--colors-neutral600);
-    border: 1px solid rgba(128, 128, 128, 0.2);
-  `}
-`;
+const DesktopSessionTable = styled.div`
+  display: block;
+  min-width: 0;
 
-const StatusDot = styled.span`
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  
-  ${props => props.$status === 'active' && `
-    background: var(--colors-success600, #22C55E);
-    box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
-    animation: pulse-green 2s ease-in-out infinite;
-  `}
-  
-  ${props => props.$status === 'idle' && `
-    background: var(--colors-warning600, #F59E0B);
-  `}
-  
-  ${props => props.$status === 'loggedout' && `
-    background: var(--colors-danger600, #EF4444);
-  `}
-  
-  ${props => props.$status === 'terminated' && `
-    background: var(--colors-neutral500);
-  `}
-  
-  @keyframes pulse-green {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(1.1); }
+  @media screen and (max-width: ${breakpoints.mobile}) {
+    display: none;
   }
 `;
 
-const ClickableRow = styled(Tr)`
-  cursor: pointer;
-  
-  &:hover {
-    background: rgba(2, 132, 199, 0.12) !important;
+const MobileSessionCards = styled.div`
+  display: none;
+  min-width: 0;
+
+  @media screen and (max-width: ${breakpoints.mobile}) {
+    display: flex;
+    flex-direction: column;
+    gap: ${theme.spacing.md};
+    margin-bottom: ${theme.spacing.lg};
   }
 `;
 
-// Empty state background that works in dark mode
-const EmptyStateBox = styled(Box)`
+const MobileSessionCard = styled.div`
   background: ${(p) => p.theme.colors.neutral0};
-  border-radius: ${theme.borderRadius.xl};
-  border: 2px dashed rgba(128, 128, 128, 0.3);
-  padding: 80px 32px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-  min-height: 400px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const EmptyStateGradient = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, ${'rgba(2, 132, 199, 0.06)'} 0%, ${'rgba(147, 51, 234, 0.06)'} 100%);
-  opacity: 0.3;
-  z-index: 0;
+  min-width: 0;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  padding: ${theme.spacing.md};
 `;
 
 const HomePage = () => {
@@ -520,13 +220,18 @@ const HomePage = () => {
   const { get, post, del } = useFetchClient();
   const { toggleNotification } = useNotification();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const unavailableValue = t('homepage.user.unknown', 'Unavailable');
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('active'); // Default: Active Only
+  const [loadError, setLoadError] = useState(null);
+  const [filterStatus, setFilterStatus] = useState(DEFAULT_SESSION_FILTER);
   const [entriesPerPage, setEntriesPerPage] = useState('25');
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSession, setSelectedSession] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [terminatingSessionId, setTerminatingSessionId] = useState(null);
+  const [deletingSessionId, setDeletingSessionId] = useState(null);
 
   useEffect(() => {
     fetchSessions();
@@ -542,84 +247,105 @@ const HomePage = () => {
     return () => clearInterval(interval);
   }, [showDetailModal]);
 
-    const fetchSessions = async () => {
+  /**
+   * Loads the complete admin session collection for dashboard filtering,
+   * pagination, detail views and exports.
+   *
+   * @returns {Promise<void>}
+   */
+  const fetchSessions = async () => {
     setLoading(true);
+    setLoadError(null);
       try {
       const { data } = await get(`/${pluginId}/sessions`);
         setSessions(data.data || []);
       } catch (err) {
-      console.error('[SessionManager] Error fetching sessions:', err);
+      setLoadError(t('homepage.error.load', 'Session data could not be loaded. Try again.'));
+      logSafeAdminError('dashboard.loadSessions', err);
       } finally {
         setLoading(false);
       }
     };
 
+  /**
+   * Confirms and requests termination of one session, then refreshes the list.
+   *
+   * @param {string} sessionId Session ID accepted by the admin API.
+   * @returns {Promise<void>}
+   */
   const handleTerminateSession = async (sessionId) => {
+    if (terminatingSessionId || deletingSessionId) return;
     if (!confirm(t('homepage.confirm.terminate', 'Are you sure you want to terminate this session?\n\nThis will set isActive to false (user will be logged out).'))) {
       return;
     }
 
+    setTerminatingSessionId(sessionId);
     try {
       await post(`/${pluginId}/sessions/${sessionId}/terminate`);
-      fetchSessions();
+      await fetchSessions();
+      toggleNotification({
+        type: 'success',
+        message: t('notifications.success.terminated', 'Session terminated successfully'),
+      });
     } catch (err) {
-      console.error('[SessionManager] Error terminating session:', err);
+      logSafeAdminError('dashboard.terminateSession', err);
+      toggleNotification({
+        type: 'danger',
+        message: t('notifications.error.terminate', 'Failed to terminate session'),
+      });
+    } finally {
+      setTerminatingSessionId(null);
     }
   };
 
+  /**
+   * Confirms removal of session details and reports that token denial remains
+   * in force until any unexpired access token reaches its expiry.
+   *
+   * @param {string} sessionId Session documentId
+   * @returns {Promise<void>}
+   */
   const handleDeleteSession = async (sessionId) => {
-    if (!confirm(t('homepage.confirm.delete', '[WARNING] This will PERMANENTLY delete this session from the database!\n\nThis action cannot be undone.\n\nAre you sure?'))) {
+    if (terminatingSessionId || deletingSessionId) return;
+    if (!confirm(t(
+      'homepage.confirm.delete',
+      "Remove this session's details? Any unexpired access token remains blocked until it expires."
+    ))) {
       return;
     }
 
+    setDeletingSessionId(sessionId);
     try {
       await del(`/${pluginId}/sessions/${sessionId}`);
-      fetchSessions();
+      await fetchSessions();
       toggleNotification({
         type: 'success',
-        message: t('notifications.success.deleted', 'Session permanently deleted'),
+        message: t('notifications.success.deleted', 'Session details removed. Token revocation remains until expiry.'),
       });
     } catch (err) {
-      console.error('[SessionManager] Error deleting session:', err);
+      logSafeAdminError('dashboard.deleteSession', err);
       toggleNotification({
         type: 'danger',
         message: t('notifications.error.delete', 'Failed to delete session'),
       });
+    } finally {
+      setDeletingSessionId(null);
     }
   };
 
+  /**
+   * Downloads CSV for every session matching the current filters, not only the
+   * rows visible on the current page.
+   *
+   * @returns {void}
+   */
   const handleExportCSV = () => {
     try {
-      // CSV Header
-      const headers = ['ID', 'Status', 'User Email', 'Username', 'Device', 'Browser', 'OS', 'IP Address', 'Login Time', 'Last Active', 'Logout Time', 'Minutes Idle'];
-      const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-      
-      // CSV Rows
-      const rows = filteredSessions.map(session => {
-        const deviceInfo = parseUserAgent(session.userAgent);
-        const status = getSessionStatus(session);
-        
-        return [
-          session.id,
-          status,
-          session.user?.email || '',
-          session.user?.username || '',
-          deviceInfo.device,
-          deviceInfo.browser,
-          deviceInfo.os,
-          session.ipAddress,
-          new Date(session.loginTime).toISOString(),
-          new Date(session.lastActive || session.loginTime).toISOString(),
-          session.logoutTime ? new Date(session.logoutTime).toISOString() : '',
-          session.minutesSinceActive,
-        ];
+      const csvContent = buildSessionCsv(filteredSessions, {
+        unavailableValue,
+        getDeviceInfo: getSessionDeviceInfo,
+        getSessionStatus,
       });
-      
-      // Create CSV content
-      const csvContent = [
-        headers.map(escapeCsvValue).join(','),
-        ...rows.map(row => row.map(escapeCsvValue).join(','))
-      ].join('\n');
       
       // Download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -633,7 +359,7 @@ const HomePage = () => {
         message: t('notifications.success.exported', 'Exported {count} sessions to {format}', { count: filteredSessions.length, format: 'CSV' }),
       });
     } catch (err) {
-      console.error('[SessionManager] Export error:', err);
+      logSafeAdminError('dashboard.exportCsv', err);
       toggleNotification({
         type: 'danger',
         message: t('notifications.error.export', 'Failed to export sessions'),
@@ -641,41 +367,24 @@ const HomePage = () => {
     }
   };
 
+  /**
+   * Downloads JSON for every session matching the current filters, not only
+   * the rows visible on the current page.
+   *
+   * @returns {void}
+   */
   const handleExportJSON = () => {
     try {
-      const exportData = {
-        exportedAt: new Date().toISOString(),
-        filter: filterStatus,
+      const jsonContent = buildSessionJson(filteredSessions, {
+        filterStatus,
         totalSessions: sessions.length,
-        exportedSessions: filteredSessions.length,
-        sessions: filteredSessions.map(session => {
-          const deviceInfo = parseUserAgent(session.userAgent);
-          return {
-            id: session.id,
-            status: getSessionStatus(session),
-            user: {
-              id: session.user?.documentId || session.user?.id,
-              email: session.user?.email,
-              username: session.user?.username,
-            },
-            device: {
-              type: deviceInfo.device,
-              browser: deviceInfo.browser,
-              browserVersion: deviceInfo.browserVersion,
-              os: deviceInfo.os,
-            },
-            ipAddress: session.ipAddress,
-            loginTime: session.loginTime,
-            lastActive: session.lastActive,
-            logoutTime: session.logoutTime,
-            minutesSinceActive: session.minutesSinceActive,
-            isActive: session.isActive,
-            isTrulyActive: session.isTrulyActive,
-          };
-        }),
-      };
-      
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        exportedAt: new Date().toISOString(),
+        unavailableValue,
+        getDeviceInfo: getSessionDeviceInfo,
+        getSessionStatus,
+      });
+
+      const blob = new Blob([jsonContent], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `sessions-export-${new Date().toISOString().split('T')[0]}.json`;
@@ -686,7 +395,7 @@ const HomePage = () => {
         message: t('notifications.success.exported', 'Exported {count} sessions to {format}', { count: filteredSessions.length, format: 'JSON' }),
       });
     } catch (err) {
-      console.error('[SessionManager] Export error:', err);
+      logSafeAdminError('dashboard.exportJson', err);
       toggleNotification({
         type: 'danger',
         message: t('notifications.error.export', 'Failed to export sessions'),
@@ -720,123 +429,103 @@ const HomePage = () => {
     fetchSessions();
   };
 
-  // Filter sessions
-  const filteredSessions = sessions
-    .filter(session => {
-      // Filter by status
-      const sessionStatus = getSessionStatus(session);
-      if (filterStatus === 'active' && sessionStatus !== 'active') return false;
-      if (filterStatus === 'idle' && sessionStatus !== 'idle') return false;
-      if (filterStatus === 'loggedout' && sessionStatus !== 'loggedout') return false;
-      if (filterStatus === 'terminated' && sessionStatus !== 'terminated') return false;
-      
-      // Filter by search query
+  // Filter the complete collection before deriving the visible page. Exports
+  // intentionally consume this full result set, not just the current page.
+  const filteredSessions = filterSessionsByStatus(sessions, filterStatus)
+    .filter((session) => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesUser = session.user?.email?.toLowerCase().includes(query) ||
                            session.user?.username?.toLowerCase().includes(query);
         const matchesIp = session.ipAddress?.toLowerCase().includes(query);
-        const deviceInfo = parseUserAgent(session.userAgent);
+        const deviceInfo = getSessionDeviceInfo(session, unavailableValue);
         const matchesDevice = deviceInfo.device?.toLowerCase().includes(query) ||
                              deviceInfo.browser?.toLowerCase().includes(query) ||
                              deviceInfo.os?.toLowerCase().includes(query);
         
         return matchesUser || matchesIp || matchesDevice;
   }
-      
+
       return true;
-    })
-    .slice(0, parseInt(entriesPerPage));
+    });
+  const pageResult = paginateSessions(filteredSessions, currentPage, entriesPerPage);
+
+  const exportActions = filteredSessions.length > 0 ? (
+    <Flex gap={2} wrap="wrap">
+      <Button onClick={handleExportCSV} startIcon={<Download />} variant="secondary">
+        {t('homepage.export.csv', 'Export CSV')}
+      </Button>
+      <Button onClick={handleExportJSON} startIcon={<Download />} variant="secondary">
+        {t('homepage.export.json', 'Export JSON')}
+      </Button>
+    </Flex>
+  ) : null;
 
   return (
-    <Container padding={8}>
-      {/* Gradient Header */}
-      <Header>
-        <HeaderContent justifyContent="space-between" alignItems="center">
-          <Flex direction="column" alignItems="flex-start" gap={2}>
-            <Title>
-              <Monitor /> {t('homepage.title', 'Session Manager')}
-            </Title>
-            <Subtitle>
-              {t('homepage.subtitle', 'Monitor and manage user sessions in real-time')}
-            </Subtitle>
-          </Flex>
-      
-          {filteredSessions.length > 0 && (
-            <Flex gap={2}>
-              <Button
-                onClick={handleExportCSV}
-                startIcon={<Download />}
-                size="M"
-                variant="secondary"
-                style={{
-                  backgroundColor: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  fontWeight: '600',
-                }}
-              >
-                {t('homepage.export.csv', 'Export CSV')}
-              </Button>
-              <Button
-                onClick={handleExportJSON}
-                startIcon={<Download />}
-                size="M"
-                variant="secondary"
-                style={{
-                  backgroundColor: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  fontWeight: '600',
-                }}
-              >
-                {t('homepage.export.json', 'Export JSON')}
-              </Button>
-            </Flex>
+    <PluginPageLayout
+      headingId="magic-sessionmanager-dashboard-title"
+      title={t('homepage.title', 'Session Manager')}
+      subtitle={t('homepage.subtitle', 'Monitor and manage end-user sessions')}
+      primaryAction={exportActions}
+    >
+      <Box style={{ width: '100%', minWidth: 0 }}>
+      {!loading && loadError ? (
+        <Alert
+          variant="danger"
+          title={t('homepage.error.title', 'Unable to load sessions')}
+          closeLabel={t('common.close', 'Close')}
+          action={(
+            <Button size="S" variant="secondary" onClick={fetchSessions}>
+              {t('common.retry', 'Retry')}
+            </Button>
           )}
-        </HeaderContent>
-      </Header>
-      
+        >
+          <ReadableText variant="pi" textColor="neutral700" tag="span">
+            {loadError}
+          </ReadableText>
+        </Alert>
+      ) : null}
+
       {/* Stats Cards */}
       <StatsGrid>
-        <StatCard $delay="0.1s" $color={'var(--colors-success600, #22C55E)'}>
-          <StatIcon className="stat-icon" $bg={'rgba(22, 163, 74, 0.12)'} $color={'var(--colors-success600, #16A34A)'}>
+        <StatCard>
+          <StatIcon aria-hidden="true">
             <Check />
           </StatIcon>
-          <StatValue className="stat-value">{activeSessions.length}</StatValue>
-          <StatLabel>{t('homepage.stats.active', 'Active')}</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p" style={{ margin: 0 }}>{activeSessions.length}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p" style={{ margin: 0 }}>{t('homepage.stats.active', 'Active')}</Typography>
         </StatCard>
 
-        <StatCard $delay="0.2s" $color={'var(--colors-warning600, #F59E0B)'}>
-          <StatIcon className="stat-icon" $bg={'rgba(234, 179, 8, 0.12)'} $color={'var(--colors-warning600, #D97706)'}>
+        <StatCard>
+          <StatIcon aria-hidden="true">
             <Clock />
           </StatIcon>
-          <StatValue className="stat-value">{idleSessions.length}</StatValue>
-          <StatLabel>{t('homepage.stats.idle', 'Idle')}</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p" style={{ margin: 0 }}>{idleSessions.length}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p" style={{ margin: 0 }}>{t('homepage.stats.idle', 'Idle')}</Typography>
         </StatCard>
 
-        <StatCard $delay="0.3s" $color={'var(--colors-danger600, #EF4444)'}>
-          <StatIcon className="stat-icon" $bg={'rgba(220, 38, 38, 0.12)'} $color={'var(--colors-danger600, #DC2626)'}>
+        <StatCard>
+          <StatIcon aria-hidden="true">
             <Cross />
           </StatIcon>
-          <StatValue className="stat-value">{loggedOutSessions.length}</StatValue>
-          <StatLabel>{t('homepage.stats.loggedOut', 'Logged Out')}</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p" style={{ margin: 0 }}>{loggedOutSessions.length}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p" style={{ margin: 0 }}>{t('homepage.stats.loggedOut', 'Logged Out')}</Typography>
         </StatCard>
 
-        <StatCard $delay="0.4s" $color="var(--colors-neutral600)">
-          <StatIcon className="stat-icon" $bg="var(--colors-neutral100)" $color="var(--colors-neutral600)">
+        <StatCard>
+          <StatIcon aria-hidden="true">
             <Cross />
           </StatIcon>
-          <StatValue className="stat-value">{terminatedSessions.length}</StatValue>
-          <StatLabel>{t('homepage.stats.terminated', 'Terminated')}</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p" style={{ margin: 0 }}>{terminatedSessions.length}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p" style={{ margin: 0 }}>{t('homepage.stats.terminated', 'Terminated')}</Typography>
         </StatCard>
 
-        <StatCard $delay="0.5s" $color="#A855F7">
-          <StatIcon className="stat-icon" $bg="rgba(147, 51, 234, 0.12)" $color="#9333EA">
+        <StatCard>
+          <StatIcon aria-hidden="true">
             <User />
           </StatIcon>
-          <StatValue className="stat-value">{sessions.length}</StatValue>
-          <StatLabel>{t('homepage.stats.total', 'Total')}</StatLabel>
+          <Typography variant="delta" fontWeight="semiBold" tag="p" style={{ margin: 0 }}>{sessions.length}</Typography>
+          <Typography variant="pi" textColor="neutral600" tag="p" style={{ margin: 0 }}>{t('homepage.stats.total', 'Total')}</Typography>
         </StatCard>
       </StatsGrid>
 
@@ -858,23 +547,35 @@ const HomePage = () => {
           
           {/* Filter Bar */}
           <FilterBar>
-            {/* Search Input */}
-            <SearchInputWrapper>
-              <SearchIcon />
-              <StyledSearchInput
+            <FormField
+              id="session-search"
+              name="sessionSearch"
+              label={t('homepage.search.label', 'Search sessions')}
+              description={t('homepage.search.hint', 'Search end-user sessions by username, email, IP address, or device.')}
+            >
+              <TextInput
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 placeholder={t('homepage.search.placeholder', 'Search by user, IP address, or device...')}
-                type="text"
+                startAction={<Search />}
               />
-            </SearchInputWrapper>
+            </FormField>
             
-            {/* Status Filter */}
-            <Box style={{ minWidth: '180px' }}>
+            <FormField
+              id="session-status-filter"
+              name="sessionStatus"
+              label={t('homepage.filter.label', 'Filter sessions by status')}
+              description={t('homepage.filter.hint', 'Limit the list to sessions with this status.')}
+            >
               <SingleSelect
                 value={filterStatus}
-                onChange={setFilterStatus}
-                placeholder="Filter"
+                onChange={(value) => {
+                  setFilterStatus(value);
+                  setCurrentPage(1);
+                }}
                 size="S"
               >
                 <SingleSelectOption value="all">{t('homepage.filter.all', 'All Sessions')}</SingleSelectOption>
@@ -883,14 +584,20 @@ const HomePage = () => {
                 <SingleSelectOption value="loggedout">{t('homepage.filter.loggedout', 'Logged Out')}</SingleSelectOption>
                 <SingleSelectOption value="terminated">{t('homepage.filter.terminated', 'Terminated')}</SingleSelectOption>
               </SingleSelect>
-            </Box>
+            </FormField>
             
-            {/* Entries per page */}
-            <Box style={{ minWidth: '130px' }}>
+            <FormField
+              id="sessions-per-page"
+              name="sessionsPerPage"
+              label={t('homepage.entries.label', 'Sessions per page')}
+              description={t('homepage.entries.hint', 'Choose how many sessions appear on each page.')}
+            >
               <SingleSelect
                 value={entriesPerPage}
-                onChange={setEntriesPerPage}
-                placeholder="Entries"
+                onChange={(value) => {
+                  setEntriesPerPage(value);
+                  setCurrentPage(1);
+                }}
                 size="S"
               >
                 <SingleSelectOption value="10">{t('homepage.entries.10', '10 entries')}</SingleSelectOption>
@@ -898,23 +605,33 @@ const HomePage = () => {
                 <SingleSelectOption value="50">{t('homepage.entries.50', '50 entries')}</SingleSelectOption>
                 <SingleSelectOption value="100">{t('homepage.entries.100', '100 entries')}</SingleSelectOption>
               </SingleSelect>
-            </Box>
+            </FormField>
           </FilterBar>
           
           {/* Results count */}
           <Box style={{ marginBottom: theme.spacing.md }}>
             <Typography variant="pi" textColor="neutral600">
-              {searchQuery 
-                ? t('homepage.showingFiltered', 'Showing {count} of {total} sessions (filtered by "{query}")', { count: filteredSessions.length, total: sessions.length, query: searchQuery })
-                : t('homepage.showing', 'Showing {count} of {total} sessions', { count: filteredSessions.length, total: sessions.length })
+              {searchQuery
+                ? t(
+                    'homepage.pagination.filteredRange',
+                    'Showing {start}-{end} of {count} matching sessions (filtered by "{query}")',
+                    { start: pageResult.startIndex, end: pageResult.endIndex, count: pageResult.total, query: searchQuery }
+                  )
+                : t(
+                    'homepage.pagination.range',
+                    'Showing {start}-{end} of {count} sessions',
+                    { start: pageResult.startIndex, end: pageResult.endIndex, count: pageResult.total }
+                  )
               }
             </Typography>
           </Box>
           
           {/* Table or No Results */}
           {filteredSessions.length > 0 ? (
+          <>
+          <DesktopSessionTable>
           <DataTable>
-            <StyledTable>
+            <Table style={{ minWidth: 1024 }}>
               <Thead>
                 <Tr>
                   <Th>{t('homepage.table.status', 'Status')}</Th>
@@ -927,58 +644,32 @@ const HomePage = () => {
                 </Tr>
               </Thead>
               <Tbody>
-                {filteredSessions.map((session) => {
-                  const deviceInfo = parseUserAgent(session.userAgent);
+                {pageResult.items.map((session) => {
+                  const deviceInfo = getSessionDeviceInfo(session, unavailableValue);
                   const DeviceIcon = getDeviceIcon(deviceInfo.device);
                   const sessionStatus = getSessionStatus(session);
-                  
-                  // Status colors and labels
-                  const statusConfig = {
-                    active: { 
-                      bg: 'rgba(22, 163, 74, 0.06)', 
-                      badgeColor: 'success600', 
-                      label: t('homepage.status.active', 'Active'),
-                      indicator: true 
-                    },
-                    idle: { 
-                      bg: 'rgba(234, 179, 8, 0.06)', 
-                      badgeColor: 'warning600', 
-                      label: t('homepage.status.idle', 'Idle'),
-                      indicator: false 
-                    },
-                    loggedout: { 
-                      bg: 'rgba(220, 38, 38, 0.06)', 
-                      badgeColor: 'danger600', 
-                      label: t('homepage.status.loggedOut', 'Logged Out'),
-                      indicator: false,
-                      opacity: 0.7 
-                    },
-                    terminated: { 
-                      bg: 'var(--colors-neutral100)', 
-                      badgeColor: 'neutral600', 
-                      label: t('homepage.status.terminated', 'Terminated'),
-                      indicator: false,
-                      opacity: 0.6 
-                    },
-                  };
-                  
-                  const config = statusConfig[sessionStatus];
+                  const config = getStatusPresentation(sessionStatus, t);
                   
                   return (
-                    <ClickableRow 
+                    <Tr
                       key={session.id} 
+                      tabIndex={0}
+                      style={{ cursor: 'pointer' }}
+                      aria-label={`${config.label}: ${session.user?.email || session.user?.username || t('homepage.user.unknown', 'Unknown')}`}
                       onClick={() => handleSessionClick(session)}
-                      style={{ 
-                        background: config.bg,
-                        opacity: config.opacity || 1,
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleSessionClick(session);
+                        }
                       }}
                     >
                       {/* Status */}
                       <Td>
-                        <StatusBadge $status={sessionStatus}>
-                          <StatusDot $status={sessionStatus} />
+                        <Badge variant={config.variant} size="S">
                           {config.label}
-                        </StatusBadge>
+                        </Badge>
                       </Td>
                       
                       {/* User */}
@@ -998,7 +689,7 @@ const HomePage = () => {
                       {/* Device */}
                       <Td>
                         <Flex alignItems="center" gap={2}>
-                          <DeviceIcon width="18px" height="18px" />
+                          {deviceInfo.hasDeviceType && <DeviceIcon width="18px" height="18px" />}
                           <Flex direction="column" alignItems="flex-start">
                             <Typography variant="omega" fontWeight="semiBold">
                               {deviceInfo.device}
@@ -1013,7 +704,7 @@ const HomePage = () => {
                       {/* IP Address */}
                       <Td>
                         <Typography variant="omega" style={{ fontFamily: 'monospace' }}>
-                          {session.ipAddress}
+                          {session.ipAddress || unavailableValue}
                         </Typography>
                       </Td>
                       
@@ -1039,7 +730,10 @@ const HomePage = () => {
                       {/* Actions */}
                       <Td onClick={(e) => e.stopPropagation()}>
                         <ActionButtons className="action-buttons">
-                          <IconButtonPrimary
+                          <Button
+                            size="S"
+                            variant="tertiary"
+                            aria-label={`${t('homepage.actions.viewDetails', 'View Details')}: ${session.user?.email || session.user?.username || ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleSessionClick(session);
@@ -1047,191 +741,205 @@ const HomePage = () => {
                             title={t('homepage.actions.viewDetails', 'View Details')}
                           >
                             <Eye />
-                          </IconButtonPrimary>
-                          <IconButtonWarning
+                          </Button>
+                          <Button
+                            size="S"
+                            variant="danger-light"
+                            aria-label={`${t('homepage.actions.terminate', 'Terminate (Logout)')}: ${session.user?.email || session.user?.username || ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleTerminateSession(session.id);
                             }}
-                            disabled={sessionStatus !== 'active' && sessionStatus !== 'idle'}
+                            loading={terminatingSessionId === session.id}
+                            disabled={
+                              !session.isActive || Boolean(terminatingSessionId) || Boolean(deletingSessionId)
+                            }
                             title={session.isActive ? t('homepage.actions.terminate', 'Terminate (Logout)') : t('homepage.actions.alreadyInactive', 'Already inactive')}
                           >
                             <Cross />
-                          </IconButtonWarning>
-                          <IconButtonDanger
+                          </Button>
+                          <Button
+                            size="S"
+                            variant="danger-light"
+                            aria-label={t('homepage.actions.deletePermanently', 'Remove session details')}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteSession(session.id);
                             }}
-                            title={t('homepage.actions.deletePermanently', 'Delete Permanently')}
+                            loading={deletingSessionId === session.id}
+                            disabled={Boolean(terminatingSessionId) || Boolean(deletingSessionId)}
+                            title={t('homepage.actions.deletePermanently', 'Remove Session Details')}
                           >
                             <Trash />
-                          </IconButtonDanger>
+                          </Button>
                         </ActionButtons>
                       </Td>
-                    </ClickableRow>
+                    </Tr>
                   );
                 })}
               </Tbody>
-            </StyledTable>
+            </Table>
           </DataTable>
+          </DesktopSessionTable>
+
+          <MobileSessionCards aria-label={t('homepage.mobileList.label', 'Session results')}>
+            {pageResult.items.map((session) => {
+              const deviceInfo = getSessionDeviceInfo(session, unavailableValue);
+              const DeviceIcon = getDeviceIcon(deviceInfo.device);
+              const presentation = getStatusPresentation(getSessionStatus(session), t);
+              const userLabel = session.user?.username || session.user?.email || t('homepage.user.unknown', 'Unknown');
+
+              return (
+                <MobileSessionCard key={session.id}>
+                  <Flex justifyContent="space-between" alignItems="center" gap={2} wrap="wrap">
+                    <Badge variant={presentation.variant} size="S">{presentation.label}</Badge>
+                    <Typography variant="pi" textColor="neutral600">
+                      {new Date(session.lastActive || session.loginTime).toLocaleString()}
+                    </Typography>
+                  </Flex>
+
+                  <Box marginTop={3}>
+                    <Flex direction="column" alignItems="stretch" gap={1}>
+                      <Typography variant="epsilon" fontWeight="semiBold">
+                        {userLabel}
+                      </Typography>
+                      {session.user?.email && session.user?.username ? (
+                        <Typography variant="pi" textColor="neutral600">
+                          {session.user.email}
+                        </Typography>
+                      ) : null}
+                    </Flex>
+                  </Box>
+
+                  <Flex direction="column" alignItems="stretch" gap={1} marginTop={3}>
+                    <Flex gap={2} alignItems="center">
+                      {deviceInfo.hasDeviceType ? <DeviceIcon aria-hidden="true" /> : null}
+                      <Typography variant="pi" textColor="neutral700">
+                        {deviceInfo.device} · {deviceInfo.browser} on {deviceInfo.os}
+                      </Typography>
+                    </Flex>
+                    <Typography variant="pi" textColor="neutral600">
+                      {t('homepage.table.ipAddress', 'IP Address')}: {session.ipAddress || unavailableValue}
+                    </Typography>
+                    <Typography variant="pi" textColor="neutral600">
+                      {t('homepage.table.loginTime', 'Login Time')}: {new Date(session.loginTime).toLocaleString()}
+                    </Typography>
+                    <Typography variant="pi" textColor="neutral600">
+                      {t('homepage.time.minAgo', '{minutes} min ago', {
+                        minutes: Number.isFinite(session.minutesSinceActive)
+                          ? session.minutesSinceActive
+                          : unavailableValue,
+                      })}
+                    </Typography>
+                  </Flex>
+
+                  <Flex gap={2} wrap="wrap" marginTop={4}>
+                    <Button
+                      size="S"
+                      variant="tertiary"
+                      startIcon={<Eye />}
+                      onClick={() => handleSessionClick(session)}
+                      aria-label={`${t('homepage.actions.viewDetails', 'View Details')}: ${userLabel}`}
+                    >
+                      {t('homepage.actions.viewDetails', 'View Details')}
+                    </Button>
+                    <Button
+                      size="S"
+                      variant="danger-light"
+                      startIcon={<Cross />}
+                      onClick={() => handleTerminateSession(session.id)}
+                      loading={terminatingSessionId === session.id}
+                      disabled={!session.isActive || Boolean(terminatingSessionId) || Boolean(deletingSessionId)}
+                    >
+                      {t('homepage.actions.terminate', 'Terminate')}
+                    </Button>
+                    <Button
+                      size="S"
+                      variant="tertiary"
+                      startIcon={<Trash />}
+                      onClick={() => handleDeleteSession(session.id)}
+                      loading={deletingSessionId === session.id}
+                      disabled={Boolean(terminatingSessionId) || Boolean(deletingSessionId)}
+                    >
+                      {t('homepage.actions.deletePermanently', 'Remove Session Details')}
+                    </Button>
+                  </Flex>
+                </MobileSessionCard>
+              );
+            })}
+          </MobileSessionCards>
+          {pageResult.pageCount > 1 && (
+            <nav aria-label={t('homepage.pagination.label', 'Session pages')}>
+              <Flex
+                justifyContent="space-between"
+                alignItems="center"
+                gap={3}
+                wrap="wrap"
+                style={{ marginTop: theme.spacing.md }}
+              >
+                <Typography variant="pi" textColor="neutral600" aria-live="polite">
+                  {t('homepage.pagination.page', 'Page {page} of {pages}', {
+                    page: pageResult.page,
+                    pages: pageResult.pageCount,
+                  })}
+                </Typography>
+                <Flex gap={2}>
+                  <Button
+                    variant="tertiary"
+                    size="S"
+                    disabled={pageResult.page <= 1}
+                    onClick={() => setCurrentPage(pageResult.page - 1)}
+                  >
+                    {t('homepage.pagination.previous', 'Previous')}
+                  </Button>
+                  <Button
+                    variant="tertiary"
+                    size="S"
+                    disabled={pageResult.page >= pageResult.pageCount}
+                    onClick={() => setCurrentPage(pageResult.page + 1)}
+                  >
+                    {t('homepage.pagination.next', 'Next')}
+                  </Button>
+                </Flex>
+              </Flex>
+            </nav>
+          )}
+          </>
           ) : (
-            /* No results found */
-        <Box
-          background="neutral0"
-          style={{
-            borderRadius: theme.borderRadius.xl,
-            border: '2px dashed rgba(128, 128, 128, 0.2)',
-            padding: '60px 32px',
-            textAlign: 'center',
-            position: 'relative',
-            overflow: 'hidden',
-            minHeight: '300px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {/* Background Gradient */}
-          <Box
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.06)'} 0%, ${'rgba(147, 51, 234, 0.06)'} 100%)`,
-              opacity: 0.3,
-              zIndex: 0,
-            }}
-          />
-          
-          {/* Floating Emoji */}
-          <FloatingEmoji>
-            🔍
-          </FloatingEmoji>
-          
-          {/* Content */}
-          <Flex direction="column" alignItems="center" gap={4} style={{ position: 'relative', zIndex: 1 }}>
-            {/* Icon Circle */}
-            <Box
-              style={{
-                width: '100px',
-                height: '100px',
-                borderRadius: '50%',
-                background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.12)'} 0%, ${'rgba(147, 51, 234, 0.12)'} 100%)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: theme.shadows.xl,
-              }}
-            >
-              <Search style={{ width: '50px', height: '50px', color: 'var(--colors-primary600, #0284C7)' }} />
-            </Box>
-            
-            <Typography 
-              variant="alpha" 
-              textColor="neutral800"
-              style={{ 
-                fontSize: '1.5rem',
-                fontWeight: '700',
-                marginBottom: '4px',
-              }}
-            >
-              {t('homepage.noResults.title', 'No sessions found')}
-            </Typography>
-            
-            <Typography 
-              variant="omega" 
-              textColor="neutral600"
-              style={{
-                fontSize: '1rem',
-                maxWidth: '400px',
-                lineHeight: '1.6',
-              }}
-            >
-              {t('homepage.noResults.description', 'Try adjusting your search query or filters to find sessions')}
-            </Typography>
-          </Flex>
-        </Box>
+            <EmptyStateLayout
+              icon={<Search aria-hidden="true" />}
+              content={(
+                <ReadableText variant="pi" textColor="neutral700" tag="span">
+                  {t('homepage.noResults.description', 'Try adjusting your search or status filter.')}
+                </ReadableText>
+              )}
+              action={(
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFilterStatus(DEFAULT_SESSION_FILTER);
+                    setCurrentPage(1);
+                  }}
+                >
+                  {t('homepage.noResults.reset', 'Clear filters')}
+                </Button>
+              )}
+            />
           )}
         </Box>
       )}
 
       {/* Empty State */}
-      {!loading && sessions.length === 0 && (
-        <Box
-          background="neutral0"
-          style={{
-            borderRadius: theme.borderRadius.xl,
-            border: '2px dashed rgba(128, 128, 128, 0.2)',
-            padding: '80px 32px',
-            textAlign: 'center',
-            position: 'relative',
-            overflow: 'hidden',
-            minHeight: '400px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {/* Background Gradient */}
-          <Box
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.06)'} 0%, ${'rgba(147, 51, 234, 0.06)'} 100%)`,
-              opacity: 0.3,
-              zIndex: 0,
-            }}
-          />
-          
-          {/* Floating Icon (removed emoji) */}
-          
-          <Flex direction="column" alignItems="center" gap={6} style={{ position: 'relative', zIndex: 1 }}>
-            <Box
-              style={{
-                width: '120px',
-                height: '120px',
-                borderRadius: '50%',
-                background: `linear-gradient(135deg, ${'rgba(2, 132, 199, 0.12)'} 0%, ${'rgba(147, 51, 234, 0.12)'} 100%)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: theme.shadows.xl,
-              }}
-            >
-              <Monitor style={{ width: '60px', height: '60px', color: 'var(--colors-primary600, #0284C7)' }} />
-            </Box>
-            
-            <Typography 
-              variant="alpha" 
-              textColor="neutral800"
-              style={{ 
-                fontSize: '1.75rem',
-                fontWeight: '700',
-                marginBottom: '8px',
-              }}
-            >
-              {t('homepage.empty.title', 'No sessions yet')}
-            </Typography>
-            
-            <Typography 
-              variant="omega" 
-              textColor="neutral600"
-              style={{
-                fontSize: '1rem',
-                maxWidth: '500px',
-                lineHeight: '1.6',
-              }}
-            >
-              {t('homepage.empty.description', 'Sessions will appear here when users log in to your application')}
-            </Typography>
-          </Flex>
-        </Box>
+      {!loading && sessions.length === 0 && !loadError && (
+        <EmptyStateLayout
+          icon={<Monitor aria-hidden="true" />}
+          content={(
+            <ReadableText variant="pi" textColor="neutral700" tag="span">
+              {t('homepage.empty.description', 'Sessions will appear here when end users log in.')}
+            </ReadableText>
+          )}
+        />
       )}
 
       {/* Session Detail Modal */}
@@ -1242,7 +950,8 @@ const HomePage = () => {
           onSessionTerminated={handleSessionTerminated}
         />
       )}
-    </Container>
+      </Box>
+    </PluginPageLayout>
   );
 };
 

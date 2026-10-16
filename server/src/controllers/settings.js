@@ -3,11 +3,12 @@
 const {
   getSessionCreationGraceMs,
   invalidateSettingsCache,
-  normalizeGeoIpDatabasePath,
   normalizeGeoIpProvider,
   normalizeGeoLookupFailureMode,
   normalizeRetentionDays,
 } = require('../utils/settings-loader');
+const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
+const path = require('node:path');
 
 /**
  * Allowed webhook URL domains to prevent SSRF attacks
@@ -58,6 +59,22 @@ function sanitizeCountryList(list) {
 
 function sanitizeBoolean(value) {
   return value === true;
+}
+
+/**
+ * Exposes only a supported filename for the download setting. Legacy custom
+ * read paths remain usable by the GeoIP reader but are never download targets.
+ *
+ * @param {unknown} value Stored legacy or current GeoIP path
+ * @returns {string} Supported filename, or an empty string for legacy paths
+ */
+function getSafeGeoIpFilename(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  try {
+    return path.basename(resolveDatabaseTarget(value));
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -200,6 +217,13 @@ const DEFAULT_SETTINGS = {
   emailTemplates: DEFAULT_EMAIL_TEMPLATES,
 };
 
+/**
+ * Merges stored settings with current defaults and exposes only a supported
+ * filename for future GeoIP downloads.
+ *
+ * @param {object|null} stored Raw settings from the plugin store
+ * @returns {object} User-facing settings with safe defaults
+ */
 function mergeSettingsWithDefaults(stored) {
   const safeStored = stored && typeof stored === 'object' ? stored : {};
   const storedTemplates = safeStored.emailTemplates && typeof safeStored.emailTemplates === 'object'
@@ -213,6 +237,7 @@ function mergeSettingsWithDefaults(stored) {
       ...DEFAULT_EMAIL_TEMPLATES,
       ...storedTemplates,
     },
+    geoIpDatabasePath: getSafeGeoIpFilename(safeStored.geoIpDatabasePath),
   };
 }
 
@@ -223,8 +248,11 @@ function mergeSettingsWithDefaults(stored) {
 
 module.exports = {
   /**
-   * Returns the current plugin settings (user-facing units: minutes/seconds/days).
+   * Returns current plugin settings in user-facing units. Legacy custom MMDB
+   * read paths are not returned as download destinations.
+   *
    * @route GET /magic-sessionmanager/settings
+   * @returns {Promise<void>}
    */
   async getSettings(ctx) {
     try {
@@ -241,7 +269,7 @@ module.exports = {
         success: true,
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/settings] Error getting settings:', error);
+      strapi.log.error('[magic-sessionmanager/settings] Error getting settings:', error?.name || 'Error');
       ctx.badRequest('Error loading settings');
     }
   },
@@ -250,7 +278,8 @@ module.exports = {
    * Validates and persists plugin settings, then invalidates the settings cache
    * so runtime code picks up the new values on next read.
    * @route PUT /magic-sessionmanager/settings
-   * @throws {ValidationError} when body is missing
+   * @throws {ValidationError} when the body or GeoIP filename is invalid
+   * @returns {Promise<void>}
    */
   async updateSettings(ctx) {
     try {
@@ -264,6 +293,15 @@ module.exports = {
         type: 'plugin',
         name: 'magic-sessionmanager',
       });
+
+      let geoIpDatabasePath = '';
+      if (body.geoIpDatabasePath !== undefined && body.geoIpDatabasePath !== '') {
+        try {
+          geoIpDatabasePath = path.basename(resolveDatabaseTarget(body.geoIpDatabasePath));
+        } catch {
+          return ctx.badRequest('GeoIP database path must be a supported MMDB filename in the dedicated GeoIP directory');
+        }
+      }
 
       // sessionCreationGraceMs is bounded 0..30s. 0 disables the grace window
       // (strictSessionEnforcement will block the very first request after login
@@ -297,7 +335,7 @@ module.exports = {
         allowedCountries: sanitizeCountryList(body.allowedCountries),
         blockedCountries: sanitizeCountryList(body.blockedCountries),
         geoIpProvider: normalizeGeoIpProvider(body.geoIpProvider),
-        geoIpDatabasePath: normalizeGeoIpDatabasePath(body.geoIpDatabasePath),
+        geoIpDatabasePath,
         geoLookupFailureMode: normalizeGeoLookupFailureMode(body.geoLookupFailureMode),
 
         // Notifications
@@ -332,7 +370,7 @@ module.exports = {
         message: 'Settings saved successfully!'
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/settings] Error updating settings:', error);
+      strapi.log.error('[magic-sessionmanager/settings] Error updating settings:', error?.name || 'Error');
       ctx.badRequest('Error saving settings');
     }
   },

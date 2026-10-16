@@ -192,9 +192,7 @@ SESSION_ENCRYPTION_KEY=your-key-here
 **Need to kick someone out?**
 1. Find their session
 2. Click **"Terminate"**
-3. Done! They're logged out immediately
-
-**Even works if they have refresh tokens!** (See below)
+3. Magic Sessionmanager asks the configured session manager to revoke it. The behavior depends on the mode below.
 
 ### 3. Session Details
 
@@ -224,52 +222,29 @@ Each login = separate session. You can see them all and logout each individually
 
 ---
 
-## 🔒 Refresh Token Protection (Advanced)
+## 🔒 Session management modes
 
-### The Problem (Without This Plugin)
+Magic Sessionmanager supports Strapi Users & Permissions end-user sessions in both the native refresh mode and the existing `legacy-support` mode.
 
-```
-Admin kicks out a user
-   ↓
-User has "refresh token"
-   ↓
-User gets new login token automatically
-   ↓
-User is back in! 😱
-```
+### Native Users & Permissions sessions
 
-### The Solution (With This Plugin)
-
-```
-Admin kicks out a user
-   ↓
-User tries to use refresh token
-   ↓
-Plugin blocks it! 🚫
-   ↓
-User MUST login again
-```
-
-**How to enable:**
-
-Add to `config/plugins.ts`:
+Set `jwtManagement` to `refresh` in the host application's Users & Permissions configuration to use Strapi's native session manager:
 
 ```typescript
 'users-permissions': {
   config: {
-    jwtManagement: 'refresh',  // Enable refresh tokens
-    sessions: {
-      accessTokenLifespan: 3600,  // 1 hour
-      maxRefreshTokenLifespan: 2592000,  // 30 days
-    },
+    jwtManagement: 'refresh',
   },
 }
 ```
 
-**What this does:**
-- Users stay logged in longer (better experience)
-- But admins can still force-logout completely (better security)
-- Best of both worlds! ✅
+In this mode, Strapi issues, rotates and revokes native sessions. Magic Sessionmanager uses that state for end-user sessions while keeping its metadata and session history, such as device, IP, GeoIP and security details. It does not issue or rotate a second token family. Rows created natively without a Magic metadata record can still appear with a `native_` ID. Missing IP, device or GeoIP values are shown as unavailable.
+
+The existing Magic endpoints keep their paths, methods, permissions and response envelopes. The plugin does not change the host application's authentication configuration or migrate existing session records. Set `jwtManagement: 'refresh'` in the host application to opt into native session management. Its default Content API permission setup targets only the Authenticated role and never adds these actions to Public. If an administrator saves the Authenticated role before the first protected Magic request, the plugin preserves that role's permission choices. Strapi administrator-account sessions are not managed by this plugin.
+
+### Existing `legacy-support` mode
+
+When Users & Permissions uses `jwtManagement: 'legacy-support'`, Magic Sessionmanager keeps its existing plugin-owned session behavior. It does not switch the host to refresh mode or migrate legacy session records. Existing Magic endpoints remain available in either mode.
 
 ---
 
@@ -615,6 +590,8 @@ Authorization: Bearer <JWT>
 
 Terminates a specific session (not the current one). Useful for "Log out other devices".
 Use the `id` / `documentId` value from the session response. The separate `sessionId` field is a tracking identifier stored on the session record.
+
+For a native-only row, use its `native_` value from `id`. Native-only rows may not have a `documentId` or Magic metadata.
 
 ```bash
 DELETE /api/magic-sessionmanager/my-sessions/:documentId

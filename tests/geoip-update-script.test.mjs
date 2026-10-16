@@ -3,6 +3,7 @@ import zlib from 'node:zlib';
 import test from 'node:test';
 
 import {
+  DEFAULT_GEOIP_DIRECTORY,
   buildBasicAuthHeader,
   buildDownloadUrl,
   extractMmdbFromTarGz,
@@ -70,13 +71,19 @@ test('resolveConfig reads credentials and output path from env', () => {
   const config = resolveConfig({
     MAXMIND_ACCOUNT_ID: '12345',
     MAXMIND_LICENSE_KEY: 'license',
-    MAGIC_SESSIONMANAGER_GEOIP_DATABASE: '/tmp/GeoLite2-Country.mmdb',
+    MAGIC_SESSIONMANAGER_GEOIP_DATABASE: `${DEFAULT_GEOIP_DIRECTORY}/GeoLite2-Country.mmdb`,
   });
 
   assert.equal(config.accountId, '12345');
   assert.equal(config.licenseKey, 'license');
   assert.equal(config.editionId, 'GeoLite2-Country');
-  assert.equal(config.outputPath, '/tmp/GeoLite2-Country.mmdb');
+  assert.equal(config.outputPath, `${DEFAULT_GEOIP_DIRECTORY}/GeoLite2-Country.mmdb`);
+});
+
+test('resolveConfig rejects download paths outside the dedicated GeoIP directory', () => {
+  assert.throws(() => resolveConfig({
+    MAGIC_SESSIONMANAGER_GEOIP_DATABASE: '/tmp/GeoLite2-Country.mmdb',
+  }), /dedicated GeoIP directory/);
 });
 
 test('resolveConfig defaults to GeoLite2 City database', () => {

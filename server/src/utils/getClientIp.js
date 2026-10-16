@@ -88,7 +88,7 @@ const getClientIp = (ctx) => {
     return 'unknown';
   } catch (error) {
     if (ctx?.app?.context?.strapi?.log?.debug) {
-      ctx.app.context.strapi.log.debug('[getClientIp] Error extracting IP:', error.message);
+      ctx.app.context.strapi.log.debug('[getClientIp] Error extracting IP:', error?.name || 'Error');
     }
     return 'unknown';
   }

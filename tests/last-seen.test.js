@@ -8,18 +8,22 @@ const { invalidateSettingsCache } = require('../server/src/utils/settings-loader
 
 const token = 'a'.repeat(80);
 
-function createStrapi(session) {
+function createStrapi(session, queries = []) {
   return {
     config: {
-      get() {
-        return {};
+      get(key, fallback) {
+        if (key === 'plugin::users-permissions.jwtManagement') return 'refresh';
+        return fallback;
       },
     },
     store: () => ({
       get: async () => null,
     }),
     documents: () => ({
-      findFirst: async () => session,
+      findFirst: async (query) => {
+        queries.push(query);
+        return session;
+      },
     }),
     log: {
       debug() {},
@@ -137,5 +141,57 @@ test('last-seen does not touch sessions after failed authenticated requests', as
     ctx.status = 500;
   });
 
+  assert.equal(touchCalls, 0);
+});
+
+test('last-seen matches the native session identity to its Magic sidecar', async () => {
+  invalidateSettingsCache();
+
+  const queries = [];
+  const touched = [];
+  const middleware = createLastSeenMiddleware({
+    strapi: createStrapi({
+      documentId: 'magic-sidecar-1',
+      nativeSessionId: 'native-session-1',
+      isActive: true,
+    }, queries),
+    sessionService: {
+      touch: async (payload) => touched.push(payload),
+    },
+  });
+  const ctx = createCtx('/api/articles');
+  ctx.state.session = { id: 'native-session-1' };
+
+  await middleware(ctx, async () => {
+    ctx.body = { ok: true };
+  });
+
+  assert.deepEqual(queries[0].filters, {
+    user: { documentId: 'user-doc-id' },
+    nativeSessionId: 'native-session-1',
+  });
+  assert.deepEqual(touched, [{ userId: 'user-doc-id', sessionId: 'magic-sidecar-1' }]);
+});
+
+test('last-seen does not fabricate a Magic session for a native-only session', async () => {
+  invalidateSettingsCache();
+
+  let touchCalls = 0;
+  const queries = [];
+  const middleware = createLastSeenMiddleware({
+    strapi: createStrapi(null, queries),
+    sessionService: { touch: async () => { touchCalls++; } },
+  });
+  const ctx = createCtx('/api/articles');
+  ctx.state.session = { id: 'native-only-session' };
+
+  await middleware(ctx, async () => {
+    ctx.body = { ok: true };
+  });
+
+  assert.deepEqual(queries[0].filters, {
+    user: { documentId: 'user-doc-id' },
+    nativeSessionId: 'native-only-session',
+  });
   assert.equal(touchCalls, 0);
 });

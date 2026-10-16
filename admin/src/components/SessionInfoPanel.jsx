@@ -1,54 +1,52 @@
 import { useState, useEffect } from 'react';
 import { useIntl } from 'react-intl';
 import styled from 'styled-components';
-import { Box, Typography, Flex, Badge, Divider } from '@strapi/design-system';
-import { Check, Cross, Monitor, Phone, Server, Clock, User } from '@strapi/icons';
-import { useFetchClient, useNotification } from '@strapi/strapi/admin';
+import { Box, Typography, Flex, Badge, Button, Divider, Alert } from '@strapi/design-system';
+import { Check, Cross, Monitor, Phone, Server, Clock, User, Information } from '@strapi/icons';
+import { useFetchClient, useNotification, useRBAC } from '@strapi/strapi/admin';
 import parseUserAgent from '../utils/parseUserAgent';
+import { getSessionStatus } from '../utils/sessionStatus.mjs';
+import { getManageableSessions } from '../utils/sessionFilters.mjs';
 import { getTranslation } from '../utils/getTranslation';
+import pluginPermissions from '../permissions';
+import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
+import ReadableText, { paragraphRhythm } from './ReadableText';
 
 // ================ STYLED COMPONENTS ================
 
 const PanelContainer = styled(Box)`
   width: 100%;
+  min-width: 0;
+
+  ${paragraphRhythm}
 `;
 
 const StatusCard = styled(Box)`
   padding: 20px;
-  border-radius: 12px;
-  border: 1px solid ${props => props.$isOnline ? 'rgba(34, 197, 94, 0.3)' : 'rgba(128, 128, 128, 0.2)'};
-  background: ${props => props.$isOnline 
-    ? 'linear-gradient(135deg, rgba(22, 163, 74, 0.06) 0%, rgba(22, 163, 74, 0.12) 100%)' 
-    : 'linear-gradient(135deg, rgba(128, 128, 128, 0.04) 0%, rgba(128, 128, 128, 0.08) 100%)'};
-  transition: all 0.2s ease;
+  border-radius: 4px;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
+  background: ${(p) => p.theme.colors.neutral0};
 `;
 
 const BlockedWarning = styled(Box)`
   padding: 16px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(220, 38, 38, 0.06) 0%, rgba(220, 38, 38, 0.12) 100%);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 4px;
+  background: ${(p) => p.theme.colors.danger100};
+  border: 1px solid ${(p) => p.theme.colors.danger200};
 `;
 
 const SessionCard = styled(Box)`
   padding: 16px;
   background: ${(p) => p.theme.colors.neutral0};
-  border-radius: 10px;
-  border: 1px solid rgba(128, 128, 128, 0.2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease;
-  
-  &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: var(--colors-primary600, #0EA5E9);
-  }
+  border-radius: 4px;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
 `;
 
 const EmptyState = styled(Box)`
   padding: 32px;
-  background: var(--colors-neutral100);
-  border-radius: 12px;
-  border: 2px dashed rgba(128, 128, 128, 0.2);
+  background: ${(p) => p.theme.colors.neutral0};
+  border-radius: 4px;
+  border: 1px solid ${(p) => p.theme.colors.neutral150};
   text-align: center;
 `;
 
@@ -59,65 +57,9 @@ const EmptyIcon = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(128, 128, 128, 0.2);
+  background: ${(p) => p.theme.colors.neutral100};
   border-radius: 50%;
-  color: var(--colors-neutral500);
-`;
-
-const SectionLabel = styled(Typography)`
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  color: var(--colors-neutral600);
-  margin-bottom: 12px;
-  display: block;
-`;
-
-const ActionButton = styled.button`
-  width: 100%;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-  
-  ${props => props.$variant === 'danger' && `
-    background: ${(p) => p.theme.colors.neutral0};
-    color: var(--colors-danger600, #DC2626);
-    border: 2px solid var(--colors-danger600, #DC2626);
-    
-    &:hover:not(:disabled) {
-      background: var(--colors-danger600, #DC2626);
-      color: white;
-    }
-  `}
-  
-  ${props => props.$variant === 'success' && `
-    background: ${(p) => p.theme.colors.neutral0};
-    color: var(--colors-success600, #16A34A);
-    border: 2px solid var(--colors-success600, #16A34A);
-    
-    &:hover:not(:disabled) {
-      background: var(--colors-success600, #16A34A);
-      color: white;
-    }
-  `}
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  svg {
-    width: 16px;
-    height: 16px;
-  }
+  color: ${(p) => p.theme.colors.neutral500};
 `;
 
 const IconWrapper = styled(Box)`
@@ -126,60 +68,79 @@ const IconWrapper = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--colors-neutral100);
+  background: ${(p) => p.theme.colors.neutral100};
   border-radius: 8px;
   flex-shrink: 0;
   
   svg {
     width: 16px;
     height: 16px;
-    color: var(--colors-neutral600);
+    color: ${(p) => p.theme.colors.neutral600};
   }
 `;
 
+const MutedIcon = styled.div`
+  display: flex;
+  color: ${(p) => p.theme.colors.neutral500};
+`;
+
 /**
- * Session Info Panel - Styled Components Version
- * Clean sidebar panel for Content Manager user edit page
+ * Shows session status and confirmed session actions for a saved end user.
+ * New Users & Permissions entries receive a save-first message until Strapi assigns an ID.
  */
 const SessionInfoPanel = ({ documentId, model, document }) => {
   const { formatMessage } = useIntl();
+  const { allowedActions: { canAccess }, isLoading: permissionsLoading } = useRBAC(pluginPermissions.access);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const { get, post: postRequest } = useFetchClient();
   const { toggleNotification } = useNotification();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const unavailableValue = t('common.unavailable', 'Unavailable');
 
   const userId = document?.documentId || documentId;
 
   useEffect(() => {
-    if (model !== 'plugin::users-permissions.user' || !userId) {
+    if (model !== 'plugin::users-permissions.user' || !userId || permissionsLoading || !canAccess) {
       setLoading(false);
       return;
     }
 
+    let cancelled = false;
     const fetchData = async () => {
+      setLoading(true);
+      setLoadError(false);
       try {
         const { data } = await get(`/magic-sessionmanager/user/${userId}/sessions`);
-        const activeSessions = (data.data || []).filter(s => s.isTrulyActive);
-        setSessions(activeSessions);
+        if (cancelled) return;
+        setSessions(getManageableSessions(data.data || []));
         setIsBlocked(document?.blocked || false);
       } catch (err) {
-        console.error('[SessionInfoPanel] Error:', err);
+        if (!cancelled) setLoadError(true);
+        logSafeAdminError('userSessions.load', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchData();
-  }, [userId, model, document, get]);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, model, document, get, reloadKey, canAccess, permissionsLoading]);
 
   /**
-   * Handles terminating all user sessions
+   * Confirms and terminates all active sessions for the displayed user.
+   *
+   * @returns {Promise<void>}
    */
   const handleLogoutAll = async () => {
     if (!userId) return;
+    if (!confirm(t('panel.confirm.terminateAll', 'End all active sessions for this user?'))) return;
     
     setActionLoading(true);
     try {
@@ -197,17 +158,24 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
         type: 'warning',
         message: t('notifications.error.terminateAll', 'Failed to terminate sessions'),
       });
-      console.error('[SessionInfoPanel] Logout all error:', error);
+      logSafeAdminError('userSessions.terminateAll', error);
     } finally {
       setActionLoading(false);
     }
   };
 
   /**
-   * Handles toggling user block status
+   * Confirms the access change before blocking or unblocking the displayed user.
+   * Blocking also ends that user's active sessions on the server.
+   *
+   * @returns {Promise<void>}
    */
   const handleToggleBlock = async () => {
     if (!userId) return;
+    const confirmation = isBlocked
+      ? t('panel.confirm.unblockUser', 'Unblock this user?')
+      : t('panel.confirm.blockUser', 'Block this user and end all active sessions?');
+    if (!confirm(confirmation)) return;
     
     setActionLoading(true);
     try {
@@ -233,7 +201,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
         type: 'warning',
         message: t('notifications.error.block', 'Failed to update user status'),
       });
-      console.error('[SessionInfoPanel] Toggle block error:', error);
+      logSafeAdminError('userSessions.toggleBlock', error);
     } finally {
       setActionLoading(false);
     }
@@ -245,7 +213,8 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   const getDeviceIcon = (deviceType) => {
     if (deviceType === 'Mobile' || deviceType === 'Tablet') return Phone;
     if (deviceType === 'Desktop' || deviceType === 'Laptop') return Monitor;
-    return Server;
+    if (deviceType === 'API Client') return Server;
+    return Information;
   };
 
   // Only show for User content type
@@ -253,20 +222,64 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     return null;
   }
 
+  if (permissionsLoading || !canAccess) {
+    return null;
+  }
+
+  if (!userId) {
+    return {
+      title: t('panel.title', 'Session Info'),
+      content: (
+        <PanelContainer>
+          <Box padding={4}>
+            <ReadableText variant="pi" textColor="neutral600" tag="p">
+              {t('panel.user.saveBeforeManagingSessions', 'Save this user before managing sessions.')}
+            </ReadableText>
+          </Box>
+        </PanelContainer>
+      ),
+    };
+  }
+
   if (loading) {
     return {
       title: t('panel.title', 'Session Info'),
       content: (
         <Box padding={4} background="neutral0">
-          <Typography variant="pi" textColor="neutral600">
+          <ReadableText variant="pi" textColor="neutral600" tag="p">
             {t('panel.loading', 'Loading...')}
-          </Typography>
+          </ReadableText>
         </Box>
       ),
     };
   }
 
-  const isOnline = sessions.length > 0;
+  if (loadError) {
+    return {
+      title: t('panel.title', 'Session Info'),
+      content: (
+        <Box padding={4}>
+          <Alert
+            variant="danger"
+            title={t('panel.error.title', 'Sessions could not be loaded')}
+            closeLabel={t('common.close', 'Close')}
+            action={(
+              <Button size="S" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
+                {t('common.retry', 'Retry')}
+              </Button>
+            )}
+          >
+            <ReadableText variant="pi" textColor="neutral700" tag="span">
+              {t('panel.error.description', 'Try again. If the problem continues, check permissions for this user.')}
+            </ReadableText>
+          </Alert>
+        </Box>
+      ),
+    };
+  }
+
+  const onlineCount = sessions.filter((session) => getSessionStatus(session) === 'active').length;
+  const isOnline = onlineCount > 0;
 
   return {
     title: t('panel.title', 'Session Info'),
@@ -275,22 +288,21 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
         <Flex direction="column" gap={4} alignItems="stretch">
           
           {/* Status Card */}
-          <StatusCard $isOnline={isOnline}>
+          <StatusCard>
             <Flex direction="column" gap={3} alignItems="center">
-              <Badge 
-                backgroundColor={isOnline ? 'success600' : 'neutral600'}
-                textColor="neutral0"
-                size="M"
-                style={{ fontSize: '12px', padding: '6px 14px', fontWeight: '700' }}
-              >
-                {isOnline ? t('panel.status.active', 'ONLINE') : t('panel.status.offline', 'OFFLINE')}
+              <Badge variant={isOnline ? 'success' : 'neutral'} size="M">
+                {isOnline ? t('panel.status.active', 'Online') : t('panel.status.offline', 'Offline')}
               </Badge>
-              <Typography 
-                variant="omega" 
-                fontWeight="semiBold" 
+              <Typography
+                variant="omega"
+                fontWeight="semiBold"
                 textColor={isOnline ? 'success700' : 'neutral700'}
               >
-                {sessions.length} {t('panel.sessions.label', 'active session')}{sessions.length !== 1 ? 's' : ''}
+                {t(
+                  'panel.sessions.currentCount',
+                  '{count, plural, one {# current session} other {# current sessions}}',
+                  { count: sessions.length }
+                )}
               </Typography>
             </Flex>
           </StatusCard>
@@ -301,22 +313,43 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               <Typography variant="omega" fontWeight="bold" textColor="danger700">
                 {t('panel.blocked.title', 'User is blocked')}
               </Typography>
-              <Typography variant="pi" textColor="danger600" style={{ marginTop: '4px' }}>
+              <ReadableText variant="pi" textColor="danger600" tag="p">
                 {t('panel.blocked.description', 'Authentication disabled')}
-              </Typography>
+              </ReadableText>
             </BlockedWarning>
           )}
 
           {/* Active Sessions List */}
           {sessions.length > 0 ? (
             <Flex direction="column" gap={3} alignItems="stretch">
-              <SectionLabel>
-                {t('panel.sessions.title', 'Active Sessions')}
-              </SectionLabel>
+              <Typography variant="pi" fontWeight="semiBold" textColor="neutral600">
+                {t('panel.sessions.title', 'Current Sessions')}
+              </Typography>
               
               {sessions.slice(0, 5).map((session) => {
-                const deviceInfo = parseUserAgent(session.userAgent);
-                const DeviceIcon = getDeviceIcon(deviceInfo.device);
+                const userAgent = typeof session.userAgent === 'string' ? session.userAgent.trim() : '';
+                const hasUserAgent = Boolean(userAgent && userAgent.toLowerCase() !== 'unknown');
+                const parsedDevice = hasUserAgent ? parseUserAgent(userAgent) : null;
+                const nativeDeviceType = typeof session.deviceType === 'string'
+                  && session.deviceType.trim().toLowerCase() !== 'unknown'
+                  ? session.deviceType.trim()
+                  : '';
+                const nativeDeviceName = typeof session.deviceName === 'string'
+                  && session.deviceName.trim().toLowerCase() !== 'unknown'
+                  ? session.deviceName.trim()
+                  : '';
+                const availableValue = (value) =>
+                  typeof value === 'string' && value.trim() && value.trim().toLowerCase() !== 'unknown'
+                    ? value.trim()
+                    : '';
+                const deviceInfo = {
+                  device: nativeDeviceName || nativeDeviceType || availableValue(parsedDevice?.device) || unavailableValue,
+                  browser: availableValue(session.browserName) || availableValue(parsedDevice?.browser) || unavailableValue,
+                  os: availableValue(session.osName) || availableValue(parsedDevice?.os) || unavailableValue,
+                };
+                const DeviceIcon = getDeviceIcon(nativeDeviceType || parsedDevice?.device);
+                const sessionStatus = getSessionStatus(session);
+                const isSessionOnline = sessionStatus === 'active';
                 
                 return (
                   <SessionCard key={session.id}>
@@ -330,8 +363,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                         </Typography>
                       </Flex>
                       
-                      <Badge backgroundColor="success600" textColor="neutral0" size="S">
-                        {t('panel.sessions.active', 'Active')}
+                      <Badge variant={isSessionOnline ? 'success' : 'warning'} size="S">
+                        {isSessionOnline
+                          ? t('panel.sessions.active', 'Active')
+                          : t('panel.sessions.idle', 'Idle')}
                       </Badge>
                       
                       <Typography variant="pi" textColor="neutral600">
@@ -341,14 +376,14 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                       <Divider />
                       
                       <Flex gap={2} alignItems="center">
-                        <Server width="14px" height="14px" style={{ color: 'var(--colors-neutral500)' }} />
+                        <MutedIcon><Server width="14px" height="14px" /></MutedIcon>
                         <Typography variant="pi" textColor="neutral600">
-                          {session.ipAddress}
+                          {session.ipAddress || unavailableValue}
                         </Typography>
                       </Flex>
                       
                       <Flex gap={2} alignItems="center">
-                        <Clock width="14px" height="14px" style={{ color: 'var(--colors-neutral500)' }} />
+                        <MutedIcon><Clock width="14px" height="14px" /></MutedIcon>
                         <Typography variant="pi" textColor="neutral600">
                           {new Date(session.loginTime).toLocaleString('en-US', {
                             month: 'short',
@@ -381,16 +416,16 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               )}
             </Flex>
           ) : (
-            <EmptyState>
+                <EmptyState>
               <EmptyIcon>
                 <User width="24px" height="24px" />
               </EmptyIcon>
-              <Typography variant="omega" fontWeight="semiBold" textColor="neutral700" style={{ display: 'block' }}>
-                {t('panel.empty.title', 'No active sessions')}
+                  <Typography variant="omega" fontWeight="semiBold" textColor="neutral700" style={{ display: 'block' }}>
+                    {t('panel.empty.title', 'No current sessions')}
               </Typography>
-              <Typography variant="pi" textColor="neutral500" style={{ display: 'block', marginTop: '4px' }}>
+              <ReadableText variant="pi" textColor="neutral500" tag="p">
                 {t('panel.empty.description', 'User has not logged in yet')}
-              </Typography>
+              </ReadableText>
             </EmptyState>
           )}
 
@@ -398,32 +433,36 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
           <Divider />
           
           <Flex direction="column" gap={3} alignItems="stretch">
-            <SectionLabel>
+            <Typography variant="pi" fontWeight="semiBold" textColor="neutral600">
               {t('panel.actions.title', 'Actions')}
-            </SectionLabel>
+            </Typography>
             
-            <ActionButton
-              $variant="danger"
+            <Button
+              fullWidth
+              variant="danger-light"
+              startIcon={<Cross />}
               onClick={handleLogoutAll}
+              loading={actionLoading}
               disabled={actionLoading || sessions.length === 0}
               type="button"
             >
-              <Cross />
               {t('panel.actions.terminateAll', 'Terminate All Sessions')}
-            </ActionButton>
+            </Button>
             
-            <ActionButton
-              $variant={isBlocked ? 'success' : 'danger'}
+            <Button
+              fullWidth
+              variant={isBlocked ? 'secondary' : 'danger-light'}
+              startIcon={isBlocked ? <Check /> : <Cross />}
               onClick={handleToggleBlock}
+              loading={actionLoading}
               disabled={actionLoading}
               type="button"
             >
-              {isBlocked ? <Check /> : <Cross />}
               {isBlocked 
                 ? t('panel.actions.unblockUser', 'Unblock User') 
                 : t('panel.actions.blockUser', 'Block User')
               }
-            </ActionButton>
+            </Button>
           </Flex>
         </Flex>
       </PanelContainer>

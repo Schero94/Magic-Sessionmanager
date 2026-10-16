@@ -4,7 +4,15 @@ const { parseUserAgent } = require('./user-agent-parser');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
+/**
+ * Determines whether session enhancement may perform a GeoIP lookup. The
+ * explicit off switch takes precedence over geofencing and risk-scoring flags.
+ *
+ * @param {object} [settings]
+ * @returns {boolean} Whether enrichment may call the GeoIP provider
+ */
 function shouldResolveGeoData(settings = {}) {
+  if (settings.enableGeolocation === false) return false;
   return settings.enableGeolocation === true ||
     settings.enableGeofencing === true ||
     settings.blockSuspiciousSessions === true;

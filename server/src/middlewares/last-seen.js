@@ -78,7 +78,7 @@ module.exports = ({ strapi, sessionService }) => {
       try {
         userDocId = await resolveUserDocumentId(strapi, ctx.state.user.id);
       } catch (err) {
-        strapi.log.debug('[magic-sessionmanager] user doc-id lookup failed:', err.message);
+        strapi.log.debug('[magic-sessionmanager] user document lookup failed:', err?.name || 'Error');
         return;
       }
     }
@@ -89,19 +89,27 @@ module.exports = ({ strapi, sessionService }) => {
 
     const token = extractBearerToken(ctx);
     const tokenHashValue = token ? hashToken(token) : null;
+    const nativeSessionId = ctx.state.session?.id;
 
-    if (!tokenHashValue) {
+    if (!nativeSessionId && !tokenHashValue) {
       return;
     }
 
     let thisSession = null;
     try {
+      const filters = { user: { documentId: userDocId } };
+      if (nativeSessionId) {
+        filters.nativeSessionId = nativeSessionId;
+      } else {
+        filters.tokenHash = tokenHashValue;
+      }
+
       thisSession = await strapi.documents(SESSION_UID).findFirst({
-        filters: { user: { documentId: userDocId }, tokenHash: tokenHashValue },
+        filters,
         fields: ['documentId', 'isActive'],
       });
     } catch (err) {
-      strapi.log.debug('[magic-sessionmanager] session lookup failed:', err.message);
+      strapi.log.debug('[magic-sessionmanager] session lookup failed:', err?.name || 'Error');
       return;
     }
 
@@ -116,7 +124,7 @@ module.exports = ({ strapi, sessionService }) => {
         sessionId: thisSession.documentId,
       });
     } catch (err) {
-      strapi.log.debug('[magic-sessionmanager] Error updating lastSeen:', err.message);
+      strapi.log.debug('[magic-sessionmanager] Error updating lastSeen:', err?.name || 'Error');
     }
   };
 };

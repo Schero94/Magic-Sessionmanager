@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const { getPluginSettings } = require('../utils/settings-loader');
+const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
 
 const GEO_API_TIMEOUT_MS = 4000;
 const IPAPI_SUCCESS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -20,8 +21,8 @@ const IPAPI_RATE_LIMIT_BACKOFF_MS = 15 * 60 * 1000;
 const IPAPI_RATE_LIMIT_LOG_INTERVAL_MS = 60 * 1000;
 const IPAPI_MAX_CONCURRENT_REQUESTS = 4;
 const IPAPI_MAX_QUEUE_SIZE = 50;
-const DEFAULT_CITY_MMDB_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-City.mmdb');
-const DEFAULT_COUNTRY_MMDB_PATH = path.resolve(process.cwd(), 'data', 'GeoLite2-Country.mmdb');
+const DEFAULT_CITY_MMDB_PATH = resolveDatabaseTarget('GeoLite2-City.mmdb');
+const DEFAULT_COUNTRY_MMDB_PATH = resolveDatabaseTarget('GeoLite2-Country.mmdb');
 const VALID_PROVIDERS = new Set(['auto', 'local-mmdb', 'ipapi', 'disabled']);
 
 const readerCache = new Map();
@@ -36,6 +37,13 @@ function normalizeProvider(value) {
   return VALID_PROVIDERS.has(value) ? value : 'auto';
 }
 
+/**
+ * Resolves a local reader path without changing it. Download destinations use
+ * the stricter dedicated-directory resolver in the updater.
+ *
+ * @param {unknown} value Configured local read path
+ * @returns {string} Absolute local path or an empty string
+ */
 function normalizeDatabasePath(value) {
   if (typeof value !== 'string' || value.trim() === '') return '';
 
@@ -47,6 +55,13 @@ function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+/**
+ * Lists the selected database first, then supported environment and default
+ * locations used by the read-only GeoIP provider.
+ *
+ * @param {object} [settings] Effective GeoIP settings
+ * @returns {string[]} Candidate local database paths
+ */
 function resolveDatabaseCandidates(settings = {}) {
   const configured = normalizeDatabasePath(
     settings.geoIpDatabasePath ||
@@ -70,6 +85,13 @@ function resolveDatabasePath(settings = {}) {
   return resolveDatabaseCandidates(settings)[0] || '';
 }
 
+/**
+ * Selects the first existing local database, falling back to the preferred
+ * configured path so the caller can report a useful missing-file error.
+ *
+ * @param {object} [settings] Effective GeoIP settings
+ * @returns {string} Selected database path or an empty string
+ */
 function resolveExistingDatabasePath(settings = {}) {
   const candidates = resolveDatabaseCandidates(settings);
   return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0] || '';
@@ -400,7 +422,7 @@ module.exports = ({ strapi }) => ({
     const settings = await this.getGeoSettings();
     const provider = normalizeProvider(settings.geoIpProvider);
 
-    if (provider === 'disabled') {
+    if (settings.enableGeolocation === false || provider === 'disabled') {
       return this.getFallbackData(lookupIp, 'disabled', 'disabled');
     }
 
@@ -467,12 +489,10 @@ module.exports = ({ strapi }) => ({
         ? normalizeLocalCityResult(data, lookupIp, this.getCountryFlag.bind(this))
         : normalizeLocalCountryResult(data, lookupIp, this.getCountryFlag.bind(this));
 
-      strapi.log.debug(
-        `[magic-sessionmanager/geolocation] Local MMDB ${result._databaseType} IP ${lookupIp}: ${result.city}, ${result.country_code}`
-      );
+      strapi.log.debug(`[magic-sessionmanager/geolocation] Local MMDB lookup completed (${result._databaseType})`);
       return result;
     } catch (error) {
-      strapi.log.warn(`[magic-sessionmanager/geolocation] Local MMDB lookup failed for ${lookupIp}:`, error.message);
+      strapi.log.warn('[magic-sessionmanager/geolocation] Local MMDB lookup failed:', error?.name || 'Error');
       return this.getFallbackData(lookupIp, 'error', 'local-mmdb', error.message);
     }
   },
@@ -565,7 +585,7 @@ module.exports = ({ strapi }) => ({
               `[magic-sessionmanager/geolocation] API reported rate limit; backing off ipapi.co lookups for ${Math.ceil(backoffMs / 1000)}s`
             );
           } else {
-            strapi.log.warn(`[magic-sessionmanager/geolocation] API Error: ${data.reason}`);
+            strapi.log.warn('[magic-sessionmanager/geolocation] Provider rejected the lookup');
           }
 
           const fallback = this.getFallbackData(lookupIp, reason, 'ipapi', data.reason);
@@ -611,13 +631,13 @@ module.exports = ({ strapi }) => ({
           _source: 'ipapi',
         };
 
-        strapi.log.debug(`[magic-sessionmanager/geolocation] IP ${ipAddress}: ${result.city}, ${result.country} (Score: ${result.securityScore})`);
+        strapi.log.debug('[magic-sessionmanager/geolocation] ipapi lookup completed');
         cacheIpapiResult(lookupIp, result, IPAPI_SUCCESS_CACHE_TTL_MS);
 
         return result;
       } catch (error) {
         const status = error?.name === 'AbortError' ? 'error' : 'error';
-        strapi.log.error(`[magic-sessionmanager/geolocation] Error fetching IP info for ${lookupIp}:`, error.message);
+        strapi.log.error('[magic-sessionmanager/geolocation] ipapi lookup failed:', error?.name || 'Error');
         const fallback = this.getFallbackData(lookupIp, status, 'ipapi', error.message);
         cacheIpapiResult(lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
         return fallback;

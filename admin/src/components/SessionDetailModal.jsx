@@ -3,6 +3,8 @@ import { useIntl } from 'react-intl';
 import styled from 'styled-components';
 import {
   Modal,
+  Badge,
+  Button,
   Box,
   Flex,
   Typography,
@@ -13,95 +15,97 @@ import {
   Phone,
   Server,
   Cross,
-  Check,
-  Clock,
   Information,
-  Earth,
-  Shield,
 } from '@strapi/icons';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import parseUserAgent from '../utils/parseUserAgent';
 import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
-import {
-  TertiaryButton,
-  DangerButton,
-  ShowHideButton,
-} from './StyledButtons';
+import { getSessionStatus } from '../utils/sessionStatus.mjs';
+import { formatSessionDateTime, getBrowserVersionFromUserAgent } from '../utils/sessionPresentation.mjs';
+import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
+import ReadableText from './ReadableText';
 
 const TwoColumnGrid = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+  min-width: 0;
 
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
+  & > * {
+    min-width: 0;
+  }
+
+  @media (max-width: 767px) {
+    grid-template-columns: minmax(0, 1fr);
   }
 `;
 
-const SectionTitle = styled(Typography)`
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--colors-neutral800);
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid rgba(128, 128, 128, 0.2);
-  display: block;
-`;
-
 const Section = styled(Box)`
+  min-width: 0;
   margin-bottom: 24px;
 `;
 
-// Status Badge - pill-shaped with gradient
-const ModalStatusBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  border-radius: 24px;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+const DetailsList = styled.dl`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  row-gap: 0;
+  width: 100%;
+  min-width: 0;
+  margin: 8px 0 0;
 
-  ${props => props.$online && `
-    background: linear-gradient(135deg, rgba(22, 163, 74, 0.12) 0%, rgba(34, 197, 94, 0.3) 100%);
-    color: var(--colors-success600, #166534);
-    border: 2px solid rgba(34, 197, 94, 0.3);
-    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
-  `}
-
-  ${props => !props.$online && `
-    background: linear-gradient(135deg, rgba(128, 128, 128, 0.08) 0%, rgba(128, 128, 128, 0.2) 100%);
-    color: var(--colors-neutral600);
-    border: 2px solid rgba(128, 128, 128, 0.2);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  `}
+  @media (max-width: 519px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 
-const StatusDot = styled.span`
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+const DetailItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid ${(props) => props.theme.colors.neutral150};
+`;
 
-  ${props => props.$online && `
-    background: var(--colors-success600, #22C55E);
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
-    animation: pulse-green 2s ease-in-out infinite;
-  `}
+const DetailLabel = styled(Typography)`
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  text-wrap: pretty;
+`;
 
-  ${props => !props.$online && `
-    background: var(--colors-neutral500);
-  `}
+const DetailValue = styled(Typography)`
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+`;
 
-	  @keyframes pulse-green {
-	    0%, 100% { opacity: 1; transform: scale(1); }
-	    50% { opacity: 0.7; transform: scale(1.15); }
-	  }
-	`;
+const ModalActions = styled(Flex)`
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  @media (max-width: 519px) {
+    flex-direction: column;
+    align-items: stretch;
+
+    & > button {
+      width: 100%;
+    }
+  }
+`;
 
 const getStoredGeoData = (session) => {
   let geoLocation = session?.geoLocation;
@@ -114,22 +118,61 @@ const getStoredGeoData = (session) => {
   }
 
   if (!geoLocation || typeof geoLocation !== 'object') return null;
-  if (!geoLocation.country && !geoLocation.country_code && !geoLocation.city) return null;
+  if (!geoLocation.country && !geoLocation.country_code && !geoLocation.city && !geoLocation.timezone) return null;
 
+  const hasSecurityScore = typeof session.securityScore === 'number';
   return {
     country_flag: geoLocation.country_flag || '',
-    country: geoLocation.country || geoLocation.country_code || 'Unknown',
-    city: geoLocation.city || 'Unknown',
-    timezone: geoLocation.timezone || 'Unknown',
-    securityScore: typeof session.securityScore === 'number' ? session.securityScore : 100,
-    riskLevel: typeof session.securityScore === 'number' && session.securityScore < 50 ? 'High' : 'Low',
-    isVpn: false,
-    isProxy: false,
+    country: geoLocation.country || geoLocation.country_code || null,
+    city: geoLocation.city || null,
+    timezone: geoLocation.timezone || null,
+    securityScore: hasSecurityScore ? session.securityScore : null,
+    riskLevel: hasSecurityScore ? (session.securityScore < 50 ? 'High' : 'Low') : null,
+    isVpn: typeof geoLocation.isVpn === 'boolean' ? geoLocation.isVpn : null,
+    isProxy: typeof geoLocation.isProxy === 'boolean' ? geoLocation.isProxy : null,
+  };
+};
+
+/**
+ * Parses available device metadata without inferring a device from missing native fields.
+ * @param {object} session Normalized Magic or native session row.
+ * @param {string} unavailableValue Localized fallback for missing details.
+ * @returns {{device: string, browser: string, browserVersion: string, os: string, hasDeviceType: boolean}}
+ */
+const getSessionDeviceInfo = (session, unavailableValue) => {
+  const normalize = (value) =>
+    typeof value === 'string' && value.trim() && value.trim().toLowerCase() !== 'unknown'
+      ? value.trim()
+      : '';
+  const userAgent = typeof session?.userAgent === 'string' ? session.userAgent.trim() : '';
+  if (userAgent && userAgent.toLowerCase() !== 'unknown') {
+    const parsed = parseUserAgent(userAgent);
+    const device = normalize(parsed.device);
+    return {
+      device: device || unavailableValue,
+      browser: normalize(parsed.browser) || unavailableValue,
+      browserVersion: getBrowserVersionFromUserAgent(userAgent) || normalize(session?.browserVersion),
+      os: normalize(parsed.os) || unavailableValue,
+      hasDeviceType: Boolean(device),
+    };
+  }
+
+  const deviceName = normalize(session?.deviceName);
+  const deviceType = normalize(session?.deviceType);
+  const browserName = normalize(session?.browserName);
+  const osName = normalize(session?.osName);
+
+  return {
+    device: deviceName || deviceType || unavailableValue,
+    browser: browserName || unavailableValue,
+    browserVersion: normalize(session?.browserVersion),
+    os: osName || unavailableValue,
+    hasDeviceType: Boolean(deviceType),
   };
 };
 
 const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
-  const { formatMessage } = useIntl();
+  const { formatMessage, locale } = useIntl();
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
   const [terminating, setTerminating] = useState(false);
@@ -137,22 +180,23 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   const [geoData, setGeoData] = useState(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const unavailableValue = t('modal.user.na', 'Unavailable');
 
   useEffect(() => {
     let cancelled = false;
     const ipAddress = session?.ipAddress;
     const storedGeoData = getStoredGeoData(session);
 
-    if (!ipAddress) {
-      setGeoData(null);
+    if (storedGeoData) {
+      setGeoData(storedGeoData);
       setGeoLoading(false);
       return () => {
         cancelled = true;
       };
     }
 
-    if (storedGeoData) {
-      setGeoData(storedGeoData);
+    if (!ipAddress) {
+      setGeoData(null);
       setGeoLoading(false);
       return () => {
         cancelled = true;
@@ -168,18 +212,9 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
           setGeoData(data.data);
         }
       } catch (err) {
-        console.error('[SessionDetailModal] Error fetching geolocation:', err);
+        logSafeAdminError('sessionDetails.geolocation', err);
         if (!cancelled) {
-          setGeoData({
-            country_flag: '',
-            country: 'Unknown',
-            city: 'Unknown',
-            timezone: 'Unknown',
-            securityScore: 50,
-            riskLevel: 'Unknown',
-            isVpn: false,
-            isProxy: false,
-          });
+          setGeoData(null);
         }
       } finally {
         if (!cancelled) {
@@ -197,19 +232,31 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
 
   if (!session) return null;
 
-  const deviceInfo = parseUserAgent(session.userAgent);
-  const isOnline = session.isTrulyActive;
+  const deviceInfo = getSessionDeviceInfo(session, unavailableValue);
+  const sessionStatus = getSessionStatus(session);
+  const statusVariant = {
+    active: 'success',
+    idle: 'warning',
+    loggedout: 'neutral',
+    terminated: 'neutral',
+  }[sessionStatus] || 'neutral';
+  const statusLabel = {
+    active: t('modal.status.online', 'Active'),
+    idle: t('modal.status.idle', 'Idle'),
+    loggedout: t('modal.status.loggedOut', 'Logged out'),
+    terminated: t('modal.status.terminated', 'Terminated'),
+  }[sessionStatus] || t('modal.status.terminated', 'Terminated');
 
-  // Use real data if available, otherwise fallback
+  // Do not infer location or security values when the session has no GeoIP data.
   const securityData = geoData || {
     country_flag: '',
-    country: 'Loading...',
-    city: 'Loading...',
-    timezone: 'Loading...',
-    securityScore: 0,
-    riskLevel: 'Unknown',
-    isVpn: false,
-    isProxy: false,
+    country: unavailableValue,
+    city: unavailableValue,
+    timezone: unavailableValue,
+    securityScore: null,
+    riskLevel: null,
+    isVpn: null,
+    isProxy: null,
   };
 
   const getDeviceIcon = (deviceType) => {
@@ -218,8 +265,13 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
     return Server;
   };
 
-  const DeviceIcon = getDeviceIcon(deviceInfo.device);
+  const DeviceIcon = deviceInfo.hasDeviceType ? getDeviceIcon(deviceInfo.device) : Information;
 
+  /**
+   * Confirms termination and posts the selected session ID to the admin API.
+   *
+   * @returns {Promise<void>}
+   */
   const handleTerminate = async () => {
     if (!confirm(t('modal.confirm.terminate', 'Are you sure you want to terminate this session?'))) {
       return;
@@ -237,7 +289,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
       onSessionTerminated();
       onClose();
     } catch (err) {
-      console.error('[SessionDetailModal] Error:', err);
+      logSafeAdminError('sessionDetails.terminate', err);
       toggleNotification({
         type: 'danger',
         message: t('notifications.error.terminate', 'Failed to terminate session'),
@@ -247,68 +299,61 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
     }
   };
 
-  const DetailRow = ({ label, value, icon: Icon, compact }) => (
-    <Flex gap={3} alignItems="flex-start" style={{ marginBottom: compact ? '12px' : '16px' }}>
-      {Icon && (
-        <Box style={{
-          width: '36px',
-          height: '36px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--colors-neutral100)',
-          borderRadius: '8px',
-          flexShrink: 0,
-        }}>
-          <Icon width="18px" height="18px" />
-        </Box>
-      )}
-      <Flex direction="column" alignItems="flex-start" style={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="pi" textColor="neutral600" style={{ fontSize: '11px', fontWeight: '600', marginBottom: '4px' }}>
-          {label}
-        </Typography>
-        <Typography variant="omega" textColor="neutral800" style={{ fontSize: '14px', fontWeight: '500' }}>
-          {value}
-        </Typography>
-      </Flex>
-    </Flex>
+  const DetailField = ({ label, value }) => (
+    <DetailItem>
+      <DetailLabel variant="pi" textColor="neutral600" tag="dt">
+        {label}
+      </DetailLabel>
+      <DetailValue variant="omega" textColor="neutral800" tag="dd">
+        {value}
+      </DetailValue>
+    </DetailItem>
   );
+
+  const browserValue = [deviceInfo.browser, deviceInfo.browserVersion].filter(Boolean).join(' ') || unavailableValue;
+  const idleMinutes = session.minutesSinceActive;
+  const idleTimeValue = idleMinutes !== null && idleMinutes !== undefined && Number.isFinite(Number(idleMinutes))
+    ? t('modal.timeline.minutes', '{minutes} min', { minutes: Number(idleMinutes) })
+    : unavailableValue;
 
   return (
     <Modal.Root open onOpenChange={onClose}>
-      <Modal.Content style={{ maxWidth: '900px' }}>
+      <Modal.Content
+        style={{
+          width: 'min(900px, calc(100vw - 24px))',
+          maxHeight: 'calc(100vh - 24px)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         <Modal.Header>
-          <Flex gap={3} alignItems="center">
-            <Box style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              background: isOnline ? 'rgba(22, 163, 74, 0.12)' : 'var(--colors-neutral100)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
+          <Flex gap={3} alignItems="center" style={{ minWidth: 0 }}>
+            <Box
+              padding={2}
+              background="neutral100"
+              hasRadius
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
               <DeviceIcon width="24px" height="24px" />
             </Box>
-            <Flex direction="column" alignItems="flex-start">
-              <Typography variant="beta" fontWeight="bold">
+            <Flex direction="column" alignItems="flex-start" style={{ minWidth: 0 }}>
+              <Typography variant="beta" fontWeight="bold" style={{ overflowWrap: 'anywhere' }}>
                 {t('modal.title', 'Session Details')}
               </Typography>
-              <Typography variant="pi" textColor="neutral600">
+              <Typography variant="pi" textColor="neutral600" style={{ overflowWrap: 'anywhere' }}>
                 {t('modal.id', 'ID: {id}', { id: session.id })}
               </Typography>
             </Flex>
           </Flex>
         </Modal.Header>
 
-        <Modal.Body>
-          <Box padding={6}>
+        <Modal.Body style={{ overflowY: 'auto', minHeight: 0 }}>
+          <Box padding={{ initial: 3, small: 5 }} style={{ minWidth: 0 }}>
             {/* Status Badge */}
-            <Flex justifyContent="center" style={{ marginBottom: '24px' }}>
-              <ModalStatusBadge $online={isOnline}>
-                <StatusDot $online={isOnline} />
-                {isOnline ? t('modal.status.online', 'ONLINE') : t('modal.status.offline', 'OFFLINE')}
-              </ModalStatusBadge>
+            <Flex justifyContent="flex-start" style={{ marginBottom: '24px' }}>
+              <Badge variant={statusVariant} size="M">
+                {statusLabel}
+              </Badge>
             </Flex>
 
             <Divider style={{ marginBottom: '24px' }} />
@@ -319,85 +364,65 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
               <Box>
                 {/* User Information */}
                 <Section>
-                  <SectionTitle>
+                  <Typography variant="epsilon" fontWeight="semiBold" textColor="neutral800" tag="h2" style={{ marginBottom: '8px' }}>
                     {t('modal.section.user', 'User')}
-                  </SectionTitle>
+                  </Typography>
 
-                  <DetailRow compact icon={Check} label={t('modal.user.username', 'Username')} value={session.user?.username || t('modal.user.na', 'N/A')} />
-                  <DetailRow compact icon={Information} label={t('modal.user.email', 'Email')} value={session.user?.email || t('modal.user.na', 'N/A')} />
-                  <DetailRow compact icon={Information} label={t('modal.user.id', 'User ID')} value={session.user?.documentId || session.user?.id || t('modal.user.na', 'N/A')} />
+                  <DetailsList>
+                    <DetailField label={t('modal.user.username', 'Username')} value={session.user?.username || unavailableValue} />
+                    <DetailField label={t('modal.user.email', 'Email')} value={session.user?.email || unavailableValue} />
+                    <DetailField label={t('modal.user.id', 'User ID')} value={session.user?.documentId || session.user?.id || unavailableValue} />
+                  </DetailsList>
                 </Section>
 
                 {/* Device Information */}
                 <Section>
-                  <SectionTitle>
+                  <Typography variant="epsilon" fontWeight="semiBold" textColor="neutral800" tag="h2" style={{ marginBottom: '8px' }}>
                     {t('modal.section.device', 'Device')}
-                  </SectionTitle>
+                  </Typography>
 
-                  <DetailRow compact icon={DeviceIcon} label={t('modal.device.device', 'Device')} value={deviceInfo.device} />
-                  <DetailRow compact icon={Monitor} label={t('modal.device.browser', 'Browser')} value={`${deviceInfo.browser} ${deviceInfo.browserVersion || ''}`} />
-                  <DetailRow compact icon={Server} label={t('modal.device.os', 'OS')} value={deviceInfo.os} />
-                  <DetailRow compact icon={Information} label={t('modal.device.ip', 'IP')} value={session.ipAddress} />
+                  <DetailsList>
+                    <DetailField label={t('modal.device.device', 'Device')} value={deviceInfo.device} />
+                    <DetailField label={t('modal.device.browser', 'Browser')} value={browserValue} />
+                    <DetailField label={t('modal.device.os', 'OS')} value={deviceInfo.os} />
+                    <DetailField label={t('modal.device.ip', 'IP')} value={session.ipAddress || unavailableValue} />
+                  </DetailsList>
                 </Section>
               </Box>
 
               {/* Right Column: Timeline */}
               <Box>
                 <Section>
-                  <SectionTitle>
+                  <Typography variant="epsilon" fontWeight="semiBold" textColor="neutral800" tag="h2" style={{ marginBottom: '8px' }}>
                     {t('modal.section.timeline', 'Timeline')}
-                  </SectionTitle>
+                  </Typography>
 
-                <DetailRow
-                  compact
-                  icon={Clock}
-                  label={t('modal.timeline.login', 'Login')}
-                  value={new Date(session.loginTime).toLocaleString('de-DE', {
-                    day: '2-digit',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                />
-                <DetailRow
-                  compact
-                  icon={Clock}
-                  label={t('modal.timeline.lastActive', 'Last Active')}
-                  value={new Date(session.lastActive || session.loginTime).toLocaleString('de-DE', {
-                    day: '2-digit',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                />
-                <DetailRow
-                  compact
-                  icon={Clock}
-                  label={t('modal.timeline.idleTime', 'Idle Time')}
-                  value={t('modal.timeline.minutes', '{minutes} min', { minutes: session.minutesSinceActive })}
-                />
-                {session.logoutTime && (
-                  <DetailRow
-                    compact
-                    icon={Cross}
-                    label={t('modal.timeline.logout', 'Logout')}
-                    value={new Date(session.logoutTime).toLocaleString('de-DE', {
-                      day: '2-digit',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  />
-                )}
+                  <DetailsList>
+                    <DetailField
+                      label={t('modal.timeline.login', 'Login')}
+                      value={formatSessionDateTime(session.loginTime, locale, unavailableValue)}
+                    />
+                    <DetailField
+                      label={t('modal.timeline.lastActive', 'Last Active')}
+                      value={formatSessionDateTime(session.lastActive || session.loginTime, locale, unavailableValue)}
+                    />
+                    <DetailField label={t('modal.timeline.idleTime', 'Idle Time')} value={idleTimeValue} />
+                    {session.logoutTime && (
+                      <DetailField
+                        label={t('modal.timeline.logout', 'Logout')}
+                        value={formatSessionDateTime(session.logoutTime, locale, unavailableValue)}
+                      />
+                    )}
+                  </DetailsList>
                 </Section>
               </Box>
             </TwoColumnGrid>
 
             {/* Geolocation & Security Information */}
             <Section>
-              <SectionTitle>
+              <Typography variant="epsilon" fontWeight="semiBold" textColor="neutral800" tag="h2" style={{ marginBottom: '8px' }}>
                 {t('modal.section.security', 'Location and Security')}
-              </SectionTitle>
+              </Typography>
 
               {geoLoading ? (
                 <Box padding={4} style={{ textAlign: 'center' }}>
@@ -406,93 +431,95 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
                   </Typography>
                 </Box>
               ) : (
-                <TwoColumnGrid>
-                  <Box>
-                    <DetailRow
-                      compact
-                      icon={Earth}
-                      label={t('modal.security.country', 'Country')}
-                      value={`${securityData.country_flag || ''} ${securityData.country}`.trim()}
-                    />
-                    <DetailRow compact icon={Earth} label={t('modal.security.city', 'City')} value={securityData.city} />
-                    <DetailRow compact icon={Clock} label={t('modal.security.timezone', 'Timezone')} value={securityData.timezone} />
-                  </Box>
-                  <Box>
-                    <DetailRow
-                      compact
-                      icon={Shield}
-                      label={t('modal.security.score', 'Security')}
-                      value={`${securityData.securityScore}/100 (${securityData.riskLevel})`}
-                    />
-                    <DetailRow
-                      compact
-                      icon={Shield}
-                      label={t('modal.security.vpn', 'VPN')}
-                      value={securityData.isVpn ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')}
-                    />
-                    <DetailRow
-                      compact
-                      icon={Shield}
-                      label={t('modal.security.proxy', 'Proxy')}
-                      value={securityData.isProxy ? t('modal.security.vpnWarning', '[WARNING] Yes') : t('modal.security.no', 'No')}
-                    />
-                  </Box>
-                </TwoColumnGrid>
+                <DetailsList>
+                  <DetailField
+                    label={t('modal.security.country', 'Country')}
+                    value={[securityData.country_flag, securityData.country].filter(Boolean).join(' ') || unavailableValue}
+                  />
+                  <DetailField label={t('modal.security.city', 'City')} value={securityData.city || unavailableValue} />
+                  <DetailField label={t('modal.security.timezone', 'Timezone')} value={securityData.timezone || unavailableValue} />
+                  <DetailField
+                    label={t('modal.security.score', 'Security')}
+                    value={typeof securityData.securityScore === 'number'
+                      ? `${securityData.securityScore}/100 (${securityData.riskLevel || unavailableValue})`
+                      : unavailableValue}
+                  />
+                  <DetailField
+                    label={t('modal.security.vpn', 'VPN')}
+                    value={typeof securityData.isVpn === 'boolean'
+                      ? (securityData.isVpn ? t('modal.security.vpnWarning', 'Yes') : t('modal.security.no', 'No'))
+                      : unavailableValue}
+                  />
+                  <DetailField
+                    label={t('modal.security.proxy', 'Proxy')}
+                    value={typeof securityData.isProxy === 'boolean'
+                      ? (securityData.isProxy ? t('modal.security.vpnWarning', 'Yes') : t('modal.security.no', 'No'))
+                      : unavailableValue}
+                  />
+                </DetailsList>
               )}
             </Section>
 
             {/* User Agent - Collapsible */}
             <Section>
-              <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '12px' }}>
-                <SectionTitle style={{ marginBottom: 0, paddingBottom: 0, border: 'none' }}>
+                <Flex justifyContent="space-between" alignItems="center" style={{ marginBottom: '12px', minWidth: 0, flexWrap: 'wrap', gap: '8px' }}>
+                <Typography variant="epsilon" fontWeight="semiBold" textColor="neutral800" tag="h2">
                   {t('modal.section.technical', 'Technical Details')}
-                </SectionTitle>
-                <ShowHideButton
+                </Typography>
+                <Button
+                  variant="tertiary"
                   size="S"
                   onClick={() => setShowUserAgent(!showUserAgent)}
+                  aria-expanded={showUserAgent}
+                  aria-controls="session-user-agent-details"
                 >
                   {showUserAgent ? t('modal.technical.hide', 'Hide Details') : t('modal.technical.show', 'Show Details')}
-                </ShowHideButton>
+                </Button>
               </Flex>
 
-              {showUserAgent && (
-                <Box
-                  padding={3}
-                  background="neutral100"
-                  hasRadius
-                  style={{
-                    fontFamily: 'monospace',
-                    fontSize: '10px',
-                    wordBreak: 'break-all',
-                    maxHeight: '80px',
-                    overflow: 'auto',
-                    marginTop: '8px',
-                    animation: 'fadeIn 0.3s ease-in-out',
-                  }}
-                >
-                  <Typography variant="pi" textColor="neutral600" style={{ lineHeight: '1.6' }}>
-                    {session.userAgent}
-                  </Typography>
-                </Box>
-              )}
+              <div id="session-user-agent-details" hidden={!showUserAgent}>
+                {showUserAgent && (
+                  <Box
+                    padding={3}
+                    background="neutral100"
+                    hasRadius
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      lineHeight: 1.5,
+                      overflowWrap: 'anywhere',
+                      maxHeight: 'min(16rem, 30vh)',
+                      overflow: 'auto',
+                      marginTop: '8px',
+                    }}
+                  >
+                    <ReadableText variant="pi" textColor="neutral600" tag="p">
+                      {typeof session.userAgent === 'string' && session.userAgent.trim() && session.userAgent.trim().toLowerCase() !== 'unknown'
+                        ? session.userAgent
+                        : unavailableValue}
+                    </ReadableText>
+                  </Box>
+                )}
+              </div>
             </Section>
           </Box>
         </Modal.Body>
 
         <Modal.Footer>
-          <Flex justifyContent="space-between" style={{ width: '100%' }}>
-            <TertiaryButton onClick={onClose}>
+          <ModalActions justifyContent="space-between">
+            <Button variant="tertiary" onClick={onClose}>
               {t('modal.actions.close', 'Close')}
-            </TertiaryButton>
-            <DangerButton
+            </Button>
+            <Button
+              variant="danger-light"
               onClick={handleTerminate}
               disabled={!session.isActive || terminating}
               loading={terminating}
               startIcon={<Cross />}
             >
               {t('modal.actions.terminate', 'Terminate Session')}
-            </DangerButton>
-          </Flex>
+            </Button>
+          </ModalActions>
         </Modal.Footer>
       </Modal.Content>
     </Modal.Root>

@@ -95,7 +95,7 @@ const baseRoutes = [
     handler: 'session.deleteSession',
     config: {
       policies: adminPolicy(),
-      description: 'Delete a single session permanently (admin)',
+      description: 'Remove session details while preserving access-token revocation (admin)',
     },
   },
   {
@@ -104,7 +104,7 @@ const baseRoutes = [
     handler: 'session.cleanInactiveSessions',
     config: {
       policies: adminPolicy(),
-      description: 'Delete all inactive sessions from database (admin)',
+      description: 'Remove inactive session details while preserving token revocation (admin)',
     },
   },
   {
@@ -123,6 +123,15 @@ const baseRoutes = [
     config: {
       policies: adminPolicy(),
       description: 'Toggle user blocked status (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/users/stats',
+    handler: 'session.getUserStatsAdmin',
+    config: {
+      policies: adminPolicy(),
+      description: 'Get aggregate end-user counts only (admin)',
     },
   },
 

@@ -22,7 +22,7 @@ module.exports = async ({ strapi }) => {
         clearTimeout(handle);
         log.info(`[STOP] ${name} timer stopped`);
       } catch (err) {
-        log.warn(`Failed to stop ${name} timer:`, err.message);
+        log.warn(`Failed to stop ${name} timer:`, err?.name || 'Error');
       }
     }
     strapi.sessionManagerIntervals = {};

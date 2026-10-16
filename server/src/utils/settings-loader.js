@@ -72,6 +72,14 @@ function normalizeGeoLookupFailureMode(value) {
   return GEO_LOOKUP_FAILURE_MODES.has(value) ? value : 'auto';
 }
 
+/**
+ * Cleans a configured local MMDB read path. Download destinations are
+ * validated separately and may only use a supported filename in the plugin's
+ * dedicated GeoIP directory.
+ *
+ * @param {unknown} value Stored local reader path
+ * @returns {string} Bounded path string, or an empty string
+ */
 function normalizeGeoIpDatabasePath(value) {
   if (typeof value !== 'string') return '';
   return value.replace(/\0/g, '').trim().slice(0, 1024);
@@ -200,8 +208,12 @@ async function getPluginSettings(strapi) {
     const pluginStore = strapi.store({ type: 'plugin', name: PLUGIN_ID });
     const raw = await pluginStore.get({ key: SETTINGS_KEY });
     storedSettings = normalizeStoredSettings(raw);
-  } catch (err) {
-    strapi.log.debug(`[${PLUGIN_ID}] settings-loader: store read failed, using static config only:`, err.message);
+  } catch {
+    // If the runtime policy cannot be read, do not silently fall back to the
+    // relaxed static default. Keep the rest of static config available while
+    // requiring a matching session until the settings store recovers.
+    strapi.log.error(`[${PLUGIN_ID}] settings-loader: store read failed; strict session enforcement is enabled`);
+    storedSettings = { strictSessionEnforcement: true };
   }
 
   const merged = { ...staticConfig, ...storedSettings };

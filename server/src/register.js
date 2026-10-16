@@ -1,6 +1,7 @@
 'use strict';
 
 const { createLogger } = require('./utils/logger');
+const { createContentApiPermissionsLifecycle } = require('./utils/content-api-permissions');
 
 const USER_UID = 'plugin::users-permissions.user';
 
@@ -34,6 +35,12 @@ module.exports = async ({ strapi }) => {
       pluginName: 'magic-sessionmanager',
     },
   ]);
+
+  try {
+    strapi.db.lifecycles.subscribe(createContentApiPermissionsLifecycle(strapi));
+  } catch (err) {
+    log.warn('Could not monitor Authenticated role permission changes:', err?.name || 'Error');
+  }
 
   try {
     const userCT = strapi.contentType(USER_UID);
@@ -82,10 +89,10 @@ module.exports = async ({ strapi }) => {
           });
 
           if (terminated > 0) {
-            log.info(`[lifecycle] Terminated ${terminated} session(s) for blocked user ${userDocId.substring(0, 8)}...`);
+            log.info(`[lifecycle] Terminated ${terminated} session(s) for blocked end user`);
           }
         } catch (err) {
-          log.warn('[lifecycle] afterUpdate hook failed:', err.message);
+          log.warn('[lifecycle] afterUpdate hook failed:', err?.name || 'Error');
         }
       },
     });
@@ -93,6 +100,6 @@ module.exports = async ({ strapi }) => {
     log.info('[SUCCESS] Plugin registered successfully');
 
   } catch (err) {
-    log.error('[ERROR] Registration error:', err);
+    log.error('[ERROR] Registration error:', err?.name || 'Error');
   }
 };

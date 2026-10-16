@@ -1,0 +1,56 @@
+# Plan: Native Users & Permissions sessions
+
+Depth: tree 4   Mode: orchestrated
+Budget note: Multi-surface authentication refactor with isolated tests, local Strapi integration, and browser acceptance. Work is split to keep independent auth, service, API, and UI changes reviewable.
+
+## Contract
+
+Decided before fan-out. The approved design is `docs/plans/2026-10-15-native-user-sessions-design.md`; the task breakdown is `docs/plans/2026-10-15-native-user-sessions-plan.md`.
+
+- Interfaces: `getNativeSessionManager(strapi)` returns `null` in `legacy-support`; in `refresh`, it returns a checked facade exposing `validateAccessToken`, `validateRefreshToken`, `isSessionActive`, `listSessions`, `revokeSessionById`, and `invalidateRefreshToken`, or throws an actionable error if Strapi has no registered Users & Permissions origin. Native session owner IDs are `String(usersPermissionsUser.id)`. Magic's existing `sessionId` and `documentId` remain unchanged. Native-only view IDs use the `native_` prefix.
+- Service contract: `createSession` accepts optional `nativeSessionId`; it derives the configured mode itself, storing only token hashes in native mode and preserving encrypted legacy behavior. `rotateSessionTokens` accepts optional `nativeSessionId` and updates it in the same conditional write as the token hashes. Existing list, terminate, delete, and cleanup methods keep their names and input shapes; in native mode they delegate to Strapi and preserve Magic history. `getAllSessions` continues returning an array and may expose a non-enumerable `truncated` boolean for the controller to serialize as `meta.truncated`.
+- Response contract: existing Magic route paths, methods, permission chains, and response envelopes stay unchanged. The normalized session view keeps `documentId`, `id`, `sessionId`, `user`, `isActive`, `isTrulyActive`, and current status fields. Native views also carry the non-secret `nativeSessionId` needed to mark the current session and correlate revocation; they never expose tokens or the native metadata blob. Native-only row IDs use the reserved `native_` prefix plus base64url-encoded JSON `[userDocumentId, nativeSessionId]`, so a row action resolves exactly one owner without scanning every user. Missing IP/device/geolocation values are represented as unavailable.
+- Data ownership: native adapter/auth leaves own `server/src/utils/native-session-manager.js`, `server/src/bootstrap.js`, `server/src/middlewares/last-seen.js`, and their dedicated tests. Service leaf owns `server/src/services/session.js`, `server/src/content-types/session/schema.json`, optional `server/src/utils/native-session-view.js`, and service tests. API leaf owns `server/src/controllers/session.js`, route files only if required, and route tests. Docs/UI leaf owns README/changelog and admin files/tests. No two leaves edit the same file.
+- Error behavior: native auth/revocation failures fail closed. Do not double-issue or double-rotate native tokens. Retain existing revocation deny-list guarantees. Do not log raw tokens, credentials, or full IP addresses. Do not query internal `admin::session` storage.
+- Content API permissions: Strapi runs plugin bootstraps in module order; Users & Permissions creates the `authenticated` role in its own bootstrap, which may occur after Magic. If the existing auto-permission initializer finds no role during Magic bootstrap, retry before a protected Magic Content API route after all plugin bootstraps. Retry failed setup with a cooldown. If an administrator saves the Authenticated role first, persist that decision and do not re-enable missing actions. Keep the route's Users & Permissions auth strategy and ownership checks; do not add public permissions or bypass RBAC.
+- Compatibility: legacy mode stays the default and existing plugin behavior remains available. Do not change the host application's auth config or migrate existing records. Scope excludes Strapi administrator sessions.
+- Worktree: continue in the existing plugin checkout because it contains user-owned, uncommitted audit changes that must be preserved. Subagents must change only their assigned paths. The driver reviews and integrates every leaf.
+
+## Tree
+
+- 1 Native end-user session integration
+  - 1.1 Native lifecycle .......... `gates/native-lifecycle-branch.md`
+    - 1.1.1 Adapter contract .......... `gates/native-adapter.md`
+    - 1.1.2 Login/refresh/JWT hooks .......... `gates/native-auth.md`
+  - 1.2 Magic compatibility layer .......... `gates/native-compatibility-branch.md`
+    - 1.2.1 Sidecar/list/history service .......... `gates/native-service.md`
+    - 1.2.2 Existing API and authorization .......... `gates/native-routes.md`
+  - 1.3 Product acceptance .......... `gates/native-acceptance-branch.md`
+    - 1.3.1 Admin display and user docs .......... `gates/native-ui-docs.md`
+    - 1.3.2 Local Strapi and Playwright acceptance .......... `gates/native-acceptance.md`
+  - 1.4 Integration root .......... `gates/native-integration-root.md`
+
+## Status log
+
+Append-only. One line per event: leaf started, leaf verified, gate abandoned. Never rewrite lines above.
+
+- 2026-10-15: plan written; design approved by user; native access-revocation behavior confirmed against installed Strapi 5.58.0 source.
+- 2026-10-15: native adapter leaf implemented and parent-reviewed; focused adapter suite passed 8/8. Bundle-inclusion gate remains open until auth hooks import the adapter.
+- 2026-10-15: confirmed the local test host is bound to loopback and uses the isolated `test-app/.tmp/plugin-audit-2026-10-15-2X6P/data.db`; no user/session rows were touched.
+- 2026-10-15: baseline package suite passed 152/152; backend and frontend type checks exited 0 before native lifecycle changes.
+- 2026-10-15: native service, auth lifecycle, route facade, and admin-display/docs leaves dispatched in disjoint file scopes for implementation and review.
+- 2026-10-15: integration review tightened native-only action keys to carry an opaque owner/session pair, avoiding a full user enumeration for one revoke/delete action while preserving route paths.
+- 2026-10-15: integration review requires normalized views to retain the non-secret native session ID so current-session flags work for linked and native-only rows.
+- 2026-10-15: first post-build host restart inherited `.env`'s default `.tmp/data.db` instead of the isolated audit DB. The server was stopped before API/browser use; the default DB file's mtime/size changed during startup, so schema/cleanup effects cannot be ruled out. No restore or further access to that file is planned. Future runtime checks will use a fresh dedicated temporary database and verify the live process before creating synthetic users.
+- 2026-10-15: restarted on fresh `test-app/.tmp/native-session-int.Q028Qt/data.db`, verified the `DATABASE_FILENAME` of PID 40610 and the loopback listener's open SQLite path; no synthetic session data created yet.
+- 2026-10-15: fresh-database API reproduction returned 200 for native `/api/auth/sessions` but 403 for Magic `/api/magic-sessionmanager/my-sessions`. Startup logged that the Authenticated role was not found; read-only aggregate found 2 U&P roles, 0 Magic permission actions, and 2 active native-linked Magic sidecars. Root cause is Magic's permission initialization running before U&P creates its roles, not native session mapping.
+- 2026-10-15: parent review added regressions for a permission save before first use, transient setup failures, and concurrent first requests. Deferred setup now preserves administrator-saved Authenticated-role choices and retries failures after a cooldown without changing route authentication.
+- 2026-10-15: fresh isolated Strapi 5.58.0 boot reproduced the missing-role ordering. After registration, native `/api/auth/sessions` and Magic `/api/magic-sessionmanager/my-sessions` both returned 200; seven Magic actions were added only to Authenticated, with zero Public actions. Runtime acceptance verified refresh rotation, current-session marking, wrong-owner denial, Magic/native revocation, logout-others/all, both logout routes, and reconciliation after native revocation. Test accounts and session mutations were confined to `test-app/.tmp/native-session-fresh.FzAudR/data.db`.
+- 2026-10-15: runtime acceptance found that the controller read `ctx.state.auth.credentials.sessionId`, while Strapi 5.58.0 exposes the verified native session ID at `ctx.state.session.id`. The controller now reads Strapi's verified state; regression tests and live current-session checks pass after refresh rotation.
+- 2026-10-15: Playwright audit found mobile dashboard clipping, an active-only default that hides idle sessions, and inconsistent list/detail status labels. A full admin-surface design is pending user approval; no UI files were changed for that audit.
+- 2026-10-15: user approved the full Strapi-native redesign across dashboard, session details, settings, analytics, activation and the Users & Permissions user panel. Scope remains end-user sessions only; Strapi Admin sessions are excluded.
+- 2026-10-15: the UI follow-up corrected Strapi Design System heading props, settings dirty-state comparison, mobile settings grids and the geofencing country row. The cleanup-strategy labels are now compact. The session dashboard now paginates all filtered results and exports the full filtered set through tested pure serializers.
+- 2026-10-15: Playwright verified dashboard filtering, pagination and no-results reset; detail modal expand/close; local settings changes and Reset; geofencing add/remove; email tabs and local validation; webhook toggle; activation refresh; and the end-user panel. At 390x844 and 1440x1000, checked surfaces had no document overflow. Session exports, settings saves, credentials, provider requests and destructive actions were not invoked.
+- 2026-10-15: final package verification passed with 262/262 tests, frontend/backend TypeScript, plugin build, package verify and runtime bundle verify. The shared Strapi admin build passed. SessionManager gate check reported all 49 plugin gates met; workbench SessionManager audit reported all 7 gates met.
+- 2026-10-15: follow-up to the earlier export note: Playwright clicked both export buttons with Blob interception. CSV reported 22 rows; JSON reported 22 sessions and no token fields. The interceptor was restored and no file was saved. Plugin pages had zero console errors; two Strapi warnings remained.
+- 2026-10-15: current native-integration re-verification passed 273/273 plugin tests, frontend/backend TypeScript, plugin build/verify/runtime bundle, shared admin build, and 60 targeted native/legacy route/auth regressions. A second Strapi 5.58.0 process ran on 127.0.0.1:1338 with a new `.tmp/native-session-reverify.GAFfbvyZ/data.db`; all eight plugin keys registered. Two generated `example.invalid` Users & Permissions users exercised native registration/list/refresh/revoke, Magic list/current/delete/logout/others/all, native logout and cross-owner denial. GeoIP was disabled in this test DB. Final aggregate: 0 admin users, 0 active native sessions, 0 active Magic sidecars and 0 raw access/refresh tokens. The pre-existing 127.0.0.1:1337 listener and database were untouched; no provider request was made.

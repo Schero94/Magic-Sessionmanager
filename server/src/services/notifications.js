@@ -43,7 +43,7 @@ module.exports = ({ strapi }) => ({
         }
       }
     } catch (err) {
-      strapi.log.warn('[magic-sessionmanager/notifications] Could not load templates from DB, using defaults:', err.message);
+      strapi.log.warn('[magic-sessionmanager/notifications] Could not load templates from DB; using defaults');
     }
 
     strapi.log.debug('[magic-sessionmanager/notifications] Using default fallback templates');
@@ -175,10 +175,10 @@ module.exports = ({ strapi }) => ({
         text: textContent,
       });
 
-      strapi.log.info(`[magic-sessionmanager/notifications] Suspicious login alert sent to ${user.email}`);
+      strapi.log.info('[magic-sessionmanager/notifications] Suspicious login alert sent');
       return true;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] Error sending email:', err);
+      strapi.log.error('[magic-sessionmanager/notifications] Email alert failed:', err?.name || 'Error');
       return false;
     }
   },
@@ -204,10 +204,10 @@ module.exports = ({ strapi }) => ({
         text: textContent,
       });
 
-      strapi.log.info(`[magic-sessionmanager/notifications] New location alert sent to ${user.email}`);
+      strapi.log.info('[magic-sessionmanager/notifications] New location alert sent');
       return true;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] Error sending new location email:', err);
+      strapi.log.error('[magic-sessionmanager/notifications] New-location email failed:', err?.name || 'Error');
       return false;
     }
   },
@@ -233,10 +233,10 @@ module.exports = ({ strapi }) => ({
         text: textContent,
       });
 
-      strapi.log.info(`[magic-sessionmanager/notifications] VPN/Proxy alert sent to ${user.email}`);
+      strapi.log.info('[magic-sessionmanager/notifications] VPN/Proxy alert sent');
       return true;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] Error sending VPN/Proxy email:', err);
+      strapi.log.error('[magic-sessionmanager/notifications] VPN/Proxy email failed:', err?.name || 'Error');
       return false;
     }
   },
@@ -265,7 +265,7 @@ module.exports = ({ strapi }) => ({
         const isAllowed = parsed.protocol === 'https:' &&
           ALLOWED_WEBHOOK_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
         if (!isAllowed) {
-          strapi.log.warn(`[magic-sessionmanager/notifications] Blocked webhook to untrusted host: ${parsed.hostname}`);
+          strapi.log.warn('[magic-sessionmanager/notifications] Blocked webhook to untrusted host');
           return false;
         }
       } catch {
@@ -302,7 +302,7 @@ module.exports = ({ strapi }) => ({
         clearTimeout(timer);
       }
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] Webhook error:', err);
+      strapi.log.error('[magic-sessionmanager/notifications] Webhook request failed:', err?.name || 'Error');
       return false;
     }
   },

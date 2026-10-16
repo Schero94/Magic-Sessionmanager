@@ -52,7 +52,7 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
 
     if (!tokenHashValue) {
       if (strictMode) {
-        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] No bearer token (user: ${userDocId.substring(0, 8)}..., strictMode)`);
+        strapi.log.info('[magic-sessionmanager] [POLICY-BLOCKED] No bearer token (strictMode)');
         throw new errors.UnauthorizedError('No valid session. Please login again.');
       }
       return true;
@@ -68,18 +68,18 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
         const reason =
           thisSession.terminationReason ||
           (thisSession.terminatedManually === true ? 'manual' : 'inactive');
-        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] Session inactive (reason: ${reason}, user: ${userDocId.substring(0, 8)}...)`);
+        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] Session inactive (reason: ${reason})`);
         throw new errors.UnauthorizedError('Session terminated. Please login again.');
       }
       return true;
     }
 
     if (strictMode) {
-      strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] No session matches this token (user: ${userDocId.substring(0, 8)}..., strictMode)`);
+      strapi.log.info('[magic-sessionmanager] [POLICY-BLOCKED] No session matches this token (strictMode)');
       throw new errors.UnauthorizedError('No valid session. Please login again.');
     }
 
-    strapi.log.warn(`[magic-sessionmanager] [POLICY-WARN] No session for token (user: ${userDocId.substring(0, 8)}...) - allowing in non-strict mode`);
+    strapi.log.warn('[magic-sessionmanager] [POLICY-WARN] No session for token; allowing in non-strict mode');
     return true;
 
   } catch (err) {
@@ -87,7 +87,7 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
       throw err;
     }
 
-    strapi.log.debug('[magic-sessionmanager] Session policy check error:', err.message);
+    strapi.log.debug('[magic-sessionmanager] Session policy check error:', err?.name || 'Error');
     return true;
   }
 };

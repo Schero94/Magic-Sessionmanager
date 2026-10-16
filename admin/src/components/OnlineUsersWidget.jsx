@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useIntl } from 'react-intl';
-import { Box, Typography, Flex, Grid } from '@strapi/design-system';
-import { Check, Cross, Clock, User, Monitor } from '@strapi/icons';
+import { Alert, Box, Button, Typography, Flex, Grid } from '@strapi/design-system';
+import ReadableText from './ReadableText';
+import { Check, Cross, Clock, User } from '@strapi/icons';
 import { useFetchClient } from '@strapi/strapi/admin';
 import { getTranslation } from '../utils/getTranslation';
-import { computeOnlineUserStats } from '../utils/onlineStats.mjs';
+import { computeOnlineUserStats, normalizeUserCounts } from '../utils/onlineStats.mjs';
+import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
 /**
  * Online Users Widget - Dashboard widget showing user activity statistics
@@ -16,55 +18,70 @@ const OnlineUsersWidget = () => {
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [stats, setStats] = useState({
     onlineNow: 0,
-    offline: 0,
+    offline: null,
     last15min: 0,
     last30min: 0,
-    totalUsers: 0,
-    blocked: 0,
+    totalUsers: null,
+    blocked: null,
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [userCountsUnavailable, setUserCountsUnavailable] = useState(false);
+  const requestInProgress = useRef(false);
 
-  const fetchStats = useCallback(async () => {
+  /**
+   * Loads session activity and aggregate end-user counts for the dashboard.
+   * User counts remain unavailable when their API request fails; they are
+   * never represented as zero unless the server returned a valid zero.
+   *
+   * @param {{showLoading?: boolean}} [options] Whether to show the initial or retry loading state
+   * @returns {Promise<void>}
+   */
+  const fetchStats = useCallback(async ({ showLoading = true } = {}) => {
+    if (requestInProgress.current) return;
+    requestInProgress.current = true;
+    if (showLoading) setLoading(true);
+
     try {
-      const { data } = await get('/magic-sessionmanager/sessions');
-      const sessions = data.data || [];
+      const { data: sessionResponse } = await get('/magic-sessionmanager/sessions');
+      const sessions = sessionResponse?.data;
+      if (!Array.isArray(sessions)) throw new Error('Invalid session response');
 
+      let userCounts = null;
+      let countsUnavailable = false;
       try {
-        // Get total users
-        const { data: usersData } = await get('/content-manager/collection-types/plugin::users-permissions.user?pageSize=1');
-        const totalUsers = usersData?.pagination?.total || 0;
-
-        // Get blocked users count
-        const { data: blockedData } = await get('/content-manager/collection-types/plugin::users-permissions.user?filters[$and][0][blocked][$eq]=true&pageSize=1');
-        const blockedUsers = blockedData?.pagination?.total || 0;
-
-        setStats(computeOnlineUserStats(sessions, {
-          totalUsers,
-          blockedUsers,
-        }));
-      } catch (err) {
-        console.error('[OnlineUsersWidget] Error fetching user count:', err);
-        setStats(computeOnlineUserStats(sessions));
+        const { data: userStatsResponse } = await get('/magic-sessionmanager/users/stats');
+        userCounts = normalizeUserCounts(userStatsResponse);
+        if (!userCounts) throw new Error('Invalid user statistics response');
+      } catch (error) {
+        logSafeAdminError('onlineUsers.userCounts', error);
+        countsUnavailable = true;
       }
-    } catch (err) {
-      console.error('[OnlineUsersWidget] Error:', err);
+
+      setStats(computeOnlineUserStats(sessions, userCounts || {}));
+      setUserCountsUnavailable(countsUnavailable);
+      setLoadError(false);
+    } catch (error) {
+      logSafeAdminError('onlineUsers.loadSessions', error);
+      setLoadError(true);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
+      requestInProgress.current = false;
     }
   }, [get]);
 
   useEffect(() => {
-    fetchStats();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchStats, 30000);
+    void fetchStats();
+
+    const interval = setInterval(() => {
+      void fetchStats({ showLoading: false });
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 
   // Stat Card - styled like Project Statistics items
   const StatCard = ({ icon: Icon, label, value, color }) => (
     <Box
-      as="a"
       padding={4}
       background="neutral0"
       hasRadius
@@ -95,7 +112,7 @@ const OnlineUsersWidget = () => {
               {label}
             </Typography>
             <Typography variant="delta" fontWeight="bold" textColor="neutral800">
-              {value}
+              {value ?? t('common.unavailable', 'Unavailable')}
             </Typography>
           </Flex>
         </Flex>
@@ -106,7 +123,28 @@ const OnlineUsersWidget = () => {
   if (loading) {
     return (
       <Box padding={4}>
-        <Typography variant="pi" textColor="neutral600">{t('common.loading', 'Loading...')}</Typography>
+        <ReadableText variant="pi" textColor="neutral600" tag="p">{t('common.loading', 'Loading...')}</ReadableText>
+      </Box>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Box padding={4} role="alert">
+        <Alert
+          variant="danger"
+          title={t('widget.error.title', 'Session statistics could not be loaded')}
+          closeLabel=""
+          action={(
+            <Button variant="secondary" onClick={() => { void fetchStats(); }}>
+              {t('common.retry', 'Retry')}
+            </Button>
+          )}
+        >
+          <ReadableText variant="pi" textColor="neutral700" tag="span">
+            {t('widget.error.description', 'Try again. If the problem continues, check Session Manager API access.')}
+          </ReadableText>
+        </Alert>
       </Box>
     );
   }
@@ -114,6 +152,19 @@ const OnlineUsersWidget = () => {
   return (
     <Box padding={0}>
       <Flex direction="column" gap={3}>
+        {userCountsUnavailable && (
+          <Box role="status">
+            <Alert
+              variant="warning"
+              title={t('widget.partial.title', 'Some user counts are unavailable')}
+              closeLabel=""
+            >
+              <ReadableText variant="pi" textColor="neutral700" tag="span">
+                {t('widget.partial.description', 'Session activity is shown, but total and blocked user counts could not be loaded.')}
+              </ReadableText>
+            </Alert>
+          </Box>
+        )}
         <Grid.Root gap={3} gridCols={2}>
           <Grid.Item col={1}>
             <StatCard 

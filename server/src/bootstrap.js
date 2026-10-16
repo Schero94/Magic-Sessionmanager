@@ -26,6 +26,9 @@ const {
   consumeSessionRejectionReason,
 } = require('./utils/rejection-cache');
 const { evaluateGeoFirewall } = require('./utils/geo-firewall');
+const { REVOCATION_UID } = require('./utils/session-revocation');
+const { getNativeSessionManager } = require('./utils/native-session-manager');
+const { CONTENT_API_PERMISSIONS_VERSION } = require('./utils/content-api-permissions');
 const {
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,
@@ -41,6 +44,7 @@ const {
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
 const JWT_WRAPPED_FLAG = Symbol.for('magic-sessionmanager.jwt.wrapped');
+const deferredContentApiPermissionSetup = new WeakMap();
 
 async function getRequestSettings(strapi, ctx) {
   let settings = {};
@@ -69,7 +73,7 @@ module.exports = async ({ strapi }) => {
   try {
     encryptToken('self-test');
   } catch (e) {
-    log.error(`[BOOTSTRAP] ${e.message}`);
+    log.error('[BOOTSTRAP] Encryption self-check failed:', e?.name || 'Error');
     throw e;
   }
 
@@ -95,7 +99,7 @@ module.exports = async ({ strapi }) => {
         useDbDirect: settings.cleanupUseDbDirect === true,
       });
     } catch (cleanupErr) {
-      log.warn('Initial cleanup failed:', cleanupErr.message);
+      log.warn('Initial cleanup failed:', cleanupErr?.name || 'Error');
     }
 
     // Schedule the idle-session cleanup using setTimeout recursion instead
@@ -119,7 +123,7 @@ module.exports = async ({ strapi }) => {
           const service = strapi.plugin('magic-sessionmanager').service('session');
           await service.cleanupInactiveSessions({ useDbDirect });
         } catch (err) {
-          log.error('Periodic cleanup error:', err);
+          log.error('Periodic cleanup error:', err?.name || 'Error');
         }
         scheduleIdleCleanup();
       }, intervalMs);
@@ -147,7 +151,7 @@ module.exports = async ({ strapi }) => {
           const service = strapi.plugin('magic-sessionmanager').service('session');
           await service.deleteOldSessions({ useDbDirect });
         } catch (err) {
-          log.error('Retention cleanup error:', err);
+          log.error('Retention cleanup error:', err?.name || 'Error');
         }
         scheduleRetention();
       }, RETENTION_INTERVAL_MS);
@@ -190,13 +194,18 @@ module.exports = async ({ strapi }) => {
     );
     log.info('[SUCCESS] LastSeen middleware mounted');
 
-    await ensureContentApiPermissions(strapi, log);
+    const contentApiPermissionsReady = await ensureContentApiPermissions(strapi, log);
+    mountDeferredContentApiPermissionRetry({
+      strapi,
+      log,
+      initiallyReady: contentApiPermissionsReady,
+    });
 
     log.info('[SUCCESS] Bootstrap complete');
     log.info('[READY] Session Manager ready! Sessions stored in plugin::magic-sessionmanager.session');
 
   } catch (err) {
-    log.error('[ERROR] Bootstrap error:', err);
+    log.error('[ERROR] Bootstrap error:', err?.name || 'Error');
   }
 };
 
@@ -238,7 +247,7 @@ function mountPreLoginGeoGuard({ strapi, log }) {
       const decision = evaluateGeoFirewall(settings, geoData);
 
       if (decision.blocked) {
-        log.warn(`[PRE-BLOCKED] Login rejected (${decision.reason}) from IP ${ip}`);
+        log.warn(`[PRE-BLOCKED] Login rejected (${decision.reason})`);
         ctx.status = 403;
         ctx.body = {
           error: {
@@ -259,7 +268,7 @@ function mountPreLoginGeoGuard({ strapi, log }) {
     } catch (err) {
       const failureDecision = evaluateGeoFirewall(settings, { _status: 'error' });
       if (failureDecision.blocked) {
-        log.warn(`[PRE-BLOCKED] Login rejected because GeoIP lookup failed for ${ip}`);
+        log.warn('[PRE-BLOCKED] Login rejected because GeoIP lookup failed');
         ctx.status = 403;
         ctx.body = {
           error: {
@@ -270,7 +279,7 @@ function mountPreLoginGeoGuard({ strapi, log }) {
         };
         return;
       }
-      log.debug('Pre-login geo guard error (allowing by configured policy):', err.message);
+      log.debug('Pre-login geo guard error (allowing by configured policy):', err?.name || 'Error');
     }
 
     await next();
@@ -405,7 +414,71 @@ function failClosedAuthResponse({ ctx, strapi, log, operation, error }) {
       message: 'Authentication temporarily unavailable. Please try again.',
     },
   };
-  log.error(`[AUTH-FAIL-CLOSED] ${operation}:`, error?.message || error || 'session persistence failed');
+  log.error(`[AUTH-FAIL-CLOSED] ${operation}:`, error?.name || 'Error');
+}
+
+/**
+ * Returns whether Users & Permissions owns token lifecycle for this request.
+ * This reads configuration only and never resolves the origin during bootstrap.
+ *
+ * @param {object} strapi
+ * @returns {boolean}
+ */
+function usesNativeRefreshSessions(strapi) {
+  return strapi.config.get('plugin::users-permissions.jwtManagement', 'legacy-support') === 'refresh';
+}
+
+/**
+ * Validates a newly issued refresh token and resolves its canonical owner and
+ * native session ID before Magic writes a metadata sidecar.
+ *
+ * @param {{strapi: object, nativeSessionManager: object, refreshToken: string, user?: object}} params
+ * @returns {Promise<{userId: string, userDocumentId: string, sessionId: string}>}
+ * @throws {Error} If the token, owner, or native session cannot be resolved.
+ */
+async function resolveNativeRefreshSession({ strapi, nativeSessionManager, refreshToken, user }) {
+  if (!refreshToken) throw new Error('native auth response contains no refresh token');
+
+  const validation = await nativeSessionManager.validateRefreshToken(refreshToken);
+  if (!validation?.isValid || !validation.userId || !validation.sessionId) {
+    throw new Error('new native refresh token could not be validated');
+  }
+
+  const userId = String(validation.userId);
+  if (user?.id != null && String(user.id) !== userId) {
+    throw new Error('native refresh token owner does not match the authentication response');
+  }
+
+  const resolvedUserDocumentId = await resolveUserDocumentId(strapi, userId);
+  if (user?.documentId && resolvedUserDocumentId && user.documentId !== resolvedUserDocumentId) {
+    throw new Error('native refresh token owner does not match the authentication response');
+  }
+  const userDocumentId = resolvedUserDocumentId || user?.documentId;
+  if (!userDocumentId) throw new Error('native refresh token owner has no resolvable user documentId');
+
+  return { userId, userDocumentId, sessionId: String(validation.sessionId) };
+}
+
+/**
+ * Best-effort compensation for a native session whose Magic sidecar could not
+ * be persisted. Only the exact newly issued session is revoked.
+ *
+ * @param {{nativeSessionManager: object, nativeSession: object, log: object}} params
+ * @returns {Promise<void>}
+ */
+async function compensateNativeSession({ nativeSessionManager, nativeSession, log }) {
+  if (!nativeSession?.userId || !nativeSession?.sessionId) return;
+
+  try {
+    const revoked = await nativeSessionManager.revokeSessionById(
+      String(nativeSession.userId),
+      String(nativeSession.sessionId)
+    );
+    if (!revoked) log.warn('[AUTH-COMPENSATION] Newly issued native session was already absent');
+  } catch (err) {
+    // Do not include token material or opaque native API error payloads here.
+    log.error('[AUTH-COMPENSATION] Native session revocation failed:', err?.name || 'Error');
+  }
 }
 
 /**
@@ -470,7 +543,7 @@ function mountFailedLoginLockout({ strapi, log }) {
     if (existing && existing.blockedUntil > now) {
       const retrySec = Math.ceil((existing.blockedUntil - now) / 1000);
       ctx.set('Retry-After', String(retrySec));
-      log.warn(`[LOCKOUT] Rejected login from locked IP ${ip} (${retrySec}s remaining)`);
+      log.warn(`[LOCKOUT] Rejected login from locked client (${retrySec}s remaining)`);
       ctx.status = 429;
       ctx.body = {
         error: {
@@ -494,7 +567,7 @@ function mountFailedLoginLockout({ strapi, log }) {
       const entry = recordFailure(ip, maxFailed);
       if (entry.blockedUntil > now) {
         log.warn(
-          `[LOCKOUT] IP ${ip} locked for 15min after ${entry.count} failed login attempts`
+          `[LOCKOUT] Client locked for 15min after ${entry.count} failed login attempts`
         );
       }
     }
@@ -504,9 +577,10 @@ function mountFailedLoginLockout({ strapi, log }) {
 }
 
 /**
- * After a successful login/MFA/OTP, creates a session record for the new JWT.
- * Geo-blocking already happened in `mountPreLoginGeoGuard`, so this handler
- * only records the session and (optionally) sends notifications.
+ * After a successful login/MFA/OTP, creates a Magic metadata sidecar for the
+ * issued session. Native refresh mode validates Strapi's refresh token and
+ * links its session ID; legacy mode keeps the existing token behavior.
+ * Geo-blocking already happened in `mountPreLoginGeoGuard`.
  *
  * @param {{strapi: object, log: object, sessionService: object}} deps
  */
@@ -514,6 +588,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
     const requestType = classifyJwtIssuingRequest(ctx.path, ctx.method);
     const previousAccessToken = requestType === 'rotate-current' ? extractBearerToken(ctx) : null;
+    const nativeMode = usesNativeRefreshSessions(strapi);
     await next();
 
     if (requestType !== 'new-session' && requestType !== 'rotate-current') return;
@@ -523,6 +598,65 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
     const refreshCookieName = getRefreshCookieName(strapi);
 
     if (requestType === 'rotate-current') {
+      if (nativeMode) {
+        let nativeSessionManager;
+        let nativeSession;
+        try {
+          if (!previousAccessToken) throw new Error('current access token is missing');
+          nativeSessionManager = getNativeSessionManager(strapi);
+          const newRefreshToken = getOutgoingRefreshToken(ctx, refreshCookieName);
+          nativeSession = await resolveNativeRefreshSession({
+            strapi,
+            nativeSessionManager,
+            refreshToken: newRefreshToken,
+            user: ctx.body.user || ctx.state?.user,
+          });
+
+          const matchingSession = await strapi.documents(SESSION_UID).findFirst({
+            filters: { tokenHash: hashToken(previousAccessToken), isActive: true },
+            fields: ['documentId'],
+          });
+
+          if (matchingSession) {
+            const rotated = await sessionService.rotateSessionTokens({
+              sessionId: matchingSession.documentId,
+              expectedAccessToken: previousAccessToken,
+              accessToken: ctx.body.jwt,
+              refreshToken: newRefreshToken,
+              nativeSessionId: nativeSession.sessionId,
+            });
+            if (!rotated) throw new Error('current sidecar changed before native password rotation was linked');
+            log.info('[PASSWORD] Native session link updated');
+          } else {
+            const userAgent = ctx.request.headers?.['user-agent'] || 'unknown';
+            const createdSidecar = await sessionService.createSession({
+              userId: nativeSession.userDocumentId,
+              ip: getClientIp(ctx),
+              userAgent,
+              token: ctx.body.jwt,
+              refreshToken: newRefreshToken,
+              geoData: ctx.state?.__magicSessionGeoData || null,
+              nativeSessionId: nativeSession.sessionId,
+            });
+            if (!createdSidecar?.documentId) {
+              throw new Error('native password-change sidecar creation returned no documentId');
+            }
+          }
+        } catch (err) {
+          if (nativeSessionManager && nativeSession) {
+            await compensateNativeSession({ nativeSessionManager, nativeSession, log });
+          }
+          failClosedAuthResponse({
+            ctx,
+            strapi,
+            log,
+            operation: 'native change-password sidecar synchronization failed',
+            error: err,
+          });
+        }
+        return;
+      }
+
       try {
         if (!previousAccessToken) throw new Error('current access token is missing');
         const matchingSession = await strapi.documents(SESSION_UID).findFirst({
@@ -541,13 +675,15 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
           refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
         });
         if (!rotated) throw new Error('current session changed before token rotation');
-        log.info(`[PASSWORD] Tokens rotated for session ${matchingSession.documentId}`);
+        log.info('[PASSWORD] Legacy session tokens rotated');
       } catch (err) {
         failClosedAuthResponse({ ctx, strapi, log, operation: 'change-password rotation failed', error: err });
       }
       return;
     }
 
+    let nativeSessionManager;
+    let nativeSession;
     try {
       const user = ctx.body.user;
       if (!user) throw new Error('authentication response contains no user');
@@ -556,11 +692,23 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
       const headers = ctx.request.headers || ctx.request.header || {};
       const userAgent = headers['user-agent'] || 'unknown';
 
-      log.info(`[CHECK] Login detected! User: ${user.documentId || user.id} (${user.email || user.username}) from IP: ${ip}`);
+      log.info('[CHECK] Login detected; creating end-user session metadata');
 
-      let userDocId = user.documentId;
-      if (!userDocId && user.id) {
-        userDocId = await resolveUserDocumentId(strapi, user.id);
+      let userDocId;
+      if (nativeMode) {
+        nativeSessionManager = getNativeSessionManager(strapi);
+        nativeSession = await resolveNativeRefreshSession({
+          strapi,
+          nativeSessionManager,
+          refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
+          user,
+        });
+        userDocId = nativeSession.userDocumentId;
+      } else {
+        userDocId = user.documentId;
+        if (!userDocId && user.id) {
+          userDocId = await resolveUserDocumentId(strapi, user.id);
+        }
       }
 
       if (!userDocId) {
@@ -576,13 +724,14 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
         token: ctx.body.jwt,
         refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
         geoData,
+        ...(nativeSession ? { nativeSessionId: nativeSession.sessionId } : {}),
       });
 
       if (!newSession?.documentId) {
         throw new Error(`session creation returned no documentId for user ${userDocId}`);
       }
 
-      log.info(`[SUCCESS] Session ${newSession.documentId} created for user ${userDocId} (IP: ${ip})`);
+      log.info('[SUCCESS] End-user session metadata created');
 
       try {
         const settings = await getPluginSettings(strapi);
@@ -654,7 +803,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
               isNewLocation = true;
             }
           } catch (locErr) {
-            log.debug('New-location check failed (non-fatal):', locErr.message);
+            log.debug('New-location check failed (non-fatal):', locErr?.name || 'Error');
           }
         }
 
@@ -738,9 +887,12 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
           );
         }
       } catch (notifErr) {
-        log.warn('Notification failed:', notifErr.message);
+        log.warn('Notification failed:', notifErr?.name || 'Error');
       }
     } catch (err) {
+      if (nativeSessionManager && nativeSession) {
+        await compensateNativeSession({ nativeSessionManager, nativeSession, log });
+      }
       failClosedAuthResponse({ ctx, strapi, log, operation: 'session creation failed', error: err });
     }
   });
@@ -749,15 +901,10 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 }
 
 /**
- * Refresh-token interceptor.
- *
- * Supports Strapi's body and HttpOnly-cookie refresh modes.
- * Responsibilities:
- *   1. Block incoming requests whose refreshToken does not match an
- *      active session (defence against stale/stolen refresh tokens).
- *   2. After a successful refresh, atomically rotate the stored token +
- *      refreshToken hashes on the session so the new JWT can be
- *      validated by magicSessionAwareVerify.
+ * Synchronizes successful refreshes with Magic metadata without taking
+ * ownership of Strapi's native token rotation. Legacy mode requires an active
+ * Magic sidecar; native mode lets Strapi validate pre-existing sessions even
+ * when no sidecar exists, then links the rotated child after success.
  *
  * @param {{strapi: object, log: object, sessionService: object}} deps
  */
@@ -768,19 +915,41 @@ function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
 
     const cookieName = getRefreshCookieName(strapi);
     const oldRefreshToken = getIncomingRefreshToken(ctx, cookieName);
+    const nativeMode = usesNativeRefreshSessions(strapi);
+    const nativeSessionManager = nativeMode ? getNativeSessionManager(strapi) : null;
     let matchingSession = null;
+    let nativeInputValidation = null;
 
     try {
       if (oldRefreshToken) {
+        if (nativeMode) {
+          // Validate the origin on the request path, but leave invalid-token
+          // decisions and all rotation to Strapi's own refresh controller.
+          nativeInputValidation = await nativeSessionManager.validateRefreshToken(oldRefreshToken);
+        }
+
         matchingSession = await strapi.documents(SESSION_UID).findFirst({
           filters: {
             refreshTokenHash: hashToken(oldRefreshToken),
-            isActive: true,
+            ...(!nativeMode ? { isActive: true } : {}),
           },
-          fields: ['documentId'],
+          fields: ['documentId', 'isActive', 'nativeSessionId'],
         });
 
-        if (!matchingSession) {
+        if (nativeMode && matchingSession && matchingSession.isActive === false) {
+          log.warn('[BLOCKED] Blocked refresh token request for an inactive Magic sidecar');
+          ctx.status = 401;
+          ctx.body = {
+            error: {
+              status: 401,
+              name: 'UnauthorizedError',
+              message: 'Session terminated. Please login again.',
+            },
+          };
+          return;
+        }
+
+        if (!nativeMode && !matchingSession) {
           log.warn('[BLOCKED] Blocked refresh token request - no active session');
           ctx.status = 401;
           ctx.body = {
@@ -801,6 +970,63 @@ function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
     await next();
 
     if (ctx.status >= 200 && ctx.status < 300 && ctx.body && ctx.body.jwt) {
+      if (nativeMode) {
+        let nativeSession;
+        try {
+          const newRefreshToken = getOutgoingRefreshToken(ctx, cookieName);
+          nativeSession = await resolveNativeRefreshSession({
+            strapi,
+            nativeSessionManager,
+            refreshToken: newRefreshToken,
+          });
+
+          if (
+            nativeInputValidation?.isValid &&
+            String(nativeInputValidation.userId) !== nativeSession.userId
+          ) {
+            throw new Error('rotated native refresh token changed its owner');
+          }
+
+          if (matchingSession) {
+            const rotated = await sessionService.rotateSessionTokens({
+              sessionId: matchingSession.documentId,
+              expectedRefreshToken: oldRefreshToken,
+              accessToken: ctx.body.jwt,
+              refreshToken: newRefreshToken,
+              nativeSessionId: nativeSession.sessionId,
+            });
+            if (!rotated) throw new Error('current sidecar changed before native refresh was linked');
+            log.info('[REFRESH] Native session link updated');
+          } else {
+            const userAgent = ctx.request.headers?.['user-agent'] || 'unknown';
+            const createdSidecar = await sessionService.createSession({
+              userId: nativeSession.userDocumentId,
+              ip: getClientIp(ctx),
+              userAgent,
+              token: ctx.body.jwt,
+              refreshToken: newRefreshToken,
+              geoData: ctx.state?.__magicSessionGeoData || null,
+              nativeSessionId: nativeSession.sessionId,
+            });
+            if (!createdSidecar?.documentId) {
+              throw new Error('native refresh sidecar creation returned no documentId');
+            }
+          }
+        } catch (err) {
+          if (nativeSession) {
+            await compensateNativeSession({ nativeSessionManager, nativeSession, log });
+          }
+          failClosedAuthResponse({
+            ctx,
+            strapi,
+            log,
+            operation: 'native refresh sidecar synchronization failed',
+            error: err,
+          });
+        }
+        return;
+      }
+
       try {
         if (!oldRefreshToken || !matchingSession) {
           throw new Error('refresh response issued without a tracked input token');
@@ -812,7 +1038,7 @@ function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
           refreshToken: getOutgoingRefreshToken(ctx, cookieName),
         });
         if (!rotated) throw new Error('refresh token was already consumed');
-        log.info(`[REFRESH] Tokens refreshed for session ${matchingSession.documentId}`);
+        log.info('[REFRESH] Legacy session tokens refreshed');
       } catch (err) {
         failClosedAuthResponse({ ctx, strapi, log, operation: 'refresh rotation failed', error: err });
       }
@@ -823,8 +1049,9 @@ function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
 }
 
 /**
- * Synchronizes a successful users-permissions logout with the authenticated
- * user's plugin session after downstream authentication has completed.
+ * Synchronizes a successful Users & Permissions logout with the authenticated
+ * user's Magic sidecar. In native mode, Strapi has already revoked the native
+ * session before this middleware resumes, so no second native revoke is sent.
  *
  * @param {{strapi: object, log: object, sessionService: object}} deps
  * @returns {void}
@@ -835,10 +1062,8 @@ function mountLogoutInterceptor({ strapi, log, sessionService }) {
 
     const refreshToken = getIncomingRefreshToken(ctx, getRefreshCookieName(strapi));
     const accessToken = extractBearerToken(ctx);
-    const jwtManagement = strapi.config.get(
-      'plugin::users-permissions.jwtManagement',
-      'legacy-support'
-    );
+    const nativeMode = usesNativeRefreshSessions(strapi);
+    const jwtManagement = strapi.config.get('plugin::users-permissions.jwtManagement', 'legacy-support');
 
     await next();
 
@@ -858,6 +1083,19 @@ function mountLogoutInterceptor({ strapi, log, sessionService }) {
     if (!authenticatedUser || (!isSuccessful && !isLegacyMissingRoute)) return;
 
     try {
+      if (nativeMode) {
+        const nativeSessionId = ctx.state?.session?.id;
+        if (!nativeSessionId) throw new Error('authenticated logout has no native session identifier');
+
+        const nativeSessionManager = getNativeSessionManager(strapi);
+        const nativeSessionStillActive = await nativeSessionManager.isSessionActive(nativeSessionId);
+        if (nativeSessionStillActive) {
+          throw new Error('Users & Permissions logout returned success while the native session remains active');
+        }
+        // Strapi has already revoked this native session. The service call
+        // below synchronizes its Magic sidecar without issuing another revoke.
+      }
+
       const userDocumentId = authenticatedUser.documentId ||
         await resolveUserDocumentId(strapi, authenticatedUser.id);
 
@@ -898,8 +1136,6 @@ async function ensureContentApiPermissions(strapi, log) {
   // installations pick up the new permissions on next boot. Storing a
   // version (not a boolean) also lets us back out a bad migration by
   // decrementing the stored value manually.
-  const PERMISSIONS_VERSION = 2;
-
   try {
     const pluginStore = strapi.store({ type: 'plugin', name: 'magic-sessionmanager' });
     const storedVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
@@ -913,9 +1149,9 @@ async function ensureContentApiPermissions(strapi, log) {
     }
 
     const effectiveVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
-    if (effectiveVersion >= PERMISSIONS_VERSION) {
+    if (effectiveVersion >= CONTENT_API_PERMISSIONS_VERSION) {
       log.debug('Content-API permissions already at current version (skipping auto-setup)');
-      return;
+      return true;
     }
 
     const ROLE_UID = 'plugin::users-permissions.role';
@@ -935,7 +1171,7 @@ async function ensureContentApiPermissions(strapi, log) {
 
     if (!authenticatedRole) {
       log.warn('Authenticated role not found - skipping permission setup');
-      return;
+      return false;
     }
 
     const requiredActions = [
@@ -961,9 +1197,12 @@ async function ensureContentApiPermissions(strapi, log) {
     const missingActions = requiredActions.filter(action => !existingActions.includes(action));
 
     if (missingActions.length === 0) {
-      await pluginStore.set({ key: 'contentApiPermissionsVersion', value: PERMISSIONS_VERSION });
+      await pluginStore.set({
+        key: 'contentApiPermissionsVersion',
+        value: CONTENT_API_PERMISSIONS_VERSION,
+      });
       log.debug('Content-API permissions already configured');
-      return;
+      return true;
     }
 
     for (const action of missingActions) {
@@ -973,12 +1212,72 @@ async function ensureContentApiPermissions(strapi, log) {
       log.info(`[PERMISSION] Enabled ${action} for authenticated users`);
     }
 
-    await pluginStore.set({ key: 'contentApiPermissionsVersion', value: PERMISSIONS_VERSION });
+    await pluginStore.set({
+      key: 'contentApiPermissionsVersion',
+      value: CONTENT_API_PERMISSIONS_VERSION,
+    });
     log.info('[SUCCESS] Content-API permissions configured for authenticated users');
+    return true;
   } catch (err) {
-    log.warn('Could not auto-configure permissions:', err.message);
+    log.warn('Could not auto-configure permissions:', err?.name || 'Error');
     log.warn('Please manually enable plugin permissions in Settings > Users & Permissions > Roles > Authenticated');
+    return false;
   }
+}
+
+/**
+ * Retries incomplete Authenticated-role permission setup before a Magic
+ * Content API route reaches Strapi's route auth and policies. Failed attempts
+ * use a cooldown, and the route's existing authentication remains authoritative.
+ *
+ * @param {{strapi: object, log: object, initiallyReady?: boolean, retryCooldownMs?: number}} deps
+ * @returns {void}
+ */
+function mountDeferredContentApiPermissionRetry({
+  strapi,
+  log,
+  initiallyReady = false,
+  retryCooldownMs = 5000,
+}) {
+  deferredContentApiPermissionSetup.set(strapi, {
+    ready: initiallyReady,
+    pending: null,
+    retryAfter: 0,
+  });
+
+  strapi.server.use(async (ctx, next) => {
+    const configuredPrefix = strapi.config.get('api.rest.prefix', '/api') ?? '/api';
+    const normalizedApiPrefix = String(configuredPrefix)
+      .split('/')
+      .filter(Boolean)
+      .join('/');
+    const routePrefix = `${normalizedApiPrefix ? `/${normalizedApiPrefix}` : ''}/magic-sessionmanager`;
+    if (ctx.path !== routePrefix && !ctx.path?.startsWith(`${routePrefix}/`)) {
+      return next();
+    }
+
+    const state = deferredContentApiPermissionSetup.get(strapi);
+    if (!state.ready) {
+      if (!state.pending && Date.now() >= state.retryAfter) {
+        state.pending = ensureContentApiPermissions(strapi, log);
+      }
+
+      if (state.pending) {
+        const pendingSetup = state.pending;
+        try {
+          state.ready = await pendingSetup;
+          if (!state.ready) state.retryAfter = Date.now() + retryCooldownMs;
+        } catch (err) {
+          state.retryAfter = Date.now() + retryCooldownMs;
+          log.warn('Deferred Content-API permission setup failed:', err?.name || 'Error');
+        } finally {
+          if (state.pending === pendingSetup) state.pending = null;
+        }
+      }
+    }
+
+    return next();
+  });
 }
 
 /**
@@ -1032,7 +1331,7 @@ async function ensureSessionLookupIndexes(strapi, log) {
       log.info(`[INDEX] Created ${definition.name}`);
     }
   } catch (err) {
-    log.debug('[INDEX] Could not create session lookup indexes (will retry on next startup):', err.message);
+    log.debug('[INDEX] Could not create session lookup indexes (will retry on next startup):', err?.name || 'Error');
   }
 }
 
@@ -1087,20 +1386,19 @@ function isSessionExpired(session, maxAgeDays = 30) {
 /**
  * Wraps the users-permissions JWT verify function with session-awareness.
  *
- * After verifying the JWT cryptographically, this wrapper:
- *   1. Rejects the request if the matching session was manually terminated.
- *   2. Rejects the request if the session exceeded maxSessionAgeDays.
- *   3. Rejects the request if the user has `blocked: true`.
- *   4. In `strictSessionEnforcement` mode, rejects if no session matches the
- *      token hash. In non-strict mode, it also rejects if the user has zero
- *      active sessions — but allows through if the user has ANY active session
- *      matching this exact tokenHash.
+ * After the Users & Permissions verifier succeeds, native refresh mode checks
+ * that the embedded Strapi session is still active. The wrapper then applies
+ * persistent revocation, user-state, and Magic sidecar policies. Strict mode
+ * rejects unresolved users and missing sidecars outside the legacy issuance
+ * grace; relaxed mode preserves its configured no-sidecar behavior. A
+ * persistent revocation record always blocks.
  *
  * This wrapper is idempotent: it can be called multiple times in hot-reload
  * scenarios without double-wrapping the verify function.
  *
  * @param {object} strapi
- * @param {object} log
+ * @param {object} log Strapi logger
+ * @returns {Promise<void>}
  */
 async function registerSessionAwareAuthStrategy(strapi, log) {
   try {
@@ -1140,8 +1438,57 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
     jwtService.verify = async function magicSessionAwareVerify(token) {
       const decoded = await originalVerify(token);
 
-      if (!decoded || !decoded.id) {
-        return decoded;
+      if (!decoded) return decoded;
+
+      const tokenHashValue = hashToken(token);
+      const nativeMode = usesNativeRefreshSessions(strapi);
+      if (nativeMode) {
+        if (typeof decoded.sessionId !== 'string' || decoded.sessionId.length === 0) {
+          setSessionRejectionReason(tokenHashValue, 'manual');
+          strapi.log.info('[magic-sessionmanager] [JWT-REJECTED] Native access token has no session identifier');
+          return null;
+        }
+
+        try {
+          const nativeSessionManager = getNativeSessionManager(strapi);
+          const nativeSessionActive = await nativeSessionManager.isSessionActive(decoded.sessionId);
+          if (!nativeSessionActive) {
+            setSessionRejectionReason(tokenHashValue, 'manual');
+            strapi.log.info('[magic-sessionmanager] [JWT-REJECTED] Native session is missing or revoked');
+            return null;
+          }
+        } catch (err) {
+          setSessionRejectionReason(tokenHashValue, 'manual');
+          strapi.log.error(
+            '[magic-sessionmanager] [JWT] Native session validation failed closed:',
+            err?.name || 'Error'
+          );
+          return null;
+        }
+      }
+
+      if (!decoded.id) return decoded;
+
+      let revocation;
+      try {
+        revocation = await strapi.documents(REVOCATION_UID).findFirst({
+          filters: { tokenHash: tokenHashValue },
+          fields: ['documentId', 'expiresAt'],
+        });
+      } catch (err) {
+        // A missing or unreadable deny-list must never turn a deleted session
+        // back into an accepted JWT, including when enforcement is relaxed.
+        strapi.log.error('[magic-sessionmanager] [JWT] Revocation lookup failed; rejecting token:', err?.name || 'Error');
+        return null;
+      }
+
+      if (revocation) {
+        const expiry = revocation.expiresAt ? new Date(revocation.expiresAt).getTime() : null;
+        if (expiry === null || !Number.isFinite(expiry) || expiry > Date.now()) {
+          setSessionRejectionReason(tokenHashValue, 'manual');
+          strapi.log.info('[magic-sessionmanager] [JWT-REJECTED] Token hash is revoked');
+          return null;
+        }
       }
 
       let settings;
@@ -1160,40 +1507,60 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
       // as "no matching session" even though a session is being created.
       // Configurable; defaults to 5s which comfortably covers DB commit +
       // network RTT on most stacks.
-      const gracePeriodMs = getSessionCreationGraceMs(settings);
+      const gracePeriodMs = nativeMode ? 0 : getSessionCreationGraceMs(settings);
 
       try {
         const userDocId = await resolveUserDocumentId(strapi, decoded.id);
 
         if (!userDocId) {
-          strapi.log.debug('[magic-sessionmanager] [JWT] No documentId found, allowing through');
+          if (strictMode) {
+            strapi.log.warn('[magic-sessionmanager] [JWT] User documentId could not be resolved; rejecting in strict mode');
+            return null;
+          }
+          strapi.log.debug('[magic-sessionmanager] [JWT] No documentId found in relaxed mode');
           return decoded;
         }
 
+        let userRecord;
         try {
-          const userRecord = await strapi.documents('plugin::users-permissions.user').findOne({
+          userRecord = await strapi.documents('plugin::users-permissions.user').findOne({
             documentId: userDocId,
             fields: ['documentId', 'blocked'],
           });
-          if (userRecord && userRecord.blocked === true) {
-            strapi.log.info(
-              `[magic-sessionmanager] [JWT-BLOCKED] User is blocked (user: ${userDocId.substring(0, 8)}...)`
-            );
-            setSessionRejectionReason(hashToken(token), 'blocked');
+        } catch (err) {
+          if (strictMode) {
+            strapi.log.error('[magic-sessionmanager] [JWT] User lookup failed in strict mode; rejecting token:', err?.name || 'Error');
             return null;
           }
-        } catch {
-          // Ignore user lookup errors and continue to session check
+          strapi.log.debug('[magic-sessionmanager] [JWT] User lookup failed in relaxed mode:', err?.name || 'Error');
         }
 
-        const tokenHashValue = hashToken(token);
+        if (!userRecord && strictMode) {
+          strapi.log.warn('[magic-sessionmanager] [JWT] User record could not be resolved; rejecting in strict mode');
+          return null;
+        }
+
+        if (userRecord?.blocked === true) {
+          strapi.log.info('[magic-sessionmanager] [JWT-BLOCKED] User is blocked');
+          setSessionRejectionReason(tokenHashValue, 'blocked');
+          return null;
+        }
 
         const thisSession = await strapi.documents(SESSION_UID).findFirst({
           filters: {
             user: { documentId: userDocId },
             tokenHash: tokenHashValue,
+            ...(nativeMode ? { nativeSessionId: decoded.sessionId } : {}),
           },
-          fields: ['documentId', 'isActive', 'terminatedManually', 'terminationReason', 'lastActive', 'loginTime'],
+          fields: [
+            'documentId',
+            'isActive',
+            'terminatedManually',
+            'terminationReason',
+            'lastActive',
+            'loginTime',
+            ...(nativeMode ? ['nativeSessionId'] : []),
+          ],
         });
 
         if (thisSession) {
@@ -1207,7 +1574,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
 
             if (reason) {
               strapi.log.info(
-                `[magic-sessionmanager] [JWT-REJECTED] Session inactive (reason: ${reason}) for user ${userDocId.substring(0, 8)}...`
+                    `[magic-sessionmanager] [JWT-REJECTED] Session inactive (reason: ${reason})`
               );
               setSessionRejectionReason(tokenHashValue, reason);
               return null;
@@ -1216,7 +1583,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
 
           if (isSessionExpired(thisSession, maxSessionAgeDays)) {
             strapi.log.info(
-              `[magic-sessionmanager] [JWT-EXPIRED] Session exceeded max age of ${maxSessionAgeDays} days (user: ${userDocId.substring(0, 8)}...)`
+                  `[magic-sessionmanager] [JWT-EXPIRED] Session exceeded max age of ${maxSessionAgeDays} days`
             );
             await strapi.documents(SESSION_UID).update({
               documentId: thisSession.documentId,
@@ -1241,7 +1608,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
 
           if (idleFor > inactivityTimeout) {
             strapi.log.info(
-              `[magic-sessionmanager] [JWT-IDLE] Session too idle to reactivate (${Math.round(idleFor / 1000)}s > ${inactivityTimeout / 1000}s) for user ${userDocId.substring(0, 8)}...`
+                  `[magic-sessionmanager] [JWT-IDLE] Session too idle to reactivate (${Math.round(idleFor / 1000)}s > ${inactivityTimeout / 1000}s)`
             );
             await strapi.documents(SESSION_UID).update({
               documentId: thisSession.documentId,
@@ -1268,7 +1635,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
             data: { isActive: true, lastActive: new Date() },
           });
           strapi.log.info(
-            `[magic-sessionmanager] [JWT-REACTIVATED] Session reactivated for user ${userDocId.substring(0, 8)}...`
+                '[magic-sessionmanager] [JWT-REACTIVATED] Session reactivated'
           );
           resetErrorCounter();
           return decoded;
@@ -1292,23 +1659,27 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
 
         if (strictMode) {
           strapi.log.info(
-            `[magic-sessionmanager] [JWT-BLOCKED] No session matches this token (user: ${userDocId.substring(0, 8)}..., strictMode)`
+                '[magic-sessionmanager] [JWT-BLOCKED] No session matches this token (strictMode)'
           );
           return null;
         }
 
         strapi.log.warn(
-          `[magic-sessionmanager] [JWT-WARN] No session matches this token for user ${userDocId.substring(0, 8)}... (non-strict: allowing)`
+              '[magic-sessionmanager] [JWT-WARN] No session matches this token (non-strict: allowing)'
         );
         resetErrorCounter();
         return decoded;
 
       } catch (err) {
+        if (strictMode) {
+          strapi.log.error('[magic-sessionmanager] [JWT] Session check failed in strict mode; rejecting token:', err?.name || 'Error');
+          return null;
+        }
         if (shouldFailOpen()) {
-          strapi.log.warn('[magic-sessionmanager] [JWT] Session check error (allowing):', err.message);
+          strapi.log.warn('[magic-sessionmanager] [JWT] Session check error (allowing):', err?.name || 'Error');
           return decoded;
         }
-        strapi.log.error('[magic-sessionmanager] [JWT] Too many consecutive errors, blocking request:', err.message);
+        strapi.log.error('[magic-sessionmanager] [JWT] Too many consecutive errors, blocking request:', err?.name || 'Error');
         return null;
       }
     };
@@ -1319,7 +1690,7 @@ async function registerSessionAwareAuthStrategy(strapi, log) {
     strapi.log.info('[magic-sessionmanager] [AUTH] [SUCCESS] JWT verify wrapped with session validation');
 
   } catch (err) {
-    strapi.log.warn('[magic-sessionmanager] [AUTH] Could not wrap JWT verify:', err.message);
+        strapi.log.warn('[magic-sessionmanager] [AUTH] Could not wrap JWT verify:', err?.name || 'Error');
     strapi.log.warn('[magic-sessionmanager] [AUTH] Session validation will only work via middleware (plugin endpoints)');
   }
 }
@@ -1331,4 +1702,6 @@ module.exports.__private = {
   mountRefreshTokenInterceptor,
   mountLogoutInterceptor,
   mountLogoutRoute,
+  ensureContentApiPermissions,
+  mountDeferredContentApiPermissionRetry,
 };
