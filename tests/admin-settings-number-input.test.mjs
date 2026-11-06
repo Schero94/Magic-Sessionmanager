@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readSettingsFile } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const login = readSettingsFile('LoginProtectionTab.jsx');
 
@@ -36,7 +37,7 @@ test('the field hint and the {count} lockout sentence use separate messages (I18
     field,
     /label=\{t\('settings\.config\.failed\.lockout\.label', 'Temporary IP lockout after'\)\}/
   );
-  assert.match(field, /description=\{t\('settings\.config\.failed\.lockout\.hint'/);
+  assert.match(unwrapSource(field), /description=\{t\('settings\.config\.failed\.lockout\.hint'/);
   assert.doesNotMatch(field, /settings\.config\.failed\.lockout\.preview'/);
   assert.match(
     login,

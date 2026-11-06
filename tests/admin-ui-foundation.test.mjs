@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const read = (relativePath) =>
   readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8');
@@ -109,7 +110,10 @@ test('StatGrid renders compact equal-height cards in 4/2/1 DS columns', () => {
   assert.match(grid, /padding=\{4\}/, 'one compact padding token');
   assert.match(grid, /variant="sigma"/, 'labels use sigma');
   // Clickable cards are real toggle buttons (IA D1.4).
-  assert.match(grid, /tag: 'button', type: 'button', onClick, 'aria-pressed': Boolean\(pressed\)/);
+  assert.match(
+    unwrapSource(grid),
+    /tag: 'button', type: 'button', onClick, 'aria-pressed': Boolean\(pressed\)/
+  );
   assert.doesNotMatch(grid, /tag="p"/, 'no block elements inside a button card');
   assert.match(grid, /<Icon aria-hidden focusable=\{false\} \/>/, 'icons are decorative');
   assert.match(grid, /theme\.colors\[`\$\{\$tone\}600`\]/, 'icon tone comes from the DS theme');
@@ -173,7 +177,7 @@ test('PropertyList is a description list with equal columns and targeted wrappin
 test('StatusBadge uses the shared state vocabulary and EndReason the shared reasons (I.1 items 1-2)', () => {
   const badge = read('components/ui/StatusBadge.jsx');
   assert.match(badge, /getSessionStatusPresentation/);
-  assert.match(badge, /<Badge \{\.\.\.getBadgeColors\(presentation\.tone\)\}/);
+  assert.match(unwrapSource(badge), /<Badge \{\.\.\.getBadgeColors\(presentation\.tone\)\}/);
   // The DS warning variant fails WCAG AA (3.6:1); Idle keeps the warning background with neutral800 text.
   assert.match(
     badge,
@@ -181,7 +185,7 @@ test('StatusBadge uses the shared state vocabulary and EndReason the shared reas
   );
   assert.match(badge, /const label = translate\(presentation\)/);
   assert.match(
-    badge,
+    unwrapSource(badge),
     /formatMessage\(\{ id: getTranslation\(descriptor\.messageId\), defaultMessage: descriptor\.defaultMessage \}\)/
   );
   assert.doesNotMatch(badge, /danger/, 'danger is not a session-state colour');

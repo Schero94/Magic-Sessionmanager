@@ -3,6 +3,7 @@ import test from 'node:test';
 import { areSettingsEqual } from '../admin/src/utils/settingsEquality.mjs';
 import { updateEmailTemplate } from '../admin/src/utils/emailTemplateDraft.mjs';
 import { readSettingsFile, readSettingsSource } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 test('template edits do not mutate saved settings and are detected as dirty', () => {
   for (const field of ['subject', 'html', 'text']) {
@@ -48,7 +49,7 @@ test('all template edit and default actions use immutable updates', () => {
     /const setField = \(field, value\) => \{\s*handleChange\('emailTemplates', updateEmailTemplate\(templates, templateKey, field, value\)\)/
   );
   assert.match(
-    editor,
+    unwrapSource(editor),
     /handleChange\('emailTemplates', updateEmailTemplate\(templates, templateKey, field, defaults\[field\]\)\)/
   );
   for (const field of ['subject', 'html', 'text']) {
@@ -91,7 +92,13 @@ test('template editors use DS colours, no emoji, translated variables and a conf
     editor,
     /<ConfirmAction\b[\s\S]*?settings\.email\.templates\.loadDefault\.confirmTitle/
   );
-  assert.match(editor, /placeholder=\{t\('settings\.email\.templates\.html\.placeholder'/);
-  assert.match(editor, /placeholder=\{t\('settings\.email\.templates\.text\.placeholder'/);
+  assert.match(
+    unwrapSource(editor),
+    /placeholder=\{t\('settings\.email\.templates\.html\.placeholder'/
+  );
+  assert.match(
+    unwrapSource(editor),
+    /placeholder=\{t\('settings\.email\.templates\.text\.placeholder'/
+  );
   assert.match(editor, /sandbox=""/, 'the preview iframe runs without scripts');
 });

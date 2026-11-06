@@ -11,6 +11,7 @@ const panelSource = readFileSync(
   'utf8'
 );
 import { readSettingsSource } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const settingsSource = readSettingsSource();
 const translations = Object.fromEntries(
@@ -86,7 +87,7 @@ test('Block user confirms before changing user access; Unblock user is not destr
   assert.match(unblock, /changeBlocked\(false\)/);
   assert.match(panelSource, /onClick=\{handleUnblock\}/);
   assert.match(
-    panelSource,
+    unwrapSource(panelSource),
     /postRequest\([^\n]+toggle-block`, \{ blocked \}\)/,
     'an explicit state, never a blind toggle'
   );

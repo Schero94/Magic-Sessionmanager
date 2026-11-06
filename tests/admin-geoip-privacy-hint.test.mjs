@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readSettingsFile } from './helpers/settingsSource.mjs';
 import { LOCALES, readCatalogue } from './helpers/settingsCatalogue.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const fragments = {
   en: ['Automatic', 'ipapi.co', 'IP addresses', 'Local database', 'Off'],
@@ -29,7 +30,7 @@ test('GeoIP provider field discloses remote lookups in its associated hint', () 
     ['disabled', 'Off'],
   ]) {
     assert.match(
-      field,
+      unwrapSource(field),
       new RegExp(
         `<SingleSelectOption value="${value}">\\{t\\('settings\\.config\\.provider\\.\\w+', '${label.replace('.', '\\.')}'\\)\\}`
       ),

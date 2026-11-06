@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const panel = readFileSync(
   new URL('../admin/src/components/SessionInfoPanel.jsx', import.meta.url),
@@ -164,7 +165,7 @@ test('block/unblock sends an explicit state and writes it into the open edit for
   }
   const handler = between('const changeBlocked = async (blocked) => {', '\n  };');
   assert.match(
-    handler,
+    unwrapSource(handler),
     /postRequest\(`\/magic-sessionmanager\/user\/\$\{userId\}\/toggle-block`, \{ blocked \}\)/
   );
   assert.match(between('const handleBlock = async () => {', '\n  };'), /changeBlocked\(true\)/);
@@ -184,7 +185,7 @@ test('block/unblock sends an explicit state and writes it into the open edit for
     'missing form context shows a reload notice'
   );
   assert.match(
-    panel,
+    unwrapSource(panel),
     /'panel\.form\.reloadNotice', 'Reload this page before saving, or the Blocked field will be overwritten\.'/
   );
 });
@@ -277,7 +278,7 @@ test('up to five open sessions, newest first, then "+n more" and "Show all sessi
   assert.match(panel, /const openSessions = getManageableSessions\(sessions\);/);
   assert.match(panel, /t\('panel\.sessions\.openTitle', 'Open sessions'\)/);
   assert.match(
-    panel,
+    unwrapSource(panel),
     /t\('panel\.sessions\.more', '\{count, plural, other \{\+# more\}\}', \{ count: hiddenCount \}\)/
   );
   assert.match(panel, /<TargetLink tag=\{NavLink\} to=\{buildUserSessionsHref\(document\)\}>/);

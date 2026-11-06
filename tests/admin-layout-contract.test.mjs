@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { readSettingsSource } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 // pages/Settings.jsx re-exports the split settings page (pages/Settings/*).
 const readAdminFile = (relativePath) =>
@@ -16,7 +17,7 @@ test('shared form fields use Strapi labels and hints with full-width controls', 
   assert.ok(/<Field\.Root\b/.test(source), 'Field.Root provides the Strapi field context');
   assert.ok(/<Field\.Label>/.test(source), 'each control has an associated visible label');
   assert.ok(
-    /<FieldHint><Field\.Hint\s*\/><Field\.Error\s*\/><\/FieldHint>/.test(source),
+    /<FieldHint><Field\.Hint\s*\/><Field\.Error\s*\/><\/FieldHint>/.test(unwrapSource(source)),
     'helper text and inline errors retain the Strapi Field.Hint/Field.Error primitives with shared readable styling'
   );
   const comboboxStyles = source.match(/\[role=['"]combobox['"]\]\s*\{([^}]*)\}/)?.[1] || '';
@@ -165,7 +166,7 @@ test('dashboard action bar sits above the list it filters, labelled and responsi
     'end reason filter has an accessible label'
   );
   assert.ok(
-    /<IconButton label=\{t\('homepage\.actions\.refresh'/.test(source),
+    /<IconButton label=\{t\('homepage\.actions\.refresh'/.test(unwrapSource(source)),
     'refresh is a labelled icon button'
   );
   assert.ok(

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const read = (path) => readFileSync(new URL(`../admin/src/${path}`, import.meta.url), 'utf8');
 const source = read('pages/HomePage.jsx');
@@ -31,11 +32,11 @@ test('End session runs only after ConfirmAction, locks the row, awaits refresh, 
   assert.match(handler, /await fetchSessions\(\)/);
   assert.match(handler, /notifications\.success\.sessionEnded', 'Session ended\.'/);
   assert.match(
-    handler,
+    unwrapSource(handler),
     /getErrorStatus\(err\) === 404[\s\S]*notifications\.error\.sessionGone', 'This session no longer exists\. The list was refreshed\.'/
   );
   assert.match(
-    handler,
+    unwrapSource(handler),
     /notifications\.error\.endSession', 'The session could not be ended\. Please try again\.'/
   );
   assert.match(handler, /throw err;/, 'a failure keeps the confirmation open for a retry');
@@ -51,11 +52,11 @@ test('Delete record confirms, prevents duplicate clicks, refreshes and reports b
   assert.ok(handler.indexOf('setDeletingSessionId(sessionId)') < handler.indexOf('del('));
   assert.match(handler, /await fetchSessions\(\)/);
   assert.match(
-    handler,
+    unwrapSource(handler),
     /notifications\.success\.recordDeleted', 'Session record deleted\. Its token stays revoked\.'/
   );
   assert.match(
-    handler,
+    unwrapSource(handler),
     /notifications\.error\.deleteRecord', 'The record could not be deleted\. Please try again\.'/
   );
   assert.match(handler, /throw err;/);
@@ -111,7 +112,7 @@ test('every row action names the session user (DUX-06, DUX-07, DASH-09)', () => 
     'homepage.actions.moreFor',
   ]) {
     assert.match(
-      actions,
+      unwrapSource(actions),
       new RegExp(`t\\('${key.replace(/\./g, '\\.')}', '[^']*\\{user\\}[^']*', \\{ user \\}\\)`),
       key
     );
@@ -131,7 +132,7 @@ test('DS grid cell keys: row buttons keep Enter/Space and dialog keys never move
   assert.match(actions, /onKeyDown=\{isolateActionKeys\}/);
   assert.match(actions, /shouldIsolateActionKey\(event\.key, fromInsideGroup\)/);
   assert.match(
-    actions,
+    unwrapSource(actions),
     /if \(shouldRedispatchEscape\(event\.key, fromInsideGroup\)\)[\s\S]*?ownerDocument\.dispatchEvent\(new KeyboardEvent\('keydown'/,
     'Escape still closes the confirmation and the More menu'
   );
@@ -170,8 +171,8 @@ test('the table has no fixed minimum width and lets user/device cells shrink (DU
 test('responsive tiers: full table when the list is wide enough, table without IP and Signed in from 768, cards below (I.1 item 10)', () => {
   assert.match(source, /const \{ isBelowSmall, isBelowMedium, isBelowLarge \} = useBreakpoint\(\)/);
   assert.match(
-    source,
-    /isBelowMedium\s*\?\s*<SessionCardList \{\.\.\.listProps\} \/>\s*:\s*<SessionTable \{\.\.\.listProps\} compact=\{shouldUseCompactTable\(listWidth, isBelowLarge\)\} \/>/
+    unwrapSource(source),
+    /isBelowMedium\s*\?\s*\(?<SessionCardList \{\.\.\.listProps\} \/>\)?\s*:\s*\(?<SessionTable \{\.\.\.listProps\} compact=\{shouldUseCompactTable\(listWidth, isBelowLarge\)\} \/>/
   );
   assert.match(
     source,
@@ -206,7 +207,7 @@ test('refresh keeps the list mounted, keeps data on a refresh error, and restore
   );
   assert.match(source, /busy: refreshing/);
   assert.match(
-    source,
+    unwrapSource(source),
     /pickFocusSessionId\(mutationSnapshotRef\.current, visibleIdsRef\.current, sessionId\)/
   );
   assert.match(actions, /fallbackFocusRef=\{focusFallback\}/);
@@ -266,11 +267,11 @@ test('header: Sessions title, end-user subtitle, Export menu and Analytics/Setti
     source,
     /'homepage\.subtitle',\s*'Sign-ins of your app’s users \(Users & Permissions\)\. Strapi administrators are not listed\.'/
   );
-  assert.match(source, /<LinkButton tag=\{Link\} to=\{ANALYTICS_PATH\}/);
-  assert.match(source, /<LinkButton tag=\{Link\} to=\{CONFIGURATION_PATH\}/);
+  assert.match(unwrapSource(source), /<LinkButton tag=\{Link\} to=\{ANALYTICS_PATH\}/);
+  assert.match(unwrapSource(source), /<LinkButton tag=\{Link\} to=\{CONFIGURATION_PATH\}/);
   assert.match(source, /const ANALYTICS_PATH = `\/settings\/\$\{pluginId\}\/analytics`/);
   assert.match(
-    source,
+    unwrapSource(source),
     /homepage\.export\.csv', '\{count, plural, one \{Export # session as CSV\} other \{Export # sessions as CSV\}\}'/
   );
   assert.match(source, /homepage\.export\.csvTruncated'/);
@@ -286,7 +287,7 @@ test('truncation alert, Last updated line and polite caption (IA D1.2, D1.5, D1.
   assert.match(source, /homepage\.lastUpdated', 'Last updated \{time\}'/);
   assert.match(source, /aria-live="polite"\s+data-session-caption=""/);
   assert.match(
-    source,
+    unwrapSource(source),
     /homepage\.caption', '\{from, number\}–\{to, number\} of \{total, plural, one \{# session\} other \{# sessions\}\}'/
   );
 });
@@ -305,7 +306,7 @@ test('empty, no-results and error states follow IA G and use plain strings (DUX-
   const states = source.match(/<EmptyStateLayout\b[\s\S]*?\n\s*\/>/g) || [];
   assert.equal(states.length, 2);
   for (const state of states) {
-    assert.match(state, /content=\{t\('homepage\.(?:noResults|empty)\.description'/);
+    assert.match(unwrapSource(state), /content=\{t\('homepage\.(?:noResults|empty)\.description'/);
   }
   assert.match(source, /'No sessions match your search or filter\.'/);
   assert.match(source, /'No sessions yet\. Sessions appear here when users of your app sign in\.'/);
@@ -342,7 +343,7 @@ test('status badge second line: Last active, Not used for, reason with end time 
     'the second line is neutral, never green'
   );
   assert.match(
-    badge,
+    unwrapSource(badge),
     /getTranslation\('common\.status\.nativeSession'\), defaultMessage: 'Strapi session'/
   );
 });
@@ -358,7 +359,7 @@ test('four clickable KPI cards set the status filter (IA D1.4, I.1 item 6)', () 
     assert.match(source, new RegExp(`\\{\\.\\.\\.statusCard\\('${status}'\\)\\}`));
   }
   assert.match(
-    source,
+    unwrapSource(source),
     /homepage\.stats\.usersOnline', '\{count, plural, one \{# user online\} other \{# users online\}\}'/
   );
   assert.match(
@@ -435,5 +436,8 @@ test('mobile pass: cards fill the list, compact Status wraps, header links fit o
   );
   // Ended detail wraps at the separator, never inside the date.
   assert.match(badge, /reason: <NoWrap key="reason">\{endReasonLabel\(session\)\}<\/NoWrap>/);
-  assert.match(badge, /\? <NoWrap key="ended-at">\{formatDate\(endedAt\)\}<\/NoWrap>/);
+  assert.match(
+    unwrapSource(badge),
+    /\? \(?<NoWrap key="ended-at">\{formatDate\(endedAt\)\}<\/NoWrap>/
+  );
 });

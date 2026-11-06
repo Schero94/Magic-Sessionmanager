@@ -7,6 +7,7 @@ const licenseSource = readFileSync(
   'utf8'
 );
 import { readSettingsFile } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const settingsSource = readSettingsFile('EncryptionKeyCard.jsx');
 
@@ -52,7 +53,7 @@ test('license download filename does not disclose a key prefix', () => {
 
 test('encryption key remains masked in the .env preview until the show control is enabled', () => {
   assert.match(
-    settingsSource,
+    unwrapSource(settingsSource),
     /formatEnvLine\(ENCRYPTION_KEY_ENV_NAME, showEncryptionKey\s*\?\s*encryptionKey\s*:\s*maskSensitiveValue\(encryptionKey\)\)/
   );
   assert.doesNotMatch(settingsSource, /SESSION_ENCRYPTION_KEY=\{encryptionKey\}/);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { readSettingsFile, readSettingsSource } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const settingsSource = readSettingsSource();
 const formFieldSource = readFileSync(
@@ -27,7 +28,10 @@ test('template editors are DS Textareas connected to their labels, hints and err
     formFieldSource,
     /<Field\.Root[^>]*id=\{id\}[^>]*hint=\{description\}[^>]*error=\{error \|\| undefined\}/
   );
-  assert.match(formFieldSource, /<FieldHint><Field\.Hint \/><Field\.Error \/><\/FieldHint>/);
+  assert.match(
+    unwrapSource(formFieldSource),
+    /<FieldHint><Field\.Hint \/><Field\.Error \/><\/FieldHint>/
+  );
 });
 
 test('webhook URLs are masked single-line inputs with a reveal toggle and inline validation (SET-15, IA I.1-22)', () => {

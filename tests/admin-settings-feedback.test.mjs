@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readSettingsFile } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const hook = readSettingsFile('hooks/useSettingsForm.js');
 const handler = (name) => {
@@ -30,7 +31,7 @@ test('Save sends preserved keys, names adjusted fields and keeps the draft on fa
   );
   assert.match(save, /t\('notifications\.success\.saved', 'Settings saved\.'\)/);
   assert.match(
-    save,
+    unwrapSource(save),
     /t\('settings\.config\.feedback\.saveError', 'Settings could not be saved\. Your changes are still in the form\.'\)/
   );
   const catchBlock = save.slice(save.indexOf('} catch (err) {'));
@@ -90,7 +91,7 @@ test('GeoIP update names edition and build date, and shows the server message on
   assert.match(update, /post\(`\/\$\{pluginId\}\/geoip\/update`, \{ force \}\)/);
   assert.match(update, /'GeoIP database updated: \{edition\}, built \{date\}\.'/);
   assert.match(
-    update,
+    unwrapSource(update),
     /getServerMessage\(err\)\s*\|\| t\('settings\.config\.feedback\.geoipUpdateError'/
   );
   const card = readSettingsFile('GeoIpDatabaseCard.jsx');
@@ -103,15 +104,15 @@ test('GeoIP update names edition and build date, and shows the server message on
     /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(true\), forceRef\)\}[\s\S]*?t\('settings\.config\.database\.force', 'Force download'\)/
   );
   assert.match(
-    card,
-    /disabled=\{databaseDisabled \|\| geoIp\.updating \|\| !geoIpStatus\?\.hasCredentials \|\| hasChanges\}/
+    unwrapSource(card),
+    /disabled=\{\s*databaseDisabled \|\| geoIp\.updating \|\| !geoIpStatus\?\.hasCredentials \|\| hasChanges\s*\}/
   );
 });
 
 test('the encryption key copy says what to do next (IA E.2)', () => {
   const card = readSettingsFile('EncryptionKeyCard.jsx');
   assert.match(
-    card,
+    unwrapSource(card),
     /formatEnvLine\(ENCRYPTION_KEY_ENV_NAME, encryptionKey\),\s*t\('settings\.config\.token\.key\.copied', 'Copied\. Add it to your server environment and restart Strapi\.'\)/
   );
   assert.match(

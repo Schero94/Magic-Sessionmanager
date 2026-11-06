@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { readSettingsSource } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 // The settings page is split into pages/Settings/* (tabs, cards, hook).
 const settingsSource = readSettingsSource();
@@ -102,7 +103,11 @@ test('EmptyStateLayout descriptions do not nest paragraph elements', () => {
       homePageSource.lastIndexOf('<EmptyStateLayout', messagePosition),
       messagePosition
     );
-    assert.match(before, /content=\{t\('$/, `${messageId} is passed as a plain string`);
+    assert.match(
+      unwrapSource(before),
+      /content=\{t\('$/,
+      `${messageId} is passed as a plain string`
+    );
   }
 });
 

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const source = readFileSync(new URL('../admin/src/pages/Analytics.jsx', import.meta.url), 'utf8');
 
@@ -193,7 +194,7 @@ test('the empty state uses the native Strapi illustration, not a text-sized icon
     /icon=\{<EmptyDocuments width="16rem" height="8\.8rem" aria-hidden="true" \/>\}/
   );
   assert.match(
-    empty,
+    unwrapSource(empty),
     /analytics\.empty', 'No sessions to analyse yet\. Analytics appear after the first sign-ins\.'/
   );
 });

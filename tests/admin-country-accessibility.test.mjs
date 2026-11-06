@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { readSettingsFile } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 // countries.js is an ES module inside a CommonJS package; load it as ESM text.
 const countriesSource = readFileSync(
@@ -22,7 +23,7 @@ test('each country is a DS Tag whose remove button has a localized name without 
   assert.match(section, /<Tag\b/);
   assert.match(section, /icon=\{<Cross aria-hidden focusable=\{false\} \/>\}/);
   assert.match(
-    section,
+    unwrapSource(section),
     /label=\{t\('settings\.geofencing\.removeCountry', 'Remove \{country\}', \{ country: getCountryName\(code, locale\) \|\| code \}\)\}/
   );
   assert.match(section, /onClick=\{\(\) => removeCode\(code\)\}/);
@@ -67,7 +68,7 @@ test('country rule mode is a labelled DS Radio group with confirmation before a 
   assert.match(source, /<Radio\.Item value="blocklist">/);
   assert.match(source, /if \(impact\.confirm\) \{\s*setPendingMode\(requestedMode\)/);
   assert.match(
-    source,
+    unwrapSource(source),
     /<ConfirmDialog\b[\s\S]*?t\('settings\.config\.countries\.switch\.title', 'Switch to \{mode\}\?', \{ mode: modeLabels\[pendingMode\] \?\? '' \}\)/
   );
   assert.match(

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { readSettingsSource } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 const readAdminFile = (relativePath) =>
   relativePath === 'pages/Settings.jsx'
@@ -60,7 +61,7 @@ test('session detail values use semantic labels and wrap long content safely', (
   // Dates use the admin locale; device facts come from the shared presentation, names only (I.1 item 8).
   assert.match(modal, /formatDate\(value\)/);
   assert.match(modal, /getDevicePresentation\(session\)/);
-  assert.match(modal, /value: device\.browser \}/);
+  assert.match(unwrapSource(modal), /value: device\.browser \}/);
   assert.doesNotMatch(modal, /device\.browserVersion/);
   assert.doesNotMatch(modal, /toLocaleString\(/);
   // No extra body padding on top of the DS modal insets (DASH-08), no custom px sizes.
@@ -98,7 +99,7 @@ test('session detail dialog: state sentence, header status, copyable record ID, 
   assert.match(modal, /<Modal\.Title>[\s\S]*?<\/Modal\.Title>\s*<StatusBadge\b/);
   assert.match(modal, /'modal\.state\.active', 'Active\. Last request \{time\}\.'/);
   assert.match(
-    modal,
+    unwrapSource(modal),
     /<Alert variant="warning"[\s\S]*?'modal\.state\.idle', 'Not used for \{minutes\} min\. It ends on its next request or at the next idle check\.'/
   );
   assert.match(modal, /'modal\.state\.ended', 'Ended \{endedAt\} · \{reason\}\.'/);
@@ -108,11 +109,11 @@ test('session detail dialog: state sentence, header status, copyable record ID, 
     'the reason definition follows the sentence'
   );
   assert.match(
-    modal,
+    unwrapSource(modal),
     /'modal\.state\.maxAgeNote', 'Sessions older than the maximum session age end on their next request\.'/
   );
   assert.match(modal, /const \{ copy \} = useClipboard\(\)/);
-  assert.match(modal, /<IconButton label=\{t\('modal\.actions\.copyId'/);
+  assert.match(unwrapSource(modal), /<IconButton label=\{t\('modal\.actions\.copyId'/);
   assert.match(modal, /modal\.copy\.success/);
   assert.match(modal, /modal\.copy\.error/);
   assert.doesNotMatch(modal, /vpnWarning|\[WARNING\]/);

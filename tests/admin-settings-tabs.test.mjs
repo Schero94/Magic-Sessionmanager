@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { readSettingsFile, readSettingsSource } from './helpers/settingsSource.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 import {
   SETTINGS_TAB_IDS,
   SETTINGS_TAB_LABELS,
@@ -152,7 +153,7 @@ test('tabs are deep-linkable with ?tab= without triggering the unsaved-changes B
 test('header: title, subtitle, Save and a confirmed Discard changes (IA D5.1, E.2, I.1-17)', () => {
   assert.match(page, /t\('settings\.config\.title', 'Session Manager configuration'\)/);
   assert.match(
-    page,
+    unwrapSource(page),
     /t\('settings\.config\.subtitle', 'Applies to all end-user sessions of this Strapi instance\.'\)/
   );
   assert.match(page, /primaryAction=\{/);
@@ -209,7 +210,7 @@ test('loading uses Page.Loading and a load failure hides the form (IA G, I.1-20)
     'the form is not rendered after a failed load'
   );
   assert.match(
-    errorView,
+    unwrapSource(errorView),
     /settings\.config\.load\.error', 'Settings could not be loaded\. Nothing can be saved until they load\.'/
   );
   assert.match(errorView, /onClick=\{form\.fetchSettings\}/);
@@ -218,7 +219,7 @@ test('loading uses Page.Loading and a load failure hides the form (IA G, I.1-20)
 
 test('footer note states where settings live and when other processes apply them (IA D5.5, I.1-23)', () => {
   assert.match(
-    page,
+    unwrapSource(page),
     /t\('settings\.config\.footer', 'Saved in the database\. Other server processes apply changes within 30 seconds\.'\)/
   );
   assert.ok(
@@ -459,7 +460,7 @@ test('read-only cards explain rejected sessions and refused sign-ins (IA I.1-21)
   assert.match(sessions, /header: 'X-Session-Terminated-Reason'/);
   for (const code of ['logout', 'manual', 'idle', 'expired', 'blocked']) {
     assert.match(
-      sessions,
+      unwrapSource(sessions),
       new RegExp(`\\['${code}', 'settings\\.config\\.rejected\\.reason\\.${code}'`),
       code
     );

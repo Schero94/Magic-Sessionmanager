@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import { readSettingsSource } from './helpers/settingsSource.mjs';
 import { LOCALES, readCatalogue } from './helpers/settingsCatalogue.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
 
 // pages/Settings.jsx re-exports the split settings page (pages/Settings/*).
 const readAdminFile = (relativePath) =>
@@ -129,7 +130,7 @@ test('session detail section headings use the Strapi Typography tag prop', () =>
   // Technical details is a collapsed DS Accordion (IA D2.7).
   assert.match(source, /<Typography variant="delta" tag="h3"/);
   assert.equal((source.match(/<DetailSection\b/g) || []).length, 4);
-  assert.match(source, /<Accordion\.Trigger>\{t\('modal\.section\.technical'/);
+  assert.match(unwrapSource(source), /<Accordion\.Trigger>\{t\('modal\.section\.technical'/);
   assert.doesNotMatch(source, /<Typography[^>]*tag="h2"/);
   assert.doesNotMatch(source, /<Typography[^>]*as="h[23]"/);
 });
@@ -203,7 +204,7 @@ test('geofencing country controls wrap without fixed-width mobile overflow', () 
     'picker and code field share a responsive grid'
   );
   assert.match(
-    source,
+    unwrapSource(source),
     /<ChipList ref=\{chipListRef\} tag="ul" gap=\{2\} wrap="wrap"/,
     'country chips wrap'
   );
