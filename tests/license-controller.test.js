@@ -177,6 +177,20 @@ test('manual license creation validates fields and stores the fake-provider resu
   assert.equal(calls[0][0], 'createLicense');
 });
 
+test('manual license creation rejects malformed identity fields without calling the provider', async () => {
+  for (const body of [
+    { email: {}, firstName: 'Test', lastName: 'Owner' },
+    { email: 'owner@example.invalid', firstName: '   ', lastName: 'Owner' },
+    { email: 'owner@example.invalid', firstName: 'Test', lastName: ['Owner'] },
+  ]) {
+    const { controller, ctx, calls } = createEndpointHarness();
+    ctx.request.body = body;
+    await controller.createAndActivate(ctx);
+    assert.equal(ctx.status, 400);
+    assert.deepEqual(calls, []);
+  }
+});
+
 test('license ping and store-key endpoints use the fake provider and preserve the response contract', async () => {
   const { controller, ctx, calls, stored } = createEndpointHarness({
     initialLicenseKey: 'synthetic-license-key',

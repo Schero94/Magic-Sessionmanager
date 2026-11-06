@@ -5,7 +5,6 @@ import {
   Typography,
   Badge,
   Flex,
-  Alert,
   Button,
   Loader,
   Accordion,
@@ -23,6 +22,7 @@ import {
 import styled from 'styled-components';
 import pluginId from '../pluginId';
 import PluginPageLayout from '../components/PluginPageLayout';
+import Alert from '../components/PersistentAlert';
 import ReadableText from '../components/ReadableText';
 import { getTranslation } from '../utils/getTranslation';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';

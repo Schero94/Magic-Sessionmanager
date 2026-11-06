@@ -211,9 +211,10 @@ async function getPluginSettings(strapi) {
   } catch {
     // If the runtime policy cannot be read, do not silently fall back to the
     // relaxed static default. Keep the rest of static config available while
-    // requiring a matching session until the settings store recovers.
-    strapi.log.error(`[${PLUGIN_ID}] settings-loader: store read failed; strict session enforcement is enabled`);
-    storedSettings = { strictSessionEnforcement: true };
+    // requiring a matching session until the settings store recovers. A saved
+    // geolocation opt-out must also not be bypassed by the static defaults.
+    strapi.log.error(`[${PLUGIN_ID}] settings-loader: store read failed; strict session enforcement is enabled and geolocation is disabled`);
+    storedSettings = { strictSessionEnforcement: true, enableGeolocation: false };
   }
 
   const merged = { ...staticConfig, ...storedSettings };

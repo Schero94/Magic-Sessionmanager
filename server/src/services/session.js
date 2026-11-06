@@ -767,7 +767,8 @@ module.exports = ({ strapi }) => {
      *                                           still match before a
      *                                           single-session update.
      * @param {'logout'|'manual'|'idle'|'expired'|'blocked'} [params.reason='manual']
-     * @returns {Promise<{terminatedCount: number}>}
+     * @returns {Promise<{terminatedCount: number}>} Completed count; rejects if
+     *   active rows cannot be updated. Earlier updates may already be committed.
      */
     async terminateSession({
       sessionId,
@@ -941,7 +942,7 @@ module.exports = ({ strapi }) => {
 
             if (batchTerminated === 0) {
               log.warn('Could not terminate remaining active sessions for one user');
-              break;
+              throw new Error('Unable to terminate all requested sessions');
             }
           }
 
@@ -1453,7 +1454,8 @@ module.exports = ({ strapi }) => {
      * Removes all inactive session rows, retaining deny hashes for unexpired
      * access tokens. A failed hash write leaves its session row in place.
      *
-     * @returns {Promise<number>} Number of session rows removed
+     * @returns {Promise<number>} Number of rows removed; rejects if any row
+     *   fails. Other rows in the same batch may already have been removed.
      * @sideeffect Writes revocation records before deleting session rows
      */
     async deleteInactiveSessions() {
@@ -1462,7 +1464,6 @@ module.exports = ({ strapi }) => {
 
         let deletedCount = 0;
         const BATCH_SIZE = 100;
-        let consecutiveEmptyLoops = 0;
 
         while (true) {
           const batch = await strapi.documents(SESSION_UID).findMany({
@@ -1481,16 +1482,8 @@ module.exports = ({ strapi }) => {
           const successful = deleteResults.filter((r) => r.status === 'fulfilled').length;
           deletedCount += successful;
 
-          if (successful === 0) {
-            consecutiveEmptyLoops++;
-            if (consecutiveEmptyLoops >= 3) {
-              log.warn(
-                '[DELETE] No progress on 3 consecutive batches, aborting to prevent infinite loop'
-              );
-              break;
-            }
-          } else {
-            consecutiveEmptyLoops = 0;
+          if (deleteResults.some((result) => result.status === 'rejected')) {
+            throw new Error('Unable to remove all inactive sessions');
           }
 
           if (batch.length < BATCH_SIZE) break;

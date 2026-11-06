@@ -258,6 +258,22 @@ When Users & Permissions uses `jwtManagement: 'legacy-support'`, Magic Sessionma
 - ISP Provider
 - Coordinates (for map)
 
+IP geolocation is enabled by default and the default provider is `auto`.
+When no local database is available, `auto` sends the session IP address to
+ipapi.co for a lookup. If a local lookup fails, `auto` can also send the IP
+address to ipapi.co. With `geoLookupFailureMode: 'block'`, a failed local
+lookup does not fall back to ipapi.co. This setting does not prevent the
+remote lookup when no local database is available.
+
+To avoid remote IP lookups, choose `local-mmdb`, which uses a local database
+and does not fall back to ipapi.co. Choose `disabled` for no GeoIP lookup,
+or set `enableGeolocation: false` for no GeoIP lookup. These choices affect
+geolocation and can affect geofencing decisions when a lookup is unavailable.
+
+The MaxMind database download is a separate authenticated network request;
+the MaxMind database download does not send end-user session IP addresses.
+Local lookups use the downloaded database without contacting MaxMind.
+
 ### Local GeoIP Firewall (Recommended)
 
 For login blocking and city-level session display, use a local MaxMind
@@ -330,8 +346,8 @@ export default () => ({
 
 Provider options:
 - `local-mmdb`: local MaxMind-compatible database only
-- `auto`: use local database when configured, otherwise use the legacy remote provider
-- `ipapi`: legacy remote provider
+- `auto`: use a local database when available, with remote fallback as described above
+- `ipapi`: send the IP address to ipapi.co for a remote lookup
 - `disabled`: no GEOIP lookup
 
 Local City and Country databases both support country firewall rules. City
@@ -651,6 +667,10 @@ POST /magic-sessionmanager/user/:userId/terminate-all
 ```bash
 POST /magic-sessionmanager/user/:userId/toggle-block
 ```
+
+The request must include JSON `{ "blocked": true }` to block or `{ "blocked": false }` to unblock. This endpoint requires the plugin's admin access permission. Blocking also revokes the user's sessions. If revocation fails, the response is 500 and the user can remain blocked while some sessions remain active; retry the same `{ "blocked": true }` request to resume revocation. Repeating a completed request does not reverse its intended state. Different concurrent block and unblock requests are not serialized by this endpoint.
+
+**Migration:** Bodyless requests are rejected with 400 instead of toggling the current state. Update existing integrations to send the explicit desired boolean before upgrading. This is a breaking API change.
 
 ### Clean Inactive Sessions
 

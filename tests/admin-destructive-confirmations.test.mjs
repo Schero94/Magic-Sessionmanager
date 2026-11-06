@@ -38,6 +38,7 @@ test('block and unblock confirm before changing user access', () => {
 
   assert.ok(handler.indexOf('confirm(') >= 0);
   assert.ok(handler.indexOf('confirm(') < handler.indexOf('postRequest('));
+  assert.match(handler, /postRequest\([^\n]+\{\s*blocked:\s*!isBlocked\s*\}/);
 });
 
 test('inactive-session cleanup confirmation explains token revocation retention', () => {

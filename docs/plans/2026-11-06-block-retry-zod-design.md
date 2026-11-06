@@ -1,0 +1,7 @@
+# Retry-safe user blocking and Zod advisory
+
+The accepted contract change replaces the ambiguous bodyless toggle with an explicit boolean `blocked` in the existing admin POST request. Missing or non-boolean values return 400 and do not mutate state. Repeating `blocked: true` must retry revocation even if the user is already blocked; a failed revocation returns 500 and leaves the user blocked. Repeating `blocked: false` remains an explicit unblock. The admin panel sends the intended state and retains its confirmation and existing permission. Bodyless callers must migrate and are rejected, not silently toggled. Losing an acknowledgement or retrying one request no longer reverses its intended state.
+
+This does not serialize competing block and unblock requests from different administrators, prevent other Strapi user-update routes, or provide crash-recovery automation. Those require separate database and multi-process evidence and remain open. Session revocation may have partial effects on failure and must not be described as atomic. No user sessions outside a disposable synthetic host are touched.
+
+For the Zod advisory, inspect the current plugin and host dependency graphs, registry versions and upstream constraints. Never force a Strapi 4 downgrade, and do not claim a plugin-local override protects downstream consumers. A host-level override is acceptable only after the entire target graph, clean install, audit, build and relevant integration/UI regressions establish compatibility; otherwise retain the release blocker and report concrete evidence.

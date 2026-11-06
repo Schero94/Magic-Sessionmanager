@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useIntl } from 'react-intl';
 import styled from 'styled-components';
-import { Box, Typography, Flex, Badge, Button, Divider, Alert } from '@strapi/design-system';
+import { Box, Typography, Flex, Badge, Button, Divider } from '@strapi/design-system';
+import Alert from './PersistentAlert';
 import { Check, Cross, Monitor, Phone, Server, Clock, User, Information } from '@strapi/icons';
 import { useFetchClient, useNotification, useRBAC } from '@strapi/strapi/admin';
 import parseUserAgent from '../utils/parseUserAgent';
 import { getSessionStatus } from '../utils/sessionStatus.mjs';
+import { requireSessionList, requireSuccessfulMutation } from '../utils/adminResponse.mjs';
+import { formatSessionDateTime } from '../utils/sessionPresentation.mjs';
 import { getManageableSessions } from '../utils/sessionFilters.mjs';
 import { getTranslation } from '../utils/getTranslation';
 import pluginPermissions from '../permissions';
@@ -89,7 +92,7 @@ const MutedIcon = styled.div`
  * New Users & Permissions entries receive a save-first message until Strapi assigns an ID.
  */
 const SessionInfoPanel = ({ documentId, model, document }) => {
-  const { formatMessage } = useIntl();
+  const { formatMessage, locale } = useIntl();
   const { allowedActions: { canAccess }, isLoading: permissionsLoading } = useRBAC(pluginPermissions.access);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +120,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
       try {
         const { data } = await get(`/magic-sessionmanager/user/${userId}/sessions`);
         if (cancelled) return;
-        setSessions(getManageableSessions(data.data || []));
+        setSessions(getManageableSessions(requireSessionList(data)));
         setIsBlocked(document?.blocked || false);
       } catch (err) {
         if (!cancelled) setLoadError(true);
@@ -145,6 +148,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     setActionLoading(true);
     try {
       const response = await postRequest(`/magic-sessionmanager/user/${userId}/terminate-all`);
+      requireSuccessfulMutation(response.data);
       
       if (response.data?.success) {
         toggleNotification({
@@ -179,7 +183,8 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     
     setActionLoading(true);
     try {
-      const response = await postRequest(`/magic-sessionmanager/user/${userId}/toggle-block`);
+      const response = await postRequest(`/magic-sessionmanager/user/${userId}/toggle-block`, { blocked: !isBlocked });
+      requireSuccessfulMutation(response.data);
       
       if (response.data?.success) {
         const newBlockedStatus = response.data.blocked;
@@ -370,7 +375,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                       </Badge>
                       
                       <Typography variant="pi" textColor="neutral600">
-                        {deviceInfo.browser} on {deviceInfo.os}
+                        {t('panel.sessions.browserOnOs', '{browser} on {os}', { browser: deviceInfo.browser, os: deviceInfo.os })}
                       </Typography>
                       
                       <Divider />
@@ -385,12 +390,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                       <Flex gap={2} alignItems="center">
                         <MutedIcon><Clock width="14px" height="14px" /></MutedIcon>
                         <Typography variant="pi" textColor="neutral600">
-                          {new Date(session.loginTime).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          {formatSessionDateTime(session.loginTime, locale, unavailableValue)}
                         </Typography>
                       </Flex>
                       
@@ -410,7 +410,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               {sessions.length > 5 && (
                 <Box padding={3} background="primary100" hasRadius style={{ textAlign: 'center' }}>
                   <Typography variant="pi" textColor="primary600" fontWeight="semiBold">
-                    +{sessions.length - 5} {t('panel.sessions.more', 'more session')}{sessions.length - 5 !== 1 ? 's' : ''}
+                    {t('panel.sessions.more', '+{count} more {count, plural, one {session} other {sessions}}', { count: sessions.length - 5 })}
                   </Typography>
                 </Box>
               )}

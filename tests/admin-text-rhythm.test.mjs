@@ -19,10 +19,10 @@ test('readable copy has a shared measure, line-height, and paragraph rhythm', ()
 test('field hints use the same comfortable line-height and control spacing', () => {
   const source = readAdminFile('components/FormField.jsx');
 
-  assert.ok(/const FieldHint = styled\(Field\.Hint\)/.test(source), 'field hints have a shared style');
+  assert.ok(/const FieldHint = styled\.div/.test(source), 'field hints have a shared wrapper style');
   assert.ok(/FieldHint[\s\S]*?line-height:\s*1\.6/.test(source), 'field hints use comfortable leading');
   assert.ok(/FieldHint[\s\S]*?margin-top:\s*8px/.test(source), 'field hints have space below controls');
-  assert.ok(/<FieldHint id=\{hintId\}>/.test(source), 'field descriptions use the shared style and an explicit id');
+  assert.ok(/<Field\.Root[^>]*hint=\{description\}/.test(source), 'field descriptions use the Strapi hint context');
 });
 
 test('settings render multi-idea copy as readable paragraphs', () => {

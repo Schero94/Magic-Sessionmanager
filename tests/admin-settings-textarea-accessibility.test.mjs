@@ -14,6 +14,6 @@ test('raw settings textareas are connected to their visible labels and descripti
     assert.match(textarea, /\baria-describedby=/, `textarea ${index + 1} needs its description association`);
   }
 
-  assert.match(formFieldSource, /const hintId = `\$\{id\}-hint`/);
-  assert.match(formFieldSource, /<FieldHint id=\{hintId\}/);
+  assert.match(formFieldSource, /<Field\.Root[^>]*id=\{id\}[^>]*hint=\{description\}/);
+  assert.match(formFieldSource, /<FieldHint><Field\.Hint\s*\/>/);
 });

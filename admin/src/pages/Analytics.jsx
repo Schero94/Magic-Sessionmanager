@@ -8,7 +8,6 @@ import {
   Flex,
   Loader,
   Badge,
-  Alert,
   Button,
   EmptyStateLayout,
 } from '@strapi/design-system';
@@ -20,7 +19,9 @@ import {
 } from '@strapi/icons';
 import pluginId from '../pluginId';
 import { computeSessionAnalytics } from '../utils/sessionAnalytics.mjs';
+import { requireSessionList } from '../utils/adminResponse.mjs';
 import PluginPageLayout from '../components/PluginPageLayout';
+import Alert from '../components/PersistentAlert';
 import ReadableText from '../components/ReadableText';
 import { getTranslation } from '../utils/getTranslation';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
@@ -37,6 +38,10 @@ const StatsGrid = styled.div`
   gap: 12px;
   min-width: 0;
   margin-bottom: 16px;
+
+  @media (max-width: 519px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 `;
 
 const StatCard = styled(Box)`
@@ -55,6 +60,7 @@ const StatCard = styled(Box)`
     max-width: none;
     margin: 0;
     line-height: 1.25;
+    overflow-wrap: anywhere;
   }
 
   && > p + p {
@@ -148,7 +154,7 @@ const AnalyticsPage = () => {
     setLoadError(false);
     try {
       const { data } = await get(`/${pluginId}/sessions`);
-      const sessions = data.data || [];
+      const sessions = requireSessionList(data);
       setAnalytics(computeSessionAnalytics(sessions));
     } catch (err) {
       setLoadError(true);

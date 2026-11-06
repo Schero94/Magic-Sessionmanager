@@ -12,6 +12,7 @@ const {
   getSessionCreationGraceMs,
 } = require('../utils/settings-loader');
 const { extractBearerToken } = require('../utils/extract-token');
+const { parseNativeSessionKey } = require('../utils/native-session-view');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
@@ -823,7 +824,10 @@ module.exports = {
         return ctx.forbidden('You can only terminate your own sessions');
       }
 
-      if (currentTokenHash && sessionToTerminate.tokenHash === currentTokenHash) {
+      if (
+        (isNativeSessionMode() && isCurrentNativeSession(sessionToTerminate, getCurrentNativeSessionId(ctx))) ||
+        (currentTokenHash && sessionToTerminate.tokenHash === currentTokenHash)
+      ) {
         return ctx.badRequest('Cannot terminate the current session. Use /logout instead.');
       }
 
@@ -894,12 +898,22 @@ module.exports = {
 
   /**
    * Terminates a specific session (admin action).
+   * A missing target returns 404; existing native-only rows remain supported.
    */
   async terminateSingleSession(ctx) {
     try {
       const { sessionId } = ctx.params;
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
-      await sessionService.terminateSession({ sessionId, reason: 'manual' });
+      let nativeTargetExists = false;
+      if (isNativeSessionMode() && sessionId?.startsWith(NATIVE_SESSION_KEY_PREFIX)) {
+        const nativeKey = parseNativeSessionKey(sessionId);
+        if (!nativeKey) return ctx.notFound('Session not found');
+        const sessions = await sessionService.getUserSessions(nativeKey.userDocumentId);
+        nativeTargetExists = !!findOwnedNativeSession(sessions, sessionId);
+        if (!nativeTargetExists) return ctx.notFound('Session not found');
+      }
+      const result = await sessionService.terminateSession({ sessionId, reason: 'manual' });
+      if (!nativeTargetExists && result?.terminatedCount === 0) return ctx.notFound('Session not found');
 
       ctx.body = {
         message: `Session ${sessionId} terminated`,
@@ -913,10 +927,17 @@ module.exports = {
 
   /**
    * Terminates ALL sessions for a specific user (admin action).
+   * Unknown numeric IDs and document IDs return 404 before revocation.
    */
   async terminateAllUserSessions(ctx) {
     try {
       const { userId } = ctx.params;
+      const numericId = /^\d+$/.test(userId) ? Number(userId) : null;
+      const user = await strapi.db.query(USER_UID).findOne({
+        where: numericId === null ? { documentId: userId } : { id: numericId },
+        select: ['id'],
+      });
+      if (!user) return ctx.notFound('User not found');
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
       await sessionService.terminateSession({ userId, reason: 'manual' });
 
@@ -1035,11 +1056,23 @@ module.exports = {
   },
 
   /**
-   * Toggles a user's blocked status and terminates their sessions on block.
+   * Sets an end user's requested access state. A repeated block also retries
+   * session revocation, including after an earlier partial failure.
+   *
+   * Requires an authenticated administrator with the plugin access permission.
+   * @route POST /magic-sessionmanager/user/:userId/toggle-block
+   * @param {object} ctx - Strapi context; body.blocked must be a boolean.
+   * @returns {Promise<void>} Writes the resulting state or a 400, 404 or 500 response.
+   * @sideeffect Updates the user and, when blocking, revokes their sessions. A
+   * failed revocation can leave the user blocked with partially active sessions.
    */
   async toggleUserBlock(ctx) {
     try {
       const { userId } = ctx.params;
+      const requestedBlocked = ctx.request?.body?.blocked;
+      if (typeof requestedBlocked !== 'boolean') {
+        return ctx.badRequest('A boolean blocked state is required');
+      }
 
       let userDocumentId = await resolveUserDocumentId(strapi, userId);
 
@@ -1064,7 +1097,7 @@ module.exports = {
         return ctx.notFound('User not found');
       }
 
-      const newBlockedStatus = !user.blocked;
+      const newBlockedStatus = requestedBlocked;
 
       await strapi.documents(USER_UID).update({
         documentId: userDocumentId,

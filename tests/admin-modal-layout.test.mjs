@@ -8,7 +8,7 @@ const readAdminFile = (relativePath) =>
 test('relaxed-mode warning title and body occupy separate full-width rows', () => {
   const settings = readAdminFile('pages/Settings.jsx');
 
-  assert.match(settings, /const RelaxedModeAlert = styled\(Alert\)/);
+  assert.match(settings, /const RelaxedModeAlert = styled\(DesignSystemAlert\)/);
   assert.match(settings, /\[role=['"]status['"]\]\s*>\s*p/);
   assert.match(settings, /flex:\s*0 0 100%/);
   assert.match(settings, /@media \(max-width: 519px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\) auto/);

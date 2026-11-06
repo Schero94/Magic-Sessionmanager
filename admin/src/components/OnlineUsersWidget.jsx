@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useIntl } from 'react-intl';
-import { Alert, Box, Button, Typography, Flex, Grid } from '@strapi/design-system';
+import { Box, Button, Typography, Flex, Grid } from '@strapi/design-system';
+import Alert from './PersistentAlert';
 import ReadableText from './ReadableText';
 import { Check, Cross, Clock, User } from '@strapi/icons';
 import { useFetchClient } from '@strapi/strapi/admin';
@@ -134,7 +135,7 @@ const OnlineUsersWidget = () => {
         <Alert
           variant="danger"
           title={t('widget.error.title', 'Session statistics could not be loaded')}
-          closeLabel=""
+          closeLabel={t('common.close', 'Close')}
           action={(
             <Button variant="secondary" onClick={() => { void fetchStats(); }}>
               {t('common.retry', 'Retry')}
@@ -157,7 +158,7 @@ const OnlineUsersWidget = () => {
             <Alert
               variant="warning"
               title={t('widget.partial.title', 'Some user counts are unavailable')}
-              closeLabel=""
+              closeLabel={t('common.close', 'Close')}
             >
               <ReadableText variant="pi" textColor="neutral700" tag="span">
                 {t('widget.partial.description', 'Session activity is shown, but total and blocked user counts could not be loaded.')}

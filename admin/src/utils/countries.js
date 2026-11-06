@@ -90,8 +90,15 @@ export const normalizeCountryCode = (raw) => {
  * @param {string} code
  * @returns {string}
  */
-export const formatCountry = (code) => {
+export const formatCountry = (code, locale = 'en') => {
   if (!code) return '';
   const match = COUNTRIES.find((c) => c.code === code);
-  return match ? `${match.flag} ${match.name} (${match.code})` : code;
+  if (!match) return code;
+  let name = match.name;
+  try {
+    name = new Intl.DisplayNames([locale], { type: 'region' }).of(code) || name;
+  } catch {
+    // Retain the existing English label when locale data is unavailable.
+  }
+  return `${match.flag} ${name} (${match.code})`;
 };

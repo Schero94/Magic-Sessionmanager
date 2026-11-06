@@ -9,7 +9,7 @@ import {
   SingleSelect,
   SingleSelectOption,
   Checkbox,
-  Alert,
+  Alert as DesignSystemAlert,
   TextInput,
   Tabs,
   Divider,
@@ -25,6 +25,8 @@ import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
 import { COUNTRIES, normalizeCountryCode, formatCountry } from '../utils/countries';
 import { areSettingsEqual } from '../utils/settingsEquality.mjs';
+import { updateEmailTemplate } from '../utils/emailTemplateDraft.mjs';
+import { requireSuccessfulMutation } from '../utils/adminResponse.mjs';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 import {
   getGeofencingField,
@@ -37,8 +39,25 @@ import PluginPageLayout from '../components/PluginPageLayout';
 import FormField from '../components/FormField';
 import ReadableText, { ReadableParagraphs } from '../components/ReadableText';
 import SettingsToggleRow from '../components/SettingsToggleRow';
+import Alert from '../components/PersistentAlert';
 
 // ================ STYLED COMPONENTS ================
+// Strapi 2.2.4 applies ellipsis to the trigger title. Allow it to reflow while
+// retaining the native button, caret, icon and keyboard behavior.
+const SettingsAccordionTrigger = styled(Accordion.Trigger)`
+  & > span:nth-child(2),
+  & > span:nth-child(2) > span:last-child {
+    min-width: 0;
+  }
+
+  & > span:nth-child(2) > span:last-child > span {
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+`;
+
 const Container = styled(Box)`
   width: 100%;
   min-width: 0;
@@ -106,7 +125,7 @@ const DangerTrashIcon = styled(Trash)`
   flex-shrink: 0;
 `;
 
-const RelaxedModeAlert = styled(Alert)`
+const RelaxedModeAlert = styled(DesignSystemAlert)`
   [role='status'] > p {
     flex: 0 0 100%;
     width: 100%;
@@ -406,7 +425,10 @@ const GeofencingPanel = ({
   settings,
   handleChange,
   t,
+  locale,
   geoIpStatus,
+  geoIpStatusError,
+  onRetryGeoIpStatus,
   geoIpCredentials,
   setGeoIpCredentials,
   onSaveGeoIpCredentials,
@@ -471,7 +493,7 @@ const GeofencingPanel = ({
           id="geoip-provider"
           name="geoIpProvider"
           label={t('settings.geofencing.provider.title', 'GeoIP Provider')}
-          description={t('settings.geofencing.provider.hint', 'Choose which source resolves approximate end-user session locations.')}
+          description={t('settings.geofencing.provider.hint', 'Auto uses a local MMDB if available. If the database is missing, or its lookup fails (unless lookup failure mode is Block), it can send the user\'s IP address to ipapi.co. The ipapi.co option sends IP addresses to that service. Local MMDB uses only local lookups; Disabled turns off GeoIP lookups.')}
         >
           <SingleSelect
             value={settings.geoIpProvider || 'auto'}
@@ -545,17 +567,25 @@ const GeofencingPanel = ({
                   {t('settings.geofencing.database.title', 'Local GeoIP Database (City recommended)')}
                 </Typography>
                 <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                  {geoIpStatus?.exists
+                  {geoIpStatus && (geoIpStatus.exists
                     ? t('settings.geofencing.database.exists', 'Database is installed locally. GeoLite2-City enables city-level lookup; Country remains supported.')
-                    : t('settings.geofencing.database.missing', 'No local database installed yet. GeoLite2-City is recommended for city-level lookup.')}
+                    : t('settings.geofencing.database.missing', 'No local database installed yet. GeoLite2-City is recommended for city-level lookup.'))}
                 </Typography>
               </Box>
-              <Badge backgroundColor={geoIpStatus?.exists ? 'success100' : 'warning100'}>
+              {geoIpStatus ? (
+              <Badge backgroundColor={geoIpStatus.exists ? 'success100' : 'warning100'}>
                 {geoIpStatus?.exists
                   ? t('settings.geofencing.database.installed', 'Installed')
                   : t('settings.geofencing.database.notInstalled', 'Missing')}
               </Badge>
+              ) : null}
             </Flex>
+
+            {geoIpStatusError && (
+              <Alert variant="danger" closeLabel={t('common.close', 'Close')} title={t('settings.geofencing.database.statusError', 'Could not load the database status. Try again.')}
+                action={<Button size="S" variant="secondary" onClick={onRetryGeoIpStatus}>{t('common.retry', 'Retry')}</Button>}
+              />
+            )}
 
             <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
               {t('settings.geofencing.database.path', 'Path')}: {geoIpStatus?.databasePath || settings.geoIpDatabasePath || 'data/magic-sessionmanager/geoip/GeoLite2-City.mmdb'}
@@ -634,7 +664,7 @@ const GeofencingPanel = ({
             </Flex>
 
             {hasChanges && (
-              <Alert variant="warning" closeLabel="" title="" onClose={() => {}}>
+              <Alert variant="warning" closeLabel={t('common.close', 'Close')} title="">
                 {t('settings.geofencing.database.saveFirst', 'Save settings before downloading so the server uses the latest database path.')}
               </Alert>
             )}
@@ -692,19 +722,17 @@ const GeofencingPanel = ({
               </Typography>
             ) : (
               activeList.map((code) => (
-                <Badge
+                <Button
                   key={code}
-                  onClick={settings.enableGeofencing ? () => removeCode(code) : undefined}
-                  style={{
-                    cursor: settings.enableGeofencing ? 'pointer' : 'not-allowed',
-                    padding: '6px 10px',
-                    background: mode === 'allowlist' ? '#DCFCE7' : '#FEE2E2',
-                    color: mode === 'allowlist' ? '#15803D' : '#B91C1C',
-                  }}
+                  variant="secondary"
+                  size="S"
+                  disabled={!settings.enableGeofencing}
+                  aria-label={t('settings.geofencing.removeCountry', 'Remove {country}', { country: formatCountry(code, locale) })}
+                  onClick={() => removeCode(code)}
                 >
-                  {formatCountry(code)}
-                  {settings.enableGeofencing ? '  ✕' : ''}
-                </Badge>
+                  {formatCountry(code, locale)}
+                  {settings.enableGeofencing ? '  ×' : ''}
+                </Button>
               ))
             )}
           </Flex>
@@ -730,7 +758,7 @@ const GeofencingPanel = ({
                   .filter((c) => !activeList.includes(c.code))
                   .map((c) => (
                     <SingleSelectOption key={c.code} value={c.code}>
-                      {c.flag} {c.name} ({c.code})
+                      {formatCountry(c.code, locale)}
                     </SingleSelectOption>
                   ))}
               </SingleSelect>
@@ -764,7 +792,7 @@ const GeofencingPanel = ({
 
       {!settings.enableGeofencing && (
         <Grid.Item col={12}>
-          <Alert variant="default" closeLabel="" title="" onClose={() => {}}>
+          <Alert variant="default" closeLabel={t('common.close', 'Close')} title="">
             {t(
               'settings.geofencing.disabled',
               'Geofencing is currently disabled. Enable it above to enforce the configured country list.'
@@ -775,7 +803,7 @@ const GeofencingPanel = ({
 
       {settings.enableGeofencing && !settings.enableGeolocation && (
         <Grid.Item col={12}>
-          <Alert variant="warning" closeLabel="" title="" onClose={() => {}}>
+          <Alert variant="warning" closeLabel={t('common.close', 'Close')} title="">
             {t(
               'settings.geofencing.needsGeolocation',
               'Geofencing requires Geolocation to be enabled (Security tab).'
@@ -788,7 +816,7 @@ const GeofencingPanel = ({
 };
 
 const SettingsPage = () => {
-  const { formatMessage } = useIntl();
+  const { formatMessage, locale } = useIntl();
   const { get, post, put } = useFetchClient();
   const { toggleNotification } = useNotification();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
@@ -805,6 +833,7 @@ const SettingsPage = () => {
     }
   };
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [activeTemplateTab, setActiveTemplateTab] = useState('suspiciousLogin');
@@ -812,6 +841,7 @@ const SettingsPage = () => {
   const [showEncryptionKey, setShowEncryptionKey] = useState(false);
   const [maxFailedLoginInputRevision, setMaxFailedLoginInputRevision] = useState(0);
   const [geoIpStatus, setGeoIpStatus] = useState(null);
+  const [geoIpStatusError, setGeoIpStatusError] = useState(false);
   const [geoIpCredentials, setGeoIpCredentials] = useState({ accountId: '', licenseKey: '' });
   const [geoIpUpdating, setGeoIpUpdating] = useState(false);
   const [geoIpSavingCredentials, setGeoIpSavingCredentials] = useState(false);
@@ -871,9 +901,14 @@ const SettingsPage = () => {
    */
   const fetchSettings = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       // Load settings from backend API
       const response = await get(`/${pluginId}/settings`);
+
+      if (!response?.data?.settings || typeof response.data.settings !== 'object' || Array.isArray(response.data.settings)) {
+        throw new Error('Invalid settings response');
+      }
 
       if (response?.data?.settings) {
         const loadedSettings = response.data.settings;
@@ -905,21 +940,10 @@ const SettingsPage = () => {
         setSettings(nextSettings);
         setSavedSettings(nextSettings);
         await fetchGeoIpStatus();
-      } else {
-        const nextSettings = { ...settings, emailTemplates: getDefaultTemplates() };
-        setSettings(nextSettings);
-        setSavedSettings(nextSettings);
-        await fetchGeoIpStatus();
       }
     } catch (err) {
       logSafeAdminError('settings.load', err);
-      toggleNotification({
-        type: 'warning',
-        message: t('notifications.warning.settingsLoad', 'Could not load settings from server. Using defaults.'),
-      });
-      // Fallback to default settings
-      const nextSettings = { ...settings, emailTemplates: getDefaultTemplates() };
-      setSettings(nextSettings);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -931,17 +955,22 @@ const SettingsPage = () => {
    * @returns {Promise<void>}
    */
   const fetchGeoIpStatus = async () => {
+    setGeoIpStatus(null);
+    setGeoIpStatusError(false);
     try {
       const response = await get(`/${pluginId}/geoip/status`);
-      if (response?.data?.status) {
-        const status = response.data.status;
+        const status = response?.data?.status;
+        if (typeof status?.exists !== 'boolean' || typeof status?.hasCredentials !== 'boolean') {
+          throw new Error('Invalid GeoIP status response');
+        }
         setGeoIpStatus(status);
         setGeoIpCredentials(prev => ({
           accountId: prev.accountId || status.accountId || '',
           licenseKey: '',
         }));
-      }
     } catch (err) {
+      setGeoIpStatus(null);
+      setGeoIpStatusError(true);
       logSafeAdminError('settings.geoIpStatus', err);
     }
   };
@@ -1008,6 +1037,7 @@ const SettingsPage = () => {
     setGeoIpSavingCredentials(true);
     try {
       const response = await put(`/${pluginId}/geoip/credentials`, geoIpCredentials);
+      requireSuccessfulMutation(response.data);
       if (response?.data?.success) {
         toggleNotification({
           type: 'success',
@@ -1038,6 +1068,7 @@ const SettingsPage = () => {
     setGeoIpUpdating(true);
     try {
       const response = await post(`/${pluginId}/geoip/update`, { force });
+      requireSuccessfulMutation(response.data);
       if (response?.data?.success) {
         toggleNotification({
           type: 'success',
@@ -1113,6 +1144,27 @@ const SettingsPage = () => {
     );
   }
 
+  if (loadError) {
+    return (
+      <PluginPageLayout
+        headingId="magic-sessionmanager-settings-title"
+        title={t('settings.title', 'Session Manager Settings')}
+        subtitle={t('settings.subtitle', 'Configure session tracking, security, and notifications')}
+      >
+        <Alert
+          variant="danger"
+          title={t('settings.error.loadTitle', 'Settings could not be loaded')}
+          closeLabel={t('common.close', 'Close')}
+          action={<Button variant="secondary" onClick={fetchSettings}>{t('common.retry', 'Retry')}</Button>}
+        >
+          <ReadableText variant="pi" textColor="neutral700" tag="span">
+            {t('settings.error.loadDescription', 'Try again before changing settings.')}
+          </ReadableText>
+        </Alert>
+      </PluginPageLayout>
+    );
+  }
+
   return (
     <PluginPageLayout
       headingId="magic-sessionmanager-settings-title"
@@ -1150,12 +1202,12 @@ const SettingsPage = () => {
           {/* General Settings */}
           <Accordion.Item value="general">
             <Accordion.Header>
-              <Accordion.Trigger
+              <SettingsAccordionTrigger
                 icon={Cog}
                 description={t('settings.general.description', 'Basic session tracking configuration')}
               >
                 {t('settings.general.title', 'General Settings')}
-              </Accordion.Trigger>
+              </SettingsAccordionTrigger>
             </Accordion.Header>
             <Accordion.Content>
               <Box padding={{ initial: 3, small: 6 }}>
@@ -1238,8 +1290,8 @@ const SettingsPage = () => {
                       name="retentionDays"
                       label={t('settings.general.retention.title', 'Retention Period')}
                       description={settings.retentionDays === -1
-                        ? t('settings.general.retention.hintNever', 'Old sessions deleted after never')
-                        : t('settings.general.retention.hint', 'Old sessions deleted after {days}', { days: `${settings.retentionDays} days` })}
+                        ? t('settings.general.retention.hintNever', 'Old sessions are never deleted')
+                        : t('settings.general.retention.hint', 'Old sessions are deleted after {days, plural, one {# day} other {# days}}', { days: settings.retentionDays })}
                     >
                       <SingleSelect
                         value={String(settings.retentionDays)}
@@ -1337,12 +1389,12 @@ const SettingsPage = () => {
           {/* Security Settings */}
           <Accordion.Item value="security">
             <Accordion.Header>
-              <Accordion.Trigger
+              <SettingsAccordionTrigger
                 icon={Shield}
                 description={t('settings.security.description', 'Security policies and threat protection')}
               >
                 {t('settings.security.title', 'Security Settings')}
-              </Accordion.Trigger>
+              </SettingsAccordionTrigger>
             </Accordion.Header>
             <Accordion.Content>
               <Box padding={{ initial: 3, small: 6 }}>
@@ -1644,12 +1696,12 @@ const SettingsPage = () => {
           {/* Geofencing */}
           <Accordion.Item value="geofencing">
             <Accordion.Header>
-              <Accordion.Trigger
+              <SettingsAccordionTrigger
                 icon={Shield}
                 description={t('settings.geofencing.description', 'Allow or block sign-ins by country')}
               >
                 {t('settings.geofencing.title', 'Geofencing')}
-              </Accordion.Trigger>
+              </SettingsAccordionTrigger>
             </Accordion.Header>
             <Accordion.Content>
               <Box padding={{ initial: 3, small: 6 }}>
@@ -1657,7 +1709,10 @@ const SettingsPage = () => {
                   settings={settings}
                   handleChange={handleChange}
                   t={t}
+                  locale={locale}
                   geoIpStatus={geoIpStatus}
+                  geoIpStatusError={geoIpStatusError}
+                  onRetryGeoIpStatus={fetchGeoIpStatus}
                   geoIpCredentials={geoIpCredentials}
                   setGeoIpCredentials={setGeoIpCredentials}
                   onSaveGeoIpCredentials={handleSaveGeoIpCredentials}
@@ -1673,12 +1728,12 @@ const SettingsPage = () => {
           {/* Email Notifications */}
           <Accordion.Item value="email">
               <Accordion.Header>
-                <Accordion.Trigger
+                <SettingsAccordionTrigger
                   icon={Mail}
                   description={t('settings.email.description', 'Email alerts for security events')}
                 >
                   {t('settings.email.title', 'Email Notifications')}
-                </Accordion.Trigger>
+                </SettingsAccordionTrigger>
               </Accordion.Header>
               <Accordion.Content>
                 <Box padding={{ initial: 3, small: 6 }}>
@@ -1786,8 +1841,7 @@ const SettingsPage = () => {
                                   <TextInput
                                     value={settings.emailTemplates[templateKey].subject}
                                     onChange={(e) => {
-                                      const newTemplates = { ...settings.emailTemplates };
-                                      newTemplates[templateKey].subject = e.target.value;
+                                      const newTemplates = updateEmailTemplate(settings.emailTemplates, templateKey, 'subject', e.target.value);
                                       handleChange('emailTemplates', newTemplates);
                                     }}
                                     placeholder={t('settings.email.templates.subjectPlaceholder', 'Enter email subject...')}
@@ -1851,8 +1905,7 @@ const SettingsPage = () => {
                                     size="S"
                                     onClick={() => {
                                       const defaultTemplates = getDefaultTemplates();
-                                      const newTemplates = { ...settings.emailTemplates };
-                                      newTemplates[templateKey].html = defaultTemplates[templateKey].html;
+                                      const newTemplates = updateEmailTemplate(settings.emailTemplates, templateKey, 'html', defaultTemplates[templateKey].html);
                                       handleChange('emailTemplates', newTemplates);
                                       toggleNotification({ type: 'success', message: t('notifications.success.defaultLoaded', 'Default template loaded!') });
                                     }}
@@ -1892,8 +1945,7 @@ const SettingsPage = () => {
                                       aria-describedby={`email-template-html-${templateKey}-hint`}
                                       value={settings.emailTemplates[templateKey].html}
                                       onChange={(e) => {
-                                        const newTemplates = { ...settings.emailTemplates };
-                                        newTemplates[templateKey].html = e.target.value;
+                                        const newTemplates = updateEmailTemplate(settings.emailTemplates, templateKey, 'html', e.target.value);
                                         handleChange('emailTemplates', newTemplates);
                                       }}
                                       style={{
@@ -1909,7 +1961,6 @@ const SettingsPage = () => {
                                         resize: 'vertical',
                                         width: '100%',
                                         boxSizing: 'border-box',
-                                        outline: 'none',
                                         margin: 0,
                                         display: 'block',
                                         overflow: 'auto'
@@ -1980,8 +2031,7 @@ const SettingsPage = () => {
                                     size="S"
                                     onClick={() => {
                                       const defaultTemplates = getDefaultTemplates();
-                                      const newTemplates = { ...settings.emailTemplates };
-                                      newTemplates[templateKey].text = defaultTemplates[templateKey].text;
+                                      const newTemplates = updateEmailTemplate(settings.emailTemplates, templateKey, 'text', defaultTemplates[templateKey].text);
                                       handleChange('emailTemplates', newTemplates);
                                       toggleNotification({ type: 'success', message: t('notifications.success.defaultLoaded', 'Default template loaded!') });
                                     }}
@@ -2021,8 +2071,7 @@ const SettingsPage = () => {
                                       aria-describedby={`email-template-text-${templateKey}-hint`}
                                       value={settings.emailTemplates[templateKey].text}
                                       onChange={(e) => {
-                                        const newTemplates = { ...settings.emailTemplates };
-                                        newTemplates[templateKey].text = e.target.value;
+                                        const newTemplates = updateEmailTemplate(settings.emailTemplates, templateKey, 'text', e.target.value);
                                         handleChange('emailTemplates', newTemplates);
                                       }}
                                       style={{
@@ -2038,7 +2087,6 @@ const SettingsPage = () => {
                                         resize: 'vertical',
                                         width: '100%',
                                         boxSizing: 'border-box',
-                                        outline: 'none',
                                         margin: 0,
                                         display: 'block',
                                         overflow: 'auto'
@@ -2075,12 +2123,12 @@ const SettingsPage = () => {
           {/* Webhooks */}
           <Accordion.Item value="webhooks">
               <Accordion.Header>
-                <Accordion.Trigger
+                <SettingsAccordionTrigger
                   icon={Code}
                   description={t('settings.webhooks.description', 'Discord & Slack integration')}
                 >
                   {t('settings.webhooks.title', 'Webhook Integration')}
-                </Accordion.Trigger>
+                </SettingsAccordionTrigger>
               </Accordion.Header>
               <Accordion.Content>
                 <Box padding={{ initial: 3, small: 6 }}>
@@ -2124,7 +2172,6 @@ const SettingsPage = () => {
                                   width: '100%',
                                   padding: '14px 18px',
                                   border: 'none',
-                                  outline: 'none',
                                   fontFamily: 'Monaco, Consolas, monospace',
                                   fontSize: '14px',
                                   lineHeight: '1.6',
@@ -2165,7 +2212,6 @@ const SettingsPage = () => {
                                   width: '100%',
                                   padding: '14px 18px',
                                   border: 'none',
-                                  outline: 'none',
                                   fontFamily: 'Monaco, Consolas, monospace',
                                   fontSize: '14px',
                                   lineHeight: '1.6',

@@ -39,14 +39,16 @@ const FieldControl = styled.div`
   }
 `;
 
-const FieldHint = styled(Field.Hint)`
-  display: block;
+const FieldHint = styled.div`
   width: 100%;
   min-width: 0;
   max-width: 72ch;
   margin-top: 8px;
-  line-height: 1.6;
-  text-wrap: pretty;
+
+  & > p {
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
 `;
 
 /**
@@ -58,14 +60,12 @@ const FieldHint = styled(Field.Hint)`
  * @returns {import('react').ReactElement} A responsive, accessible form field.
  */
 const FormField = ({ id, name = id, label, description, children }) => {
-  const hintId = `${id}-hint`;
-
   return (
     <FieldFrame>
-      <Field.Root id={id} name={name}>
+      <Field.Root id={id} name={name} hint={description}>
         <Field.Label>{label}</Field.Label>
         <FieldControl>{children}</FieldControl>
-        {description ? <FieldHint id={hintId}>{description}</FieldHint> : null}
+        {description ? <FieldHint><Field.Hint /></FieldHint> : null}
       </Field.Root>
     </FieldFrame>
   );

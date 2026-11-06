@@ -103,7 +103,7 @@ module.exports = ({ strapi }) => ({
     try {
       const { email, firstName, lastName } = ctx.request.body || {};
 
-      if (!email || !firstName || !lastName) {
+      if (![email, firstName, lastName].every((value) => typeof value === 'string' && value.trim())) {
         return ctx.badRequest('Email, firstName, and lastName are required');
       }
 

@@ -43,7 +43,7 @@ test('session terminate actions are disabled when the authoritative session is i
 test('end-user panel includes all current native sessions and uses Strapi actions', () => {
   const source = readAdminFile('components/SessionInfoPanel.jsx');
 
-  assert.match(source, /getManageableSessions\(data\.data \|\| \[\]\)/);
+  assert.match(source, /getManageableSessions\(requireSessionList\(data\)\)/);
   assert.match(source, /<Button\b/);
   assert.doesNotMatch(source, /const activeSessions = \(data\.data \|\| \[\]\)\.filter\(s => s\.isTrulyActive\)/);
 });

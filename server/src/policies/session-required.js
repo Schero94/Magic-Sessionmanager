@@ -32,8 +32,12 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
   }
 
   const user = policyContext.state.user;
+  // If settings cannot be read, do not silently disable enforcement.
+  let strictMode = true;
 
   try {
+    const settings = await getPluginSettings(strapi);
+    strictMode = settings.strictSessionEnforcement === true;
     let userDocId = user.documentId;
 
     if (!userDocId && user.id) {
@@ -41,11 +45,11 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
     }
 
     if (!userDocId) {
+      if (strictMode) {
+        throw new errors.UnauthorizedError('No valid session. Please login again.');
+      }
       return true;
     }
-
-    const settings = await getPluginSettings(strapi);
-    const strictMode = settings.strictSessionEnforcement === true;
 
     const token = extractBearerToken(policyContext);
     const tokenHashValue = token ? hashToken(token) : null;
@@ -88,6 +92,9 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
     }
 
     strapi.log.debug('[magic-sessionmanager] Session policy check error:', err?.name || 'Error');
+    if (strictMode) {
+      throw new errors.UnauthorizedError('No valid session. Please login again.');
+    }
     return true;
   }
 };

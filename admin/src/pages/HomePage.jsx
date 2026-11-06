@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import styled from 'styled-components';
@@ -19,7 +19,6 @@ import {
   Th,
   Badge,
   TextInput,
-  Alert,
   EmptyStateLayout,
   SingleSelect,
   SingleSelectOption,
@@ -41,11 +40,14 @@ import {
 import pluginId from '../pluginId';
 import parseUserAgent from '../utils/parseUserAgent';
 import { getSessionStatus } from '../utils/sessionStatus.mjs';
+import { requireSessionList } from '../utils/adminResponse.mjs';
+import { restoreDialogFocus } from '../utils/restoreDialogFocus.mjs';
 import { DEFAULT_SESSION_FILTER, filterSessionsByStatus } from '../utils/sessionFilters.mjs';
 import { paginateSessions } from '../utils/sessionPagination.mjs';
 import { buildSessionCsv, buildSessionJson } from '../utils/sessionExports.mjs';
 import SessionDetailModal from '../components/SessionDetailModal';
 import PluginPageLayout from '../components/PluginPageLayout';
+import Alert from '../components/PersistentAlert';
 import FormField from '../components/FormField';
 import ReadableText from '../components/ReadableText';
 
@@ -232,10 +234,14 @@ const HomePage = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [terminatingSessionId, setTerminatingSessionId] = useState(null);
   const [deletingSessionId, setDeletingSessionId] = useState(null);
+  const openerRef = useRef(null);
+  const dashboardRef = useRef(null);
 
   useEffect(() => {
     fetchSessions();
-    
+  }, []);
+
+  useEffect(() => {
     // Auto-refresh every 10 minutes (silent background update)
     // But ONLY if modal is not open (to avoid interrupting user)
     const interval = setInterval(() => {
@@ -255,10 +261,10 @@ const HomePage = () => {
    */
   const fetchSessions = async () => {
     setLoading(true);
-    setLoadError(null);
       try {
       const { data } = await get(`/${pluginId}/sessions`);
-        setSessions(data.data || []);
+        setSessions(requireSessionList(data));
+        setLoadError(null);
       } catch (err) {
       setLoadError(t('homepage.error.load', 'Session data could not be loaded. Try again.'));
       logSafeAdminError('dashboard.loadSessions', err);
@@ -415,7 +421,8 @@ const HomePage = () => {
   const loggedOutSessions = sessions.filter(s => getSessionStatus(s) === 'loggedout');
   const terminatedSessions = sessions.filter(s => getSessionStatus(s) === 'terminated');
 
-  const handleSessionClick = (session) => {
+  const handleSessionClick = (session, opener) => {
+    openerRef.current = opener;
     setSelectedSession(session);
     setShowDetailModal(true);
   };
@@ -423,6 +430,11 @@ const HomePage = () => {
   const handleModalClose = () => {
     setShowDetailModal(false);
     setSelectedSession(null);
+  };
+
+  /** Restore focus after the native dialog releases its focus trap. */
+  const handleCloseAutoFocus = (event) => {
+    restoreDialogFocus(event, openerRef.current, dashboardRef.current);
   };
 
   const handleSessionTerminated = () => {
@@ -450,7 +462,8 @@ const HomePage = () => {
     });
   const pageResult = paginateSessions(filteredSessions, currentPage, entriesPerPage);
 
-  const exportActions = filteredSessions.length > 0 ? (
+  const showSessionData = !loading && !loadError;
+  const exportActions = showSessionData && filteredSessions.length > 0 ? (
     <Flex gap={2} wrap="wrap">
       <Button onClick={handleExportCSV} startIcon={<Download />} variant="secondary">
         {t('homepage.export.csv', 'Export CSV')}
@@ -468,7 +481,7 @@ const HomePage = () => {
       subtitle={t('homepage.subtitle', 'Monitor and manage end-user sessions')}
       primaryAction={exportActions}
     >
-      <Box style={{ width: '100%', minWidth: 0 }}>
+      <Box ref={dashboardRef} tabIndex={-1} style={{ width: '100%', minWidth: 0 }}>
       {!loading && loadError ? (
         <Alert
           variant="danger"
@@ -487,6 +500,7 @@ const HomePage = () => {
       ) : null}
 
       {/* Stats Cards */}
+      {showSessionData && (
       <StatsGrid>
         <StatCard>
           <StatIcon aria-hidden="true">
@@ -528,6 +542,7 @@ const HomePage = () => {
           <Typography variant="pi" textColor="neutral600" tag="p" style={{ margin: 0 }}>{t('homepage.stats.total', 'Total')}</Typography>
         </StatCard>
       </StatsGrid>
+      )}
 
       {/* Loading */}
       {loading && (
@@ -537,7 +552,7 @@ const HomePage = () => {
       )}
 
       {/* Sessions Table */}
-      {!loading && sessions.length > 0 && (
+      {showSessionData && sessions.length > 0 && (
         <Box>
           <Box style={{ marginBottom: theme.spacing.md }}>
             <Typography variant="delta" textColor="neutral700" style={{ marginBottom: theme.spacing.md }}>
@@ -656,12 +671,12 @@ const HomePage = () => {
                       tabIndex={0}
                       style={{ cursor: 'pointer' }}
                       aria-label={`${config.label}: ${session.user?.email || session.user?.username || t('homepage.user.unknown', 'Unknown')}`}
-                      onClick={() => handleSessionClick(session)}
+                      onClick={(event) => handleSessionClick(session, event.currentTarget)}
                       onKeyDown={(event) => {
                         if (event.target !== event.currentTarget) return;
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
-                          handleSessionClick(session);
+                          handleSessionClick(session, event.currentTarget);
                         }
                       }}
                     >
@@ -736,7 +751,7 @@ const HomePage = () => {
                             aria-label={`${t('homepage.actions.viewDetails', 'View Details')}: ${session.user?.email || session.user?.username || ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleSessionClick(session);
+                              handleSessionClick(session, e.currentTarget);
                             }}
                             title={t('homepage.actions.viewDetails', 'View Details')}
                           >
@@ -838,7 +853,7 @@ const HomePage = () => {
                       size="S"
                       variant="tertiary"
                       startIcon={<Eye />}
-                      onClick={() => handleSessionClick(session)}
+                      onClick={(event) => handleSessionClick(session, event.currentTarget)}
                       aria-label={`${t('homepage.actions.viewDetails', 'View Details')}: ${userLabel}`}
                     >
                       {t('homepage.actions.viewDetails', 'View Details')}
@@ -931,7 +946,7 @@ const HomePage = () => {
       )}
 
       {/* Empty State */}
-      {!loading && sessions.length === 0 && !loadError && (
+      {showSessionData && sessions.length === 0 && (
         <EmptyStateLayout
           icon={<Monitor aria-hidden="true" />}
           content={(
@@ -947,6 +962,7 @@ const HomePage = () => {
         <SessionDetailModal
           session={selectedSession}
           onClose={handleModalClose}
+          onCloseAutoFocus={handleCloseAutoFocus}
           onSessionTerminated={handleSessionTerminated}
         />
       )}

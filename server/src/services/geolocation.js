@@ -297,6 +297,7 @@ function normalizeLocalCityResult(data, lookupIp, getCountryFlag) {
   };
 }
 
+/** Normalize an IP literal, including IPv4-mapped IPv6, for lookup and classification. */
 function normalizeLookupIp(ipAddress) {
   if (typeof ipAddress !== 'string') return '';
 
@@ -310,6 +311,22 @@ function normalizeLookupIp(ipAddress) {
   const ipv4Mapped = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
   if (ipv4Mapped && net.isIP(ipv4Mapped[1]) === 4) {
     return ipv4Mapped[1];
+  }
+
+  // IPv4-mapped IPv6 also permits expanded and hexadecimal representations.
+  // Canonicalize before applying the existing IPv4 private-range checks.
+  if (net.isIP(normalized) === 6) {
+    try {
+      const canonical = new URL(`http://[${normalized}]/`).hostname.slice(1, -1);
+      const mapped = canonical.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+      if (mapped) {
+        const high = Number.parseInt(mapped[1], 16);
+        const low = Number.parseInt(mapped[2], 16);
+        return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+      }
+    } catch {
+      // Leave other valid IPv6 forms unchanged.
+    }
   }
 
   return normalized;
@@ -357,7 +374,12 @@ function getFirstHextet(ip) {
 }
 
 function isPrivateIpv6(ip) {
-  const lower = ip.toLowerCase();
+  let lower = ip.toLowerCase();
+  try {
+    lower = new URL(`http://[${lower}]/`).hostname.slice(1, -1);
+  } catch {
+    // Preserve handling for IPv6 literals URL cannot parse, such as zone IDs.
+  }
 
   if (lower === '::' || lower === '::1') return true;
   if (/^(?:0:){7}0$/.test(lower) || /^(?:0:){7}1$/.test(lower)) return true;
@@ -437,7 +459,7 @@ module.exports = ({ strapi }) => ({
         if (localResult?._status === 'ok' || settings.geoLookupFailureMode === 'block') {
           return localResult;
         }
-        strapi.log.warn(`[magic-sessionmanager/geolocation] Local MMDB lookup failed (${localResult?._reason || localResult?._status}), falling back to ipapi.co`);
+        strapi.log.warn('[magic-sessionmanager/geolocation] Local MMDB lookup failed, falling back to ipapi.co');
       }
     }
 

@@ -10,7 +10,7 @@ test('shared form fields use Strapi labels and hints with full-width controls', 
 
   assert.ok(/<Field\.Root\b/.test(source), 'Field.Root provides the Strapi field context');
   assert.ok(/<Field\.Label>/.test(source), 'each control has an associated visible label');
-  assert.ok(/const FieldHint = styled\(Field\.Hint\)/.test(source), 'helper text retains the Strapi Field.Hint primitive with shared readable styling');
+  assert.ok(/<FieldHint><Field\.Hint\s*\/><\/FieldHint>/.test(source), 'helper text retains the Strapi Field.Hint primitive with shared readable styling');
   const comboboxStyles = source.match(/\[role=['"]combobox['"]\]\s*\{([^}]*)\}/)?.[1] || '';
   assert.ok(/width:\s*100%/.test(comboboxStyles), 'selects fill their grid column');
   assert.ok(/min-width:\s*0/.test(comboboxStyles), 'select text cannot impose an intrinsic minimum width');

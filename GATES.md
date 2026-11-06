@@ -1,5 +1,22 @@
 # Session Manager mobile, desktop, API and security gates
 
+## 2026-11-06 full acceptance continuation
+
+Prior checked gates below are historical evidence, not proof for the current release. The current objective, ownership boundaries and leaf gates are in `docs/plans/2026-11-06-complete-acceptance.md` and `gates/complete-acceptance-*.md`.
+
+- [ ] N1: Every current admin, content and compatibility endpoint has an independently verified access, owner, input and error contract; all confirmed security defects have regression tests and fixes.
+  EVIDENCE: pending
+- [ ] N2: All reachable plugin screens and states conform to Strapi's current Design System, and every action is exercised in a real isolated host at desktop and mobile breakpoints, with keyboard, accessibility, clipping and console evidence.
+  EVIDENCE: pending
+- [ ] N3: Privacy and external-provider behavior are explicitly disclosed, safe by design, tested without external effects and compatible with existing deployments.
+  EVIDENCE: pending
+- [ ] N4: Dependency advisories are triaged with current evidence; compatible safe remediations are verified and residual risks explicitly recorded.
+  EVIDENCE: pending
+- [ ] N5: Current plugin tests, type checks, build, package/runtime verification, isolated shared-host build/boot and final browser/API sweep pass on final code; open gates are not presented as complete.
+  EVIDENCE: pending
+- [ ] N6: Integrate, independently verify and report all leaf results with no credentials, production data, external side effects or unauthorized publication.
+  EVIDENCE: pending
+
 Scope: Continue the approved Strapi-native UI direction for Users & Permissions end-user sessions. Keep Strapi Admin sessions, unrelated plugins, live user data and external provider effects out of scope.
 
 - [x] G1: Current-state, target-state, route inventory and click/API acceptance matrix are recorded for every Session Manager screen.

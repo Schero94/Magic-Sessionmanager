@@ -171,7 +171,7 @@ const getSessionDeviceInfo = (session, unavailableValue) => {
   };
 };
 
-const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
+const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onSessionTerminated }) => {
   const { formatMessage, locale } = useIntl();
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
@@ -319,6 +319,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
   return (
     <Modal.Root open onOpenChange={onClose}>
       <Modal.Content
+        onCloseAutoFocus={onCloseAutoFocus}
         style={{
           width: 'min(900px, calc(100vw - 24px))',
           maxHeight: 'calc(100vh - 24px)',
@@ -326,7 +327,7 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
           flexDirection: 'column',
         }}
       >
-        <Modal.Header>
+        <Modal.Header closeLabel={t('common.close', 'Close')}>
           <Flex gap={3} alignItems="center" style={{ minWidth: 0 }}>
             <Box
               padding={2}
@@ -337,9 +338,9 @@ const SessionDetailModal = ({ session, onClose, onSessionTerminated }) => {
               <DeviceIcon width="24px" height="24px" />
             </Box>
             <Flex direction="column" alignItems="flex-start" style={{ minWidth: 0 }}>
-              <Typography variant="beta" fontWeight="bold" style={{ overflowWrap: 'anywhere' }}>
+              <Modal.Title variant="beta" fontWeight="bold" style={{ overflowWrap: 'anywhere' }}>
                 {t('modal.title', 'Session Details')}
-              </Typography>
+              </Modal.Title>
               <Typography variant="pi" textColor="neutral600" style={{ overflowWrap: 'anywhere' }}>
                 {t('modal.id', 'ID: {id}', { id: session.id })}
               </Typography>
