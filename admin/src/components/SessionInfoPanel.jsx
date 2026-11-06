@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { NavLink } from 'react-router-dom';
-import { Badge, Box, Button, Flex, Link, Loader, Typography } from '@strapi/design-system';
+import { Badge, Box, Button, Flex, Loader, Typography } from '@strapi/design-system';
 import { CheckCircle, Lock, SignOut } from '@strapi/icons';
 import { useFetchClient, useForm, useNotification, useRBAC } from '@strapi/strapi/admin';
 import Alert from './PersistentAlert';
 import ReadableText from './ReadableText';
-import { ConfirmAction, DeviceIcon, StatusBadge } from './ui';
+import { ActionStack, ConfirmAction, DeviceIcon, StatusBadge, TargetLink } from './ui';
 import { requireSessionList, requireSuccessfulMutation } from '../utils/adminResponse.mjs';
 import { getManageableSessions } from '../utils/sessionFilters.mjs';
 import { getDevicePresentation } from '../utils/devicePresentation.mjs';
@@ -143,11 +143,30 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   }, [persistedBlocked, userId]);
 
   // Block and Unblock swap the button; keep keyboard focus on the new one.
+  // Strapi renders the panel content one commit after this hook, the new
+  // button stays disabled until the pending action is cleared, and Radix
+  // focuses <body> in a zero-delay timeout when the Block dialog unmounts.
+  // So the focus is moved in later timeouts, once the swapped and enabled
+  // button is in the document.
   useEffect(() => {
-    if (!focusBlockToggle.current) return;
-    focusBlockToggle.current = false;
-    if (blockToggleRef.current?.isConnected) blockToggleRef.current.focus();
-  }, [isBlocked]);
+    if (!focusBlockToggle.current || pendingAction !== null) return undefined;
+    const expected = isBlocked ? 'unblock' : 'block';
+    let attempts = 0;
+    let timer;
+    const tryFocus = () => {
+      const button = blockToggleRef.current;
+      if (button?.isConnected && !button.disabled && button.dataset.blockToggle === expected) {
+        focusBlockToggle.current = false;
+        button.focus();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 20) timer = window.setTimeout(tryFocus, 25);
+      else focusBlockToggle.current = false;
+    };
+    timer = window.setTimeout(tryFocus, 0);
+    return () => window.clearTimeout(timer);
+  }, [isBlocked, pendingAction]);
 
   useEffect(() => {
     if (model !== 'plugin::users-permissions.user' || !userId || permissionsLoading || !canAccess) {
@@ -401,79 +420,83 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
 
         {/* Action Buttons */}
         <Flex direction="column" alignItems="stretch" gap={2} data-panel-actions="">
-          <ConfirmAction
-            title={t('panel.confirm.endAllTitle', 'End all sessions of {user}?', { user: userLabel })}
-            body={t(
-              'panel.confirm.endAllBody',
-              '{count, plural, one {# open session ends} other {# open sessions end}} on all devices. {user} can sign in again unless you also block the account.',
-              { count: summary.openCount, user: userLabel }
-            )}
-            confirmLabel={endAllLabel}
-            onConfirm={handleEndAll}
-            fallbackFocusRef={panelRef}
-            disabled={actionsDisabled || !hasOpenSessions}
-            trigger={(
+          <ActionStack>
+            <ConfirmAction
+              title={t('panel.confirm.endAllTitle', 'End all sessions of {user}?', { user: userLabel })}
+              body={t(
+                'panel.confirm.endAllBody',
+                '{count, plural, one {# open session ends} other {# open sessions end}} on all devices. {user} can sign in again unless you also block the account.',
+                { count: summary.openCount, user: userLabel }
+              )}
+              confirmLabel={endAllLabel}
+              onConfirm={handleEndAll}
+              fallbackFocusRef={panelRef}
+              disabled={actionsDisabled || !hasOpenSessions}
+              trigger={(
+                <Button
+                  fullWidth
+                  size="S"
+                  variant="danger-light"
+                  startIcon={<SignOut aria-hidden focusable={false} />}
+                  loading={pendingAction === 'endAll'}
+                  disabled={actionsDisabled || !hasOpenSessions}
+                  aria-describedby={!loading && !hasOpenSessions ? noOpenSessionsHintId : undefined}
+                  type="button"
+                >
+                  {endAllLabel}
+                </Button>
+              )}
+            />
+            {isBlocked ? (
               <Button
+                ref={blockToggleRef}
+                data-block-toggle="unblock"
                 fullWidth
-                size="M"
-                variant="danger-light"
-                startIcon={<SignOut aria-hidden focusable={false} />}
-                loading={pendingAction === 'endAll'}
-                disabled={actionsDisabled || !hasOpenSessions}
-                aria-describedby={!loading && !hasOpenSessions ? noOpenSessionsHintId : undefined}
+                size="S"
+                variant="secondary"
+                startIcon={<CheckCircle aria-hidden focusable={false} />}
+                loading={pendingAction === 'unblock'}
+                disabled={actionsDisabled}
+                onClick={handleUnblock}
                 type="button"
               >
-                {endAllLabel}
+                {unblockLabel}
               </Button>
+            ) : (
+              <ConfirmAction
+                title={t('panel.confirm.blockTitle', 'Block {user}?', { user: userLabel })}
+                body={t(
+                  'panel.confirm.blockBody',
+                  '{user} can no longer sign in, and {count, plural, =0 {no open sessions are affected} one {# open session ends now} other {# open sessions end now}}. You can unblock the account later; ended sessions stay ended.',
+                  { count: summary.openCount, user: userLabel }
+                )}
+                confirmLabel={blockLabel}
+                onConfirm={handleBlock}
+                fallbackFocusRef={panelRef}
+                disabled={actionsDisabled}
+                trigger={(
+                  <Button
+                    ref={blockToggleRef}
+                    data-block-toggle="block"
+                    fullWidth
+                    size="S"
+                    variant="danger-light"
+                    startIcon={<Lock aria-hidden focusable={false} />}
+                    loading={pendingAction === 'block'}
+                    disabled={actionsDisabled}
+                    type="button"
+                  >
+                    {blockLabel}
+                  </Button>
+                )}
+              />
             )}
-          />
+          </ActionStack>
           {!loading && !hasOpenSessions ? (
             <Typography id={noOpenSessionsHintId} variant="pi" textColor="neutral600">
               {t('panel.actions.noOpenSessions', 'No open sessions')}
             </Typography>
           ) : null}
-          {isBlocked ? (
-            <Button
-              ref={blockToggleRef}
-              fullWidth
-              size="M"
-              variant="secondary"
-              startIcon={<CheckCircle aria-hidden focusable={false} />}
-              loading={pendingAction === 'unblock'}
-              disabled={actionsDisabled}
-              onClick={handleUnblock}
-              type="button"
-            >
-              {unblockLabel}
-            </Button>
-          ) : (
-            <ConfirmAction
-              title={t('panel.confirm.blockTitle', 'Block {user}?', { user: userLabel })}
-              body={t(
-                'panel.confirm.blockBody',
-                '{user} can no longer sign in, and {count, plural, =0 {no open sessions are affected} one {# open session ends now} other {# open sessions end now}}. You can unblock the account later; ended sessions stay ended.',
-                { count: summary.openCount, user: userLabel }
-              )}
-              confirmLabel={blockLabel}
-              onConfirm={handleBlock}
-              fallbackFocusRef={panelRef}
-              disabled={actionsDisabled}
-              trigger={(
-                <Button
-                  ref={blockToggleRef}
-                  fullWidth
-                  size="M"
-                  variant="danger-light"
-                  startIcon={<Lock aria-hidden focusable={false} />}
-                  loading={pendingAction === 'block'}
-                  disabled={actionsDisabled}
-                  type="button"
-                >
-                  {blockLabel}
-                </Button>
-              )}
-            />
-          )}
           <ReadableText variant="pi" textColor="neutral600" tag="p">
             {t(
               'panel.actions.hint',
@@ -513,9 +536,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
           </Flex>
         )}
 
-        <Link tag={NavLink} to={buildUserSessionsHref(document)}>
+        <TargetLink tag={NavLink} to={buildUserSessionsHref(document)}>
           {t('panel.sessions.showAllLink', 'Show all sessions')}
-        </Link>
+        </TargetLink>
       </Flex>
     ),
   };

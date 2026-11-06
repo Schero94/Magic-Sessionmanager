@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react';
 import { Button, Dialog } from '@strapi/design-system';
 import { ConfirmDialog } from '@strapi/strapi/admin';
+import { pickFocusTarget } from '../../utils/restoreDialogFocus.mjs';
 
 /**
  * Confirms a destructive action with Strapi's ConfirmDialog. Never use
  * window.confirm. Focus returns to the trigger after the dialog closes; when
- * the trigger is gone (for example a deleted row), it moves to
- * `fallbackFocusRef` instead of being lost on <body>.
+ * the trigger is gone or disabled (for example a deleted row, or "End all
+ * sessions" once no session is left), it moves to `fallbackFocusRef` instead
+ * of being lost on <body>.
  *
  * Without a `trigger` the dialog is controlled through `isOpen` and
  * `onOpenChange`, for actions started from a menu item; focus then returns
@@ -51,8 +53,8 @@ const ConfirmAction = ({
       const active = document.activeElement;
       if (active && active !== document.body) return;
       const ownTrigger = controlled ? returnFocusRef?.current : triggerRef.current;
-      const target = ownTrigger?.isConnected ? ownTrigger : fallbackFocusRef?.current;
-      if (target?.isConnected && typeof target.focus === 'function') target.focus();
+      const target = pickFocusTarget(ownTrigger, fallbackFocusRef?.current);
+      if (target) target.focus();
     });
   };
 

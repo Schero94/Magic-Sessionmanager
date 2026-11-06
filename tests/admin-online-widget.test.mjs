@@ -22,6 +22,9 @@ test('Online Users distinguishes load errors and empty data from real zeroes (IA
   assert.match(widgetSource, /t\('widget\.empty\.noSignIns', 'No users have signed in yet\.'\)/);
   assert.match(widgetSource, /if \(showLoading\) setLoadError\(true\)/, 'a failed background refresh keeps the last values');
   assert.match(widgetSource, /if \(showLoading\) setUserCounts\(null\)/, 'a failed background totals refresh keeps the last totals');
+  // Widget.Error fills the widget height; inside an auto-height box it keeps its
+  // natural height, so "Try again" sits under the message instead of at the bottom edge.
+  assert.match(widgetSource, /<Box>\s*<NativeWidget\.Error>\{message\}<\/NativeWidget\.Error>\s*<\/Box>/);
 });
 
 test('when only the user totals fail, the tiles say so and Blocked users shows the missing marker', () => {
@@ -54,9 +57,13 @@ test('Online Users shows the IA D4 tiles in a 2 x 2 grid without overflow (I.1-2
   assert.match(widgetSource, /'\{total, plural, one \{of # registered user\} other \{of # registered users\}\}'/);
   assert.doesNotMatch(widgetSource, /widget\.stats\.(onlineNow|last15min|last30min|lastHour|today|offline)/, 'retired tiles are gone');
   assert.doesNotMatch(widgetSource, /15 \* 60|FIFTEEN_MINUTES|ONE_HOUR|startOfLocalDay/, 'no hard-coded activity windows');
-  assert.match(widgetSource, /repeat\(auto-fit, minmax\(min\(100%, max\(14rem, calc\(\(100% - 1px\) \/ 2\)\)\), 1fr\)\)/,
+  assert.match(widgetSource, /repeat\(auto-fit, minmax\(min\(100%, max\(14rem, 50%\)\), 1fr\)\)/,
     'at most two columns, one column on narrow widgets, never wider than the widget');
   assert.match(widgetSource, /height="100%"/, 'tiles fill their grid row, so a row has equal heights');
+  assert.match(widgetSource, /grid-auto-rows: 1fr;/, 'both rows share one height, so the 2 x 2 tiles are equal');
+  assert.doesNotMatch(widgetSource, /gap: 1px/, 'cell lines are tile borders, not an off-scale 1px grid gap');
+  assert.match(widgetSource, /border-right: 1px solid/);
+  assert.match(widgetSource, /border-bottom: 1px solid/);
   assert.doesNotMatch(widgetSource, /gridCols=\{2\}/);
 });
 

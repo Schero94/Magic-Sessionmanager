@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { restoreDialogFocus } from '../admin/src/utils/restoreDialogFocus.mjs';
+import { pickFocusTarget, restoreDialogFocus } from '../admin/src/utils/restoreDialogFocus.mjs';
 
 test('dialog focus returns to the connected opener or an available fallback', () => {
   let focused = '';
@@ -19,6 +19,17 @@ test('dialog focus returns to the connected opener or an available fallback', ()
   fallback.isConnected = false;
   restoreDialogFocus(event, opener, fallback);
   assert.equal(prevented, false);
+});
+
+test('a disabled opener is skipped, so focus lands on the fallback instead of <body>', () => {
+  const opener = { isConnected: true, disabled: true, focus() {} };
+  const fallback = { isConnected: true, focus() {} };
+  assert.equal(pickFocusTarget(opener, fallback), fallback);
+  const ariaDisabled = { isConnected: true, getAttribute: (name) => (name === 'aria-disabled' ? 'true' : null), focus() {} };
+  assert.equal(pickFocusTarget(ariaDisabled, fallback), fallback);
+  assert.equal(pickFocusTarget({ isConnected: true, focus() {} }, fallback).disabled, undefined);
+  assert.equal(pickFocusTarget(null, null), null);
+  assert.equal(pickFocusTarget(opener, { isConnected: false, focus() {} }), null);
 });
 
 test('dashboard retains the actual row or button opener and does not refetch merely on modal toggles', () => {

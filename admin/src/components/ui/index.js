@@ -7,3 +7,5 @@ export { default as EndReason } from './EndReason';
 export { default as ConfirmAction } from './ConfirmAction';
 export { MissingValue, ValueOrMissing } from './MissingValue';
 export { default as DeviceIcon, getDeviceIconComponent } from './DeviceIcon';
+export { default as TargetLink } from './TargetLink';
+export { default as ActionStack } from './ActionStack';

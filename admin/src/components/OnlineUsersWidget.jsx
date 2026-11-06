@@ -35,23 +35,35 @@ const NativeWidget = pickAdminExport('Widget');
 const hasNativeState = (state) => typeof NativeWidget?.[state] === 'function';
 
 /**
- * 2 x 2 tile grid in the style of Strapi's "Key statistics" widget. The 1px
- * grid gap on a neutral200 background draws the cell borders for any column
- * count. Each column is at least half the width, so there are never more than
- * two columns; below 14rem per column the tiles stack into one column, so
- * nothing overflows at 320px (F10). Grid rows stretch, so tiles in one row
- * share the same height.
+ * 2 x 2 tile grid in the style of Strapi's "Key statistics" widget. The frame
+ * clips the grid, which is 1px larger than the frame on the right and bottom:
+ * every tile draws its own right and bottom line, and the lines of the last
+ * column and row fall outside the frame, so the cell lines are correct for one
+ * or two columns without an off-scale 1px grid gap. Each column is at least
+ * half the width, so there are never more than two columns; below 14rem per
+ * column the tiles stack into one column, so nothing overflows at 320px (F10).
+ * All rows share one height, so the four tiles are equal.
  */
-const TileGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(14rem, calc((100% - 1px) / 2))), 1fr));
-  gap: 1px;
+const TileFrame = styled.div`
   width: 100%;
   min-width: 0;
-  background: ${({ theme }) => theme.colors.neutral200};
   border: 1px solid ${({ theme }) => theme.colors.neutral200};
   border-radius: ${({ theme }) => theme.borderRadius};
   overflow: hidden;
+`;
+
+const TileGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(14rem, 50%)), 1fr));
+  grid-auto-rows: 1fr;
+  gap: 0;
+  min-width: 0;
+  margin: 0 -1px -1px 0;
+
+  & > [data-widget-tile] {
+    border-right: 1px solid ${({ theme }) => theme.colors.neutral200};
+    border-bottom: 1px solid ${({ theme }) => theme.colors.neutral200};
+  }
 `;
 
 const TileIcon = styled(Flex)`
@@ -88,7 +100,7 @@ const StatTile = ({ icon: Icon, tone, label, value, detail }) => (
       >
         <Icon aria-hidden focusable={false} />
       </TileIcon>
-      <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0}>
+      <Flex direction="column" alignItems="flex-start" minWidth={0}>
         <Typography variant="pi" fontWeight="bold" textColor="neutral600">
           {label}
         </Typography>
@@ -125,7 +137,9 @@ const LoadingState = ({ label }) => {
 };
 
 /**
- * Error state with a retry action. Uses Widget.Error when available.
+ * Error state with a retry action. Uses Widget.Error when available. That
+ * helper fills the widget height, so it sits in an auto-height box and the
+ * retry button stays directly under the message.
  *
  * @param {{message: string, retryLabel: string, onRetry: () => void}} props Copy and retry handler.
  * @returns {import('react').ReactElement} Error state.
@@ -133,7 +147,9 @@ const LoadingState = ({ label }) => {
 const ErrorState = ({ message, retryLabel, onRetry }) => (
   <Flex direction="column" alignItems="center" justifyContent="center" gap={4} height="100%" role="alert">
     {hasNativeState('Error') ? (
-      <NativeWidget.Error>{message}</NativeWidget.Error>
+      <Box>
+        <NativeWidget.Error>{message}</NativeWidget.Error>
+      </Box>
     ) : (
       <Flex direction="column" alignItems="center" gap={2}>
         <TileIcon $tone="danger" aria-hidden>
@@ -290,18 +306,20 @@ const OnlineUsersWidget = () => {
   ];
 
   return (
-    <TileGrid role="group" aria-label={t('widget.online-users.title', 'Online users')}>
-      {tiles.map((tile) => (
-        <StatTile
-          key={tile.key}
-          icon={tile.icon}
-          tone={tile.tone}
-          label={tile.label}
-          value={tile.value}
-          detail={tile.detail}
-        />
-      ))}
-    </TileGrid>
+    <TileFrame>
+      <TileGrid role="group" aria-label={t('widget.online-users.title', 'Online users')}>
+        {tiles.map((tile) => (
+          <StatTile
+            key={tile.key}
+            icon={tile.icon}
+            tone={tile.tone}
+            label={tile.label}
+            value={tile.value}
+            detail={tile.detail}
+          />
+        ))}
+      </TileGrid>
+    </TileFrame>
   );
 };
 

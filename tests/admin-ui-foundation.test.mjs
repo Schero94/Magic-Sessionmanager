@@ -135,7 +135,8 @@ test('ConfirmAction wraps Strapi ConfirmDialog and restores focus', () => {
   assert.match(confirm, /<ConfirmDialog\b[\s\S]*?title=\{title\}/);
   assert.match(confirm, /variant = 'danger'/);
   assert.match(confirm, /\{confirmLabel\}/);
-  assert.match(confirm, /ownTrigger\?\.isConnected \? ownTrigger : fallbackFocusRef\?\.current/);
+  assert.match(confirm, /pickFocusTarget\(ownTrigger, fallbackFocusRef\?\.current\)/,
+    'a trigger that became disabled (End all sessions after the last session ended) hands focus to the fallback');
   assert.match(confirm, /if \(busy\) return;/, 'the dialog cannot be dismissed while the action runs');
   assert.doesNotMatch(confirm, /window\.confirm\s*\(/);
 });

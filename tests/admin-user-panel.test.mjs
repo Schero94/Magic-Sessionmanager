@@ -71,7 +71,19 @@ test('each action shows its own spinner and all are blocked while one runs (UX-1
   assert.match(panel, /loading=\{pendingAction === 'unblock'\}/);
   assert.match(panel, /const actionsDisabled = loading \|\| pendingAction !== null;/, 'buttons are disabled while loading too (IA G)');
   assert.doesNotMatch(panel, /actionLoading/);
-  assert.equal((panel.match(/<Button\s+(?:ref=\{blockToggleRef\}\s+)?fullWidth\s+size="M"/g) || []).length, 3, 'equal-height full-width buttons');
+  assert.equal((panel.match(/<Button\s+(?:ref=\{blockToggleRef\}\s+data-block-toggle="(?:block|unblock)"\s+)?fullWidth\s+size="S"/g) || []).length, 3, 'equal-height full-width buttons at the 32px height of the native Entry panel buttons');
+  assert.doesNotMatch(panel, /fullWidth\s+size="M"/, 'no panel button is taller than the native side-panel buttons');
+  // In the narrow sidebar (about 12rem wide at 1080px) labels wrap; both
+  // buttons sit in one stack whose rows share a height, so they stay equal.
+  const stack = between('<ActionStack>', '</ActionStack>');
+  assert.match(stack, /panel\.confirm\.endAllTitle/);
+  assert.match(stack, /data-block-toggle="unblock"/);
+  assert.match(stack, /data-block-toggle="block"/);
+  assert.doesNotMatch(stack, /noOpenSessionsHintId\}/, 'hints sit below the stack, not between the buttons');
+  const stackSource = readFileSync(new URL('../admin/src/components/ui/ActionStack.jsx', import.meta.url), 'utf8');
+  assert.match(stackSource, /grid-auto-rows: 1fr;/);
+  assert.match(stackSource, /min-height: 3\.2rem;/);
+  assert.match(stackSource, /height: auto;/);
 });
 
 test('End all sessions is disabled without open sessions and says why (IA D3)', () => {
@@ -115,7 +127,21 @@ test('successful actions update the panel in place and keep focus on the swapped
   assert.match(between('const handleEndAll = async () => {', '\n  };'), /setSessions\(\(rows\) => endOpenSessions\(rows, 'manual'\)\)/);
   assert.match(between('const changeBlocked = async (blocked) => {', '\n  };'), /endOpenSessions\(rows, 'blocked'\)/);
   assert.equal((panel.match(/ref=\{blockToggleRef\}/g) || []).length, 2, 'Block and Unblock share one focus target');
-  assert.match(panel, /blockToggleRef\.current\.focus\(\)/);
+  assert.match(panel, /const button = blockToggleRef\.current;[\s\S]*?button\.focus\(\)/);
+  // The Block dialog unmounts with its trigger; Radix then moves focus to <body>
+  // in a zero-delay timeout, so the swapped button is focused in a later one.
+  // The new button is disabled while the action is pending, so the focus waits
+  // until no action runs.
+  const focusEffect = between('// Block and Unblock swap the button', '}, [isBlocked, pendingAction]);');
+  assert.match(focusEffect, /if \(!focusBlockToggle\.current \|\| pendingAction !== null\) return undefined;/);
+  // Strapi renders the panel content one commit after the panel hook, so the
+  // effect retries until the swapped, enabled button is in the document.
+  assert.match(focusEffect, /button\.dataset\.blockToggle === expected/);
+  assert.match(focusEffect, /timer = window\.setTimeout\(tryFocus, \d+\)/);
+  assert.match(panel, /data-block-toggle="unblock"/);
+  assert.match(panel, /data-block-toggle="block"/);
+  assert.match(focusEffect, /window\.setTimeout\(/);
+  assert.match(focusEffect, /return \(\) => window\.clearTimeout\(timer\);/);
 });
 
 test('summary shows Online / Not online, open sessions and the last activity (IA D3, I.1-28)', () => {
@@ -155,7 +181,9 @@ test('up to five open sessions, newest first, then "+n more" and "Show all sessi
   assert.match(panel, /const openSessions = getManageableSessions\(sessions\);/);
   assert.match(panel, /t\('panel\.sessions\.openTitle', 'Open sessions'\)/);
   assert.match(panel, /t\('panel\.sessions\.more', '\{count, plural, other \{\+# more\}\}', \{ count: hiddenCount \}\)/);
-  assert.match(panel, /<Link tag=\{NavLink\} to=\{buildUserSessionsHref\(document\)\}>/);
+  assert.match(panel, /<TargetLink tag=\{NavLink\} to=\{buildUserSessionsHref\(document\)\}>/);
+  assert.match(readFileSync(new URL('../admin/src/components/ui/TargetLink.jsx', import.meta.url), 'utf8'), /styled\(Link\)`[^`]*min-height: 3\.2rem;/,
+    'the link has a size S button height, not a 2rem text line');
   assert.match(panel, /t\('panel\.sessions\.showAllLink', 'Show all sessions'\)/);
 });
 
