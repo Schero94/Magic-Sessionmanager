@@ -85,6 +85,10 @@ const escapeHtml = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+/** Script elements and inline event handlers, removed from HTML previews. */
+const PREVIEW_SCRIPT_PATTERN = /<script\b[^>]*>[\s\S]*?<\/script\s*>|<script\b[^>]*\/?>/gi;
+const PREVIEW_HANDLER_PATTERN = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+
 /**
  * Replaces template variables with synthetic preview values. HTML previews
  * escape the inserted values; the result is meant for a sandboxed iframe.
@@ -94,7 +98,11 @@ const escapeHtml = (value) =>
  * @returns {string} Preview text.
  */
 export function renderTemplatePreview(template, { html = false } = {}) {
-  const source = typeof template === 'string' ? template : '';
+  const raw = typeof template === 'string' ? template : '';
+  // The preview frame is sandboxed without scripts. Scripts and inline event
+  // handlers are dropped first, so the browser logs no blocked-script errors;
+  // the server sanitises the stored HTML separately.
+  const source = html ? raw.replace(PREVIEW_SCRIPT_PATTERN, '').replace(/<[a-z][^>]*>/gi, (tag) => tag.replace(PREVIEW_HANDLER_PATTERN, '')) : raw;
   return source.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, name) => {
     const value = TEMPLATE_PREVIEW_VALUES[`{{${name}}}`];
     if (value === undefined) return match;

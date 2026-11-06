@@ -6,7 +6,7 @@ import { ReadableParagraphs } from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import { SELECT_PRESETS } from './settingsTabs.mjs';
 import EncryptionKeyCard, { useEncryptionKeyDraft } from './EncryptionKeyCard';
-import { AdvancedSection, IntroText, PresetSelect } from './SettingsBlocks';
+import { AdvancedSection, IntroText, PresetSelect, TermList } from './SettingsBlocks';
 import { useOptionLabels } from './hooks/useOptionLabels';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
@@ -20,6 +20,18 @@ const RelaxedModeAlert = styled(DesignSystemAlert)`
     flex: 0 0 100%;
     width: 100%;
     min-width: 0;
+  }
+
+  /* The DS close button is a bare 16 px icon; its hit area grows to 32 px
+     while negative margins keep the icon where the DS draws it. */
+  & > button:last-child {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: ${({ theme }) => theme.spaces[7]};
+    min-height: ${({ theme }) => theme.spaces[7]};
+    margin: -${({ theme }) => theme.spaces[2]};
+    border-radius: ${({ theme }) => theme.borderRadius};
   }
 `;
 
@@ -48,19 +60,6 @@ const formatReasonCodes = (locale) => {
   }
 };
 
-const ReasonList = styled.ul`
-  display: grid;
-  gap: ${({ theme }) => theme.spaces[2]};
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: 0;
-
-  code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: ${({ theme }) => theme.colors.neutral800};
-  }
-`;
 
 /**
  * Tab "Sessions" (IA F Tab 1): how long a session stays valid, the token
@@ -187,8 +186,8 @@ const SessionsTab = ({ form }) => {
         )}
         action={(
           <Badge
-            backgroundColor={settings.strictSessionEnforcement ? 'success100' : 'warning100'}
-            textColor={settings.strictSessionEnforcement ? 'success700' : 'warning700'}
+            backgroundColor={settings.strictSessionEnforcement ? 'success100' : 'neutral150'}
+            textColor={settings.strictSessionEnforcement ? 'success700' : 'neutral700'}
           >
             {settings.strictSessionEnforcement
               ? t('settings.config.token.strict', 'Strict')
@@ -227,20 +226,22 @@ const SessionsTab = ({ form }) => {
         )}
 
         <AdvancedSection>
-          <PresetSelect
-            id="session-creation-grace-period"
-            name="sessionCreationGraceMs"
-            label={t('settings.config.token.grace.label', 'Grace period after sign-in')}
-            description={t(
-              'settings.config.token.grace.hint',
-              "Accepts a new token for a few seconds while its session record is being created. Only for tokens without a session record. Not used when Strapi's refresh-token mode (jwtManagement: 'refresh') is on."
-            )}
-            value={settings.sessionCreationGraceMs ?? 5000}
-            presets={SELECT_PRESETS.sessionCreationGraceMs}
-            format={units.graceMs}
-            onChange={(value) => handleChange('sessionCreationGraceMs', value)}
-          />
-          <EncryptionKeyCard draft={encryptionKeyDraft} copyValue={form.copyValue} notify={form.notify} />
+          <EqualGrid columns={2} stackBelow="medium" gap={6}>
+            <PresetSelect
+              id="session-creation-grace-period"
+              name="sessionCreationGraceMs"
+              label={t('settings.config.token.grace.label', 'Grace period after sign-in')}
+              description={t(
+                'settings.config.token.grace.hint',
+                "Accepts a new token for a few seconds while its session record is being created. Only for tokens without a session record. Not used when Strapi's refresh-token mode (jwtManagement: 'refresh') is on."
+              )}
+              value={settings.sessionCreationGraceMs ?? 5000}
+              presets={SELECT_PRESETS.sessionCreationGraceMs}
+              format={units.graceMs}
+              onChange={(value) => handleChange('sessionCreationGraceMs', value)}
+            />
+            <EncryptionKeyCard draft={encryptionKeyDraft} copyValue={form.copyValue} notify={form.notify} />
+          </EqualGrid>
         </AdvancedSection>
       </SectionCard>
 
@@ -258,17 +259,15 @@ const SessionsTab = ({ form }) => {
             { header: 'X-Session-Terminated-Reason', reasons: formatReasonCodes(locale) }
           )}
         />
-        <ReasonList>
-          {REJECTION_REASONS.map(([code, id, defaultMessage]) => (
-            <li key={code}>
-              <Typography variant="omega" textColor="neutral700">
-                <code>{code}</code>
-                {' · '}
-                {t(id, defaultMessage)}
-              </Typography>
-            </li>
-          ))}
-        </ReasonList>
+        <TermList
+          code
+          label={t('settings.config.rejected.title', 'When a session is rejected')}
+          items={REJECTION_REASONS.map(([code, id, defaultMessage]) => ({
+            id: code,
+            term: code,
+            description: t(id, defaultMessage),
+          }))}
+        />
       </SectionCard>
     </Flex>
   );

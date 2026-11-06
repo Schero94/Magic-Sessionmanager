@@ -61,6 +61,9 @@ export function useSettingsForm() {
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [relaxedWarningDismissed, setRelaxedWarningDismissed] = useState(false);
+  // Bumped whenever the draft is replaced (Discard, Save). Inputs that keep
+  // their own text, like the DS NumberInput, remount with it as their key.
+  const [draftVersion, setDraftVersion] = useState(0);
   const [geoIpStatus, setGeoIpStatus] = useState(null);
   const [geoIpStatusError, setGeoIpStatusError] = useState(false);
   const [geoIpCredentials, setGeoIpCredentials] = useState({ accountId: '', licenseKey: '' });
@@ -209,6 +212,7 @@ export function useSettingsForm() {
       const stored = normalizeSettings(storedPayload);
       setSettings(stored);
       setSavedSettings(stored);
+      setDraftVersion((version) => version + 1);
 
       const adjustedNames = [...new Set(
         getAdjustedFields(submitted, stored, previous)
@@ -250,6 +254,7 @@ export function useSettingsForm() {
   const handleReset = useCallback(() => {
     setSettings(savedSettingsRef.current);
     setRelaxedWarningDismissed(false);
+    setDraftVersion((version) => version + 1);
   }, []);
 
   /**
@@ -392,6 +397,7 @@ export function useSettingsForm() {
     canSave,
     relaxedWarningDismissed,
     setRelaxedWarningDismissed,
+    draftVersion,
     copyValue,
     notify: toggleNotification,
     fetchSettings,

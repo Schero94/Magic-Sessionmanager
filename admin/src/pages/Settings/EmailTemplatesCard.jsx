@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Badge, Box, Button, Flex, Tabs, Tag, Textarea, TextInput, Typography } from '@strapi/design-system';
 import { useNotification } from '@strapi/strapi/admin';
 import { Duplicate } from '@strapi/icons';
 import styled from 'styled-components';
-import { ConfirmAction, EqualGrid } from '../../components/ui';
+import { ConfirmAction } from '../../components/ui';
 import FormField from '../../components/FormField';
 import {
   TEMPLATE_KEYS,
@@ -41,6 +41,29 @@ const TemplateTabsList = styled(Tabs.List)`
   }
 `;
 
+/**
+ * Variables as "tag | meaning" pairs. Tags share one column per pair, so
+ * every description starts on the same edge: two pairs per row when the
+ * editor is at least 720 px wide (container query), else one pair per row.
+ */
+const VariableGridFrame = styled.div`
+  container-type: inline-size;
+  min-width: 0;
+`;
+
+const VariableGrid = styled.div`
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: ${({ theme }) => theme.spaces[3]};
+  min-width: 0;
+
+  @container (min-width: 720px) {
+    grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+    column-gap: ${({ theme }) => theme.spaces[4]};
+  }
+`;
+
 const PreviewFrame = styled.iframe`
   display: block;
   width: 100%;
@@ -65,7 +88,7 @@ const TEMPLATE_TAB_LABELS = {
  * @returns {import('react').ReactElement} Bold label.
  */
 const BlockLabel = ({ children }) => (
-  <Typography variant="omega" fontWeight="bold" tag="p" textColor="neutral800">
+  <Typography variant="omega" fontWeight="bold" tag="div" textColor="neutral800">
     {children}
   </Typography>
 );
@@ -134,29 +157,33 @@ const TemplateEditor = ({ templateKey, template, templates, handleChange, copyVa
 
       <Flex direction="column" alignItems="stretch" gap={3}>
         <BlockLabel>{t('settings.email.templates.variables', 'Available variables')}</BlockLabel>
-        <EqualGrid columns={2} stackBelow="medium" gap={3}>
-          {TEMPLATE_VARIABLES[templateKey].map((variable) => {
-            const definition = TEMPLATE_VARIABLE_DEFINITIONS[variable];
-            return (
-              <Flex key={variable} gap={3} alignItems="center" wrap="wrap" minWidth={0}>
-                <Tag
-                  icon={<Duplicate aria-hidden focusable={false} />}
-                  label={t('settings.email.templates.copyVariable', 'Copy {variable}', { variable })}
-                  onClick={() => copyValue(
-                    variable,
-                    t('notifications.success.variableCopied', '{variable} copied.', { variable }),
-                    'settings.copyTemplateVariable'
-                  )}
-                >
-                  {variable}
-                </Tag>
-                <Typography variant="pi" textColor="neutral600">
-                  {t(definition.messageId, definition.defaultMessage)}
-                </Typography>
-              </Flex>
-            );
-          })}
-        </EqualGrid>
+        <VariableGridFrame>
+          <VariableGrid data-template-variables="">
+            {TEMPLATE_VARIABLES[templateKey].map((variable) => {
+              const definition = TEMPLATE_VARIABLE_DEFINITIONS[variable];
+              return (
+                <Fragment key={variable}>
+                  <Box>
+                    <Tag
+                      icon={<Duplicate aria-hidden focusable={false} />}
+                      label={t('settings.email.templates.copyVariable', 'Copy {variable}', { variable })}
+                      onClick={() => copyValue(
+                        variable,
+                        t('notifications.success.variableCopied', '{variable} copied.', { variable }),
+                        'settings.copyTemplateVariable'
+                      )}
+                    >
+                      {variable}
+                    </Tag>
+                  </Box>
+                  <Typography variant="pi" textColor="neutral600">
+                    {t(definition.messageId, definition.defaultMessage)}
+                  </Typography>
+                </Fragment>
+              );
+            })}
+          </VariableGrid>
+        </VariableGridFrame>
       </Flex>
 
       <Flex direction="column" alignItems="stretch" gap={3}>
@@ -276,18 +303,20 @@ const EmailTemplatesCard = ({ form }) => {
       </Tabs.Root>
 
       <Flex direction="column" alignItems="stretch" gap={3}>
-        <BlockLabel>{t('settings.email.templates.preview.title', 'Preview')}</BlockLabel>
-        <Typography variant="pi" textColor="neutral600" tag="p">
-          {t('settings.email.templates.preview.subtitle', 'The selected template rendered with sample data. Scripts and links are disabled.')}
-        </Typography>
-        <Box>
-          <Typography variant="sigma" textColor="neutral600" tag="p">
+        <Flex direction="column" alignItems="stretch" gap={1}>
+          <BlockLabel>{t('settings.email.templates.preview.title', 'Preview')}</BlockLabel>
+          <Typography variant="pi" textColor="neutral600" tag="p">
+            {t('settings.email.templates.preview.subtitle', 'The selected template rendered with sample data. Scripts and links are disabled.')}
+          </Typography>
+        </Flex>
+        <Flex direction="column" alignItems="stretch" gap={1}>
+          <Typography variant="sigma" textColor="neutral600" tag="div">
             {t('settings.email.templates.subject', 'Email subject')}
           </Typography>
-          <Typography variant="omega" textColor="neutral800" tag="p">
+          <Typography variant="omega" textColor="neutral800" tag="div">
             {renderTemplatePreview(active.subject)}
           </Typography>
-        </Box>
+        </Flex>
         <PreviewFrame
           title={t('settings.email.templates.preview.frameTitle', 'Email preview: {template}', {
             template: t(TEMPLATE_TAB_LABELS[activeTemplateTab][0], TEMPLATE_TAB_LABELS[activeTemplateTab][1]),

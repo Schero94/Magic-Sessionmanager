@@ -52,16 +52,6 @@ export const GEOIP_DATABASE_FILENAMES = Object.freeze([
   'GeoIP2-Country.mmdb',
 ]);
 
-/** Which tab shows which validated field (for Tabs hasError and the summary). */
-export const SETTINGS_TAB_FIELDS = Object.freeze({
-  general: [],
-  security: ['maxFailedLogins'],
-  geofencing: ['geoIpDatabasePath'],
-  notifications: ['discordWebhookUrl', 'slackWebhookUrl', 'emailTemplates'],
-});
-
-export const SETTINGS_TABS = Object.freeze(Object.keys(SETTINGS_TAB_FIELDS));
-
 /**
  * Merges loaded settings over the client defaults and fills empty e-mail
  * templates. Used for the initial load AND for the PUT response, so the
@@ -186,16 +176,6 @@ export function validateSettings(settings) {
   }
 
   return errors;
-}
-
-/**
- * @param {Record<string, unknown>} errors Errors from validateSettings().
- * @param {string} tab Tab id.
- * @returns {boolean} Whether the tab contains a field with an error.
- */
-export function tabHasErrors(errors, tab) {
-  const fields = SETTINGS_TAB_FIELDS[tab] || [];
-  return Object.keys(errors || {}).some((path) => fields.some((field) => path === field || path.startsWith(`${field}.`)));
 }
 
 /**

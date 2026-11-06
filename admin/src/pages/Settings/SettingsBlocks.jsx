@@ -1,5 +1,6 @@
-import { useEffect, useId, useState } from 'react';
+import { Fragment, useEffect, useId, useState } from 'react';
 import { Accordion, Box, Flex, SingleSelect, SingleSelectOption, Typography } from '@strapi/design-system';
+import styled from 'styled-components';
 import FormField from '../../components/FormField';
 import ReadableText from '../../components/ReadableText';
 import { buildSelectOptions } from './settingsTabs.mjs';
@@ -47,6 +48,19 @@ export const RequiresGeolocation = () => {
 };
 
 /**
+ * The DS accordion marks keyboard focus only with a faint border tint. The
+ * trigger gets the same 2 px primary focus ring as other DS controls.
+ */
+const AdvancedFrame = styled.div`
+  min-width: 0;
+
+  & button[data-radix-collection-item][aria-expanded]:not([role]):focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary600};
+    outline-offset: -2px;
+  }
+`;
+
+/**
  * Collapsed "Advanced" accordion inside a card (IA D5.3). It opens by itself
  * when a field inside it becomes invalid, so the error is never hidden.
  *
@@ -68,20 +82,22 @@ export const AdvancedSection = ({ label, hasError = false, disabled = false, chi
   }, [hasError, itemValue]);
 
   return (
-    <Accordion.Root value={open} onValueChange={setOpen} data-advanced-section="">
-      <Accordion.Item value={itemValue} disabled={disabled && !hasError}>
-        <Accordion.Header>
-          <Accordion.Trigger>{label || t('settings.config.advanced', 'Advanced')}</Accordion.Trigger>
-        </Accordion.Header>
-        <Accordion.Content>
-          <Box padding={{ initial: 4, medium: 6 }}>
-            <Flex direction="column" alignItems="stretch" gap={6}>
-              {children}
-            </Flex>
-          </Box>
-        </Accordion.Content>
-      </Accordion.Item>
-    </Accordion.Root>
+    <AdvancedFrame>
+      <Accordion.Root value={open} onValueChange={setOpen} data-advanced-section="">
+        <Accordion.Item value={itemValue} disabled={disabled && !hasError}>
+          <Accordion.Header>
+            <Accordion.Trigger>{label || t('settings.config.advanced', 'Advanced')}</Accordion.Trigger>
+          </Accordion.Header>
+          <Accordion.Content>
+            <Box padding={{ initial: 4, medium: 6 }}>
+              <Flex direction="column" alignItems="stretch" gap={6}>
+                {children}
+              </Flex>
+            </Box>
+          </Accordion.Content>
+        </Accordion.Item>
+      </Accordion.Root>
+    </AdvancedFrame>
   );
 };
 
@@ -123,3 +139,69 @@ export const PresetSelect = ({ id, name, label, description, error, value, prese
     </FormField>
   );
 };
+
+const Terms = styled.dl`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: ${({ theme }) => theme.spaces[1]} ${({ theme }) => theme.spaces[6]};
+  margin: 0;
+  min-width: 0;
+
+  ${({ theme }) => theme.breakpoints.small} {
+    grid-template-columns: max-content minmax(0, 1fr);
+    row-gap: ${({ theme }) => theme.spaces[3]};
+  }
+
+  dt,
+  dd {
+    margin: 0;
+    min-width: 0;
+  }
+
+  dd + dt {
+    margin-top: ${({ theme }) => theme.spaces[2]};
+  }
+
+  ${({ theme }) => theme.breakpoints.small} {
+    dd + dt {
+      margin-top: 0;
+    }
+  }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+`;
+
+/**
+ * Read-only reference list (IA F 1.3 and 2.5): a term column and a
+ * description column, so every description starts on the same edge. One
+ * column below the DS small breakpoint. Terms keep their case (no sigma
+ * uppercase), because they quote protocol values and server messages.
+ *
+ * @param {{
+ *   items: Array<{ id: string, term: string, description: string }>,
+ *   label?: string,
+ *   code?: boolean,
+ * }} props Rows, accessible name and whether terms are protocol codes
+ *   (monospace).
+ * @returns {import('react').ReactElement} Description list.
+ */
+export const TermList = ({ items, label, code = false }) => (
+  <Terms aria-label={label} data-term-list="">
+    {items.map((item) => (
+      <Fragment key={item.id}>
+        <dt>
+          <Typography variant="omega" fontWeight={code ? undefined : 'semiBold'} textColor="neutral800">
+            {code ? <code>{item.term}</code> : item.term}
+          </Typography>
+        </dt>
+        <dd>
+          <Typography variant="omega" textColor="neutral700">
+            {item.description}
+          </Typography>
+        </dd>
+      </Fragment>
+    ))}
+  </Terms>
+);

@@ -7,6 +7,7 @@ const List = styled.dl`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: ${({ theme }) => theme.spaces[4]};
+  column-gap: ${({ theme, $columnGap }) => theme.spaces[$columnGap ?? 4]};
   margin: 0;
   min-width: 0;
 
@@ -56,10 +57,12 @@ const List = styled.dl`
  * }>} props.items Properties. `render` replaces the plain value; missing values show "—".
  * @param {1|2} [props.columns] Columns from the small breakpoint.
  * @param {string} [props.label] Accessible name for the list.
+ * @param {number} [props.columnGap] DS spacing token between the columns
+ *   (4 by default); 6 lines the columns up with a form grid below.
  * @returns {import('react').ReactElement} Description list.
  */
-const PropertyList = ({ items = [], columns = 2, label }) => (
-  <List $columns={columns === 1 ? 1 : 2} aria-label={label} data-property-list="">
+const PropertyList = ({ items = [], columns = 2, label, columnGap }) => (
+  <List $columns={columns === 1 ? 1 : 2} $columnGap={columnGap} aria-label={label} data-property-list="">
     {items.filter(Boolean).map((item) => {
       const wrapsAnywhere = item.kind === 'id' || item.kind === 'email';
       const missing = item.render === undefined && isMissingValue(item.value);

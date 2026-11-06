@@ -112,7 +112,7 @@ const EncryptionKeyCard = ({ draft, copyValue, notify }) => {
       {encryptionKey ? (
         <EnvPreview padding={4} background="neutral100" borderColor="neutral200" hasRadius>
           <Flex direction="column" alignItems="stretch" gap={2}>
-            <Typography variant="sigma" textColor="neutral600" tag="p">
+            <Typography variant="sigma" textColor="neutral600" tag="div">
               {t('settings.security.encryption.envLabel', 'Add to .env file:')}
             </Typography>
             <Typography variant="omega" tag="p">

@@ -1,12 +1,12 @@
 import { Box, Flex, NumberInput, SingleSelect, SingleSelectOption } from '@strapi/design-system';
-import { PropertyList, SectionCard } from '../../components/ui';
+import { EqualGrid, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
 import ReadableText, { ReadableParagraphs } from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import { MAX_FAILED_LOGINS_RANGE } from '../../utils/settingsForm.mjs';
 import { fieldHasError } from './settingsTabs.mjs';
 import CountryListEditor from './CountryListEditor';
-import { AdvancedSection, IntroText, RequiresGeolocation } from './SettingsBlocks';
+import { AdvancedSection, IntroText, RequiresGeolocation, TermList } from './SettingsBlocks';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
 /**
@@ -37,23 +37,26 @@ const LoginProtectionTab = ({ form }) => {
         title={t('settings.config.failed.title', 'Failed sign-ins')}
         subtitle={t('settings.config.failed.intro', 'Slows down password guessing from one IP address.')}
       >
-        <FormField
-          id="max-failed-logins"
-          name="maxFailedLogins"
-          label={t('settings.config.failed.lockout.label', 'Temporary IP lockout after')}
-          description={t('settings.config.failed.lockout.hint', 'A whole number from 0 to 100. 0 turns the lockout off.')}
-          suffix={t('settings.config.failed.lockout.suffix', 'failed sign-ins')}
-          error={maxFailedError}
-          required
-        >
-          <NumberInput
-            value={settings.maxFailedLogins}
-            onValueChange={(value) => handleChange('maxFailedLogins', value)}
-            min={MAX_FAILED_LOGINS_RANGE.min}
-            max={MAX_FAILED_LOGINS_RANGE.max}
-            step={1}
-          />
-        </FormField>
+        <EqualGrid columns={2} stackBelow="medium" gap={6}>
+          <FormField
+            id="max-failed-logins"
+            name="maxFailedLogins"
+            label={t('settings.config.failed.lockout.label', 'Temporary IP lockout after')}
+            description={t('settings.config.failed.lockout.hint', 'A whole number from 0 to 100. 0 turns the lockout off.')}
+            suffix={t('settings.config.failed.lockout.suffix', 'failed sign-ins')}
+            error={maxFailedError}
+            required
+          >
+            <NumberInput
+              key={form.draftVersion}
+              value={settings.maxFailedLogins}
+              onValueChange={(value) => handleChange('maxFailedLogins', value)}
+              min={MAX_FAILED_LOGINS_RANGE.min}
+              max={MAX_FAILED_LOGINS_RANGE.max}
+              step={1}
+            />
+          </FormField>
+        </EqualGrid>
         {!maxFailedError ? (
           <Box padding={3} background={maxFailedValue === 0 ? 'warning100' : 'neutral100'} hasRadius aria-live="polite">
             <ReadableParagraphs
@@ -116,25 +119,27 @@ const LoginProtectionTab = ({ form }) => {
         </SettingsToggleRow>
 
         <AdvancedSection hasError={fieldHasError(errors, 'geoLookupFailureMode')}>
-          <FormField
-            id="geoip-lookup-failure-mode"
-            name="geoLookupFailureMode"
-            label={t('settings.config.suspicious.failureMode.label', 'If the location cannot be determined')}
-            description={t(
-              'settings.config.suspicious.failureMode.hint',
-              "Automatic rejects only when 'Reject suspicious sign-ins' is on. A rejected sign-in gets 'Login temporarily unavailable'. With 'Reject sign-in', the Automatic provider no longer falls back to ipapi.co."
-            )}
-          >
-            <SingleSelect
-              value={settings.geoLookupFailureMode || 'auto'}
-              disabled={lookupOff}
-              onChange={(value) => handleChange('geoLookupFailureMode', value)}
+          <EqualGrid columns={2} stackBelow="medium" gap={6}>
+            <FormField
+              id="geoip-lookup-failure-mode"
+              name="geoLookupFailureMode"
+              label={t('settings.config.suspicious.failureMode.label', 'If the location cannot be determined')}
+              description={t(
+                'settings.config.suspicious.failureMode.hint',
+                "Automatic rejects only when 'Reject suspicious sign-ins' is on. A rejected sign-in gets 'Login temporarily unavailable'. With 'Reject sign-in', the Automatic provider no longer falls back to ipapi.co."
+              )}
             >
-              <SingleSelectOption value="auto">{t('settings.config.suspicious.failureMode.auto', 'Automatic')}</SingleSelectOption>
-              <SingleSelectOption value="allow">{t('settings.config.suspicious.failureMode.allow', 'Allow sign-in')}</SingleSelectOption>
-              <SingleSelectOption value="block">{t('settings.config.suspicious.failureMode.block', 'Reject sign-in')}</SingleSelectOption>
-            </SingleSelect>
-          </FormField>
+              <SingleSelect
+                value={settings.geoLookupFailureMode || 'auto'}
+                disabled={lookupOff}
+                onChange={(value) => handleChange('geoLookupFailureMode', value)}
+              >
+                <SingleSelectOption value="auto">{t('settings.config.suspicious.failureMode.auto', 'Automatic')}</SingleSelectOption>
+                <SingleSelectOption value="allow">{t('settings.config.suspicious.failureMode.allow', 'Allow sign-in')}</SingleSelectOption>
+                <SingleSelectOption value="block">{t('settings.config.suspicious.failureMode.block', 'Reject sign-in')}</SingleSelectOption>
+              </SingleSelect>
+            </FormField>
+          </EqualGrid>
         </AdvancedSection>
       </SectionCard>
 
@@ -154,24 +159,23 @@ const LoginProtectionTab = ({ form }) => {
       </SectionCard>
 
       <SectionCard title={t('settings.config.refused.title', 'Why sign-ins are refused')}>
-        <PropertyList
-          columns={1}
+        <TermList
           label={t('settings.config.refused.title', 'Why sign-ins are refused')}
           items={[
             {
               id: 'lockout',
-              label: t('settings.config.refused.lockout.response', '429 with Retry-After'),
-              value: t('settings.config.refused.lockout.cause', 'Temporary IP lockout'),
+              term: t('settings.config.refused.lockout.response', '429 with Retry-After'),
+              description: t('settings.config.refused.lockout.cause', 'Temporary IP lockout'),
             },
             {
               id: 'rule',
-              label: t('settings.config.refused.rule.response', '403'),
-              value: t('settings.config.refused.rule.cause', 'Country rule, or suspicious address / low score'),
+              term: t('settings.config.refused.rule.response', '403'),
+              description: t('settings.config.refused.rule.cause', 'Country rule, or suspicious address / low score'),
             },
             {
               id: 'unavailable',
-              label: t('settings.config.refused.unavailable.response', '403 "Login temporarily unavailable"'),
-              value: t('settings.config.refused.unavailable.cause', 'Location could not be determined and the rule says reject'),
+              term: t('settings.config.refused.unavailable.response', '403 "Login temporarily unavailable"'),
+              description: t('settings.config.refused.unavailable.cause', 'Location could not be determined and the rule says reject'),
             },
           ]}
         />

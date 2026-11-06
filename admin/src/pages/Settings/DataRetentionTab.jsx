@@ -1,6 +1,6 @@
 import { Button, Flex } from '@strapi/design-system';
 import { Trash } from '@strapi/icons';
-import { ConfirmAction, SectionCard } from '../../components/ui';
+import { ConfirmAction, EqualGrid, SectionCard } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import { SELECT_PRESETS } from './settingsTabs.mjs';
 import { IntroText, PresetSelect } from './SettingsBlocks';
@@ -29,19 +29,21 @@ const DataRetentionTab = ({ form }) => {
       </IntroText>
 
       <SectionCard title={t('settings.config.retention.title', 'History retention')}>
-        <PresetSelect
-          id="session-retention-period"
-          name="retentionDays"
-          label={t('settings.config.retention.keep.label', 'Keep ended sessions for')}
-          description={t(
-            'settings.config.retention.keep.hint',
-            "Checked once a day, the first time about 24 hours after the server starts. Open sessions are never deleted by retention. 'Forever' keeps them."
-          )}
-          value={settings.retentionDays}
-          presets={SELECT_PRESETS.retentionDays}
-          format={units.retentionDays}
-          onChange={(value) => handleChange('retentionDays', value)}
-        />
+        <EqualGrid columns={2} stackBelow="medium" gap={6}>
+          <PresetSelect
+            id="session-retention-period"
+            name="retentionDays"
+            label={t('settings.config.retention.keep.label', 'Keep ended sessions for')}
+            description={t(
+              'settings.config.retention.keep.hint',
+              "Checked once a day, the first time about 24 hours after the server starts. Open sessions are never deleted by retention. 'Forever' keeps them."
+            )}
+            value={settings.retentionDays}
+            presets={SELECT_PRESETS.retentionDays}
+            format={units.retentionDays}
+            onChange={(value) => handleChange('retentionDays', value)}
+          />
+        </EqualGrid>
       </SectionCard>
 
       <SectionCard title={t('settings.config.deleteEnded.title', 'Delete ended sessions')} tone="danger">
@@ -52,7 +54,7 @@ const DataRetentionTab = ({ form }) => {
           gap={4}
           data-danger-zone=""
         >
-          <ReadableText variant="omega" textColor="neutral700" tag="p">
+          <ReadableText variant="pi" textColor="neutral600" tag="p">
             {t(
               'settings.config.deleteEnded.description',
               'Deletes the records of all ended sessions of all users now. Open sessions, including idle ones, stay.'

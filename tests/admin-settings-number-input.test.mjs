@@ -31,3 +31,20 @@ test('the field hint and the {count} lockout sentence use separate messages (I18
   assert.doesNotMatch(login, /will be blocked after/i, 'the lockout targets IP addresses, not accounts (IA A.1)');
   assert.doesNotMatch(login, /background="warning50"/, 'warning50 is not a DS token');
 });
+
+test('the lockout input shows the stored value again after Discard changes and after Save (DS NumberInput keeps its own text)', () => {
+  // DS NumberInput prefers its internal text over a changed `value` prop, so
+  // a reset draft would still show the discarded number. The form bumps a
+  // draft version whenever it replaces the draft, and the input remounts.
+  const hook = readSettingsFile('hooks/useSettingsForm.js');
+  assert.match(hook, /const \[draftVersion, setDraftVersion\] = useState\(0\)/);
+  const reset = hook.slice(hook.indexOf('const handleReset = useCallback'), hook.indexOf('}, []);', hook.indexOf('const handleReset = useCallback')));
+  assert.match(reset, /setDraftVersion\(\(version\) => version \+ 1\)/);
+  const save = hook.slice(hook.indexOf('const handleSave = useCallback'), hook.indexOf('const handleReset = useCallback'));
+  assert.match(save, /setSavedSettings\(stored\);\s*setDraftVersion\(\(version\) => version \+ 1\)/);
+  assert.match(hook, /\n    draftVersion,\n/);
+
+  const valueIndex = login.indexOf('value={settings.maxFailedLogins}');
+  const numberInput = login.slice(login.lastIndexOf('<NumberInput', valueIndex), valueIndex);
+  assert.match(numberInput, /key=\{form\.draftVersion\}/);
+});

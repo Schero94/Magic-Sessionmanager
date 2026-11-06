@@ -11,7 +11,6 @@ import {
   getAdjustedFields,
   isAllowedWebhookUrl,
   normalizeSettings,
-  tabHasErrors,
   validateCountryCode,
   validateMaxFailedLogins,
   validateSettings,
@@ -28,6 +27,7 @@ import {
   TEMPLATE_VARIABLES,
 } from '../admin/src/utils/emailTemplateDraft.mjs';
 import { getModeChangeImpact } from '../admin/src/utils/geofencingMode.mjs';
+import { tabHasFieldErrors } from '../admin/src/pages/Settings/settingsTabs.mjs';
 
 const require = createRequire(import.meta.url);
 const dotenv = require('dotenv');
@@ -85,8 +85,8 @@ test('webhook URLs follow the server allowlist and report errors inline', () => 
   });
   assert.equal(errors.discordWebhookUrl.messageId, 'settings.validation.webhookDiscord');
   assert.equal(errors.slackWebhookUrl.messageId, 'settings.validation.webhookSlack');
-  assert.equal(tabHasErrors(errors, 'notifications'), true);
-  assert.equal(tabHasErrors(errors, 'general'), false);
+  assert.equal(tabHasFieldErrors(errors, 'alerts'), true);
+  assert.equal(tabHasFieldErrors(errors, 'sessions'), false);
 });
 
 test('GeoIP filename and template lengths are validated instead of silently changed by the server', () => {
@@ -102,7 +102,7 @@ test('GeoIP filename and template lengths are validated instead of silently chan
   const errors = validateSettings({ maxFailedLogins: 1, emailTemplates: templates });
   assert.equal(errors['emailTemplates.vpnProxy.subject'].messageId, 'settings.validation.maxLength');
   assert.equal(errors['emailTemplates.vpnProxy.subject'].values.count, TEMPLATE_LIMITS.subject + 1);
-  assert.equal(tabHasErrors(errors, 'notifications'), true);
+  assert.equal(tabHasFieldErrors(errors, 'alerts'), true);
 });
 
 test('country codes are validated and duplicates are reported', () => {
@@ -155,4 +155,14 @@ test('template variables have translated descriptions and previews escape insert
   });
   assert.equal(renderTemplatePreview('Hi {{user.email}} {{unknown.x}}'), 'Hi jane.doe@example.com {{unknown.x}}');
   assert.doesNotMatch(renderTemplatePreview('<b>{{session.userAgent}}</b>', { html: true }), /<script/);
+});
+
+test('the HTML preview drops scripts and inline handlers, so the sandboxed frame logs no blocked-script errors', () => {
+  const preview = renderTemplatePreview('<p onclick="x()" onmouseover=\'y()\'>Hi {{user.email}}</p><script>alert(1)</script><SCRIPT src="a.js"></SCRIPT>', { html: true });
+  assert.doesNotMatch(preview, /<script/i);
+  assert.doesNotMatch(preview, /\son\w+=/i);
+  assert.match(preview, /<p>Hi jane\.doe@example\.com<\/p>/);
+  assert.match(renderTemplatePreview('<p>Someone onboarding = yes</p>', { html: true }), /Someone onboarding = yes/, 'text outside tags stays');
+  // Plain text and subjects are never touched.
+  assert.equal(renderTemplatePreview('<script>x</script>'), '<script>x</script>');
 });

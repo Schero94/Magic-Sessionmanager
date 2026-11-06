@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Box, Button, Combobox, ComboboxOption, Dialog, Flex, Radio, Tag, TextInput, Typography } from '@strapi/design-system';
+import { Button, Combobox, ComboboxOption, Dialog, Flex, Radio, Tag, TextInput, Typography } from '@strapi/design-system';
 import { ConfirmDialog } from '@strapi/strapi/admin';
 import { Cross, Plus } from '@strapi/icons';
 import { EqualGrid } from '../../components/ui';
@@ -121,7 +121,7 @@ const CountryListEditor = ({ settings, handleChange }) => {
   return (
     <Flex direction="column" alignItems="stretch" gap={4}>
       <Flex direction="column" alignItems="stretch" gap={2}>
-        <Typography id={modeLabelId} variant="delta" tag="h3" textColor="neutral800">
+        <Typography id={modeLabelId} variant="pi" fontWeight="bold" tag="div" textColor="neutral800">
           {t('settings.config.countries.mode.label', 'Mode')}
         </Typography>
         <Radio.Group
@@ -167,13 +167,15 @@ const CountryListEditor = ({ settings, handleChange }) => {
         </ConfirmDialog>
       </Dialog.Root>
 
-      <Flex direction="column" alignItems="stretch" gap={2}>
-        <Typography id={listLabelId} variant="delta" tag="h3" textColor="neutral800">
-          {t('settings.config.countries.list.label', 'Countries')}
-        </Typography>
-        <ReadableText variant="pi" textColor="neutral600" tag="p">
-          {t('settings.config.countries.list.hint', "With 'Allow only listed countries', an empty list allows every country.")}
-        </ReadableText>
+      <Flex direction="column" alignItems="stretch" gap={3}>
+        <Flex direction="column" alignItems="stretch" gap={1}>
+          <Typography id={listLabelId} variant="pi" fontWeight="bold" tag="div" textColor="neutral800">
+            {t('settings.config.countries.list.label', 'Countries')}
+          </Typography>
+          <ReadableText variant="pi" textColor="neutral600" tag="p">
+            {t('settings.config.countries.list.hint', "With 'Allow only listed countries', an empty list allows every country.")}
+          </ReadableText>
+        </Flex>
         {activeList.length === 0 ? (
           <Typography variant="pi" textColor="neutral600" tag="p">
             {t('settings.geofencing.empty', 'No countries configured.')}
@@ -223,31 +225,16 @@ const CountryListEditor = ({ settings, handleChange }) => {
           </Combobox>
         </FormField>
 
-        <Flex direction="column" alignItems="stretch" gap={2}>
-          <FormField
-            id="country-code-manual"
-            name="countryCodeManual"
-            label={t('settings.geofencing.manual.label', 'Country code')}
-            description={t('settings.geofencing.manual.hint', 'Enter a two-letter ISO country code.')}
-            error={manualError}
-          >
-            <TextInput
-              placeholder={t('settings.geofencing.manual', 'For example, JP')}
-              value={manualCode}
-              maxLength={2}
-              autoComplete="off"
-              onChange={(event) => setManualCode(event.target.value.toUpperCase().slice(0, 2))}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  if (!manualError && addCode(manualCode)) setManualCode('');
-                }
-              }}
-            />
-          </FormField>
-          <Box>
+        <FormField
+          id="country-code-manual"
+          name="countryCodeManual"
+          label={t('settings.geofencing.manual.label', 'Country code')}
+          description={t('settings.geofencing.manual.hint', 'Enter a two-letter ISO country code.')}
+          error={manualError}
+          action={(
             <Button
               variant="secondary"
+              size="L"
               startIcon={<Plus aria-hidden focusable={false} />}
               disabled={Boolean(manualError) || !normalizeCountryCode(manualCode)}
               onClick={() => {
@@ -256,8 +243,22 @@ const CountryListEditor = ({ settings, handleChange }) => {
             >
               {t('settings.geofencing.add', 'Add')}
             </Button>
-          </Box>
-        </Flex>
+          )}
+        >
+          <TextInput
+            placeholder={t('settings.geofencing.manual', 'For example, JP')}
+            value={manualCode}
+            maxLength={2}
+            autoComplete="off"
+            onChange={(event) => setManualCode(event.target.value.toUpperCase().slice(0, 2))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                if (!manualError && addCode(manualCode)) setManualCode('');
+              }
+            }}
+          />
+        </FormField>
       </EqualGrid>
     </Flex>
   );

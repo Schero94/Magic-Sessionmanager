@@ -1,4 +1,5 @@
-import { Badge, Button, Flex, SingleSelect, SingleSelectOption, TextInput } from '@strapi/design-system';
+import { useRef } from 'react';
+import { Badge, Button, Divider, Flex, SingleSelect, SingleSelectOption, TextInput } from '@strapi/design-system';
 import { Trash } from '@strapi/icons';
 import { ConfirmAction, EqualGrid, PropertyList, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
@@ -23,6 +24,9 @@ const GeoIpDatabaseCard = ({ form }) => {
   const { t, tError, locale } = useSettingsTranslate();
   const { settings, handleChange, errors, hasChanges, geoIp } = form;
   const geoIpStatus = geoIp.status;
+  // Removing stored credentials also removes the Remove button; focus then
+  // moves to the account ID field instead of falling back to the page body.
+  const accountIdRef = useRef(null);
   const lookupOff = !settings.enableGeolocation;
   const localDatabase = usesLocalDatabase(settings.geoIpProvider);
   const databaseDisabled = lookupOff || !localDatabase;
@@ -54,32 +58,36 @@ const GeoIpDatabaseCard = ({ form }) => {
         </RequiresNotice>
       ) : null}
 
-      <FormField
-        id="geoip-provider"
-        name="geoIpProvider"
-        label={t('settings.config.provider.label', 'Provider')}
-        description={t(
-          'settings.config.provider.hint',
-          'Automatic uses the local database, else ipapi.co unless lookup failures are set to reject. Local database keeps lookups on this server. ipapi.co sends IP addresses to that service. Off turns lookups off.'
-        )}
-      >
-        <SingleSelect
-          value={settings.geoIpProvider || 'auto'}
-          disabled={lookupOff}
-          onChange={(value) => handleChange('geoIpProvider', value)}
+      <EqualGrid columns={2} stackBelow="medium" gap={6}>
+        <FormField
+          id="geoip-provider"
+          name="geoIpProvider"
+          label={t('settings.config.provider.label', 'Provider')}
+          description={t(
+            'settings.config.provider.hint',
+            'Automatic uses the local database, else ipapi.co unless lookup failures are set to reject. Local database keeps lookups on this server. ipapi.co sends IP addresses to that service. Off turns lookups off.'
+          )}
         >
-          <SingleSelectOption value="auto">{t('settings.config.provider.auto', 'Automatic')}</SingleSelectOption>
-          <SingleSelectOption value="local-mmdb">{t('settings.config.provider.local', 'Local database')}</SingleSelectOption>
-          <SingleSelectOption value="ipapi">{t('settings.config.provider.ipapi', 'ipapi.co')}</SingleSelectOption>
-          <SingleSelectOption value="disabled">{t('settings.config.provider.off', 'Off')}</SingleSelectOption>
-        </SingleSelect>
-      </FormField>
+          <SingleSelect
+            value={settings.geoIpProvider || 'auto'}
+            disabled={lookupOff}
+            onChange={(value) => handleChange('geoIpProvider', value)}
+          >
+            <SingleSelectOption value="auto">{t('settings.config.provider.auto', 'Automatic')}</SingleSelectOption>
+            <SingleSelectOption value="local-mmdb">{t('settings.config.provider.local', 'Local database')}</SingleSelectOption>
+            <SingleSelectOption value="ipapi">{t('settings.config.provider.ipapi', 'ipapi.co')}</SingleSelectOption>
+            <SingleSelectOption value="disabled">{t('settings.config.provider.off', 'Off')}</SingleSelectOption>
+          </SingleSelect>
+        </FormField>
+      </EqualGrid>
 
       {!lookupOff && !localDatabase ? (
         <RequiresNotice>
           {t('settings.config.requires.localDatabase', 'The database settings below require the Automatic or Local database provider.')}
         </RequiresNotice>
       ) : null}
+
+      <Divider />
 
       {geoIp.statusError && (
         <Alert
@@ -142,6 +150,7 @@ const GeoIpDatabaseCard = ({ form }) => {
           description={t('settings.config.database.accountId.hint', 'Up to 64 characters. Environment variables take precedence.')}
         >
           <TextInput
+            ref={accountIdRef}
             name="maxmindAccountId"
             value={geoIp.credentials.accountId || ''}
             autoComplete="off"
@@ -197,9 +206,12 @@ const GeoIpDatabaseCard = ({ form }) => {
             )}
             confirmLabel={t('settings.config.database.remove.action', 'Remove')}
             onConfirm={geoIp.removeCredentials}
+            fallbackFocusRef={accountIdRef}
           />
         ) : null}
       </Flex>
+
+      <Divider />
 
       <Flex direction="column" alignItems="stretch" gap={2}>
         <Flex gap={2} wrap="wrap">
@@ -231,26 +243,28 @@ const GeoIpDatabaseCard = ({ form }) => {
       </Flex>
 
       <AdvancedSection hasError={fieldHasError(errors, 'geoIpDatabasePath')}>
-        <FormField
-          id="geoip-database-filename"
-          name="geoIpDatabasePath"
-          label={t('settings.config.database.fileName.label', 'Database file name')}
-          description={t(
-            'settings.config.database.fileName.hint',
-            "File name only, inside the plugin's GeoIP folder. Leave empty for the default."
-          )}
-          error={tError(errors.geoIpDatabasePath)}
-        >
-          <TextInput
+        <EqualGrid columns={2} stackBelow="medium" gap={6}>
+          <FormField
+            id="geoip-database-filename"
             name="geoIpDatabasePath"
-            value={settings.geoIpDatabasePath || ''}
-            disabled={databaseDisabled && !errors.geoIpDatabasePath}
-            onChange={(event) => handleChange('geoIpDatabasePath', event.target.value)}
-            placeholder="GeoLite2-City.mmdb"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </FormField>
+            label={t('settings.config.database.fileName.label', 'Database file name')}
+            description={t(
+              'settings.config.database.fileName.hint',
+              "File name only, inside the plugin's GeoIP folder. Leave empty for the default."
+            )}
+            error={tError(errors.geoIpDatabasePath)}
+          >
+            <TextInput
+              name="geoIpDatabasePath"
+              value={settings.geoIpDatabasePath || ''}
+              disabled={databaseDisabled && !errors.geoIpDatabasePath}
+              onChange={(event) => handleChange('geoIpDatabasePath', event.target.value)}
+              placeholder="GeoLite2-City.mmdb"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </FormField>
+        </EqualGrid>
       </AdvancedSection>
     </SectionCard>
   );

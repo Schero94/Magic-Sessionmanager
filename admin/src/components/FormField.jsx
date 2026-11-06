@@ -80,21 +80,25 @@ const FieldHint = styled.div`
  *   error?: string,
  *   required?: boolean,
  *   suffix?: import('react').ReactNode,
+ *   action?: import('react').ReactNode,
  *   children: import('react').ReactNode,
  * }} props Field identity, copy, validation state, optional unit suffix
- *   (IA F: units are input suffixes) and control.
+ *   (IA F: units are input suffixes), optional button on the control's row
+ *   (for example "Add") and control.
  * @returns {import('react').ReactElement} A responsive, accessible form field.
  */
-const FormField = ({ id, name = id, label, description, error, required = false, suffix, children }) => {
+const FormField = ({ id, name = id, label, description, error, required = false, suffix, action, children }) => {
   const control = <FieldControl>{children}</FieldControl>;
   return (
     <FieldFrame>
       <Field.Root id={id} name={name} hint={description} error={error || undefined} required={required}>
         <Field.Label>{label}</Field.Label>
-        {suffix ? (
+        {suffix || action ? (
           <SuffixRow>
             {control}
-            <Typography variant="omega" textColor="neutral600" id={`${id}-suffix`}>{suffix}</Typography>
+            {suffix ? (
+              <Typography variant="omega" textColor="neutral600" id={`${id}-suffix`}>{suffix}</Typography>
+            ) : action}
           </SuffixRow>
         ) : control}
         {description || error ? <FieldHint><Field.Hint /><Field.Error /></FieldHint> : null}

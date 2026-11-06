@@ -1,6 +1,16 @@
 import { createContext, useContext } from 'react';
 import { Link } from '@strapi/design-system';
+import styled from 'styled-components';
 import { buildTabSearch } from './settingsTabs.mjs';
+
+/**
+ * A tab link usually stands on its own line, so it keeps the 24 px minimum
+ * target height (spacing token 6) instead of the 20 px text line.
+ */
+const TabLink = styled(Link)`
+  min-height: ${({ theme }) => theme.spaces[6]};
+  align-items: center;
+`;
 
 const SettingsNavigationContext = createContext({ selectTab: () => {} });
 
@@ -26,7 +36,7 @@ export const SettingsTabLink = ({ tab, children }) => {
   const { selectTab } = useSettingsNavigation();
   const search = typeof window === 'undefined' ? '' : window.location.search;
   return (
-    <Link
+    <TabLink
       href={buildTabSearch(search, tab)}
       onClick={(event) => {
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
@@ -35,6 +45,6 @@ export const SettingsTabLink = ({ tab, children }) => {
       }}
     >
       {children}
-    </Link>
+    </TabLink>
   );
 };

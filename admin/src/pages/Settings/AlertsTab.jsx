@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { Box, Checkbox, Flex, Typography } from '@strapi/design-system';
+import styled from 'styled-components';
 import { EqualGrid, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
 import ReadableText from '../../components/ReadableText';
@@ -18,6 +19,28 @@ const WEBHOOK_EVENTS = Object.freeze({
   newLocation: 'login.new_location',
   success: 'login.success',
 });
+
+/**
+ * Email types side by side when the card is wide enough for three readable
+ * cells, else one per row. It follows the card width (container query), not
+ * the viewport, so a 2 + 1 split with a lonely third cell never happens.
+ */
+const EmailTypeGrid = styled.div`
+  container-type: inline-size;
+  min-width: 0;
+
+  & > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: ${({ theme }) => theme.spaces[4]};
+  }
+
+  @container (min-width: 640px) {
+    & > div {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+`;
 
 /**
  * Bordered cell around one email type checkbox with its helper text; the
@@ -110,7 +133,7 @@ const AlertsTab = ({ form }) => {
         />
 
         <Flex direction="column" alignItems="stretch" gap={3}>
-          <Typography variant="omega" fontWeight="bold" tag="p" textColor="neutral800">
+          <Typography variant="pi" fontWeight="bold" tag="div" textColor="neutral800">
             {t('settings.config.email.types.label', 'Send an email for')}
           </Typography>
           {!lookupOff && !settings.enableEmailAlerts ? (
@@ -118,23 +141,25 @@ const AlertsTab = ({ form }) => {
               {t('settings.config.requires.emailAlerts', 'Requires Send security emails')}
             </RequiresNotice>
           ) : null}
-          <EqualGrid columns={3} stackBelow="medium" gap={4}>
-            {emailTypes.map(({ field, hintId, label, hint }) => (
-              <AlertTypeCell key={field} checked={settings[field]} disabled={emailTypesDisabled}>
-                <Checkbox
-                  checked={settings[field]}
-                  disabled={emailTypesDisabled}
-                  aria-describedby={hintId}
-                  onCheckedChange={(checked) => handleChange(field, checked === true)}
-                >
-                  {label}
-                </Checkbox>
-                <ReadableText id={hintId} variant="pi" textColor="neutral600" tag="p">
-                  {hint}
-                </ReadableText>
-              </AlertTypeCell>
-            ))}
-          </EqualGrid>
+          <EmailTypeGrid>
+            <div>
+              {emailTypes.map(({ field, hintId, label, hint }) => (
+                <AlertTypeCell key={field} checked={settings[field]} disabled={emailTypesDisabled}>
+                  <Checkbox
+                    checked={settings[field]}
+                    disabled={emailTypesDisabled}
+                    aria-describedby={hintId}
+                    onCheckedChange={(checked) => handleChange(field, checked === true)}
+                  >
+                    {label}
+                  </Checkbox>
+                  <ReadableText id={hintId} variant="pi" textColor="neutral600" tag="p">
+                    {hint}
+                  </ReadableText>
+                </AlertTypeCell>
+              ))}
+            </div>
+          </EmailTypeGrid>
         </Flex>
 
         <AdvancedSection

@@ -285,3 +285,10 @@ test('settings content relies on the page shell gutters and uses one heading hie
 test('settings source carries no internal process notes', () => {
   assert.doesNotMatch(source, /scratch[p]ad|i18n[ ]merge/i);
 });
+
+test('removing stored MaxMind credentials moves focus to the account ID field, because the Remove trigger disappears', () => {
+  const database = readSettingsFile('GeoIpDatabaseCard.jsx');
+  assert.match(database, /const accountIdRef = useRef\(null\)/);
+  assert.match(database, /<TextInput\s+ref=\{accountIdRef\}\s+name="maxmindAccountId"/);
+  assert.match(database, /onConfirm=\{geoIp\.removeCredentials\}\s+fallbackFocusRef=\{accountIdRef\}/);
+});
