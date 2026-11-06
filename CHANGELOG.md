@@ -33,6 +33,13 @@ Branch `claude/sessionmanager-ui-redesign`. Not yet accepted: see `GATES.md` and
 * Server-side store and provider failures now return 500 (502 for a failed MaxMind download, 503 when the licence server is unreachable) instead of 400. The `{ data: null, error }` envelope is unchanged; clients that check for 400 must be updated.
 * Admin session lists no longer include the internal `sessionId` field. Actions use `documentId`; the Content API `/my-sessions` response keeps `sessionId`.
 * `POST /magic-sessionmanager/user/:userId/toggle-block` accepts `{ "blocked": true | false }` to set the state, which is safe to retry and is what the admin UI sends. A request without a body still toggles, as before, but is deprecated. A `blocked` value that is not a boolean returns 400. The response adds `mode` (`explicit` or `toggle`).
+* Session objects in admin and Content API responses no longer include `nativeSessionId` (token and token-hash fields were already removed).
+* Admin `POST /magic-sessionmanager/sessions/:sessionId/terminate` returns 404 for an unknown session, and `POST /magic-sessionmanager/user/:userId/terminate-all` returns 404 for an unknown user. Both answered 200 before.
+* Admin `POST /magic-sessionmanager/sessions/clean-inactive` returns 500 with `deletedCount` and `failedCount` when some records cannot be removed, instead of stopping and reporting success.
+* Settings `PUT`: a webhook URL on a host other than Discord or Slack is rejected with a field error instead of being saved as empty, and an email template longer than its limit (subject 200, HTML 10,000, text 5,000 characters) is rejected instead of being cut off.
+* The opt-in `plugin::magic-sessionmanager.session-required` policy follows the global token check more closely. With Strict token check it now also returns 401 when the user cannot be resolved, when settings or the session lookup fail, and, with `jwtManagement: 'refresh'`, when Strapi verified no native session or the session row does not match it. Relaxed behaviour is unchanged. No plugin route attaches the policy.
+* If the plugin settings cannot be read from the store, IP location lookup is turned off as well (Strict token check was already enforced in that case) until the store recovers, so the static defaults cannot override a saved opt-out.
+* Every admin page sets the browser tab title, for example "Sessions | Strapi".
 
 ### Fixed
 
@@ -43,6 +50,13 @@ Branch `claude/sessionmanager-ui-redesign`. Not yet accepted: see `GATES.md` and
 * Deleting another user's session answers exactly like a missing session, so session IDs cannot be probed.
 * Blocking a user from the admin revokes the user's sessions once instead of twice.
 * `tests/isolated-fallback-logout-http.test.js` skips with a clear message instead of failing when no Strapi host dependencies are available.
+* iPad user agents are recorded as tablets, and iPhone and iPad sessions report iOS instead of macOS.
+* IPv4-mapped IPv6 addresses in expanded or hexadecimal form are recognised as private or loopback addresses, so they are no longer sent to a location provider.
+
+### Documentation and maintenance
+
+* README and the project site (`docs/site`) are rewritten for the new screens and terminology. They include a configuration, Content API and Admin API reference checked against the code, a section on the opt-in `session-required` policy and a maintenance status. The screenshots in `pics/` and `docs/site/img/` are new and show synthetic data only.
+* Dependabot proposes weekly patch and minor updates. A workflow merges a Dependabot pull request that is not a major update once tests, type checks, build, verify and a critical-level production audit pass. The lint step runs only if a `lint` script exists, and there is none yet. Merges use `GITHUB_TOKEN`, so they do not trigger the release workflow.
 
 # [4.8.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.2...v4.8.0) (2026-11-06)
 
