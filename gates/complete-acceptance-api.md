@@ -2,7 +2,28 @@
 
 Scope: all current plugin admin, content and compatibility routes; no production data or external provider operations.
 
+## Current state on the redesign branch, 2026-11-06 (read first)
+
+Strapi version of every HTTP count (GA-08): sections below this one ran on the workbench test-app, **Strapi 5.58.0**, unless they say otherwise. The plugin targets 5.61.0 (`package.json` devDependency). The runs in this section used `SESSION_HTTP_STRAPI_NODE_MODULES` pointing at `.tmp/sessionmanager-complete-host/node_modules` (`@strapi/strapi` **5.61.0**), on the redesign working tree around 17:40:
+
+| Command | Result |
+| --- | --- |
+| `SESSION_HTTP_MODE=legacy-support node --test tests/isolated-http-access.test.js` | 38 tests, 38 pass |
+| `SESSION_HTTP_MODE=refresh node --test tests/isolated-http-access.test.js` | 40 tests, 40 pass |
+| `SESSION_HTTP_MODE=refresh SESSION_HTTP_FALLBACK=1 node --test tests/isolated-http-access.test.js` | 41 tests, 41 pass |
+| `SESSION_HTTP_FALLBACK=1 node --test tests/isolated-http-access.test.js` (legacy) | 39 tests, 39 pass |
+| `node --test tests/isolated-fallback-logout-http.test.js tests/isolated-http-portability.test.js` | 5 tests, 5 pass |
+| server focused (`server-api-hardening`, `auth-routes`, `settings`, `license-controller`, `geoip-controller`, `endpoint-error-contracts`, `route-contracts`, `content-api-permissions`, `session-controller-delete`, `native-session-routes`, `session-policy`) | 98 tests, 98 pass |
+
+The default without `SESSION_HTTP_STRAPI_NODE_MODULES` is still the 5.58.0 test-app; acceptance evidence must name the 5.61 host explicitly.
+
+New regression coverage on this branch (server agent): every Content API route answers 429 once its per-caller budget is spent, with buckets keyed on the matched route template instead of the raw path (API-1/API-2); admin settings can only tighten the write limit (API-5); a partial settings PUT keeps omitted fields and rejects invalid values with 400 instead of clamping (API-6); a successful password reset ends older sessions in both modes (GA-04); a foreign session id on `DELETE /my-sessions/:id` answers like an absent one (API-10); admin session lists drop the internal `sessionId` (F12); a bodyless `toggle-block` keeps the pre-4.9 toggle (GA-09/API-4, see next section). Store and provider failures now answer 500 (502 for the MaxMind download, 503 for an unreachable license server) instead of 400 (API-7); the `{ data: null, error }` envelope is unchanged, but the status codes differ, so clients that branch on 400 see a change.
+
+A2 stays open: races and partial writes, fallback-route rate limiting, current-session 202/404 over HTTP, other malformed IDs, DB failures in more places, multi-process and non-SQLite databases. These runs are green tests, not a security sign-off.
+
 ## Retry-safe contract implementation, 2026-11-06
+
+Superseded in part on the redesign branch (GA-09/API-4): bodyless requests are **no longer** rejected. A request without `blocked` keeps the pre-4.9 toggle behaviour (deprecated, response `mode: 'toggle'`); `{ blocked: true | false }` sets the state retry-safely (`mode: 'explicit'`); a `blocked` value that is present but not boolean is still a 400 before any mutation. `README.md:673` still describes the 400 migration and must be corrected by its owner. The text below describes the acceptance worktree.
 
 The explicitly approved breaking contract now requires `{ blocked: true | false }` on `POST /user/:userId/toggle-block`; bodyless and non-boolean requests return 400 before mutation. The admin panel sends the state chosen at confirmation. Block requests invoke revocation even when the user was already blocked, so a sequential retry following partial revocation or a lost success response no longer reverses the block. Explicit unblock remains available. The README documents the migration and partial-effect limits. The historical characterization below predates this change and must not be read as the current implementation.
 
@@ -46,14 +67,16 @@ The opt-in session policy must reject an authenticated request when strict enfor
   EVIDENCE: route matrix below; `tests/route-contracts.test.js` checks every declared plugin route and policy; `tests/auth-interceptors.test.js` exercises the separate compatibility route.
 - [ ] A2: For each applicable endpoint verify authorized success, anonymous and wrong-role rejection, wrong owner, invalid input, provider failure and safe errors. Document executable evidence and gaps explicitly.
   EVIDENCE: pending
-- [x] A3: Confirmed endpoint/security defects are fixed with a failing regression first; existing public contracts stay compatible.
-  EVIDENCE: the native current-session, malformed license identity, and strict opt-in policy regressions failed before their respective edits and pass afterwards. Existing 400/UnauthorizedError contracts and valid inputs are preserved; relaxed policy failure remains allowed for compatibility.
+- [ ] A3: Confirmed endpoint/security defects are fixed with a failing regression first; existing public contracts stay compatible.
+  EVIDENCE: Unchecked 2026-11-06 (GA-04, API-4). On the acceptance worktree the claim did not hold: the confirmed password-reset defect was open and the bodyless toggle-block had been made a breaking 400. On the redesign branch the reset defect is fixed and the bodyless toggle is compatible again (see top section), but server-side store/provider failures now answer 500/502/503 instead of 400; that client-visible change needs a release decision before this gate can close. Earlier evidence still holds: the native current-session, malformed license identity, and strict opt-in policy regressions failed before their respective edits and pass afterwards.
 - [x] A4: Focused endpoint/security suite passes after changes, and no secrets or personal data appear in tests or reports.
   EVIDENCE: `node --test --test-reporter=spec tests/endpoint-error-contracts.test.js tests/route-contracts.test.js tests/ownership-permissions.test.js tests/native-session-routes.test.js tests/session-policy.test.js tests/session-controller-delete.test.js tests/license-controller.test.js tests/geoip-controller.test.js tests/settings.test.js tests/content-api-permissions.test.js tests/session-revocation.test.js tests/auth-routes.test.js tests/auth-interceptors.test.js` => 124 pass, 0 fail; new fixtures are synthetic.
 
 ## Endpoint inventory and evidence
 
-### Password-reset session security, 2026-11-06: open
+### Password-reset session security, 2026-11-06: open on the acceptance worktree and in 4.8.0; fixed on the redesign branch
+
+Update (redesign branch, GA-04): `server/src/utils/auth-routes.js` and `server/src/bootstrap.js` now end every older session of the user after a successful reset and fail closed if that is not possible. Regression tests: `tests/auth-routes.test.js` ("GA-04: …" cases) and the isolated HTTP case "a successful password reset ends every older session of the user (GA-04)", passing in legacy-support and refresh on Strapi 5.61.0 dependencies. The published 4.8.0 still has the defect described below.
 
 In an isolated real Strapi 5.58.0 / Users & Permissions 5.58.0 host using the current acceptance-worktree plugin source, a synthetic user had an existing Magic session and access token before a successful `POST /api/auth/reset-password`. In `legacy-support`, the old Magic sidecar remained active and its old bearer token still received HTTP 200 on the owner's protected `/my-sessions` endpoint after reset. In `refresh` mode the prior native session became inactive and its old bearer was denied (401/403), but the Magic sidecar still appeared active in storage. The reset response issued a new token that successfully accessed `/my-sessions` in both modes. No email was sent; the reset code and password were random synthetic values kept in the isolated process. The executable characterization runs in `tests/isolated-http-access.test.js`; its passing status describes the observed gap and is not a security pass. The complete HTTP suites passed 34 tests in legacy and 36 in refresh.
 
@@ -132,7 +155,7 @@ Input classification for each registered route is below. `none` means there is n
 | GET /license/status | none; admin-wide | fake provider exception 400 |
 | POST /license/auto-create | admin identity; no request body; admin-wide | fake provider exception 400 |
 | POST /license/create | email, firstName, lastName; admin-wide | invalid input and fake provider exception 400 |
-| POST /license/ping | stored key, no request body; admin-wide | fake provider exception 400; missing stored key remains HTTP gap |
+| POST /license/ping | stored key, no request body; admin-wide | fake provider exception 400; missing stored key 400 before any provider call (HTTP, see "Missing license key") |
 | POST /license/store-key | key and optional email; admin-wide | invalid key, fake provider exception and email mismatch 400 |
 | GET /geolocation/:ipAddress | IP address; admin-wide | invalid IP 400, fake provider exception 500 |
 | GET /geoip/status | none; admin-wide | plugin-store exception 400 |
@@ -145,9 +168,9 @@ Input classification for each registered route is below. `none` means there is n
 | GET /my-sessions; GET /current-session | caller identity/bearer; caller's own sessions | document failure (legacy) / service failure (refresh) 500; 202 pending and missing current session HTTP cases open |
 | GET /user/:userId/sessions (Content API) | user ID must match caller | wrong owner 403; service exception 500; other malformed IDs open |
 | DELETE /my-sessions/:sessionId | non-current own session ID | missing/foreign/current and malformed native ID covered; service exception 500; race open |
-| POST /api/auth/logout | bearer or built-in refresh credential; caller | native host success/denial; actual fallback handler tested separately with synthetic JWT and fake dependencies, not integrated fallback registration; rate limit open |
+| POST /api/auth/logout | bearer or built-in refresh credential; caller | native host success/denial; real-host fallback registration with `SESSION_HTTP_FALLBACK=1` (built-in route removed, exactly one bootstrap-registered route, missing/invalid/forged tokens rejected, owner terminated, injected failure redacted 500); signed-expired token only in the separate Koa harness; fallback rate limit open |
 
-This section supersedes older open-case descriptions in historical tables below. A2 remains open for the cases explicitly named above, particularly race/partial-write behavior and real-host fallback registration; tested representative errors do not establish every possible failure. No product code or Admin UI files changed in this pass.
+This section supersedes older open-case descriptions in historical tables below. A2 remains open for the cases explicitly named above, particularly race/partial-write behavior and fallback-route rate limiting (real-host fallback registration itself is covered by the `SESSION_HTTP_FALLBACK=1` runs, corrected 2026-11-06, GA-12); tested representative errors do not establish every possible failure. No product code or Admin UI files changed in this pass.
 
 #### Additional HTTP edge cases, 2026-11-06
 
@@ -168,7 +191,7 @@ Full suite after the additions: `node --test --test-reporter=spec tests/*.test.j
 | GET /sessions; POST /sessions/clean-inactive | Injected session service failure returns 500 without the private error marker. | Individual storage failures and partial batch effects. |
 | GET/PUT /settings; GET /geoip/status; PUT /geoip/credentials | Injected plugin-store exceptions return 400 without the private error marker. | Partial writes, specific storage failures; 400 is existing behavior. |
 | GET /geolocation/:ipAddress; POST /license/create | Injected provider exception returns respectively 500 / 400 without the private marker; no external request. | Other provider endpoints and response shapes. |
-| POST /api/auth/logout fallback handler | Separate private Koa HTTP harness uses the actual fallback route handler with fake Strapi dependencies: missing, malformed and wrong-signature JWTs give 401; unresolved owner gives 401; valid and signed-expired JWTs terminate the resolved synthetic owner; termination failure gives redacted 500. | Real Strapi fallback route registration/auth stack not tested; host tests exercise its installed logout route. Fallback rate limiting is not established. |
+| POST /api/auth/logout fallback handler | Separate private Koa HTTP harness uses the actual fallback route handler with fake Strapi dependencies: missing, malformed and wrong-signature JWTs give 401; unresolved owner gives 401; valid and signed-expired JWTs terminate the resolved synthetic owner; termination failure gives redacted 500. | Superseded for registration: the real-host `SESSION_HTTP_FALLBACK=1` runs exercise the bootstrap-registered route and auth stack. Still open: signed-expired token over the real host, fallback rate limiting. |
 
 The fallback harness is deliberately distinct from the real Strapi host, so its HTTP proof does not establish framework middleware behavior. No UI/privacy files were edited; fake services and network restrictions prevent external effects. The previously observed missing-ID responses are corrected by the approved 404 change above.
 

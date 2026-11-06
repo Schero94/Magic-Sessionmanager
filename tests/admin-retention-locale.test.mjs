@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { IntlMessageFormat } from 'intl-messageformat';
 
-const source = readFileSync(new URL('../admin/src/pages/Settings.jsx', import.meta.url), 'utf8');
+import { readSettingsSource } from './helpers/settingsSource.mjs';
+
+const source = readSettingsSource();
 const translations = Object.fromEntries(['en', 'de', 'es', 'fr', 'pt'].map((locale) => [locale, JSON.parse(readFileSync(new URL(`../admin/src/translations/${locale}.json`, import.meta.url)))]));
 
 test('retention passes a numeric value and uses the never branch for -1', () => {

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { readSettingsSource } from './helpers/settingsSource.mjs';
 
-const settingsSource = readFileSync(new URL('../admin/src/pages/Settings.jsx', import.meta.url), 'utf8');
+const settingsSource = readSettingsSource();
 
 test('email alert checkboxes update the controlled Strapi Design System v2 state', () => {
   const checkboxBlocks = settingsSource.match(/<Checkbox\b[\s\S]*?<\/Checkbox>/g) || [];

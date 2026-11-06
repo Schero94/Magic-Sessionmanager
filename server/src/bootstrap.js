@@ -32,6 +32,7 @@ const { CONTENT_API_PERMISSIONS_VERSION } = require('./utils/content-api-permiss
 const {
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,
+  isPasswordResetRequest,
   shouldRunPreAuthGeoGuard,
 } = require('./utils/auth-routes');
 const {
@@ -580,6 +581,8 @@ function mountFailedLoginLockout({ strapi, log }) {
  * After a successful login/MFA/OTP, creates a Magic metadata sidecar for the
  * issued session. Native refresh mode validates Strapi's refresh token and
  * links its session ID; legacy mode keeps the existing token behavior.
+ * After a successful password reset every other session of the user is
+ * ended before the new token is released.
  * Geo-blocking already happened in `mountPreLoginGeoGuard`.
  *
  * @param {{strapi: object, log: object, sessionService: object}} deps
@@ -729,6 +732,19 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 
       if (!newSession?.documentId) {
         throw new Error(`session creation returned no documentId for user ${userDocId}`);
+      }
+
+      // A completed password reset must end every older session of this
+      // user, including legacy JWTs that stay cryptographically valid. The
+      // new session is excluded. A failure fails closed so the client never
+      // receives the new token while old ones remain usable (GA-04).
+      if (isPasswordResetRequest(ctx.path, ctx.method)) {
+        await sessionService.terminateSession({
+          userId: userDocId,
+          exceptSessionId: newSession.documentId,
+          reason: 'logout',
+        });
+        log.info('[PASSWORD] Ended older sessions after password reset');
       }
 
       log.info('[SUCCESS] End-user session metadata created');

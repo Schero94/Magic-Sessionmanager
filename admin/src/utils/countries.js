@@ -85,20 +85,73 @@ export const normalizeCountryCode = (raw) => {
 };
 
 /**
- * Renders a short label for an ISO-2 code — flag + name when known,
- * otherwise just the code.
- * @param {string} code
- * @returns {string}
+ * Returns the localized country name for an ISO-2 code, or '' when the code
+ * is not in the list.
+ *
+ * @param {string} code ISO 3166-1 alpha-2 code.
+ * @param {string} [locale] Admin locale.
+ * @returns {string} Country name.
  */
-export const formatCountry = (code, locale = 'en') => {
+export const getCountryName = (code, locale = 'en') => {
+  const match = COUNTRIES.find((c) => c.code === code);
+  if (!match) return '';
+  try {
+    return new Intl.DisplayNames([locale], { type: 'region' }).of(code) || match.name;
+  } catch {
+    // Retain the existing English label when locale data is unavailable.
+    return match.name;
+  }
+};
+
+/**
+ * Renders a short label for an ISO-2 code: "Name (CODE)" when known,
+ * otherwise just the code. Flags are emoji and stay out of the admin UI and
+ * accessible names unless explicitly requested (SET-06 browser).
+ *
+ * @param {string} code ISO 3166-1 alpha-2 code.
+ * @param {string} [locale] Admin locale.
+ * @param {{withFlag?: boolean}} [options] Prefix the flag emoji.
+ * @returns {string} Display label.
+ */
+export const formatCountry = (code, locale = 'en', { withFlag = false } = {}) => {
   if (!code) return '';
   const match = COUNTRIES.find((c) => c.code === code);
   if (!match) return code;
-  let name = match.name;
+  const label = `${getCountryName(code, locale)} (${match.code})`;
+  return withFlag ? `${match.flag} ${label}` : label;
+};
+
+/**
+ * Lists the known countries sorted by their localized name, excluding codes
+ * that are already selected. Used for the Combobox typeahead.
+ *
+ * @param {string} [locale] Admin locale.
+ * @param {string[]} [exclude] Codes to leave out.
+ * @returns {Array<{code: string, label: string}>} Options.
+ */
+export const getCountryOptions = (locale = 'en', exclude = []) => {
+  let collator;
   try {
-    name = new Intl.DisplayNames([locale], { type: 'region' }).of(code) || name;
+    collator = new Intl.Collator(locale);
   } catch {
-    // Retain the existing English label when locale data is unavailable.
+    collator = new Intl.Collator('en');
   }
-  return `${match.flag} ${name} (${match.code})`;
+  return COUNTRIES
+    .filter((country) => !exclude.includes(country.code))
+    .map((country) => ({ code: country.code, label: formatCountry(country.code, locale) }))
+    .sort((left, right) => collator.compare(left.label, right.label));
+};
+
+/**
+ * Picks the element to focus after removing the item at `removedIndex` from
+ * a list of `remainingCount` items: the next item, else the previous one,
+ * else null (the caller then focuses the picker) (SET-06 browser).
+ *
+ * @param {number} removedIndex Index of the removed item.
+ * @param {number} remainingCount Items left after removal.
+ * @returns {number|null} Index to focus, or null when the list is empty.
+ */
+export const getFocusIndexAfterRemoval = (removedIndex, remainingCount) => {
+  if (remainingCount <= 0) return null;
+  return Math.min(Math.max(removedIndex, 0), remainingCount - 1);
 };

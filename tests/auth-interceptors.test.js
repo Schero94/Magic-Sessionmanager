@@ -1128,3 +1128,74 @@ test('native logout syncs an already-revoked native session without revoking it 
   assert.equal(ctx.status, 200);
   assert.equal(ctx.body?.ok, true);
 });
+
+test('GA-04: a successful password reset ends every other session of that user', async () => {
+  const calls = [];
+  const sessionService = {
+    createSession: async (data) => {
+      calls.push(['createSession', data.userId]);
+      return { documentId: 'sidecar-after-reset' };
+    },
+    terminateSession: async (args) => {
+      calls.push(['terminateSession', args]);
+      return { terminatedCount: 2 };
+    },
+  };
+  const strapi = createStrapi({ sessionService });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/reset-password',
+    body: { jwt: 'reset-access', user: { documentId: 'user-reset' } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(ctx.status, 200);
+  assert.equal(ctx.body.jwt, 'reset-access');
+  assert.deepEqual(calls, [
+    ['createSession', 'user-reset'],
+    ['terminateSession', { userId: 'user-reset', exceptSessionId: 'sidecar-after-reset', reason: 'logout' }],
+  ]);
+});
+
+test('GA-04: password reset fails closed when older sessions cannot be ended', async () => {
+  const sessionService = {
+    createSession: async () => ({ documentId: 'sidecar-after-reset' }),
+    terminateSession: async () => {
+      throw new Error('synthetic revocation failure');
+    },
+  };
+  const strapi = createStrapi({ sessionService });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/reset-password',
+    body: { jwt: 'reset-access', refreshToken: 'reset-refresh', user: { documentId: 'user-reset' } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(ctx.status, 503);
+  assert.equal(ctx.body?.jwt, undefined);
+  assert.equal(ctx.body?.refreshToken, undefined);
+});
+
+test('GA-04: ordinary logins do not end the user’s other sessions', async () => {
+  let terminated = false;
+  const sessionService = {
+    createSession: async () => ({ documentId: 'sidecar-login' }),
+    terminateSession: async () => {
+      terminated = true;
+    },
+  };
+  const strapi = createStrapi({ sessionService });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: { jwt: 'login-access', user: { documentId: 'user-login' } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(ctx.status, 200);
+  assert.equal(terminated, false);
+});

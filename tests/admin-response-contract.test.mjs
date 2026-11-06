@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { readSettingsSource } from './helpers/settingsSource.mjs';
 import { requireSessionList, requireSuccessfulMutation } from '../admin/src/utils/adminResponse.mjs';
 
 test('session list responses require a data array, including a valid empty array', () => {
@@ -26,6 +27,6 @@ test('dashboard, analytics, panel and GeoIP handlers validate their response env
     assert.match(read(path), /requireSessionList\(data\)/, path);
   }
   for (const path of ['pages/Settings.jsx', 'components/SessionInfoPanel.jsx']) {
-    assert.equal((read(path).match(/requireSuccessfulMutation\(response\.data\)/g) || []).length, 2, path);
+    assert.equal(((path === 'pages/Settings.jsx' ? readSettingsSource() : read(path)).match(/requireSuccessfulMutation\(response\.data\)/g) || []).length, 2, path);
   }
 });

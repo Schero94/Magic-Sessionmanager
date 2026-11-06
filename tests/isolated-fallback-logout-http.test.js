@@ -8,12 +8,17 @@ const crypto = require('node:crypto');
 const net = require('node:net');
 const path = require('node:path');
 
-const modules = process.env.SESSION_HTTP_STRAPI_NODE_MODULES || path.resolve(__dirname, '../../../test-app/node_modules');
-const Koa = require(path.join(modules, 'koa'));
-const jwt = require(path.join(modules, 'jsonwebtoken'));
+const { resolveHostDependencies, assertHostAvailable } = require('./helpers/host-dependencies');
 const { mountLogoutRoute } = require('../server/src/bootstrap').__private;
 
-test('fallback logout handler verifies signed tokens and ownership over isolated HTTP', async (t) => {
+// koa and jsonwebtoken come from a Strapi host install; without one this
+// suite skips (or fails when SESSION_HTTP_REQUIRED=1) instead of crashing.
+const host = resolveHostDependencies(['koa', 'jsonwebtoken']);
+
+test('fallback logout handler verifies signed tokens and ownership over isolated HTTP', { skip: host.skip }, async (t) => {
+  assertHostAvailable(host);
+  const Koa = require(path.join(host.modules, 'koa'));
+  const jwt = require(path.join(host.modules, 'jsonwebtoken'));
   const secret = crypto.randomBytes(32).toString('hex');
   const userId = 987654321;
   let userExists = true;

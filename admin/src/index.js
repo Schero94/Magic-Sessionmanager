@@ -3,6 +3,7 @@ import pluginId from './pluginId';
 import Initializer from './components/Initializer';
 import PluginIcon from './components/PluginIcon';
 import SessionInfoPanel from './components/SessionInfoPanel';
+import permissions from './permissions';
 import { logSafeAdminError } from './utils/safeAdminLog.mjs';
 
 // Manual fallback for prefixPluginTranslations if helper-plugin is not available
@@ -18,7 +19,7 @@ const name = pluginPkg.strapi.name;
 
 export default {
   register(app) {
-    const pluginPermissions = [{ action: `plugin::${pluginId}.access`, subject: null }];
+    const pluginPermissions = permissions.access;
 
     app.addMenuLink({
       to: `plugins/${pluginId}`,
@@ -78,13 +79,20 @@ export default {
       name,
     });
 
-    // Register Online Users Widget for Homepage (Strapi v5.13+)
-    if ('widgets' in app) {
+    // Homepage widget (Strapi 5.13+). Older versions have no widgets API.
+    if ('widgets' in app && app.widgets && typeof app.widgets.register === 'function') {
       app.widgets.register({
         icon: PluginIcon,
         title: {
           id: `${pluginId}.widget.online-users.title`,
-          defaultMessage: 'Online Users',
+          defaultMessage: 'Online users',
+        },
+        link: {
+          label: {
+            id: `${pluginId}.widget.link`,
+            defaultMessage: 'Open Session Manager',
+          },
+          href: `/plugins/${pluginId}`,
         },
         component: async () => {
           const component = await import('./components/OnlineUsersWidget');
@@ -94,22 +102,16 @@ export default {
         pluginId: pluginId,
         permissions: pluginPermissions,
       });
-      console.log(`[${pluginId}] [SUCCESS] Online Users Widget registered`);
     }
   },
 
   bootstrap(app) {
-    console.log(`[${pluginId}] Bootstrapping plugin...`);
-
-    // Inject Session Info Panel into Content Manager edit view
+    // Session side panel in the Content Manager edit view. The panel itself
+    // renders nothing for models other than Users & Permissions users.
     try {
       const contentManagerPlugin = app.getPlugin('content-manager');
-      if (contentManagerPlugin && contentManagerPlugin.apis) {
-        console.log(`[${pluginId}] Injecting SessionInfoPanel into edit view sidebar...`);
+      if (contentManagerPlugin?.apis?.addEditViewSidePanel) {
         contentManagerPlugin.apis.addEditViewSidePanel([SessionInfoPanel]);
-        console.log(`[${pluginId}] [SUCCESS] SessionInfoPanel injected successfully`);
-      } else {
-        console.warn(`[${pluginId}] Content Manager plugin or APIs not available`);
       }
     } catch (error) {
       logSafeAdminError('plugin.bootstrap', error);

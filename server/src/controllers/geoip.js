@@ -15,6 +15,7 @@ const {
   invalidateSettingsCache,
   normalizeGeoIpDatabasePath,
 } = require('../utils/settings-loader');
+const { sendServerError } = require('../utils/http-errors');
 
 const CREDENTIALS_KEY = 'geoipCredentials';
 const SAFE_GEOIP_DIRECTORY_LABEL = 'data/magic-sessionmanager/geoip';
@@ -180,7 +181,7 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager/geoip] Error getting status:', error?.name || 'Error');
-      return ctx.badRequest('Error getting GeoIP status');
+      return sendServerError(ctx, 500, 'Error getting GeoIP status');
     }
   },
 
@@ -216,7 +217,7 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager/geoip] Error storing credentials:', error?.name || 'Error');
-      return ctx.badRequest('Error storing GeoIP credentials');
+      return sendServerError(ctx, 500, 'Error storing GeoIP credentials');
     }
   },
 
@@ -239,7 +240,15 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
         return ctx.badRequest('MaxMind credentials are required before downloading GeoIP data');
       }
 
-      const result = await updateDatabase(config);
+      let result;
+      try {
+        result = await updateDatabase(config);
+      } catch (error) {
+        // The updater downloads from MaxMind: report its failure as an
+        // upstream (502) error, distinct from local store failures (500).
+        strapi.log.error('[magic-sessionmanager/geoip] GeoIP download failed:', error?.name || 'Error');
+        return sendServerError(ctx, 502, 'Error updating GeoIP database');
+      }
       invalidateSettingsCache();
 
       ctx.send({
@@ -248,7 +257,7 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager/geoip] Error updating database:', error?.name || 'Error');
-      return ctx.badRequest('Error updating GeoIP database');
+      return sendServerError(ctx, 500, 'Error updating GeoIP database');
     }
   },
 

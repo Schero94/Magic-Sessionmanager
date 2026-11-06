@@ -14,7 +14,7 @@ export const paragraphRhythm = css`
   }
 
   p + p {
-    margin-block-start: 12px;
+    margin-block-start: ${({ theme }) => theme.spaces[3]};
   }
 
   li {
@@ -24,7 +24,7 @@ export const paragraphRhythm = css`
   }
 
   li + li {
-    margin-block-start: 6px;
+    margin-block-start: ${({ theme }) => theme.spaces[2]};
   }
 `;
 
@@ -44,7 +44,7 @@ const ReadableText = styled(Typography)`
   text-wrap: pretty;
 
   & + & {
-    margin-block-start: 12px;
+    margin-block-start: ${({ theme }) => theme.spaces[3]};
   }
 `;
 

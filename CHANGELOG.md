@@ -1,3 +1,42 @@
+## [Unreleased]
+
+Branch `claude/sessionmanager-ui-redesign`. Not yet accepted: see `GATES.md` and `gates/ui-redesign.md`. Whoever cuts the next release must fold this section into the generated release entry, so it does not stay behind as a second `[Unreleased]` block.
+
+### Known issues in 4.8.0
+
+4.8.0 was released before its acceptance gates closed, although its release-readiness audit said not to publish. It is not accepted. Known defects in 4.8.0, fixed on this branch:
+
+* The Session Details dialog has no accessible name, and focus can land on the page body after Escape.
+* Settings field hints, including the GeoIP privacy disclosure, never render.
+* Three Settings alerts have close buttons without a name; country chips cannot be removed with the keyboard.
+* In `legacy-support` mode, a password reset leaves the user's older sessions usable.
+* A failed block followed by a retry of the bodyless toggle unblocks the user.
+* The Content API rate limiter is keyed on the raw request path, so varying the path opens a fresh budget.
+
+### Changed
+
+* **Admin UI redesign** to match Strapi's own screens. Shared building blocks (`PageShell`, `SectionCard`, `StatGrid`, `PropertyList`, `StatusBadge`, `ConfirmAction`) are used on every page. Only Design System components, spacing tokens and breakpoints are used: no emoji, colour literals or px font sizes.
+* **Dashboard:** export menu (CSV, JSON) in the header; Strapi search, status filter and refresh in one action bar; four equal stat cards (Active, Idle, Ended, Total); Design System table without a fixed minimum width, so the Actions column is no longer clipped; row actions reachable by keyboard; page, page size, status and search kept in the URL; native pagination; refreshing keeps the table and the focus in place. Below the large breakpoint the table becomes a card list.
+* **Session details:** named dialog with device icon and status badge; sections for user, session, device, location and security, and technical details; copy button for the session ID; translated VPN, proxy and risk labels; "Log out session" asks for confirmation and is disabled for ended sessions.
+* **Settings:** split into tabs (General, Security, Geofencing, Notifications) with Save and Reset in the header, a warning before leaving with unsaved changes, inline validation, and a form that shows what the server actually stored after saving. "Copy for .env" quotes the value so `#` survives. A newly generated key stays hidden until revealed. Countries are chosen with a searchable combobox. The privacy note on IP lookups sits next to the switch that enables them.
+* **Analytics, Activation, home widget, user panel:** equal-height cards and readable bar labels; licence details as a property list with a masked key; widget tiles in a 2×2 grid; panel actions as equal buttons with confirmation. After block or unblock the open Content Manager form is updated, so a later Save does not undo it.
+* Destructive actions use Strapi's confirmation dialog instead of `window.confirm`.
+* All visible text is translated in English, German (formal "Sie"), French, Spanish and Portuguese, and dates use the admin locale.
+* CSV and JSON exports use stable English column names, write device type keys (for example `desktop`) and leave missing values empty instead of writing the translated word "Unavailable". Invalid timestamps no longer abort the CSV export.
+* Server-side store and provider failures now return 500 (502 for a failed MaxMind download, 503 when the licence server is unreachable) instead of 400. The `{ data: null, error }` envelope is unchanged; clients that check for 400 must be updated.
+* Admin session lists no longer include the internal `sessionId` field. Actions use `documentId`; the Content API `/my-sessions` response keeps `sessionId`.
+* `POST /magic-sessionmanager/user/:userId/toggle-block` accepts `{ "blocked": true | false }` to set the state, which is safe to retry and is what the admin UI sends. A request without a body still toggles, as before, but is deprecated. A `blocked` value that is not a boolean returns 400. The response adds `mode` (`explicit` or `toggle`).
+
+### Fixed
+
+* A successful password reset ends every older session of the user in both JWT modes; if that fails, the reset fails closed.
+* The Content API rate limiter keys buckets on the matched route instead of the raw path, and admin settings can only make the write limit stricter.
+* A partial settings update keeps omitted fields; invalid values are rejected with field errors instead of being clamped silently.
+* `store-key` rejects non-string keys and invalid emails before calling the licence server.
+* Deleting another user's session answers exactly like a missing session, so session IDs cannot be probed.
+* Blocking a user from the admin revokes the user's sessions once instead of twice.
+* `tests/isolated-fallback-logout-http.test.js` skips with a clear message instead of failing when no Strapi host dependencies are available.
+
 # [4.8.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.2...v4.8.0) (2026-11-06)
 
 
@@ -12,11 +51,7 @@
 * add Strapi-native end-user session management ([2f00880](https://github.com/Schero94/Magic-Sessionmanager/commit/2f00880337bf590e4e5cbc8059c31fd0d18aee05))
 * improve session settings and admin access ([36ccd50](https://github.com/Schero94/Magic-Sessionmanager/commit/36ccd503433a7b8d6ade9e7d0ec971ba124518aa))
 
-## [Unreleased]
-
-### Added
-
-* Add native Strapi Users & Permissions end-user session support for `jwtManagement: 'refresh'` while retaining `legacy-support`, Magic session metadata and history, and existing endpoint contracts. The plugin does not change host authentication configuration. Strapi administrator-account sessions remain out of scope.
+The native Strapi Users & Permissions end-user session support from 2f00880 covers sessions with `jwtManagement: 'refresh'` and keeps `legacy-support`, Magic session metadata and history, and the existing endpoint contracts. The plugin does not change host authentication configuration. Strapi administrator-account sessions remain out of scope. (Moved here from a stale `[Unreleased]` block on 2026-11-06.)
 
 ## [4.7.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.1...v4.7.2) (2026-07-11)
 

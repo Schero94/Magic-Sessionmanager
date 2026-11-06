@@ -1,8 +1,14 @@
-// Monitor Icon - Session Manager
-const PluginIcon = () => (
-  <svg viewBox="0 0 32 32" fill="currentColor" width="24" height="24">
-    <path d="M26 5H6a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h20a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3M20 27h-8a1 1 0 0 0 0 2h8a1 1 0 0 0 0-2" />
-  </svg>
-);
+import { Monitor } from '@strapi/icons';
+
+/**
+ * Session Manager icon for the main menu and the homepage widget header.
+ * It forwards size and theme `fill` props, so Strapi can render it like its
+ * own 16px neutral icons (F13). It is decorative: the menu link and widget
+ * title carry the accessible name.
+ *
+ * @param {import('react').SVGProps<SVGSVGElement> & {fill?: string}} props Icon props from Strapi.
+ * @returns {import('react').ReactElement} Monitor icon.
+ */
+const PluginIcon = (props) => <Monitor aria-hidden focusable={false} {...props} />;
 
 export default PluginIcon;

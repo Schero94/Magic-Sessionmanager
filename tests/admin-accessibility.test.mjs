@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const settingsSource = readFileSync(new URL('../admin/src/pages/Settings.jsx', import.meta.url), 'utf8');
+import { readSettingsSource } from './helpers/settingsSource.mjs';
+
+// The settings page is split into pages/Settings/* (tabs, cards, hook).
+const settingsSource = readSettingsSource();
 const settingsToggleSource = readFileSync(new URL('../admin/src/components/SettingsToggleRow.jsx', import.meta.url), 'utf8');
 const homePageSource = readFileSync(new URL('../admin/src/pages/HomePage.jsx', import.meta.url), 'utf8');
 const alertSources = [
@@ -15,10 +18,10 @@ const alertSources = [
 ];
 
 test('Strapi Design System Switch exposes an accessible name, description, and controlled state', () => {
-  const switches = settingsToggleSource.match(/<SettingsSwitch\b[\s\S]*?\/>/g) || [];
+  const switches = settingsToggleSource.match(/<Switch\b[\s\S]*?\/>/g) || [];
 
   assert.equal(switches.length, 1, 'Settings uses one shared switch component');
-  assert.match(settingsToggleSource, /const SettingsSwitch = styled\(Switch\)/, 'the row uses Strapi Design System Switch');
+  assert.match(settingsToggleSource, /import \{[^}]*\bSwitch\b[^}]*\} from '@strapi\/design-system'/, 'the row uses Strapi Design System Switch');
   assert.match(switches[0], /aria-label=/, 'the switch needs an accessible name');
   assert.match(switches[0], /aria-describedby=/, 'the switch should be associated with its description');
   assert.match(switches[0], /checked=\{checked\}/, 'the checked state stays controlled by settings');
@@ -49,13 +52,13 @@ test('GeoIP download filename uses a labeled Strapi field', () => {
 });
 
 test('EmptyStateLayout descriptions do not nest paragraph elements', () => {
+  // EmptyStateLayout renders `content` inside its own paragraph and its type is
+  // `content: string` (DUX-17): pass the translated string, never a nested element.
   for (const messageId of ['homepage.noResults.description', 'homepage.empty.description']) {
     const messagePosition = homePageSource.indexOf(messageId);
     assert.notEqual(messagePosition, -1, `${messageId} is present`);
-    const componentStart = homePageSource.lastIndexOf('<ReadableText', messagePosition);
-    const componentOpeningEnd = homePageSource.indexOf('>', componentStart);
-    const componentOpeningTag = homePageSource.slice(componentStart, componentOpeningEnd + 1);
-    assert.match(componentOpeningTag, /tag="span"/, `${messageId} must not create a <p> inside Strapi's paragraph`);
+    const before = homePageSource.slice(homePageSource.lastIndexOf('<EmptyStateLayout', messagePosition), messagePosition);
+    assert.match(before, /content=\{t\('$/, `${messageId} is passed as a plain string`);
   }
 });
 

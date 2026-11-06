@@ -24,6 +24,8 @@ function context() {
     forbidden(message) { this.status = 403; this.body = { message }; },
     notFound(message) { this.status = 404; this.body = { message }; },
     internalServerError(message) { this.status = 500; this.body = { message }; },
+    badGateway(message) { this.status = 502; this.body = { message }; },
+    serviceUnavailable(message) { this.status = 503; this.body = { message }; },
   };
 }
 
@@ -85,7 +87,8 @@ test('settings, license and GeoIP dependency failures return sanitized errors', 
       for (const action of actions) {
         const ctx = context();
         await controller[action](ctx);
-        assert.equal(ctx.status, 400, action);
+        // Server-side store/provider failures are 5xx, never a client 400 (API-7).
+        assert.equal(ctx.status, 500, action);
         assert.equal(JSON.stringify(ctx.body).includes(privateDetail), false, action);
       }
     }

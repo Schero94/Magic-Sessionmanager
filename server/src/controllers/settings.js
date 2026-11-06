@@ -1,13 +1,12 @@
 'use strict';
 
 const {
-  getSessionCreationGraceMs,
   invalidateSettingsCache,
   normalizeGeoIpProvider,
   normalizeGeoLookupFailureMode,
-  normalizeRetentionDays,
 } = require('../utils/settings-loader');
 const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
+const { sendServerError, sendValidationError } = require('../utils/http-errors');
 const path = require('node:path');
 
 /**
@@ -43,22 +42,6 @@ function sanitizeWebhookUrl(url, type) {
   } catch {
     return '';
   }
-}
-
-/**
- * Sanitizes country code list (only 2-letter uppercase ISO codes).
- * @param {Array} list - Array of country codes
- * @returns {Array} Sanitized country codes
- */
-function sanitizeCountryList(list) {
-  if (!Array.isArray(list)) return [];
-  return list
-    .filter(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code.trim().toUpperCase()))
-    .map(code => code.trim().toUpperCase());
-}
-
-function sanitizeBoolean(value) {
-  return value === true;
 }
 
 /**
@@ -242,6 +225,211 @@ function mergeSettingsWithDefaults(stored) {
 }
 
 /**
+ * Inclusive bounds for integer settings, in user-facing units.
+ */
+const INTEGER_SETTING_RANGES = {
+  inactivityTimeout: [1, 1440],
+  cleanupInterval: [5, 1440],
+  lastSeenRateLimit: [5, 300],
+  maxSessionAgeDays: [1, 365],
+  sessionCreationGraceMs: [0, 30000],
+  rateLimitWriteMax: [1, 1000],
+  rateLimitReadMax: [1, 10000],
+  rateLimitWindowSeconds: [10, 3600],
+  maxFailedLogins: [0, 100],
+};
+
+const BOOLEAN_SETTINGS = [
+  'cleanupUseDbDirect',
+  'enableGeolocation',
+  'enableSecurityScoring',
+  'blockSuspiciousSessions',
+  'enableGeofencing',
+  'enableEmailAlerts',
+  'alertOnSuspiciousLogin',
+  'alertOnNewLocation',
+  'alertOnVpnProxy',
+  'enableWebhooks',
+  'strictSessionEnforcement',
+  'trustedProxies',
+];
+
+const GEO_IP_PROVIDER_VALUES = ['auto', 'local-mmdb', 'ipapi', 'disabled'];
+const GEO_LOOKUP_FAILURE_MODE_VALUES = ['auto', 'allow', 'block'];
+const EMAIL_TEMPLATE_LIMITS = { subject: 200, html: 10000, text: 5000 };
+
+/**
+ * Parses an integer that the admin UI may send as a number or numeric string.
+ *
+ * @param {unknown} value Raw input
+ * @returns {number|null} Integer, or null when the value is not an integer
+ */
+function parseInteger(value) {
+  if (typeof value === 'number') return Number.isInteger(value) ? value : null;
+  if (typeof value === 'string' && /^\s*-?\d+\s*$/.test(value)) return Number.parseInt(value, 10);
+  return null;
+}
+
+/**
+ * Validates one email template update and merges it over the current value.
+ *
+ * @param {string} key Template key
+ * @param {unknown} update Requested template fields
+ * @param {object} current Current stored template
+ * @param {object[]} errors Collected field errors
+ * @returns {object|undefined} Merged raw template, or undefined when invalid
+ */
+function mergeEmailTemplate(key, update, current, errors) {
+  if (!update || typeof update !== 'object' || Array.isArray(update)) {
+    errors.push({ path: ['emailTemplates', key], message: `emailTemplates.${key} must be an object` });
+    return undefined;
+  }
+  const merged = { subject: '', html: '', text: '', ...(current && typeof current === 'object' ? current : {}) };
+  for (const [field, limit] of Object.entries(EMAIL_TEMPLATE_LIMITS)) {
+    if (update[field] === undefined) continue;
+    if (typeof update[field] !== 'string') {
+      errors.push({ path: ['emailTemplates', key, field], message: `emailTemplates.${key}.${field} must be a string` });
+    } else if (update[field].length > limit) {
+      errors.push({ path: ['emailTemplates', key, field], message: `emailTemplates.${key}.${field} must be at most ${limit} characters` });
+    } else {
+      merged[field] = update[field];
+    }
+  }
+  return merged;
+}
+
+/**
+ * Validates a (partial) settings payload and merges it over the current
+ * stored settings. Fields missing from the payload keep their current value;
+ * invalid fields are reported instead of being clamped or defaulted. Unknown
+ * keys are ignored so a client may send back the whole GET response.
+ *
+ * @param {object} body Request payload
+ * @param {object} current Current settings merged with defaults
+ * @returns {{settings?: object, errors: {path: string[], message: string}[]}}
+ */
+function validateSettingsUpdate(body, current) {
+  const errors = [];
+  const next = {};
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key) && body[key] !== undefined;
+
+  for (const [key, [min, max]] of Object.entries(INTEGER_SETTING_RANGES)) {
+    if (!has(key)) continue;
+    const value = parseInteger(body[key]);
+    if (value === null || value < min || value > max) {
+      errors.push({ path: [key], message: `${key} must be an integer between ${min} and ${max}` });
+    } else {
+      next[key] = value;
+    }
+  }
+
+  if (has('retentionDays')) {
+    const value = parseInteger(body.retentionDays);
+    if (value === null || (value !== -1 && (value < 1 || value > 365))) {
+      errors.push({ path: ['retentionDays'], message: 'retentionDays must be -1 (forever) or an integer between 1 and 365' });
+    } else {
+      next.retentionDays = value;
+    }
+  }
+
+  for (const key of BOOLEAN_SETTINGS) {
+    if (!has(key)) continue;
+    if (typeof body[key] !== 'boolean') {
+      errors.push({ path: [key], message: `${key} must be a boolean` });
+    } else {
+      next[key] = body[key];
+    }
+  }
+
+  for (const key of ['allowedCountries', 'blockedCountries']) {
+    if (!has(key)) continue;
+    const list = body[key];
+    if (!Array.isArray(list)) {
+      errors.push({ path: [key], message: `${key} must be a list of ISO 3166-1 alpha-2 country codes` });
+      continue;
+    }
+    const normalized = list.map((code) => (typeof code === 'string' ? code.trim().toUpperCase() : ''));
+    if (normalized.some((code) => !/^[A-Z]{2}$/.test(code))) {
+      errors.push({ path: [key], message: `${key} must contain only ISO 3166-1 alpha-2 country codes` });
+    } else {
+      next[key] = [...new Set(normalized)];
+    }
+  }
+
+  if (has('geoIpProvider')) {
+    if (!GEO_IP_PROVIDER_VALUES.includes(body.geoIpProvider)) {
+      errors.push({ path: ['geoIpProvider'], message: `geoIpProvider must be one of: ${GEO_IP_PROVIDER_VALUES.join(', ')}` });
+    } else {
+      next.geoIpProvider = normalizeGeoIpProvider(body.geoIpProvider);
+    }
+  }
+
+  if (has('geoLookupFailureMode')) {
+    if (!GEO_LOOKUP_FAILURE_MODE_VALUES.includes(body.geoLookupFailureMode)) {
+      errors.push({ path: ['geoLookupFailureMode'], message: `geoLookupFailureMode must be one of: ${GEO_LOOKUP_FAILURE_MODE_VALUES.join(', ')}` });
+    } else {
+      next.geoLookupFailureMode = normalizeGeoLookupFailureMode(body.geoLookupFailureMode);
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'geoIpDatabasePath')) {
+    if (body.geoIpDatabasePath === '') {
+      next.geoIpDatabasePath = '';
+    } else {
+      try {
+        next.geoIpDatabasePath = path.basename(resolveDatabaseTarget(body.geoIpDatabasePath));
+      } catch {
+        errors.push({
+          path: ['geoIpDatabasePath'],
+          message: 'GeoIP database path must be a supported MMDB filename in the dedicated GeoIP directory',
+        });
+      }
+    }
+  }
+
+  for (const [key, type] of [['discordWebhookUrl', 'discord'], ['slackWebhookUrl', 'slack']]) {
+    if (!has(key)) continue;
+    const value = body[key];
+    if (typeof value !== 'string') {
+      errors.push({ path: [key], message: `${key} must be a string` });
+    } else if (!value.trim()) {
+      next[key] = '';
+    } else {
+      const sanitized = sanitizeWebhookUrl(value, type);
+      if (!sanitized) {
+        errors.push({ path: [key], message: `${key} must be an https URL on ${ALLOWED_WEBHOOK_DOMAINS[type].join(' or ')}` });
+      } else {
+        next[key] = sanitized;
+      }
+    }
+  }
+
+  if (has('emailTemplates')) {
+    const templates = body.emailTemplates;
+    if (!templates || typeof templates !== 'object' || Array.isArray(templates)) {
+      errors.push({ path: ['emailTemplates'], message: 'emailTemplates must be an object' });
+    } else {
+      const currentTemplates = current.emailTemplates || DEFAULT_EMAIL_TEMPLATES;
+      const mergedTemplates = { ...DEFAULT_EMAIL_TEMPLATES, ...currentTemplates };
+      for (const key of Object.keys(DEFAULT_EMAIL_TEMPLATES)) {
+        if (templates[key] === undefined) continue;
+        const merged = mergeEmailTemplate(key, templates[key], mergedTemplates[key], errors);
+        if (merged) mergedTemplates[key] = merged;
+      }
+      next.emailTemplates = sanitizeEmailTemplates(mergedTemplates);
+    }
+  }
+
+  if (errors.length > 0) return { errors };
+
+  const settings = {};
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    settings[key] = Object.prototype.hasOwnProperty.call(next, key) ? next[key] : current[key];
+  }
+  return { settings, errors };
+}
+
+/**
  * Settings controller
  * Manages plugin settings stored in Strapi database
  */
@@ -270,18 +458,25 @@ module.exports = {
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager/settings] Error getting settings:', error?.name || 'Error');
-      ctx.badRequest('Error loading settings');
+      return sendServerError(ctx, 500, 'Error loading settings');
     }
   },
 
   /**
-   * Validates and persists plugin settings, then invalidates the settings cache
-   * so runtime code picks up the new values on next read.
+   * Validates a full or partial settings payload, merges it over the stored
+   * settings and persists the result, then invalidates the settings cache so
+   * runtime code picks up the new values on next read.
+   *
+   * Omitted fields keep their stored value. Invalid values are rejected with
+   * a 400 whose `error.details.errors` names each field; nothing is clamped
+   * or written in that case. Store failures return a 500 with a safe message.
+   *
    * @route PUT /magic-sessionmanager/settings
-   * @throws {ValidationError} when the body or GeoIP filename is invalid
    * @returns {Promise<void>}
    */
   async updateSettings(ctx) {
+    let pluginStore;
+    let current;
     try {
       const { body } = ctx.request;
 
@@ -289,71 +484,27 @@ module.exports = {
         return ctx.badRequest('Settings data must be an object');
       }
 
-      const pluginStore = strapi.store({
+      pluginStore = strapi.store({
         type: 'plugin',
         name: 'magic-sessionmanager',
       });
 
-      let geoIpDatabasePath = '';
-      if (body.geoIpDatabasePath !== undefined && body.geoIpDatabasePath !== '') {
-        try {
-          geoIpDatabasePath = path.basename(resolveDatabaseTarget(body.geoIpDatabasePath));
-        } catch {
-          return ctx.badRequest('GeoIP database path must be a supported MMDB filename in the dedicated GeoIP directory');
-        }
-      }
-
-      // sessionCreationGraceMs is bounded 0..30s. 0 disables the grace window
-      // (strictSessionEnforcement will block the very first request after login
-      // if the session-create write has not propagated). Values > 30s are
-      // rejected because they would silently defeat session revocation.
-      const grace = getSessionCreationGraceMs(body);
-      const maxFailedLoginsRaw = Number.parseInt(body.maxFailedLogins, 10);
-      const maxFailedLogins = Number.isFinite(maxFailedLoginsRaw)
-        ? Math.max(0, Math.min(maxFailedLoginsRaw, 100))
-        : 5;
-
-      const sanitizedSettings = {
-        // Timing & cleanup
-        inactivityTimeout: Math.max(1, Math.min(parseInt(body.inactivityTimeout) || 15, 1440)),
-        cleanupInterval: Math.max(5, Math.min(parseInt(body.cleanupInterval) || 30, 1440)),
-        lastSeenRateLimit: Math.max(5, Math.min(parseInt(body.lastSeenRateLimit) || 30, 300)),
-        retentionDays: normalizeRetentionDays(body.retentionDays, 90),
-        maxSessionAgeDays: Math.max(1, Math.min(parseInt(body.maxSessionAgeDays) || 30, 365)),
-        sessionCreationGraceMs: grace,
-        cleanupUseDbDirect: sanitizeBoolean(body.cleanupUseDbDirect),
-        rateLimitWriteMax: Math.max(1, Math.min(parseInt(body.rateLimitWriteMax) || 10, 1000)),
-        rateLimitReadMax: Math.max(1, Math.min(parseInt(body.rateLimitReadMax) || 120, 10000)),
-        rateLimitWindowSeconds: Math.max(10, Math.min(parseInt(body.rateLimitWindowSeconds) || 60, 3600)),
-
-        // Geo / security
-        enableGeolocation: sanitizeBoolean(body.enableGeolocation),
-        enableSecurityScoring: sanitizeBoolean(body.enableSecurityScoring),
-        blockSuspiciousSessions: sanitizeBoolean(body.blockSuspiciousSessions),
-        maxFailedLogins,
-        enableGeofencing: sanitizeBoolean(body.enableGeofencing),
-        allowedCountries: sanitizeCountryList(body.allowedCountries),
-        blockedCountries: sanitizeCountryList(body.blockedCountries),
-        geoIpProvider: normalizeGeoIpProvider(body.geoIpProvider),
-        geoIpDatabasePath,
-        geoLookupFailureMode: normalizeGeoLookupFailureMode(body.geoLookupFailureMode),
-
-        // Notifications
-        enableEmailAlerts: sanitizeBoolean(body.enableEmailAlerts),
-        alertOnSuspiciousLogin: sanitizeBoolean(body.alertOnSuspiciousLogin),
-        alertOnNewLocation: sanitizeBoolean(body.alertOnNewLocation),
-        alertOnVpnProxy: sanitizeBoolean(body.alertOnVpnProxy),
-        enableWebhooks: sanitizeBoolean(body.enableWebhooks),
-        discordWebhookUrl: sanitizeWebhookUrl(body.discordWebhookUrl, 'discord'),
-        slackWebhookUrl: sanitizeWebhookUrl(body.slackWebhookUrl, 'slack'),
-
-        // Session policy
-        strictSessionEnforcement: sanitizeBoolean(body.strictSessionEnforcement),
-        trustedProxies: sanitizeBoolean(body.trustedProxies),
-
-        // Email templates
-        emailTemplates: sanitizeEmailTemplates(body.emailTemplates),
+      // PUT merges: omitted fields keep their stored value. The stored
+      // GeoIP path is kept verbatim (legacy read paths stay readable) unless
+      // the payload replaces it.
+      const stored = await pluginStore.get({ key: 'settings' });
+      const storedObject = stored && typeof stored === 'object' ? stored : {};
+      current = {
+        ...mergeSettingsWithDefaults(storedObject),
+        geoIpDatabasePath: typeof storedObject.geoIpDatabasePath === 'string'
+          ? storedObject.geoIpDatabasePath
+          : '',
       };
+
+      const { settings: sanitizedSettings, errors } = validateSettingsUpdate(body, current);
+      if (errors.length > 0) {
+        return sendValidationError(ctx, 'Invalid settings', errors);
+      }
 
       await pluginStore.set({
         key: 'settings',
@@ -365,15 +516,19 @@ module.exports = {
       strapi.log.info('[magic-sessionmanager/settings] Settings updated successfully');
 
       ctx.send({
-        settings: sanitizedSettings,
+        settings: {
+          ...sanitizedSettings,
+          geoIpDatabasePath: getSafeGeoIpFilename(sanitizedSettings.geoIpDatabasePath),
+        },
         success: true,
         message: 'Settings saved successfully!'
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager/settings] Error updating settings:', error?.name || 'Error');
-      ctx.badRequest('Error saving settings');
+      return sendServerError(ctx, 500, 'Error saving settings');
     }
   },
   DEFAULT_SETTINGS,
   mergeSettingsWithDefaults,
+  validateSettingsUpdate,
 };

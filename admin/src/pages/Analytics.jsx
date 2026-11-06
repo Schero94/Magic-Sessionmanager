@@ -7,134 +7,161 @@ import {
   Typography,
   Flex,
   Loader,
-  Badge,
   Button,
   EmptyStateLayout,
+  VisuallyHidden,
 } from '@strapi/design-system';
-import { 
-  ChartBubble,
-  User,
-  Monitor,
-  Clock,
-} from '@strapi/icons';
+import { ChartBubble, User, Clock, Calendar } from '@strapi/icons';
 import pluginId from '../pluginId';
-import { computeSessionAnalytics } from '../utils/sessionAnalytics.mjs';
+import {
+  ANALYTICS_OTHER_KEY,
+  computeSessionAnalytics,
+  getAnalyticsBarRows,
+} from '../utils/sessionAnalytics.mjs';
+import { getDeviceTypeMessage } from '../utils/devicePresentation.mjs';
 import { requireSessionList } from '../utils/adminResponse.mjs';
-import PluginPageLayout from '../components/PluginPageLayout';
+import { PageShell, SectionCard, StatGrid, StatCard, EqualGrid } from '../components/ui';
 import Alert from '../components/PersistentAlert';
 import ReadableText from '../components/ReadableText';
 import { getTranslation } from '../utils/getTranslation';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
-// ================ STRAPI DESIGN SYSTEM LAYOUT ================
-const Container = styled(Box)`
-  width: 100%;
-  min-width: 0;
-`;
+// ================ BAR LIST ================
+// Label, track and count are three grid cells. The count never overlaps the
+// fill, so its contrast is the card's body-text contrast in both themes
+// (UX-02, F4). Below the DS small breakpoint the track moves under the label.
 
-const StatsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-  gap: 12px;
-  min-width: 0;
-  margin-bottom: 16px;
-
-  @media (max-width: 519px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-`;
-
-const StatCard = styled(Box)`
-  background: ${(p) => p.theme.colors.neutral0};
-  border: 1px solid ${(p) => p.theme.colors.neutral150};
-  border-top: 3px solid ${(p) => p.theme.colors.primary600};
-  border-radius: 4px;
-  min-width: 0;
-  padding: 16px;
+const BarList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  gap: ${({ theme }) => theme.spaces[3]};
+  min-width: 0;
+`;
 
-  && > p {
-    max-width: none;
-    margin: 0;
-    line-height: 1.25;
+const BarRow = styled.li`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6ch;
+  grid-template-areas:
+    'label count'
+    'track track';
+  column-gap: ${({ theme }) => theme.spaces[3]};
+  row-gap: ${({ theme }) => theme.spaces[1]};
+  align-items: center;
+  min-width: 0;
+
+  ${({ theme }) => theme.breakpoints.small} {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 6ch;
+    grid-template-areas: 'label track count';
+  }
+
+  & > [data-bar-label] {
+    grid-area: label;
+    min-width: 0;
     overflow-wrap: anywhere;
   }
 
-  && > p + p {
-    margin-block-start: 0;
+  & > [data-bar-count] {
+    grid-area: count;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
   }
 `;
 
-const StatIcon = styled(Box)`
-  width: 36px;
-  height: 36px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: ${(p) => p.theme.colors.primary100};
-  color: ${(p) => p.theme.colors.primary600};
-  margin-bottom: 8px;
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
-`;
-
-const ChartCard = styled(Box)`
-  background: ${(p) => p.theme.colors.neutral0};
-  border-radius: 4px;
-  border: 1px solid ${(p) => p.theme.colors.neutral150};
-  min-width: 0;
-  padding: 20px;
-`;
-
-const BarChart = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-`;
-
-const BarRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-`;
-
-const BarContainer = styled.div`
-  flex: 1;
-  min-width: 0;
-  height: 28px;
-  background: ${(p) => p.theme.colors.neutral100};
-  border-radius: 4px;
+const BarTrack = styled.span`
+  grid-area: track;
+  display: block;
+  height: ${({ theme }) => theme.spaces[2]};
+  background: ${({ theme }) => theme.colors.neutral150};
+  border-radius: ${({ theme }) => theme.borderRadius};
   overflow: hidden;
-  position: relative;
 `;
 
-const BarFill = styled.div`
+const BarFill = styled.span`
+  display: block;
   height: 100%;
-  width: ${props => `${Math.max(0, Math.min(100, props.$percentage || 0))}%`};
-  background: ${(p) => p.theme.colors.primary600};
-  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.primary600};
+  border-radius: inherit;
 `;
 
-const LoadingOverlay = styled(Flex)`
-  min-height: 240px;
-  align-items: center;
-  justify-content: center;
+// ================ LOGIN TIMELINE ================
+
+const TimelineColumns = styled.div`
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: ${({ theme }) => theme.spaces[1]};
+  align-items: end;
+  height: calc(${({ theme }) => theme.spaces[8]} * 4);
 `;
+
+const TimelineBar = styled.span`
+  display: block;
+  min-height: ${({ theme, $empty }) => ($empty ? '0' : theme.spaces[1])};
+  background: ${({ theme, $peak }) => ($peak ? theme.colors.primary600 : theme.colors.primary200)};
+  border-radius: ${({ theme }) => `${theme.borderRadius} ${theme.borderRadius} 0 0`};
+`;
+
+const TimelineAxis = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: ${({ theme }) => theme.spaces[1]};
+`;
+
+const AXIS_HOURS = [0, 6, 12, 18];
+
+/**
+ * Formats an hour of the day (0-23) with the admin locale ("14:00", "2 PM").
+ *
+ * @param {number} hour Hour of the day.
+ * @param {string} locale Admin locale.
+ * @returns {string} Localized hour.
+ */
+const formatHour = (hour, locale) => {
+  const date = new Date(2000, 0, 1, hour, 0, 0);
+  try {
+    return new Intl.DateTimeFormat(locale || 'en', { hour: 'numeric', minute: '2-digit' }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(date);
+  }
+};
+
+/**
+ * One horizontal bar list. Labels are resolved by the caller, so translated
+ * bucket names (device types, "Other or unknown") and proper names (browsers)
+ * share one rendering.
+ *
+ * @param {{rows: Array<{key: string, count: number, percent: number}>, label: string,
+ *   getLabel: (key: string) => string, countLabel: (count: number) => string}} props Bar data.
+ * @returns {import('react').ReactElement} Accessible bar list.
+ */
+const AnalyticsBars = ({ rows, label, getLabel, countLabel }) => (
+  <BarList aria-label={label}>
+    {rows.map((row) => (
+      <BarRow key={row.key}>
+        <Typography data-bar-label="" variant="omega" textColor="neutral800" tag="span">
+          {getLabel(row.key)}
+        </Typography>
+        <BarTrack aria-hidden="true">
+          <BarFill style={{ width: `${row.percent}%` }} />
+        </BarTrack>
+        <Typography data-bar-count="" variant="omega" fontWeight="semiBold" textColor="neutral800" tag="span">
+          <span aria-hidden="true">{row.count}</span>
+          <VisuallyHidden>{countLabel(row.count)}</VisuallyHidden>
+        </Typography>
+      </BarRow>
+    ))}
+  </BarList>
+);
 
 const AnalyticsPage = () => {
-  const { formatMessage } = useIntl();
+  const { formatMessage, locale } = useIntl();
   const { get } = useFetchClient();
   const t = (id, defaultMessage, values) =>
     formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const translate = (descriptor) =>
+    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage });
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
   const [loadError, setLoadError] = useState(false);
@@ -164,171 +191,151 @@ const AnalyticsPage = () => {
     }
   };
 
-  // Loading analytics data
+  const title = t('analytics.title', 'Session analytics');
+  const subtitle = t('analytics.subtitle', 'Session activity and device trends');
+
   if (loading) {
     return (
-      <PluginPageLayout
-        headingId="magic-sessionmanager-analytics-title"
-        title={t('analytics.title', 'Session Analytics')}
-        subtitle={t('analytics.subtitle', 'Session activity and device trends')}
-      >
-        <LoadingOverlay>
+      <PageShell headingId="magic-sessionmanager-analytics-title" title={title} subtitle={subtitle}>
+        <Flex justifyContent="center" padding={8}>
           <Loader>{t('analytics.loading', 'Loading analytics data...')}</Loader>
-        </LoadingOverlay>
-      </PluginPageLayout>
+        </Flex>
+      </PageShell>
     );
   }
 
   if (loadError) {
     return (
-      <PluginPageLayout
-        headingId="magic-sessionmanager-analytics-title"
-        title={t('analytics.title', 'Session Analytics')}
-        subtitle={t('analytics.subtitle', 'Session activity and device trends')}
-      >
+      <PageShell headingId="magic-sessionmanager-analytics-title" title={title} subtitle={subtitle}>
         <Alert
           variant="danger"
           title={t('analytics.error.title', 'Analytics could not be loaded')}
           closeLabel={t('common.close', 'Close')}
           action={<Button variant="secondary" onClick={fetchAnalytics}>{t('common.retry', 'Retry')}</Button>}
         >
-          <ReadableText variant="pi" textColor="neutral700" tag="span">
+          <ReadableText variant="omega" textColor="neutral800" tag="span">
             {t('analytics.error.description', 'Try again. If the problem continues, check session API access and permissions.')}
           </ReadableText>
         </Alert>
-      </PluginPageLayout>
+      </PageShell>
     );
   }
 
-  const maxDevices = Math.max(...Object.values(analytics?.devices || {}), 1);
-  const maxBrowsers = Math.max(...Object.values(analytics?.browsers || {}), 1);
   const hasSessions = Number(analytics?.totalSessions) > 0;
+  const deviceRows = getAnalyticsBarRows(analytics?.devices);
+  const browserRows = getAnalyticsBarRows(analytics?.browsers);
+  const loginHours = analytics?.loginHours || [];
+  const maxLogins = Math.max(0, ...loginHours);
+  const peakHour = analytics?.peakHour;
+  const devicesTitle = t('analytics.devices.title', 'Devices');
+  const browsersTitle = t('analytics.browsers.title', 'Browsers');
+  const countLabel = (count) =>
+    t('analytics.bar.sessions', '{count, plural, one {# session} other {# sessions}}', { count });
+  const deviceLabel = (key) =>
+    translate(getDeviceTypeMessage(key === ANALYTICS_OTHER_KEY ? '' : key));
+  const browserLabel = (key) =>
+    key === ANALYTICS_OTHER_KEY ? t('analytics.browser.other', 'Other or unknown') : key;
+  const timelineSummary = peakHour === null || peakHour === undefined
+    ? t('analytics.timeline.empty', 'No login times recorded yet.')
+    : t(
+      'analytics.timeline.summary',
+      'Most logins start between {start} and {end} ({count, plural, one {# login} other {# logins}}).',
+      {
+        start: formatHour(peakHour, locale),
+        end: formatHour((peakHour + 1) % 24, locale),
+        count: maxLogins,
+      }
+    );
 
   return (
-    <PluginPageLayout
-      headingId="magic-sessionmanager-analytics-title"
-      title={t('analytics.title', 'Session Analytics')}
-      subtitle={t('analytics.subtitle', 'Session activity and device trends')}
-    >
-      <Container>
-      {/* Overview Stats */}
-      <StatsGrid>
-        <StatCard padding={4} background="neutral0">
-          <StatIcon aria-hidden="true">
-            <ChartBubble />
-          </StatIcon>
-          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.totalSessions || 0}</Typography>
-          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.total', 'Total sessions')}</Typography>
-        </StatCard>
-
-        <StatCard padding={4} background="neutral0">
-          <StatIcon aria-hidden="true">
-            <User />
-          </StatIcon>
-          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.activeSessions || 0}</Typography>
-          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.active', 'Online now')}</Typography>
-        </StatCard>
-
-        <StatCard padding={4} background="neutral0">
-          <StatIcon aria-hidden="true">
-            <Clock />
-          </StatIcon>
-          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.todayLogins || 0}</Typography>
-          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.today', 'Logins today')}</Typography>
-        </StatCard>
-
-        <StatCard padding={4} background="neutral0">
-          <StatIcon aria-hidden="true">
-            <Clock />
-          </StatIcon>
-          <Typography variant="delta" fontWeight="semiBold" tag="p">{analytics?.weekLogins || 0}</Typography>
-          <Typography variant="pi" textColor="neutral600" tag="p">{t('analytics.stats.week', 'Logins this week')}</Typography>
-        </StatCard>
-      </StatsGrid>
+    <PageShell headingId="magic-sessionmanager-analytics-title" title={title} subtitle={subtitle}>
+      <StatGrid label={t('analytics.stats.label', 'Session overview')}>
+        <StatCard
+          icon={ChartBubble}
+          tone="primary"
+          label={t('analytics.stats.total', 'Total sessions')}
+          value={analytics?.totalSessions || 0}
+        />
+        <StatCard
+          icon={User}
+          tone="success"
+          label={t('analytics.stats.active', 'Online now')}
+          value={analytics?.activeSessions || 0}
+        />
+        <StatCard
+          icon={Clock}
+          tone="primary"
+          label={t('analytics.stats.today', 'Logins in the last 24 hours')}
+          value={analytics?.todayLogins || 0}
+        />
+        <StatCard
+          icon={Calendar}
+          tone="primary"
+          label={t('analytics.stats.week', 'Logins in the last 7 days')}
+          value={analytics?.weekLogins || 0}
+        />
+      </StatGrid>
 
       {hasSessions ? (
         <>
-      {/* Charts Row */}
-      <Flex gap={4} wrap="wrap" style={{ marginBottom: '28px' }}>
-        {/* Devices Chart */}
-        <Box style={{ flex: '1 1 320px', minWidth: 0 }}>
-          <ChartCard>
-            <Flex gap={2} alignItems="center" style={{ marginBottom: 16 }}>
-              <Monitor />
-              <Typography variant="epsilon" fontWeight="semiBold" tag="h2">
-                {t('analytics.devices.title', 'Devices')}
+          <EqualGrid columns={2} stackBelow="medium">
+            <SectionCard
+              fill
+              title={devicesTitle}
+              subtitle={t('analytics.devices.subtitle', 'Sessions by device type')}
+            >
+              <AnalyticsBars rows={deviceRows} label={devicesTitle} getLabel={deviceLabel} countLabel={countLabel} />
+            </SectionCard>
+            <SectionCard
+              fill
+              title={browsersTitle}
+              subtitle={t('analytics.browsers.subtitle', 'Sessions by browser')}
+            >
+              <AnalyticsBars rows={browserRows} label={browsersTitle} getLabel={browserLabel} countLabel={countLabel} />
+            </SectionCard>
+          </EqualGrid>
+
+          <SectionCard
+            title={t('analytics.timeline.title', 'Logins by hour of day')}
+            subtitle={t('analytics.timeline.subtitle', 'Login times in your browser time zone.')}
+          >
+            <Flex direction="column" alignItems="stretch" gap={2}>
+              <TimelineColumns aria-hidden="true">
+                {loginHours.map((count, hour) => (
+                  <TimelineBar
+                    key={hour}
+                    $empty={count === 0}
+                    $peak={count > 0 && count === maxLogins}
+                    style={{ height: maxLogins > 0 ? `${Math.round((count / maxLogins) * 100)}%` : '0%' }}
+                  />
+                ))}
+              </TimelineColumns>
+              <TimelineAxis aria-hidden="true">
+                {AXIS_HOURS.map((hour) => (
+                  <Typography key={hour} variant="pi" textColor="neutral600">
+                    {formatHour(hour, locale)}
+                  </Typography>
+                ))}
+              </TimelineAxis>
+              <Typography variant="omega" textColor="neutral800" tag="p">
+                {timelineSummary}
               </Typography>
             </Flex>
-            <BarChart>
-              {analytics?.devices && Object.entries(analytics.devices)
-                .sort(([, a], [, b]) => b - a)
-                .map(([device, count]) => (
-                  <BarRow key={device}>
-                    <Typography variant="pi" textColor="neutral700" style={{ flex: '0 0 96px', minWidth: 0, overflowWrap: 'anywhere' }}>{device}</Typography>
-                    <BarContainer>
-                      <BarFill 
-                        $percentage={(count / maxDevices) * 100}
-                      >
-                      </BarFill>
-                      <Typography variant="pi" fontWeight="semiBold" textColor="neutral800" style={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', fontVariantNumeric: 'tabular-nums' }}>{count}</Typography>
-                    </BarContainer>
-                  </BarRow>
-                ))}
-            </BarChart>
-          </ChartCard>
-        </Box>
+          </SectionCard>
 
-        {/* Browsers Chart */}
-        <Box style={{ flex: '1 1 320px', minWidth: 0 }}>
-          <ChartCard>
-            <Flex gap={2} alignItems="center" style={{ marginBottom: 16 }}>
-              <Monitor />
-              <Typography variant="epsilon" fontWeight="semiBold" tag="h2">
-                {t('analytics.browsers.title', 'Browsers')}
+          <SectionCard
+            title={t('analytics.duration.title', 'Average session duration')}
+            subtitle={t(
+              'analytics.duration.description',
+              'Time from login to the last recorded activity, or to logout when the user logged out. Time a session spent idle before it was cleaned up is not counted.'
+            )}
+          >
+            <Box>
+              <Typography variant="alpha" textColor="neutral800" tag="p">
+                {t('analytics.duration.minutes', '{count} min', { count: analytics?.avgSessionDuration || 0 })}
               </Typography>
-            </Flex>
-            <BarChart>
-              {analytics?.browsers && Object.entries(analytics.browsers)
-                .sort(([, a], [, b]) => b - a)
-                .map(([browser, count]) => (
-                  <BarRow key={browser}>
-                    <Typography variant="pi" textColor="neutral700" style={{ flex: '0 0 96px', minWidth: 0, overflowWrap: 'anywhere' }}>{browser}</Typography>
-                    <BarContainer>
-                      <BarFill 
-                        $percentage={(count / maxBrowsers) * 100}
-                      >
-                      </BarFill>
-                      <Typography variant="pi" fontWeight="semiBold" textColor="neutral800" style={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', fontVariantNumeric: 'tabular-nums' }}>{count}</Typography>
-                    </BarContainer>
-                  </BarRow>
-                ))}
-            </BarChart>
-          </ChartCard>
-        </Box>
-      </Flex>
-
-      {/* Average Session Duration */}
-      <ChartCard>
-        <Flex alignItems="center" justifyContent="space-between">
-          <Flex gap={2} alignItems="center">
-            <Clock />
-            <Typography variant="epsilon" fontWeight="semiBold" tag="h2">
-              {t('analytics.duration.title', 'Average session duration')}
-            </Typography>
-          </Flex>
-          <Badge variant="primary" size="M">
-            {t('analytics.duration.minutes', '{count} min', { count: analytics?.avgSessionDuration || 0 })}
-          </Badge>
-        </Flex>
-        
-        {analytics?.avgSessionDuration > 0 && (
-          <Box marginTop={4} padding={4} background="neutral100" hasRadius>
-            <ReadableText variant="pi" textColor="neutral700" tag="p">
-              {t('analytics.duration.description', 'Average time between login and last activity. Higher values can indicate idle or abandoned sessions.')}
-            </ReadableText>
-          </Box>
-        )}
-      </ChartCard>
+            </Box>
+          </SectionCard>
         </>
       ) : (
         <EmptyStateLayout
@@ -336,8 +343,7 @@ const AnalyticsPage = () => {
           content={t('analytics.empty', 'Session analytics will appear here after end users sign in.')}
         />
       )}
-      </Container>
-    </PluginPageLayout>
+    </PageShell>
   );
 };
 

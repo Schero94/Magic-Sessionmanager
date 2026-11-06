@@ -2,6 +2,12 @@
 
 Scope: independent verification and end-to-end acceptance of the final combined plugin.
 
+## Status note, 2026-11-06 (read first)
+
+- 4.8.0 (`c9ba929`) was released before any I-gate closed, although the release-readiness audit said not to publish. The observations below describe the acceptance worktree (4.8.0 plus uncommitted work) and are not acceptance of 4.8.0. See `GATES.md`, "Release status".
+- All counts below are dated snapshots on the acceptance worktree and mostly on the workbench Strapi 5.58.0 test-app unless they name the 5.61 host. The latest recorded there was 414 tests (and 418 in the orchestrator's re-run with the 5.61 host). The redesign branch snapshot on 2026-11-06 ~17:35 is 627 tests, 609 pass, 0 fail, 18 todo, with `SESSION_HTTP_STRAPI_NODE_MODULES` on the 5.61.0 host; both type checks exit 0. Build, verify and browser checks were not re-run on the redesign tree (GA-12).
+- The `dist` and the browser observations below predate the redesign. The redesign branch's integration gates are in `gates/ui-redesign.md`.
+
 ## Retry-contract build continuation, 2026-11-06
 
 The current source snapshot was copied to `/tmp/sessionmanager-build-review.hwrnSk` without its prior `dist`, Git metadata or browser artifacts. With a symlink to an existing dependency installation, `npm run build`, `npm run verify` and `npm run verify:runtime` passed. The resulting admin bundle contains the explicit desired-state request and the server bundle contains the missing-boolean rejection. The acceptance worktree's original `dist` was not cleaned or rebuilt. This is a build of a disposable copy using an existing installation, not a clean-install or host/browser acceptance, and it does not resolve the Zod advisory or the conflicting-request observation.

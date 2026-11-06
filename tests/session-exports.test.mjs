@@ -87,3 +87,30 @@ test('JSON export preserves the full filtered set and marks missing details unav
   assert.equal(result.sessions[0].device.type, 'Unavailable');
   assert.equal('accessToken' in result.sessions[0], false);
 });
+
+test('CSV export survives rows with missing or invalid timestamps', async () => {
+  const { toIsoTimestamp } = await import('../admin/src/utils/sessionExports.mjs');
+  assert.equal(toIsoTimestamp(undefined), '');
+  assert.equal(toIsoTimestamp('not a date'), '');
+  assert.equal(toIsoTimestamp('2026-10-15T10:00:00.000Z'), '2026-10-15T10:00:00.000Z');
+
+  const csv = buildSessionCsv([{ id: 'legacy', status: 'terminated', user: {}, minutesSinceActive: undefined }], {
+    unavailableValue: '',
+    getDeviceInfo,
+    getSessionStatus,
+  });
+  const [, row] = csv.split('\n');
+  assert.equal(row.split(',').length, 12);
+  assert.doesNotMatch(row, /undefined|Invalid/);
+});
+
+test('CSV column names are stable machine identifiers, independent of the admin language (I18N-11)', async () => {
+  const { CSV_HEADERS } = await import('../admin/src/utils/sessionExports.mjs');
+  assert.ok(Object.isFrozen(CSV_HEADERS));
+  assert.deepEqual([...CSV_HEADERS], [
+    'ID', 'Status', 'User Email', 'Username', 'Device', 'Browser', 'OS',
+    'IP Address', 'Login Time', 'Last Active', 'Logout Time', 'Minutes Idle',
+  ]);
+  const csv = buildSessionCsv([], { unavailableValue: '', getDeviceInfo, getSessionStatus });
+  assert.equal(csv, CSV_HEADERS.map((header) => `"${header}"`).join(','));
+});

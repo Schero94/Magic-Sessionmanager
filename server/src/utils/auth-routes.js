@@ -59,6 +59,18 @@ function classifyJwtIssuingRequest(path, method) {
   return null;
 }
 
+/**
+ * Identifies Users & Permissions' password-reset completion. A successful
+ * reset issues a new session and must end every older session of that user.
+ *
+ * @param {string} path Request path
+ * @param {string} method HTTP method
+ * @returns {boolean} Whether the request completes a password reset
+ */
+function isPasswordResetRequest(path, method) {
+  return requestKey(path, String(method || '').toUpperCase()) === 'POST /api/auth/reset-password';
+}
+
 function shouldRunPreAuthGeoGuard(path, method) {
   return classifyJwtIssuingRequest(path, method) === 'new-session';
 }
@@ -70,5 +82,6 @@ function isFailedLoginTrackedPath(path, method) {
 module.exports = {
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,
+  isPasswordResetRequest,
   shouldRunPreAuthGeoGuard,
 };

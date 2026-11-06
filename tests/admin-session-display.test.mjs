@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const homepageSource = readFileSync(new URL('../admin/src/pages/HomePage.jsx', import.meta.url), 'utf8');
+const actionsSource = readFileSync(new URL('../admin/src/pages/Dashboard/SessionActions.jsx', import.meta.url), 'utf8');
+const tableSource = readFileSync(new URL('../admin/src/pages/Dashboard/SessionTable.jsx', import.meta.url), 'utf8');
+const cardsSource = readFileSync(new URL('../admin/src/pages/Dashboard/SessionCardList.jsx', import.meta.url), 'utf8');
+const listSource = tableSource + cardsSource;
 const exportSource = readFileSync(new URL('../admin/src/utils/sessionExports.mjs', import.meta.url), 'utf8');
 const userPanelSource = readFileSync(new URL('../admin/src/components/SessionInfoPanel.jsx', import.meta.url), 'utf8');
 const detailSource = readFileSync(new URL('../admin/src/components/SessionDetailModal.jsx', import.meta.url), 'utf8');
@@ -10,41 +14,55 @@ const readmeSource = readFileSync(new URL('../README.md', import.meta.url), 'utf
 const changelogSource = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
 
 test('native-only session IDs remain the display, export, and action key', () => {
-  assert.match(homepageSource, /key=\{session\.id\}/);
+  assert.match(tableSource, /key=\{session\.id\}/);
+  assert.match(cardsSource, /key=\{session\.id\}/);
   assert.match(exportSource, /id:\s*session\.id/);
-  assert.match(homepageSource, /handleTerminateSession\(session\.id\)/);
+  assert.match(homepageSource, /onLogOut: handleTerminateSession/);
+  assert.match(actionsSource, /onLogOut\(session\.id\)/);
+  assert.match(actionsSource, /onRemove\(session\.id\)/);
   assert.match(detailSource, /sessions\/\$\{session\.id\}\/terminate/);
-  assert.doesNotMatch(homepageSource, /session\.documentId/);
-  assert.doesNotMatch(detailSource, /session\.documentId/);
+  for (const source of [homepageSource, actionsSource, listSource, detailSource]) {
+    assert.doesNotMatch(source, /session\.documentId/);
+  }
 });
 
-test('session list and exports label missing device and IP values as unavailable', () => {
-  assert.ok(
-    (homepageSource.match(/getSessionDeviceInfo\(session, unavailableValue\)/g) || []).length >= 3,
-    'search, desktop table, and mobile cards should use the same optional-user-agent handling'
-  );
+test('session list, details and exports mark missing device and IP values as unavailable', () => {
+  // One device presentation (native fields or user agent) for every surface.
+  assert.match(tableSource, /getDevicePresentation\(session\)/);
+  assert.match(tableSource, /deviceTypeLabel\(session\)/);
+  assert.match(tableSource, /deviceSummary\(session\)/);
+  assert.match(cardsSource, /<DeviceSummary session=\{session\} \/>/);
+  assert.match(detailSource, /getDevicePresentation\(session\)/);
+  assert.match(homepageSource, /getDeviceInfo: getExportDeviceInfo/);
   assert.ok(
     (exportSource.match(/getDeviceInfo\(session, unavailableValue\)/g) || []).length >= 2,
     'CSV and JSON exports should use the same optional-user-agent handling'
   );
-  assert.ok(
-    (homepageSource.match(/session\.ipAddress \|\| unavailableValue/g) || []).length >= 2,
-    'desktop table and mobile cards should preserve an explicit missing-IP value'
-  );
+  // Missing IPs render the shared accessible missing-value marker, never an invented value.
+  assert.match(tableSource, /<ValueOrMissing value=\{session\.ipAddress\} \/>/);
+  assert.match(cardsSource, /value: session\.ipAddress/);
+  assert.match(detailSource, /value: session\.ipAddress/);
   assert.ok(
     (exportSource.match(/session\.ipAddress \|\| unavailableValue/g) || []).length >= 2,
     'CSV and JSON should preserve an explicit missing-IP value'
   );
-  assert.ok(/getSessionDeviceInfo\(session, unavailableValue\)/.test(detailSource));
-  assert.ok(/session\.ipAddress \|\| unavailableValue/.test(detailSource));
-  assert.ok(/session\.userAgent[\s\S]{0,180}\?\s*session\.userAgent[\s\S]{0,100}: unavailableValue/.test(detailSource));
+  // The raw user agent is shown only when present; otherwise the missing marker.
+  assert.match(detailSource, /const userAgent = presentText\(session\.userAgent\)/);
+  assert.match(detailSource, /!userAgent\s*\? \{ id: 'userAgent'[^}]*value: null \}/);
 });
 
-test('native device metadata is shown when the session has no user-agent', () => {
-  assert.ok(/session\?\.deviceName/.test(homepageSource), 'session list should retain the actual native device label');
-  assert.ok(/session\?\.deviceName/.test(detailSource), 'session details should retain the actual native device label');
-  assert.match(homepageSource, /toLowerCase\(\) !== 'unknown'/, 'session list should not present unknown placeholders as device facts');
-  assert.match(detailSource, /toLowerCase\(\) !== 'unknown'/, 'session details should not present unknown placeholders as device facts');
+test('native device metadata is shown when the session has no user-agent', async () => {
+  const { getDevicePresentation } = await import('../admin/src/utils/devicePresentation.mjs');
+  const native = getDevicePresentation({ deviceType: 'mobile', browserName: 'Firefox', osName: 'Android' });
+  assert.equal(native.deviceType, 'mobile');
+  assert.equal(native.browser, 'Firefox');
+  assert.equal(native.os, 'Android');
+  // Unknown placeholders are not presented as device facts, and nothing is inferred as Desktop.
+  const placeholders = getDevicePresentation({ deviceType: 'unknown', browserName: 'unknown', osName: 'Unknown' });
+  assert.equal(placeholders.hasDeviceType, false);
+  assert.equal(placeholders.browser, '');
+  assert.equal(placeholders.os, '');
+  assert.equal(getDevicePresentation({ userAgent: 'SyntheticAgent/1.0' }).deviceType, '');
 });
 
 test('unsaved Users & Permissions entries explain the save requirement without no-op session actions', () => {
@@ -64,12 +82,13 @@ test('session details do not leave missing GeoIP data loading or invent security
   const missingIpCheck = detailSource.indexOf('if (!ipAddress)');
 
   assert.ok(storedGeoCheck >= 0 && missingIpCheck > storedGeoCheck, 'stored GeoIP data should remain usable without an IP address');
-  assert.match(detailSource, /country: unavailableValue/);
-  assert.match(detailSource, /city: unavailableValue/);
-  assert.match(detailSource, /timezone: unavailableValue/);
+  assert.match(detailSource, /country: null/);
+  assert.match(detailSource, /city: null/);
+  assert.match(detailSource, /timezone: null/);
   assert.match(detailSource, /typeof securityData\.securityScore === 'number'/);
-  assert.match(detailSource, /typeof securityData\.isVpn === 'boolean'/);
-  assert.match(detailSource, /typeof securityData\.isProxy === 'boolean'/);
+  assert.match(detailSource, /typeof value === 'boolean'/, 'VPN/proxy badges only for real booleans');
+  assert.match(detailSource, /isVpn: null/);
+  assert.match(detailSource, /isProxy: null/);
   assert.doesNotMatch(detailSource, /securityScore:\s*(?:0|50|100)\b/);
   assert.doesNotMatch(detailSource, /isVpn:\s*false/);
   assert.doesNotMatch(detailSource, /isProxy:\s*false/);

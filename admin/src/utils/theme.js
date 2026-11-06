@@ -1,6 +1,13 @@
 /**
+ * @deprecated Legacy static tokens. Do not use in new code: they are not
+ * Design System tokens and do not follow dark mode. Use DS props
+ * (background="neutral0", textColor="neutral600", padding={4}, gap={6}) or
+ * `theme.colors` / `theme.spaces` / `theme.breakpoints` from styled-components,
+ * and the shared blocks in components/ui. Kept only until every screen has
+ * migrated off it.
+ *
  * Theme Utilities for Dark Mode Support
- * 
+ *
  * IMPORTANT: For Dark Mode to work properly, use props.theme in styled-components:
  * 
  * Example:

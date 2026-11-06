@@ -43,7 +43,7 @@ const FieldHint = styled.div`
   width: 100%;
   min-width: 0;
   max-width: 72ch;
-  margin-top: 8px;
+  margin-top: ${({ theme }) => theme.spaces[2]};
 
   & > p {
     line-height: 1.6;
@@ -53,19 +53,33 @@ const FieldHint = styled.div`
 
 /**
  * Renders a Strapi Design System field with a visible label, an associated
- * control, and concise helper text. The control is constrained to its grid
- * column so long select values cannot widen the page on small screens.
+ * control, concise helper text and an inline validation error. The control
+ * is constrained to its grid column so long select values cannot widen the
+ * page on small screens.
  *
- * @param {{ id: string, name?: string, label: import('react').ReactNode, description: import('react').ReactNode, children: import('react').ReactNode }} props Field identity, copy, and control.
+ * Field.Root wires `aria-describedby` and `aria-invalid` for DS inputs: the
+ * control points at `${id}-error` while an error is shown, else `${id}-hint`.
+ * Field.Hint hides itself while an error is shown, so only one message is
+ * announced (SET-03).
+ *
+ * @param {{
+ *   id: string,
+ *   name?: string,
+ *   label: import('react').ReactNode,
+ *   description?: import('react').ReactNode,
+ *   error?: string,
+ *   required?: boolean,
+ *   children: import('react').ReactNode,
+ * }} props Field identity, copy, validation state and control.
  * @returns {import('react').ReactElement} A responsive, accessible form field.
  */
-const FormField = ({ id, name = id, label, description, children }) => {
+const FormField = ({ id, name = id, label, description, error, required = false, children }) => {
   return (
     <FieldFrame>
-      <Field.Root id={id} name={name} hint={description}>
+      <Field.Root id={id} name={name} hint={description} error={error || undefined} required={required}>
         <Field.Label>{label}</Field.Label>
         <FieldControl>{children}</FieldControl>
-        {description ? <FieldHint><Field.Hint /></FieldHint> : null}
+        {description || error ? <FieldHint><Field.Hint /><Field.Error /></FieldHint> : null}
       </Field.Root>
     </FieldFrame>
   );

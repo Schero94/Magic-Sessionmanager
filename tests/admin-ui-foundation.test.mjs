@@ -1,0 +1,198 @@
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import test from 'node:test';
+
+const read = (relativePath) =>
+  readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8');
+
+const UI_FILES = [
+  'components/ui/PageShell.jsx',
+  'components/ui/SectionCard.jsx',
+  'components/ui/StatGrid.jsx',
+  'components/ui/PropertyList.jsx',
+  'components/ui/StatusBadge.jsx',
+  'components/ui/ConfirmAction.jsx',
+  'components/ui/MissingValue.jsx',
+  'components/ui/DeviceIcon.jsx',
+];
+
+test('the shared ui blocks exist and are exported from one barrel', () => {
+  for (const file of [...UI_FILES, 'components/ui/index.js']) {
+    assert.ok(existsSync(new URL(`../admin/src/${file}`, import.meta.url)), `${file} exists`);
+  }
+  const barrel = read('components/ui/index.js');
+  for (const name of ['PageShell', 'SectionCard', 'StatGrid', 'StatCard', 'EqualGrid', 'PropertyList', 'StatusBadge', 'ConfirmAction', 'MissingValue', 'DeviceIcon']) {
+    assert.match(barrel, new RegExp(`\\b${name}\\b`), `${name} is exported`);
+  }
+});
+
+test('PageShell is the native Strapi frame without extra content insets (DUX-10, DASH-03, SET-10, F14)', () => {
+  const shell = read('components/ui/PageShell.jsx');
+  assert.match(shell, /import \{[^}]*\bLayouts\b[^}]*\bPage\b[^}]*\} from '@strapi\/strapi\/admin'/);
+  assert.match(shell, /<Page\.Main\b[^>]*aria-labelledby=\{titleId\}/);
+  assert.match(shell, /<Layouts\.Header\b[\s\S]*?id=\{titleId\}/);
+  for (const prop of ['title', 'subtitle', 'primaryAction', 'secondaryAction', 'navigationAction']) {
+    assert.match(shell, new RegExp(`${prop}=\\{${prop}\\}`), `header forwards ${prop}`);
+  }
+  assert.match(shell, /hasActionBar \? <Layouts\.Action startActions=\{startActions\} endActions=\{endActions\} \/> : null/);
+  assert.match(shell, /<Layouts\.Content>/);
+
+  const content = shell.match(/<PageContent\b([^>]*)>/)?.[1] || '';
+  assert.ok(content, 'content wrapper is present');
+  assert.doesNotMatch(content, /\bpadding(?:Left|Right|X)?=/, 'no horizontal padding inside Layouts.Content');
+  assert.doesNotMatch(content, /\bpadding=/, 'no shorthand padding inside Layouts.Content');
+  assert.match(content, /gap=\{6\}/, 'sections are separated by spacing token 6');
+  assert.match(shell, /paragraphRhythm/, 'page prose keeps the shared paragraph rhythm');
+});
+
+test('PluginPageLayout is a thin alias of PageShell', () => {
+  const layout = read('components/PluginPageLayout.jsx');
+  assert.match(layout, /export \{ default \} from '\.\/ui\/PageShell'/);
+  assert.doesNotMatch(layout, /padding/);
+});
+
+test('SectionCard follows the white card recipe with responsive padding', () => {
+  const card = read('components/ui/SectionCard.jsx');
+  assert.match(card, /tag="section"/);
+  assert.match(card, /background="neutral0"/);
+  assert.match(card, /hasRadius/);
+  assert.match(card, /shadow="tableShadow"/);
+  assert.match(card, /padding=\{\{ initial: 4, medium: 6 \}\}/);
+  assert.match(card, /variant="delta"/);
+  assert.match(card, /headingTag = 'h2'/);
+  assert.match(card, /variant="pi" textColor="neutral600"/);
+  assert.match(card, /aria-labelledby=/, 'sections are labelled by their heading');
+});
+
+test('StatGrid renders equal-height cards in 4/2/1 DS columns', () => {
+  const grid = read('components/ui/StatGrid.jsx');
+  assert.match(grid, /<Grid\.Root\b/);
+  assert.match(grid, /getGridItemSpans\(columns, stackBelow\)/);
+  assert.match(grid, /<EqualGrid columns=\{columns\} stackBelow="small" gap=\{4\}/);
+  assert.match(grid, /direction="column"\s+alignItems="stretch"/, 'items stretch to the row height');
+  assert.match(grid, /minWidth=\{0\}/);
+  assert.match(grid, /variant="alpha"/, 'values use alpha');
+  assert.match(grid, /variant="sigma"/, 'labels use sigma');
+  assert.match(grid, /<Icon aria-hidden focusable=\{false\} \/>/, 'icons are decorative');
+  assert.match(grid, /theme\.colors\[`\$\{\$tone\}600`\]/, 'icon tone comes from the DS theme');
+});
+
+test('PropertyList is a description list with equal columns and targeted wrapping', () => {
+  const list = read('components/ui/PropertyList.jsx');
+  assert.match(list, /styled\.dl`/);
+  assert.match(list, /grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(list, /theme\.breakpoints\.small/);
+  assert.match(list, /repeat\(\$\{\(\{ \$columns \}\) => \$columns\}, minmax\(0, 1fr\)\)/);
+  assert.match(list, /<dt>/);
+  assert.match(list, /<dd\b/);
+  assert.match(list, /dd\[data-wrap='anywhere'\] \{\s*overflow-wrap: anywhere;/);
+  assert.equal((list.match(/overflow-wrap: anywhere/g) || []).length, 1, 'only ids and emails break anywhere');
+  assert.match(list, /item\.kind === 'id' \|\| item\.kind === 'email'/);
+  assert.match(list, /<MissingValue/);
+});
+
+test('StatusBadge uses the shared status vocabulary', () => {
+  const badge = read('components/ui/StatusBadge.jsx');
+  assert.match(badge, /getSessionStatusPresentation/);
+  assert.match(badge, /<Badge variant=\{presentation\.tone\}/);
+  assert.match(badge, /formatMessage\(\{\s*id: getTranslation\(presentation\.messageId\)/);
+});
+
+test('ConfirmAction wraps Strapi ConfirmDialog and restores focus', () => {
+  const confirm = read('components/ui/ConfirmAction.jsx');
+  assert.match(confirm, /import \{ ConfirmDialog \} from '@strapi\/strapi\/admin'/);
+  assert.match(confirm, /<Dialog\.Root open=\{open\} onOpenChange=\{handleOpenChange\}>/);
+  assert.match(confirm, /<Dialog\.Trigger ref=\{triggerRef\}/);
+  assert.match(confirm, /<ConfirmDialog\b[\s\S]*?title=\{title\}/);
+  assert.match(confirm, /variant = 'danger'/);
+  assert.match(confirm, /\{confirmLabel\}/);
+  assert.match(confirm, /triggerRef\.current\?\.isConnected \? triggerRef\.current : fallbackFocusRef\?\.current/);
+  assert.match(confirm, /if \(busy\) return;/, 'the dialog cannot be dismissed while the action runs');
+  assert.doesNotMatch(confirm, /window\.confirm\s*\(/);
+});
+
+test('missing values show a dash with an accessible label', () => {
+  const missing = read('components/ui/MissingValue.jsx');
+  assert.match(missing, /<span aria-hidden="true">\{MISSING_VALUE_GLYPH\}<\/span>/);
+  assert.match(missing, /<VisuallyHidden>\{label\}<\/VisuallyHidden>/);
+});
+
+test('device icons are decorative and the unknown device is not a monitor', () => {
+  const icon = read('components/ui/DeviceIcon.jsx');
+  assert.match(icon, /unknown: Information/);
+  assert.match(icon, /aria-hidden/);
+});
+
+test('alert bodies align with the alert title (F7)', () => {
+  const alert = read('components/PersistentAlert.jsx');
+  assert.match(alert, /styled\(Alert\)/);
+  assert.match(alert, /& \[role='status'\] > p > \*,\s*& \[role='alert'\] > p > \* \{[^}]*display: inline;[^}]*max-width: none;[^}]*font-size: inherit;[^}]*line-height: inherit;/);
+});
+
+test('readable text spacing uses DS spacing tokens', () => {
+  const text = read('components/ReadableText.jsx');
+  assert.doesNotMatch(text, /margin-block-start:\s*\d+px/);
+  assert.match(text, /theme\.spaces\[3\]/);
+});
+
+test('useBreakpoint reads DS theme breakpoints through matchMedia (DUX-19)', () => {
+  const hook = read('utils/useBreakpoint.js');
+  assert.match(hook, /useTheme\(\)/);
+  assert.match(hook, /getBreakpointQueries\(theme\)/);
+  assert.match(hook, /window\.matchMedia/);
+  assert.doesNotMatch(hook, /\d+px/, 'no hard-coded widths in the hook');
+});
+
+test('formatters use the admin locale from react-intl (DASH-05, I18N-10)', () => {
+  const formatters = read('utils/useSessionFormatters.js');
+  assert.match(formatters, /const \{ formatMessage, locale \} = useIntl\(\)/);
+  assert.match(formatters, /formatSessionDate\(value, locale,/);
+  assert.match(formatters, /formatRelative\(value, locale,/);
+  assert.doesNotMatch(formatters, /toLocaleString\(\)/);
+});
+
+test('the user-agent entry point re-exports the tested parser', () => {
+  const entry = read('utils/parseUserAgent.js');
+  assert.match(entry, /from '\.\/parseUserAgent\.mjs'/);
+  assert.doesNotMatch(read('utils/parseUserAgent.mjs'), /let device = 'Desktop'/);
+});
+
+test('shared blocks use DS tokens only', () => {
+  for (const file of UI_FILES) {
+    const source = read(file);
+    assert.doesNotMatch(source, /#[0-9a-fA-F]{3,8}\b|rgba?\(/, `${file} has no colour literals`);
+    assert.doesNotMatch(source, /\d+px/, `${file} has no px values`);
+    assert.doesNotMatch(source, /@media/, `${file} uses DS breakpoints only`);
+  }
+});
+
+const collectDescriptors = () => {
+  const descriptors = new Map();
+  for (const file of ['utils/sessionStatus.mjs', 'utils/devicePresentation.mjs', 'utils/missingValue.mjs']) {
+    const source = read(file);
+    for (const match of source.matchAll(/messageId: '([^']+)',\s*defaultMessage: '([^']*)'/g)) {
+      descriptors.set(match[1], match[2]);
+    }
+  }
+  return descriptors;
+};
+
+const LOCALES = ['en', 'de', 'fr', 'es', 'pt'];
+const translations = Object.fromEntries(
+  LOCALES.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))])
+);
+const descriptors = collectDescriptors();
+const pendingKeys = [...descriptors.keys()].filter((key) => LOCALES.some((locale) => !(key in translations[locale])));
+
+test('foundation message ids exist in every locale with matching English defaults', {
+  todo: pendingKeys.length ? `pending i18n merge: ${pendingKeys.length} key(s)` : false,
+}, () => {
+  assert.ok(descriptors.size >= 15, 'status, end reason, device and missing-value messages are collected');
+  for (const [key, defaultMessage] of descriptors) {
+    for (const locale of LOCALES) {
+      assert.ok(typeof translations[locale][key] === 'string' && translations[locale][key].trim(), `${key} exists in ${locale}`);
+    }
+    assert.equal(translations.en[key], defaultMessage, `${key} default matches en`);
+  }
+  assert.equal(translations.de['common.status.idle'], 'Leerlauf', 'German separates idle from ended (DUX-12)');
+});

@@ -22,6 +22,7 @@ When `auto` falls back after a local reader failure, log only a fixed message. R
   CHECK: node --test tests/geolocation-store-privacy.test.js tests/geolocation-disabled.test.js tests/geolocation-local-mmdb.test.js tests/geo-firewall.test.js tests/session-aware-jwt.test.js tests/privacy-logging.test.js
   EXPECT: exit 0
   EVIDENCE: 45 passed, 0 failed; `npm test` at the integration snapshot passed 348 tests, 0 failed; `npm run test:ts:back` and `git diff --check` passed. Other owners were concurrently changing their files; integration must rerun against final combined state.
+  RECHECK 2026-11-06 ~17:40, redesign working tree (GA-12): the CHECK command passed 45/45 again. The full suite there is 627 tests (609 pass, 0 fail, 18 todo) with `SESSION_HTTP_STRAPI_NODE_MODULES` on the Strapi 5.61.0 host; the 348 above is a historical snapshot. `npm run test:ts:back` exit 0. The dependency audit was not re-run (no registry access).
 
 ## Data flow and compatibility
 
@@ -69,7 +70,7 @@ These checks show limited compatibility of the scoped override with this fixture
 
 ## Open handoff gates
 
-- Integration update: the Settings hint now discloses the default Auto fallback, direct ipapi transfers and local/disabled alternatives. The actual Strapi 5.61 browser showed it and its `aria-describedby` association at 320 px. The README/default migration and legal-basis review described above remain open; the existing default and saved settings were not changed.
+- Integration update: the Settings hint now discloses the default Auto fallback, direct ipapi transfers and local/disabled alternatives. The actual Strapi 5.61 browser showed it and its `aria-describedby` association at 320 px. The README disclosure is done (see "Data flow and compatibility"). What remains open is a possible migration of the `auto` default and the legal-basis review; the existing default and saved settings were not changed. (Reworded 2026-11-06, GA-12: the old wording "README/default migration" read as if the README part were still open.) On the redesign branch the disclosure moves next to the "IP geolocation" switch that enables the lookup; its browser check is `gates/ui-redesign.md` B1/B2.
 - Review the UI leaf's provider disclosure at integration; any consent/legal-basis decision or default migration remains a separate product decision.
 - Compatible dependency remediation and fresh plugin plus host audits; current high findings remain open.
 - Integration owner must rerun full tests, builds and isolated host/browser/API acceptance after all parallel edits. No shared build, install, provider request, push or publication was performed by this leaf.

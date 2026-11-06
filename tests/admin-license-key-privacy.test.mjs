@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const licenseSource = readFileSync(new URL('../admin/src/pages/License.jsx', import.meta.url), 'utf8');
-const settingsSource = readFileSync(new URL('../admin/src/pages/Settings.jsx', import.meta.url), 'utf8');
+import { readSettingsFile } from './helpers/settingsSource.mjs';
+
+const settingsSource = readSettingsFile('EncryptionKeyCard.jsx');
 
 test('license key masking keeps only a short suffix visible', async () => {
   const { maskSensitiveValue } = await import('../admin/src/utils/maskSensitiveValue.mjs');
@@ -17,7 +19,8 @@ test('license key masking keeps only a short suffix visible', async () => {
 test('activation key is masked by default and has an explicit accessible reveal control', () => {
   assert.match(licenseSource, /useState\(false\).*showLicenseKey/s);
   assert.match(licenseSource, /showLicenseKey\s*\?\s*data\.licenseKey\s*:\s*maskSensitiveValue\(data\.licenseKey\)/);
-  assert.match(licenseSource, /aria-label=\{t\(\s*showLicenseKey\s*\?/);
+  // DS IconButton turns `label` into its accessible name (aria-label).
+  assert.match(licenseSource, /<IconButton\b[^>]*?\b(?:aria-)?label=\{t\(\s*showLicenseKey\s*\?/s);
 
   for (const locale of ['de', 'en', 'es', 'fr', 'pt']) {
     const translations = JSON.parse(
@@ -36,7 +39,23 @@ test('activation-key download filename does not disclose a key prefix', () => {
 test('encryption key remains masked in the .env preview until the show control is enabled', () => {
   assert.match(
     settingsSource,
-    /SESSION_ENCRYPTION_KEY=\{showEncryptionKey\s*\?\s*encryptionKey\s*:\s*maskSensitiveValue\(encryptionKey\)\}/
+    /formatEnvLine\(ENCRYPTION_KEY_ENV_NAME, showEncryptionKey\s*\?\s*encryptionKey\s*:\s*maskSensitiveValue\(encryptionKey\)\)/
   );
   assert.doesNotMatch(settingsSource, /SESSION_ENCRYPTION_KEY=\{encryptionKey\}/);
+});
+
+test('a generated encryption key stays hidden until revealed and the reveal toggle reports its state (SET-10)', () => {
+  const generate = settingsSource.slice(settingsSource.indexOf('const handleGenerate'), settingsSource.indexOf('return (', settingsSource.indexOf('const handleGenerate')));
+  assert.match(generate, /setEncryptionKey\(generateEncryptionKey\(\)\)/);
+  assert.match(generate, /setShowEncryptionKey\(false\)/);
+  assert.doesNotMatch(generate, /setShowEncryptionKey\(true\)/);
+  assert.match(settingsSource, /revealed=\{showEncryptionKey\}/);
+  const secretInput = readFileSync(new URL('../admin/src/pages/Settings/SecretTextInput.jsx', import.meta.url), 'utf8');
+  assert.match(secretInput, /aria-pressed=\{revealed\}/);
+  assert.match(secretInput, /type=\{revealed \? revealedType : 'password'\}/);
+});
+
+test('the copied .env line is quoted so dotenv keeps every character (SET-01)', () => {
+  assert.match(settingsSource, /formatEnvLine\(ENCRYPTION_KEY_ENV_NAME, encryptionKey\)/);
+  assert.doesNotMatch(settingsSource, /`SESSION_ENCRYPTION_KEY=\$\{/);
 });

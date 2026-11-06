@@ -13,6 +13,8 @@ const {
 } = require('../utils/settings-loader');
 const { extractBearerToken } = require('../utils/extract-token');
 const { parseNativeSessionKey } = require('../utils/native-session-view');
+const { runWithCallerRevocation } = require('../utils/block-revocation-scope');
+const { sendServerError } = require('../utils/http-errors');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
@@ -98,6 +100,42 @@ function isNativeSessionMode() {
 function getCurrentNativeSessionId(ctx) {
   const value = ctx?.state?.session?.id ?? ctx?.state?.auth?.credentials?.sessionId;
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * Fields that never leave the server in a session list response. Token
+ * material is stripped by enhanceSession already; this is the boundary check
+ * that also covers native-only rows and service results (F12).
+ */
+const PRIVATE_SESSION_FIELDS = ['token', 'tokenHash', 'refreshToken', 'refreshTokenHash', 'nativeSessionId'];
+
+/**
+ * Returns a copy of a session row that is safe for the browser. Actions use
+ * `documentId` (or the opaque `native_` key), so admin responses also drop
+ * the internal tracking `sessionId`; Content API responses keep it because
+ * it is a documented field of `/my-sessions`.
+ *
+ * @param {object} session Session view row
+ * @param {{admin?: boolean}} [options]
+ * @returns {object} Browser-safe session row
+ */
+function toPublicSession(session, { admin = false } = {}) {
+  if (!session || typeof session !== 'object') return session;
+  const safe = { ...session };
+  for (const field of PRIVATE_SESSION_FIELDS) delete safe[field];
+  if (admin) delete safe.sessionId;
+  return safe;
+}
+
+/**
+ * Maps a list of session rows to browser-safe rows.
+ *
+ * @param {object[]} sessions Session view rows
+ * @param {{admin?: boolean}} [options]
+ * @returns {object[]} Browser-safe rows
+ */
+function toPublicSessions(sessions, options) {
+  return Array.isArray(sessions) ? sessions.map((session) => toPublicSession(session, options)) : sessions;
 }
 
 /**
@@ -238,7 +276,7 @@ module.exports = {
       const sessions = await sessionService.getAllSessions();
 
       ctx.body = {
-        data: sessions,
+        data: toPublicSessions(sessions, { admin: true }),
         meta: {
           count: sessions.length,
           active: sessions.filter((s) => s.isTrulyActive).length,
@@ -262,7 +300,7 @@ module.exports = {
       const sessions = await sessionService.getActiveSessions();
 
       ctx.body = {
-        data: sessions,
+        data: toPublicSessions(sessions, { admin: true }),
         meta: { count: sessions.length, ...getTruncationMeta(sessions) },
       };
     } catch (err) {
@@ -308,7 +346,7 @@ module.exports = {
         });
 
         ctx.body = {
-          data: sessionsWithCurrent,
+          data: toPublicSessions(sessionsWithCurrent),
           meta: {
             count: sessionsWithCurrent.length,
             active: sessionsWithCurrent.filter((session) => session.isTrulyActive).length,
@@ -358,7 +396,7 @@ module.exports = {
       });
 
       ctx.body = {
-        data: sessionsWithCurrent,
+        data: toPublicSessions(sessionsWithCurrent),
         meta: {
           count: sessionsWithCurrent.length,
           active: sessionsWithCurrent.filter((s) => s.isTrulyActive).length,
@@ -403,7 +441,7 @@ module.exports = {
       const sessions = await sessionService.getUserSessions(serviceUserId);
 
       ctx.body = {
-        data: sessions,
+        data: toPublicSessions(sessions, { admin: isAdminRequest }),
         meta: { count: sessions.length, ...getTruncationMeta(sessions) },
       };
     } catch (err) {
@@ -818,10 +856,12 @@ module.exports = {
         return ctx.notFound('Session not found');
       }
 
+      // A foreign session answers exactly like an absent one, so the
+      // endpoint cannot be used to probe which session ids exist (API-10).
       const sessionUserId = sessionToTerminate.user?.documentId;
       if (sessionUserId !== userDocId) {
         strapi.log.warn('[magic-sessionmanager] Denied an attempt to terminate another user session');
-        return ctx.forbidden('You can only terminate your own sessions');
+        return ctx.notFound('Session not found');
       }
 
       if (
@@ -1038,6 +1078,9 @@ module.exports = {
    * @route POST /magic-sessionmanager/sessions/clean-inactive
    * @sideeffect Deletes inactive session rows and retains token deny records
    *   until expiry
+   * @returns {Promise<void>} 200 with `deletedCount`, or 500 whose
+   *   `error.details` carries `deletedCount` and `failedCount` when some rows
+   *   could not be removed
    */
   async cleanInactiveSessions(ctx) {
     try {
@@ -1050,27 +1093,51 @@ module.exports = {
         deletedCount,
       };
     } catch (err) {
+      if (err?.name === 'PartialCleanupError') {
+        strapi.log.warn('[magic-sessionmanager] Inactive session cleanup finished partially');
+        return sendServerError(ctx, 500, 'Some inactive session records could not be removed', {
+          deletedCount: Number(err.deletedCount) || 0,
+          failedCount: Number(err.failedCount) || 0,
+        });
+      }
       strapi.log.error('[magic-sessionmanager] Error cleaning inactive sessions:', err?.name || 'Error');
       return ctx.internalServerError('Error deleting inactive sessions');
     }
   },
 
   /**
-   * Sets an end user's requested access state. A repeated block also retries
-   * session revocation, including after an earlier partial failure.
+   * Sets or toggles an end user's blocked state.
+   *
+   * - `{ blocked: true | false }` sets that state (retry-safe, used by the
+   *   admin UI). A repeated block also retries session revocation, including
+   *   after an earlier partial failure.
+   * - A request without `blocked` keeps the pre-4.9 behaviour and toggles the
+   *   stored state. It is deprecated because a retried toggle can undo itself.
+   * - A `blocked` value that is present but not a boolean is rejected with 400
+   *   before any mutation.
+   *
+   * The response keeps `message`, `blocked` and `success`; `mode`
+   * (`'explicit' | 'toggle'`) is additive.
    *
    * Requires an authenticated administrator with the plugin access permission.
    * @route POST /magic-sessionmanager/user/:userId/toggle-block
-   * @param {object} ctx - Strapi context; body.blocked must be a boolean.
+   * @param {object} ctx - Strapi context; optional body.blocked boolean.
    * @returns {Promise<void>} Writes the resulting state or a 400, 404 or 500 response.
-   * @sideeffect Updates the user and, when blocking, revokes their sessions. A
-   * failed revocation can leave the user blocked with partially active sessions.
+   * @sideeffect Updates the user and, when blocking, revokes their sessions
+   * exactly once (the user lifecycle skips this update). A failed revocation
+   * can leave the user blocked with partially active sessions.
    */
   async toggleUserBlock(ctx) {
     try {
       const { userId } = ctx.params;
-      const requestedBlocked = ctx.request?.body?.blocked;
-      if (typeof requestedBlocked !== 'boolean') {
+      const body = ctx.request?.body;
+      const hasRequestedState =
+        body !== null &&
+        typeof body === 'object' &&
+        Object.prototype.hasOwnProperty.call(body, 'blocked') &&
+        body.blocked !== undefined;
+      const requestedBlocked = hasRequestedState ? body.blocked : undefined;
+      if (hasRequestedState && typeof requestedBlocked !== 'boolean') {
         return ctx.badRequest('A boolean blocked state is required');
       }
 
@@ -1097,12 +1164,15 @@ module.exports = {
         return ctx.notFound('User not found');
       }
 
-      const newBlockedStatus = requestedBlocked;
+      const mode = hasRequestedState ? 'explicit' : 'toggle';
+      const newBlockedStatus = hasRequestedState ? requestedBlocked : !user.blocked;
 
-      await strapi.documents(USER_UID).update({
-        documentId: userDocumentId,
-        data: { blocked: newBlockedStatus },
-      });
+      await runWithCallerRevocation(userDocumentId, () =>
+        strapi.documents(USER_UID).update({
+          documentId: userDocumentId,
+          data: { blocked: newBlockedStatus },
+        })
+      );
 
       if (newBlockedStatus) {
         const sessionService = strapi.plugin('magic-sessionmanager').service('session');
@@ -1113,6 +1183,7 @@ module.exports = {
         message: `User ${newBlockedStatus ? 'blocked' : 'unblocked'} successfully`,
         blocked: newBlockedStatus,
         success: true,
+        mode,
       };
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] Error toggling user block:', err?.name || 'Error');

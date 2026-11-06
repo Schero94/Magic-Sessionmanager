@@ -10,17 +10,17 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const net = require('node:net');
 
+const { resolveHostDependencies, assertHostAvailable } = require('./helpers/host-dependencies');
+
 const sourceRoot = path.resolve(__dirname, '..');
-const workbench = path.resolve(sourceRoot, '../..');
-const hostDependencies = process.env.SESSION_HTTP_STRAPI_NODE_MODULES || path.join(workbench, 'test-app', 'node_modules');
-const dependenciesAvailable = fs.existsSync(path.join(hostDependencies, '@strapi/strapi')) &&
-  fs.existsSync(path.join(hostDependencies, '@strapi/plugin-users-permissions')) &&
-  fs.existsSync(path.join(hostDependencies, 'better-sqlite3'));
+const host = resolveHostDependencies(['@strapi/strapi', '@strapi/plugin-users-permissions', 'better-sqlite3', 'jsonwebtoken']);
+const hostDependencies = host.modules;
 
 const mode = process.env.SESSION_HTTP_MODE || 'legacy-support';
 const fallbackHost = process.env.SESSION_HTTP_FALLBACK === '1';
 if (!['legacy-support', 'refresh'].includes(mode)) throw new Error('Invalid isolated HTTP test mode');
-test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 120000, skip: dependenciesAvailable ? false : 'Isolated host dependencies unavailable; set SESSION_HTTP_STRAPI_NODE_MODULES' }, async (t) => {
+test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 120000, skip: host.skip }, async (t) => {
+  assertHostAvailable(host);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sessionmanager-http-'));
   const config = path.join(root, 'config');
   const plugin = path.join(root, 'plugin');
@@ -199,6 +199,10 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
     for (const [method, url, body] of [
       ['POST', '/magic-sessionmanager/license/create', { email: {}, firstName: 'Test', lastName: 'Owner' }],
       ['POST', '/magic-sessionmanager/license/store-key', { licenseKey: '' }],
+      ['POST', '/magic-sessionmanager/license/store-key', { licenseKey: 12345 }],
+      ['POST', '/magic-sessionmanager/license/store-key', { licenseKey: 'synthetic-key', email: 42 }],
+      ['PUT', '/magic-sessionmanager/settings', { inactivityTimeout: 0 }],
+      ['PUT', '/magic-sessionmanager/settings', { enableGeolocation: 'true' }],
       ['PUT', '/magic-sessionmanager/geoip/credentials', {}],
       ['PUT', '/magic-sessionmanager/settings', []],
       ['GET', '/magic-sessionmanager/geolocation/999.1.1.1', undefined],
@@ -226,10 +230,15 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
       guard.verifyLicense = originalVerify;
     }
   });
-  await t.test('characterizes existing session access after a successful password reset', async () => {
+  await t.test('a successful password reset ends every older session of the user (GA-04)', async () => {
     const user = await createUser('reset-session-review');
-    const oldToken = await jwt.issue({ id: user.id });
+    // A distinct claim keeps the earlier login token different from the reset
+    // token even when both are issued within the same second.
+    const oldToken = await jwt.issue({ id: user.id, n: 'before-reset' });
     const session = await createSession(user, 'reset-session-review', oldToken);
+    const bystander = await createUser('reset-bystander');
+    const bystanderToken = await jwt.issue({ id: bystander.id });
+    const bystanderSession = await createSession(bystander, 'reset-bystander', bystanderToken);
     const code = crypto.randomBytes(32).toString('hex');
     const password = `${crypto.randomBytes(24).toString('hex')}Aa1!`;
     await app.db.query('plugin::users-permissions.user').update({ where: { id: user.id }, data: { resetPasswordToken: code } });
@@ -237,17 +246,19 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
     assert.equal(result.status, 200, 'the synthetic password reset succeeds');
     assert.ok(result.body.jwt, 'the host issues a new access token');
     const oldSidecar = await app.documents('plugin::magic-sessionmanager.session').findOne({ documentId: session.documentId });
+    assert.equal(oldSidecar.isActive, false, 'the prior Magic sidecar is ended by the reset');
     const oldAccess = await request('GET', '/api/magic-sessionmanager/my-sessions', oldToken);
-    assert.equal(oldSidecar.isActive, true, 'the prior Magic sidecar remains active after the reset');
+    assert.ok([401, 403].includes(oldAccess.status), `old token must be denied after reset, got ${oldAccess.status}`);
     const newAccess = await request('GET', '/api/magic-sessionmanager/my-sessions', result.body.jwt);
     assert.equal(newAccess.status, 200, 'the new reset session is usable');
+    const activeAfterReset = newAccess.body.data.filter((row) => row.isActive !== false);
+    assert.equal(activeAfterReset.length, 1, 'only the reset session remains active');
     if (mode === 'refresh') {
       const nativeId = app.sessionManager('users-permissions').validateAccessToken(oldToken).payload.sessionId;
       assert.equal(await app.sessionManager('users-permissions').isSessionActive(nativeId), false);
-      assert.ok([401, 403].includes(oldAccess.status));
-    } else {
-      assert.equal(oldAccess.status, 200, 'existing legacy token remains usable after reset');
     }
+    const untouched = await app.documents('plugin::magic-sessionmanager.session').findOne({ documentId: bystanderSession.documentId });
+    assert.equal(untouched.isActive, true, 'other users keep their sessions');
   });
   await t.test('missing and malformed resource IDs cannot mutate other sessions', async () => {
     const absent = 'synthetic-missing-id';
@@ -423,7 +434,7 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
       assert.equal(result.status, 500);
       assert.equal(JSON.stringify(result.body).includes('synthetic-block-revocation-failure'), false);
     } finally { service.terminateSession = original; }
-    assert.equal(attempts, 2, 'lifecycle and controller both attempted termination');
+    assert.equal(attempts, 1, 'only the controller revokes, so its failure surfaces once (API-12)');
     const storedUser = await app.documents('plugin::users-permissions.user').findOne({ documentId: user.documentId });
     const storedSession = await app.documents('plugin::magic-sessionmanager.session').findOne({ documentId: target.documentId });
     assert.equal(storedUser.blocked, true, 'user remains blocked after later failure');
@@ -475,18 +486,31 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
     assert.equal(repeated.body.blocked, true);
     assert.equal((await app.documents('plugin::users-permissions.user').findOne({ documentId: user.documentId })).blocked, true);
   });
-  await t.test('bodyless and invalid desired states never change a user', async () => {
+  await t.test('invalid desired states never change a user', async () => {
     const user = await createUser('invalid-block-state');
     const url = `/magic-sessionmanager/user/${user.documentId}/toggle-block`;
-    for (const body of [undefined, {}, { blocked: 'false' }, { blocked: null }, { blocked: 0 }]) {
+    for (const body of [{ blocked: 'false' }, { blocked: 'true' }, { blocked: null }, { blocked: 0 }]) {
       const result = await request('POST', url, adminToken, body);
       assert.equal(result.status, 400);
       assert.equal((await app.documents('plugin::users-permissions.user').findOne({ documentId: user.documentId })).blocked, false);
     }
-    await app.documents('plugin::users-permissions.user').update({ documentId: user.documentId, data: { blocked: true } });
-    const bodyless = await request('POST', url, adminToken);
-    assert.equal(bodyless.status, 400);
-    assert.equal((await app.documents('plugin::users-permissions.user').findOne({ documentId: user.documentId })).blocked, true);
+  });
+  await t.test('a bodyless toggle-block keeps the legacy toggle contract (GA-09/API-4)', async () => {
+    const user = await createUser('legacy-toggle');
+    const token = await jwt.issue({ id: user.id });
+    const session = await createSession(user, 'legacy-toggle', token);
+    const url = `/magic-sessionmanager/user/${user.documentId}/toggle-block`;
+    const blocked = await request('POST', url, adminToken);
+    assert.equal(blocked.status, 200);
+    assert.equal(blocked.body.success, true);
+    assert.equal(blocked.body.blocked, true);
+    assert.equal(blocked.body.message, 'User blocked successfully');
+    assert.equal(blocked.body.mode, 'toggle');
+    assert.equal((await app.documents('plugin::magic-sessionmanager.session').findOne({ documentId: session.documentId })).isActive, false);
+    const unblocked = await request('POST', url, adminToken, {});
+    assert.equal(unblocked.status, 200);
+    assert.equal(unblocked.body.blocked, false);
+    assert.equal((await app.documents('plugin::users-permissions.user').findOne({ documentId: user.documentId })).blocked, false);
   });
   await t.test('characterizes overlapping block and unblock responses', async () => {
     const user = await createUser('overlapping-access-state');
@@ -500,7 +524,9 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
     const reached = new Promise((resolve) => { reachedBarrier = resolve; });
     const release = new Promise((resolve) => { releaseBarrier = resolve; });
     service.terminateSession = async function (params) {
-      if (params.userId === user.documentId && params.reason === 'blocked' && ++arrivals === 2) {
+      // The controller is the single revocation path (API-12), so the block
+      // request is held at its first and only revocation call.
+      if (params.userId === user.documentId && params.reason === 'blocked' && ++arrivals === 1) {
         reachedBarrier();
         await release;
       }
@@ -622,7 +648,7 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
         ['PUT', '/magic-sessionmanager/geoip/credentials', { accountId: 'synthetic', licenseKey: 'synthetic' }],
       ]) {
         const result = await request(method, url, adminToken, body);
-        assert.equal(result.status, 400, `${method} ${url}`);
+        assert.equal(result.status, 500, `${method} ${url}: store failures are server errors (API-7)`);
         assert.equal(JSON.stringify(result.body).includes(marker), false);
       }
     } finally {
@@ -674,7 +700,7 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
     const result = await request('POST', '/magic-sessionmanager/license/create', adminToken, {
       email: 'fixture@example.invalid', firstName: 'Test', lastName: 'Owner',
     });
-    assert.equal(result.status, 400);
+    assert.equal(result.status, 500, 'a provider exception is a server error (API-7)');
     assert.equal(JSON.stringify(result.body).includes('synthetic-provider-private-detail'), false);
     const settings = await request('PUT', '/magic-sessionmanager/settings', adminToken, { enableGeolocation: true, geoIpProvider: 'ipapi' });
     assert.equal(settings.status, 200);
@@ -735,7 +761,7 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
       guard[operation] = async () => { throw new Error(marker); };
       try {
         const result = await request(method, url, adminToken, body);
-        assert.equal(result.status, 400, `${method} ${url}`);
+        assert.equal(result.status, 500, `${method} ${url}: provider exceptions are server errors (API-7)`);
         assert.equal(JSON.stringify(result.body).includes(marker), false);
       } finally { guard[operation] = original; }
     }
@@ -759,7 +785,7 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
       assert.equal(fakeUpdaterCalls, callsBefore + 1);
       fakeUpdaterFails = true;
       const failure = await request('POST', '/magic-sessionmanager/geoip/update', adminToken);
-      assert.equal(failure.status, 400);
+      assert.equal(failure.status, 502, 'an updater (provider) failure is an upstream error (API-7)');
       assert.equal(JSON.stringify(failure.body).includes('synthetic-updater-private-detail'), false);
       assert.equal(fakeUpdaterCalls, callsBefore + 2);
     } finally {
@@ -809,7 +835,9 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
   const foreign = await request('GET', `/api/magic-sessionmanager/user/${other.documentId}/sessions`, ownerToken);
   assert.equal(foreign.status, 403, 'cross-user listing');
   const deniedDelete = await request('DELETE', `/api/magic-sessionmanager/my-sessions/${otherSession.documentId}`, ownerToken);
-  assert.equal(deniedDelete.status, 403, 'cross-user termination');
+  assert.equal(deniedDelete.status, 404, 'cross-user termination answers like an absent session (API-10)');
+  const absentDelete = await request('DELETE', '/api/magic-sessionmanager/my-sessions/synthetic-absent-session', ownerToken);
+  assert.deepEqual(deniedDelete.body, absentDelete.body, 'foreign and absent session ids are indistinguishable');
   const stillActive = await app.documents('plugin::magic-sessionmanager.session').findOne({ documentId: otherSession.documentId });
   assert.equal(stillActive.isActive, true, 'denied foreign session remains active');
   if (mode === 'refresh') {
@@ -849,6 +877,65 @@ test(`isolated Strapi HTTP authentication and ownership (${mode})`, { timeout: 1
       assert.equal(JSON.stringify(failure.body).includes('synthetic-fallback-secret'), false);
     } finally { service.terminateAuthenticatedSession = original; }
     assert.equal((await app.documents('plugin::magic-sessionmanager.session').findOne({ documentId: session.documentId })).isActive, true);
+  });
+  await t.test('admin session lists expose no raw session identifiers or token material (F12)', async () => {
+    for (const url of ['/magic-sessionmanager/sessions', '/magic-sessionmanager/sessions/active', `/magic-sessionmanager/user/${owner.documentId}/sessions`]) {
+      const result = await request('GET', url, adminToken);
+      assert.equal(result.status, 200, url);
+      assert.ok(result.body.data.length > 0, `${url} returns synthetic rows`);
+      for (const row of result.body.data) {
+        assert.ok(row.documentId, `${url} keeps the action identifier`);
+        for (const field of ['sessionId', 'nativeSessionId', 'tokenHash', 'token', 'refreshToken', 'refreshTokenHash']) {
+          assert.equal(Object.hasOwn(row, field), false, `${url} must not expose ${field}`);
+        }
+      }
+    }
+  });
+  await t.test('a partial settings PUT keeps every omitted field (API-6)', async () => {
+    const before = await request('GET', '/magic-sessionmanager/settings', adminToken);
+    assert.equal(before.status, 200);
+    const toggled = !before.body.settings.alertOnVpnProxy;
+    const seeded = await request('PUT', '/magic-sessionmanager/settings', adminToken, { alertOnVpnProxy: toggled, blockedCountries: ['RU'] });
+    assert.equal(seeded.status, 200);
+    const partial = await request('PUT', '/magic-sessionmanager/settings', adminToken, { inactivityTimeout: 25 });
+    assert.equal(partial.status, 200);
+    const after = await request('GET', '/magic-sessionmanager/settings', adminToken);
+    assert.equal(after.body.settings.inactivityTimeout, 25);
+    assert.equal(after.body.settings.alertOnVpnProxy, toggled);
+    assert.deepEqual(after.body.settings.blockedCountries, ['RU']);
+    const invalid = await request('PUT', '/magic-sessionmanager/settings', adminToken, { inactivityTimeout: 0 });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.error.details.errors[0].path[0], 'inactivityTimeout');
+    assert.equal((await request('GET', '/magic-sessionmanager/settings', adminToken)).body.settings.inactivityTimeout, 25);
+    await request('PUT', '/magic-sessionmanager/settings', adminToken, { ...before.body.settings, geoIpDatabasePath: '' });
+  });
+  await t.test('every content route answers 429 once its per-caller budget is spent (API-1/API-2)', { timeout: 60000 }, async () => {
+    const issue = async (user, index) => jwt.issue({ id: user.id, n: `${index}-${crypto.randomBytes(4).toString('hex')}` });
+    const routes = require('../server/src/routes/content-api').routes;
+    for (const [index, route] of routes.entries()) {
+      const max = route.config.middlewares[0].config.max;
+      const user = await createUser(`limit-${index}`);
+      const keepToken = await issue(user, 'keep');
+      await createSession(user, `limit-keep-${index}`, keepToken);
+      const statuses = [];
+      for (let attempt = 0; attempt <= max; attempt++) {
+        // Logout routes end the calling session, so each attempt uses its own
+        // session of the same user; the budget is per user and route.
+        const ownsToken = route.handler === 'session.logout' || route.handler === 'session.logoutAll';
+        const token = ownsToken ? await issue(user, attempt) : keepToken;
+        if (ownsToken) await createSession(user, `limit-${index}-${attempt}`, token);
+        // Vary letter case, trailing slash and the path parameter on purpose.
+        let pathname = route.path
+          .replace(':sessionId', `synthetic-absent-${attempt}`)
+          .replace(':userId', user.documentId);
+        if (attempt % 3 === 1) pathname = pathname.toUpperCase().replace(user.documentId.toUpperCase(), user.documentId);
+        if (attempt % 3 === 2) pathname = `${pathname}/`;
+        const result = await request(route.method, `/api/magic-sessionmanager${pathname}`, token);
+        statuses.push(result.status);
+      }
+      assert.ok(statuses.slice(0, max).every((status) => status !== 429), `${route.method} ${route.path}: no 429 within budget (${statuses.slice(0, max).join(',')})`);
+      assert.equal(statuses[max], 429, `${route.method} ${route.path}: request ${max + 1} must be limited (${statuses.join(',')})`);
+    }
   });
   const adminList = await request('GET', '/magic-sessionmanager/sessions', adminToken);
   assert.equal(adminList.status, 200, 'authorized admin');

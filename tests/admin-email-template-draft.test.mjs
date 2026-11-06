@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { areSettingsEqual } from '../admin/src/utils/settingsEquality.mjs';
 import { updateEmailTemplate } from '../admin/src/utils/emailTemplateDraft.mjs';
+import { readSettingsFile, readSettingsSource } from './helpers/settingsSource.mjs';
 
 test('template edits do not mutate saved settings and are detected as dirty', () => {
   for (const field of ['subject', 'html', 'text']) {
@@ -18,7 +18,26 @@ test('template edits do not mutate saved settings and are detected as dirty', ()
 });
 
 test('all template edit and default actions use immutable updates', () => {
-  const source = readFileSync(new URL('../admin/src/pages/Settings.jsx', import.meta.url), 'utf8');
-  assert.equal((source.match(/updateEmailTemplate\(/g) || []).length, 5);
-  assert.doesNotMatch(source, /newTemplates\[templateKey\]\.(?:subject|html|text)\s*=/);
+  const editor = readSettingsFile('EmailTemplatesCard.jsx');
+  assert.match(editor, /const setField = \(field, value\) => \{\s*handleChange\('emailTemplates', updateEmailTemplate\(templates, templateKey, field, value\)\)/);
+  assert.match(editor, /handleChange\('emailTemplates', updateEmailTemplate\(templates, templateKey, field, defaults\[field\]\)\)/);
+  for (const field of ['subject', 'html', 'text']) {
+    assert.match(editor, new RegExp(`setField\\('${field}', event\\.target\\.value\\)`), field);
+  }
+  assert.doesNotMatch(readSettingsSource(), /newTemplates\[templateKey\]\.(?:subject|html|text)\s*=/);
+});
+
+test('template editors use DS colours, no emoji, translated variables and a confirmed Load Default (SET-07, SET-11, SET-14)', () => {
+  const editor = readSettingsFile('EmailTemplatesCard.jsx');
+  assert.match(editor, /const CodeTextarea = styled\(Textarea\)/);
+  assert.doesNotMatch(editor, /#1e1e1e|#d4d4d4|#888|#333|rgba\(/i);
+  assert.doesNotMatch(editor, /\p{Extended_Pictographic}/u);
+  assert.doesNotMatch(editor, /<Badge variant="success"/, 'the main-template badge is neutral');
+  assert.match(editor, /t\(definition\.messageId, definition\.defaultMessage\)/, 'variable descriptions are visible and translated');
+  assert.match(editor, /<Tag\b[\s\S]*?label=\{t\('settings\.email\.templates\.copyVariable'/);
+  assert.match(editor, /aria-label=\{t\('settings\.email\.templates\.title'/, 'tablist name is translated');
+  assert.match(editor, /<ConfirmAction\b[\s\S]*?settings\.email\.templates\.loadDefault\.confirmTitle/);
+  assert.match(editor, /placeholder=\{t\('settings\.email\.templates\.html\.placeholder'/);
+  assert.match(editor, /placeholder=\{t\('settings\.email\.templates\.text\.placeholder'/);
+  assert.match(editor, /sandbox=""/, 'the preview iframe runs without scripts');
 });
