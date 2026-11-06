@@ -17,6 +17,14 @@ import { DASHBOARD_COMPACT_TABLE_COLUMNS, DASHBOARD_TABLE_COLUMNS, getSessionUse
 const SHRINKING_USER_CELL = { maxWidth: 0, width: '30%' };
 const SHRINKING_DEVICE_CELL = { maxWidth: 0, width: '25%' };
 
+/**
+ * In the compact table (768-1199 px list width) the longest "{reason} ·
+ * {Ended at}" line would otherwise widen the Status column to about a third
+ * of the table and squeeze User and Device to a few letters. The detail line
+ * wraps instead, inside a share comparable to the User column.
+ */
+const COMPACT_STATUS_CELL = { width: '24%', whiteSpace: 'normal' };
+
 /** Monospace identifiers (IA H.13) through the theme font stack. */
 const MONOSPACE = { fontFamily: 'monospace' };
 
@@ -145,7 +153,7 @@ const SessionTable = ({
     >
       <Thead>
         <Tr>
-          <Th>{header('homepage.table.status', 'Status')}</Th>
+          <Th style={compact ? COMPACT_STATUS_CELL : undefined}>{header('homepage.table.status', 'Status')}</Th>
           <Th>{header('homepage.table.user', 'User')}</Th>
           <Th>{header('homepage.table.device', 'Device')}</Th>
           {compact ? null : <Th>{header('homepage.table.ipAddress', 'IP address')}</Th>}
@@ -168,7 +176,7 @@ const SessionTable = ({
                 onView(session, opener || event.currentTarget);
               }}
             >
-              <Td>
+              <Td style={compact ? COMPACT_STATUS_CELL : undefined}>
                 <StatusBadge session={session} size="S" detail />
               </Td>
               <Td style={SHRINKING_USER_CELL}>

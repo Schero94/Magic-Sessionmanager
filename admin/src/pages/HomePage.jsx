@@ -8,6 +8,7 @@ import {
   useQueryParams,
 } from '@strapi/strapi/admin';
 import {
+  Box,
   Button,
   EmptyStateLayout,
   Flex,
@@ -24,6 +25,7 @@ import {
 } from '@strapi/design-system';
 import { ArrowClockwise, ChartBubble, Check, Clock, Cog, Cross, Download, User } from '@strapi/icons';
 import { EmptyDocuments } from '@strapi/icons/symbols';
+import styled from 'styled-components';
 import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
@@ -74,6 +76,28 @@ const ANALYTICS_PATH = `/settings/${pluginId}/analytics`;
 const CONFIGURATION_PATH = `/settings/${pluginId}/general`;
 
 /**
+ * Footer around the native Strapi pagination. DS page links are 30 px wide;
+ * the wrapper raises them to the 32 px touch target without changing their
+ * look. The native footer row does not wrap, so at 320 px "Entries per page"
+ * and three page links ran past the viewport; here the links wrap to a
+ * second row instead and the label stays on one line.
+ */
+const PaginationTargets = styled.div`
+  nav a {
+    min-width: 3.2rem;
+  }
+
+  & > div {
+    flex-wrap: wrap;
+    gap: ${({ theme }) => theme.spaces[2]} ${({ theme }) => theme.spaces[4]};
+  }
+
+  & > div > div > span {
+    white-space: nowrap;
+  }
+`;
+
+/**
  * Starts a browser download for generated export text.
  *
  * @param {string} content File content.
@@ -106,7 +130,7 @@ const HomePage = () => {
   const { get, post, del } = useFetchClient();
   const { toggleNotification } = useNotification();
   const formatters = useSessionFormatters();
-  const { isBelowMedium, isBelowLarge } = useBreakpoint();
+  const { isBelowSmall, isBelowMedium, isBelowLarge } = useBreakpoint();
   const [listWidthRef, listWidth] = useElementWidth();
   const [{ query }, setQuery] = useQueryParams();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
@@ -437,15 +461,32 @@ const HomePage = () => {
 
   // Header actions sit together on the right, as in native Strapi list views
   // (Media Library: secondary actions left of the primary one). The links are
-  // tertiary so Export stays the strongest action.
+  // tertiary so Export stays the strongest action. Below the DS small
+  // breakpoint the three labelled buttons no longer fit one row (and wrap
+  // into a two-row sticky header), so the links become labelled 32 px icon
+  // links, like the native header doc link.
+  const analyticsLabel = t('homepage.links.analytics', 'Analytics');
+  const settingsLabel = t('homepage.links.settings', 'Settings');
   const primaryAction = (
     <Flex gap={2} wrap="wrap" justifyContent="flex-end">
-      <LinkButton tag={Link} to={ANALYTICS_PATH} variant="tertiary" size="S" startIcon={<ChartBubble />}>
-        {t('homepage.links.analytics', 'Analytics')}
-      </LinkButton>
-      <LinkButton tag={Link} to={CONFIGURATION_PATH} variant="tertiary" size="S" startIcon={<Cog />}>
-        {t('homepage.links.settings', 'Settings')}
-      </LinkButton>
+      {isBelowSmall ? (
+        <IconButton tag={Link} to={ANALYTICS_PATH} label={analyticsLabel} variant="tertiary">
+          <ChartBubble />
+        </IconButton>
+      ) : (
+        <LinkButton tag={Link} to={ANALYTICS_PATH} variant="tertiary" size="S" startIcon={<ChartBubble />}>
+          {analyticsLabel}
+        </LinkButton>
+      )}
+      {isBelowSmall ? (
+        <IconButton tag={Link} to={CONFIGURATION_PATH} label={settingsLabel} variant="tertiary">
+          <Cog />
+        </IconButton>
+      ) : (
+        <LinkButton tag={Link} to={CONFIGURATION_PATH} variant="tertiary" size="S" startIcon={<Cog />}>
+          {settingsLabel}
+        </LinkButton>
+      )}
       {exportAction}
     </Flex>
   );
@@ -453,35 +494,43 @@ const HomePage = () => {
   // Action bar (IA D1.5): search left, Status / End reason / Refresh right.
   // Below the medium breakpoint the search is full width and the filters wrap
   // to the next row.
+  // Below medium the selects share the row with Refresh (in proportion to their
+  // labels, so "All reasons" is not cut while "Ended" has room to spare), so
+  // Refresh never wraps onto a row of its own (320 px with End reason).
+  const filterSlot = isBelowMedium ? { flex: '1 1 auto', minWidth: 0 } : undefined;
   const filterControls = (
-    <Flex gap={2} alignItems="center" wrap="wrap" shrink={0}>
-      <SingleSelect
-        size="S"
-        aria-label={t('homepage.filter.label', 'Status')}
-        value={dashboard.status}
-        onChange={handleStatusChange}
-      >
-        {SESSION_FILTER_OPTIONS.map((option) => (
-          <SingleSelectOption key={option} value={option}>
-            {option === 'all' && t('homepage.filter.all', 'All sessions')}
-            {option === 'open' && t('homepage.filter.open', 'Open')}
-            {option !== 'all' && option !== 'open' && formatters.statusLabel(option)}
-          </SingleSelectOption>
-        ))}
-      </SingleSelect>
-      {dashboard.status === 'ended' ? (
+    <Flex gap={2} alignItems="center" wrap={isBelowMedium ? 'nowrap' : 'wrap'} shrink={0}>
+      <Box {...filterSlot}>
         <SingleSelect
           size="S"
-          aria-label={t('homepage.filter.reasonLabel', 'End reason')}
-          value={dashboard.reason}
-          onChange={handleReasonChange}
+          aria-label={t('homepage.filter.label', 'Status')}
+          value={dashboard.status}
+          onChange={handleStatusChange}
         >
-          {END_REASON_FILTER_OPTIONS.map((option) => (
+          {SESSION_FILTER_OPTIONS.map((option) => (
             <SingleSelectOption key={option} value={option}>
-              {option === 'all' ? t('homepage.filter.allReasons', 'All reasons') : formatters.endReasonLabel(option)}
+              {option === 'all' && t('homepage.filter.all', 'All sessions')}
+              {option === 'open' && t('homepage.filter.open', 'Open')}
+              {option !== 'all' && option !== 'open' && formatters.statusLabel(option)}
             </SingleSelectOption>
           ))}
         </SingleSelect>
+      </Box>
+      {dashboard.status === 'ended' ? (
+        <Box {...filterSlot}>
+          <SingleSelect
+            size="S"
+            aria-label={t('homepage.filter.reasonLabel', 'End reason')}
+            value={dashboard.reason}
+            onChange={handleReasonChange}
+          >
+            {END_REASON_FILTER_OPTIONS.map((option) => (
+              <SingleSelectOption key={option} value={option}>
+                {option === 'all' ? t('homepage.filter.allReasons', 'All reasons') : formatters.endReasonLabel(option)}
+              </SingleSelectOption>
+            ))}
+          </SingleSelect>
+        </Box>
       ) : null}
       <IconButton label={t('homepage.actions.refresh', 'Refresh sessions')} onClick={() => fetchSessions()}>
         <ArrowClockwise />
@@ -670,14 +719,16 @@ const HomePage = () => {
                 {isBelowMedium
                   ? <SessionCardList {...listProps} />
                   : <SessionTable {...listProps} compact={shouldUseCompactTable(listWidth, isBelowLarge)} />}
-                <Pagination.Root
-                  pageCount={pageResult.pageCount}
-                  total={pageResult.total}
-                  defaultPageSize={Number(DEFAULT_PAGE_SIZE)}
-                >
-                  <Pagination.PageSize options={[...PAGE_SIZE_OPTIONS]} />
-                  <Pagination.Links />
-                </Pagination.Root>
+                <PaginationTargets>
+                  <Pagination.Root
+                    pageCount={pageResult.pageCount}
+                    total={pageResult.total}
+                    defaultPageSize={Number(DEFAULT_PAGE_SIZE)}
+                  >
+                    <Pagination.PageSize options={[...PAGE_SIZE_OPTIONS]} />
+                    <Pagination.Links />
+                  </Pagination.Root>
+                </PaginationTargets>
               </>
             ) : (
               <EmptyStateLayout

@@ -14,6 +14,13 @@ const CardList = styled.ul`
   margin: 0;
   padding: 0;
   min-width: 0;
+
+  /* The page text rhythm caps list items at 72ch and adds li + li margins;
+     cards use the full list width and the flex gap only. */
+  && > li {
+    max-width: none;
+    margin: 0;
+  }
 `;
 
 /** Monospace identifiers (IA H.13). */

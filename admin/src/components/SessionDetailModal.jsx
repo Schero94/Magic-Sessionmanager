@@ -34,13 +34,18 @@ import Alert from './PersistentAlert';
 import ReadableText from './ReadableText';
 
 /**
- * Inline "Open user" link with a 24 px high hit area (WCAG 2.5.8), without
- * changing how the text sits on the line.
+ * Inline "Open user" link with a 32 px touch target below the DS medium
+ * breakpoint and a 24 px hit area from medium (WCAG 2.5.8), without changing
+ * how the text sits on the line.
  */
 const TargetLink = styled(Link)`
-  min-height: 2.4rem;
+  min-height: 3.2rem;
   display: inline-flex;
   align-items: center;
+
+  ${({ theme }) => theme.breakpoints.medium} {
+    min-height: 2.4rem;
+  }
 `;
 
 /** Monospace identifiers (IA H.13). */

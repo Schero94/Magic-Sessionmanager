@@ -1,5 +1,6 @@
 import { Badge, Flex, Tooltip, Typography } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
+import styled from 'styled-components';
 import { getTranslation } from '../../utils/getTranslation';
 import { toValidDate } from '../../utils/sessionDates.mjs';
 import { useSessionFormatters } from '../../utils/useSessionFormatters';
@@ -9,6 +10,11 @@ import {
   isNativeOnlySession,
 } from '../../utils/sessionStatus.mjs';
 import { MissingValue } from './MissingValue';
+
+/** Keeps a detail segment on one line. */
+const NoWrap = styled.span`
+  white-space: nowrap;
+`;
 
 /**
  * Second line under the badge (IA B.3), in neutral text: "Last active
@@ -26,9 +32,13 @@ const StatusDetail = ({ session, status }) => {
 
   if (status === 'ended') {
     const endedAt = toValidDate(session.logoutTime);
+    // Reason and date are unbreakable segments: where the line has to wrap
+    // (compact table), it wraps at the separator, never inside the date.
     text = t('common.status.ended.detail', '{reason} · {endedAt}', {
-      reason: endReasonLabel(session),
-      endedAt: endedAt ? formatDate(endedAt) : <MissingValue variant="pi" key="ended-at" />,
+      reason: <NoWrap key="reason">{endReasonLabel(session)}</NoWrap>,
+      endedAt: endedAt
+        ? <NoWrap key="ended-at">{formatDate(endedAt)}</NoWrap>
+        : <MissingValue variant="pi" key="ended-at" />,
     });
   } else {
     const minutes = Number(session.minutesSinceActive);

@@ -120,7 +120,7 @@ test('the table has no fixed minimum width and lets user/device cells shrink (DU
 });
 
 test('responsive tiers: full table when the list is wide enough, table without IP and Signed in from 768, cards below (I.1 item 10)', () => {
-  assert.match(source, /const \{ isBelowMedium, isBelowLarge \} = useBreakpoint\(\)/);
+  assert.match(source, /const \{ isBelowSmall, isBelowMedium, isBelowLarge \} = useBreakpoint\(\)/);
   assert.match(source, /isBelowMedium\s*\?\s*<SessionCardList \{\.\.\.listProps\} \/>\s*:\s*<SessionTable \{\.\.\.listProps\} compact=\{shouldUseCompactTable\(listWidth, isBelowLarge\)\} \/>/);
   assert.match(source, /<Flex ref=\{listWidthRef\}/, 'the compact decision uses the measured list width');
   assert.match(table, /\{compact \? null : <Th>\{header\('homepage\.table\.ipAddress', 'IP address'\)\}<\/Th>\}/);
@@ -150,7 +150,7 @@ test('query state lives in the URL: search, status, end reason, page and page si
   assert.match(source, /setQuery\(\{ status: status === 'all' \? undefined : status, reason: undefined, page: '1' \}\)/);
   assert.match(source, /setQuery\(\{ reason: reason === 'all' \? undefined : reason, page: '1' \}\)/);
   assert.match(source, /search: encodeSearchQuery\(value\)/);
-  assert.match(source, /\{dashboard\.status === 'ended' \? \(\s*<SingleSelect\b[\s\S]*?homepage\.filter\.reasonLabel', 'End reason'/);
+  assert.match(source, /\{dashboard\.status === 'ended' \? \(\s*<Box \{\.\.\.filterSlot\}>\s*<SingleSelect\b[\s\S]*?homepage\.filter\.reasonLabel', 'End reason'/);
   assert.match(source, /<SimpleMenu\b[\s\S]*?<MenuItem onSelect=\{handleExportCSV\}>[\s\S]*?<MenuItem onSelect=\{handleExportJSON\}>/);
 });
 
@@ -250,4 +250,31 @@ test('exports cover the filtered list, add the truncation flag and report failur
   assert.match(exportHandlers, /truncated,/);
   assert.equal((exportHandlers.match(/notifications\.error\.exportFailed', 'The export could not be created\.'/g) || []).length, 2);
   assert.doesNotMatch(exportHandlers, /notifications\.success/, 'the download itself is the feedback');
+});
+
+test('mobile pass: cards fill the list, compact Status wraps, header links fit one row, pagination targets are 32 px', () => {
+  // The page text rhythm caps <li> at 72ch and adds li + li margins; the cards must opt out.
+  assert.match(cards, /&& > li \{\s*max-width: none;\s*margin: 0;\s*\}/);
+  // Compact table: the "{reason} · {Ended at}" line wraps inside a bounded Status column.
+  assert.match(table, /const COMPACT_STATUS_CELL = \{ width: '24%', whiteSpace: 'normal' \};/);
+  assert.match(table, /<Th style=\{compact \? COMPACT_STATUS_CELL : undefined\}>/);
+  assert.match(table, /<Td style=\{compact \? COMPACT_STATUS_CELL : undefined\}>/);
+  // Below the DS small breakpoint Analytics and Settings become labelled icon links, so the
+  // header actions (and the sticky header) stay on one row at 320-519 px.
+  assert.match(source, /const \{ isBelowSmall, isBelowMedium, isBelowLarge \} = useBreakpoint\(\);/);
+  assert.match(source, /isBelowSmall \? \(\s*<IconButton tag=\{Link\} to=\{ANALYTICS_PATH\} label=\{analyticsLabel\} variant="tertiary">/);
+  assert.match(source, /<IconButton tag=\{Link\} to=\{CONFIGURATION_PATH\} label=\{settingsLabel\} variant="tertiary">/);
+  // DS pagination links are 30 px wide; below medium the touch target is 32 px.
+  assert.match(source, /const PaginationTargets = styled\.div`/);
+  assert.match(source, /min-width: 3\.2rem;/);
+  // The native footer row does not wrap; at 320 px the links wrap to a second row.
+  assert.match(source, /& > div \{\s*flex-wrap: wrap;/);
+  assert.match(source, /<PaginationTargets>\s*<Pagination\.Root/);
+  // Below medium the filters share one row with Refresh instead of leaving Refresh alone on a third row.
+  assert.match(source, /<Flex gap=\{2\} alignItems="center" wrap=\{isBelowMedium \? 'nowrap' : 'wrap'\} shrink=\{0\}>/);
+  assert.match(source, /const filterSlot = isBelowMedium \? \{ flex: '1 1 auto', minWidth: 0 \} : undefined;/);
+  assert.equal((source.match(/<Box \{\.\.\.filterSlot\}>/g) || []).length, 2, 'Status and End reason both stretch');
+  // Ended detail wraps at the separator, never inside the date.
+  assert.match(badge, /reason: <NoWrap key="reason">\{endReasonLabel\(session\)\}<\/NoWrap>/);
+  assert.match(badge, /\? <NoWrap key="ended-at">\{formatDate\(endedAt\)\}<\/NoWrap>/);
 });

@@ -108,7 +108,8 @@ test('"Open user" links to the Content Manager only when the row has the user do
   assert.match(modal, /const userEditPath = getUserEditPath\(session\)/);
   assert.match(modal, /presentText\(session\.user\?\.username\) && userEditPath \?/);
   assert.match(modal, /<TargetLink\s+tag=\{NavLink\}\s+to=\{userEditPath\}/);
-  assert.match(modal, /const TargetLink = styled\(Link\)`\s*min-height: 2\.4rem;/, 'the inline link has a 24 px hit area');
+  assert.match(modal, /const TargetLink = styled\(Link\)`\s*min-height: 3\.2rem;/, 'the inline link has a 32 px touch target below medium');
+  assert.match(modal, /theme\.breakpoints\.medium\} \{\s*min-height: 2\.4rem;/, 'and the 24 px desktop target from medium');
   assert.match(modal, /'modal\.user\.openFor', 'Open user \{user\}'/);
 });
 
