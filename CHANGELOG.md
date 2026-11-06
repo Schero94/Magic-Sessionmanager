@@ -1,3 +1,17 @@
+# [4.8.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.2...v4.8.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* align CI installs with lockfile settings ([ad9e7ed](https://github.com/Schero94/Magic-Sessionmanager/commit/ad9e7eda60e4a5e5f7479532085946869e3d7f96))
+* pass npm credentials to release workflow ([6a6d17d](https://github.com/Schero94/Magic-Sessionmanager/commit/6a6d17d740c8b6a80d72b057a548a8c649ba3651))
+
+
+### Features
+
+* add Strapi-native end-user session management ([2f00880](https://github.com/Schero94/Magic-Sessionmanager/commit/2f00880337bf590e4e5cbc8059c31fd0d18aee05))
+* improve session settings and admin access ([36ccd50](https://github.com/Schero94/Magic-Sessionmanager/commit/36ccd503433a7b8d6ade9e7d0ec971ba124518aa))
+
 ## [Unreleased]
 
 ### Added
