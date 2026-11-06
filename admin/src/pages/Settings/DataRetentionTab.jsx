@@ -1,11 +1,22 @@
 import { Button, Flex } from '@strapi/design-system';
 import { Trash } from '@strapi/icons';
+import styled from 'styled-components';
 import { ConfirmAction, EqualGrid, SectionCard } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import { SELECT_PRESETS } from './settingsTabs.mjs';
 import { IntroText, PresetSelect } from './SettingsBlocks';
 import { useOptionLabels } from './hooks/useOptionLabels';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
+
+/**
+ * The danger action keeps its label on one line. Beside the description it
+ * would otherwise shrink first and break "Delete ended sessions" over two
+ * lines (768 px with the Settings sub-navigation).
+ */
+const DangerButton = styled(Button)`
+  flex: none;
+  white-space: nowrap;
+`;
 
 /**
  * Tab "Data and retention" (IA F Tab 5): how long session history is kept,
@@ -62,9 +73,9 @@ const DataRetentionTab = ({ form }) => {
           </ReadableText>
           <ConfirmAction
             trigger={(
-              <Button variant="danger-light" startIcon={<Trash aria-hidden focusable={false} />}>
+              <DangerButton variant="danger-light" startIcon={<Trash aria-hidden focusable={false} />}>
                 {t('settings.config.deleteEnded.action', 'Delete ended sessions')}
-              </Button>
+              </DangerButton>
             )}
             title={t('settings.config.deleteEnded.confirmTitle', 'Delete all ended sessions?')}
             body={t(

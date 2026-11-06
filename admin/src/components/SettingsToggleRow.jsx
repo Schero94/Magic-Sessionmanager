@@ -13,6 +13,18 @@ const SettingsRowCard = styled(Box)`
   gap: ${({ theme }) => theme.spaces[4]};
   width: 100%;
   min-width: 0;
+
+  /* The DS Switch is 24 px tall, below the 32 px touch target on phones.
+     Transparent top and bottom borders grow its hit area to 32 px; the track
+     is painted only inside them (background-clip) with the same pill radius,
+     and negative margins keep the row height and the switch position. */
+  & [role='switch'] {
+    height: ${({ theme }) => theme.spaces[7]};
+    border-block: ${({ theme }) => theme.spaces[1]} solid transparent;
+    border-radius: 1.2rem / 1.6rem;
+    background-clip: padding-box;
+    margin-block: -${({ theme }) => theme.spaces[1]};
+  }
 `;
 
 const SettingsCopy = styled.div`

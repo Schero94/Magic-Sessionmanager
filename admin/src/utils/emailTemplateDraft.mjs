@@ -85,9 +85,137 @@ const escapeHtml = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-/** Script elements and inline event handlers, removed from HTML previews. */
-const PREVIEW_SCRIPT_PATTERN = /<script\b[^>]*>[\s\S]*?<\/script\s*>|<script\b[^>]*\/?>/gi;
-const PREVIEW_HANDLER_PATTERN = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+const HTML_SPACE = /[\t\n\f\r ]/;
+const ASCII_LETTER = /[A-Za-z]/;
+/** Attributes that run script or load a nested document in the preview frame. */
+const isActiveAttribute = (name) => /^on/i.test(name) || name.toLowerCase() === 'srcdoc';
+
+/**
+ * Reads one start or end tag the way the HTML tokenizer does: attribute
+ * values in quotes run until the closing quote (also across ">" and line
+ * breaks), unquoted values until white space or ">". Inline event handlers
+ * and srcdoc are left out.
+ *
+ * @param {string} raw HTML source.
+ * @param {number} start Index of "<".
+ * @returns {{ tag: string, name: string, end: number }|null} Cleaned tag,
+ *   lower-case name and the index after it, or null when the source ends
+ *   inside the tag (the browser then drops the tag).
+ */
+const readTag = (raw, start) => {
+  const isEnd = raw[start + 1] === '/';
+  let j = start + (isEnd ? 2 : 1);
+  const nameStart = j;
+  while (j < raw.length && !HTML_SPACE.test(raw[j]) && raw[j] !== '/' && raw[j] !== '>') j += 1;
+  const name = raw.slice(nameStart, j);
+  let tag = `<${isEnd ? '/' : ''}${name}`;
+
+  for (;;) {
+    let separator = '';
+    while (j < raw.length && (HTML_SPACE.test(raw[j]) || raw[j] === '/')) separator += raw[j++];
+    if (j >= raw.length) return null;
+    if (raw[j] === '>') return { tag: `${tag}${separator}>`, name: name.toLowerCase(), end: j + 1 };
+
+    const attributeStart = j;
+    j += 1; // The first character may be "=".
+    while (j < raw.length && !HTML_SPACE.test(raw[j]) && !['/', '>', '='].includes(raw[j])) j += 1;
+    const attributeName = raw.slice(attributeStart, j);
+
+    let k = j;
+    while (k < raw.length && HTML_SPACE.test(raw[k])) k += 1;
+    if (raw[k] === '=') {
+      k += 1;
+      while (k < raw.length && HTML_SPACE.test(raw[k])) k += 1;
+      if (k >= raw.length) return null;
+      if (raw[k] === '"' || raw[k] === "'") {
+        const close = raw.indexOf(raw[k], k + 1);
+        if (close === -1) return null;
+        j = close + 1;
+      } else if (raw[k] === '>') {
+        j = k;
+      } else {
+        while (k < raw.length && !HTML_SPACE.test(raw[k]) && raw[k] !== '>') k += 1;
+        if (k >= raw.length) return null;
+        j = k;
+      }
+    }
+
+    if (!isActiveAttribute(attributeName)) {
+      tag += `${separator || ' '}${raw.slice(attributeStart, j)}`;
+    }
+  }
+};
+
+/**
+ * Removes script elements, inline event handlers and srcdoc from HTML for the
+ * sandboxed preview, so the frame never logs "Blocked script execution".
+ * It tokenizes like the browser: while an admin types, half-finished markup
+ * such as `<p onclick` before the next tag, or a quote that is not closed
+ * yet, is a real handler for the browser, which a regular expression over
+ * "<…>" does not see. A tag cut off by the end of the source is dropped, as
+ * the browser drops it. Comments and text are kept unchanged.
+ *
+ * @param {string} raw HTML source.
+ * @returns {string} HTML without active content.
+ */
+const stripActiveHtml = (raw) => {
+  let out = '';
+  let i = 0;
+  while (i < raw.length) {
+    const lt = raw.indexOf('<', i);
+    if (lt === -1) return out + raw.slice(i);
+    out += raw.slice(i, lt);
+    i = lt;
+    const next = raw[i + 1] || '';
+
+    if (raw.startsWith('<!--', i)) {
+      // "<!-->" and "<!--->" are complete (empty) comments for the browser.
+      const shortEnd = raw.startsWith('<!-->', i) ? 5 : raw.startsWith('<!--->', i) ? 6 : 0;
+      if (shortEnd) {
+        out += raw.slice(i, i + shortEnd);
+        i += shortEnd;
+        continue;
+      }
+      const ends = [raw.indexOf('-->', i + 4), raw.indexOf('--!>', i + 4)].filter((index) => index !== -1);
+      if (!ends.length) return out;
+      const end = Math.min(...ends);
+      const close = raw.indexOf('>', end) + 1;
+      out += raw.slice(i, close);
+      i = close;
+      continue;
+    }
+
+    const isTag = ASCII_LETTER.test(next) || (next === '/' && ASCII_LETTER.test(raw[i + 2] || ''));
+    if (!isTag) {
+      if (next === '!' || next === '?' || next === '/') {
+        // Doctype, bogus comment or invalid end tag: inert up to the next ">".
+        const close = raw.indexOf('>', i);
+        if (close === -1) return out;
+        out += raw.slice(i, close + 1);
+        i = close + 1;
+      } else {
+        out += '<';
+        i += 1;
+      }
+      continue;
+    }
+
+    const parsed = readTag(raw, i);
+    if (!parsed) return out;
+    i = parsed.end;
+    if (parsed.name === 'script' && !parsed.tag.startsWith('</')) {
+      const closing = /<\/script[\t\n\f\r />]/i.exec(raw.slice(i));
+      if (!closing) return out;
+      const close = raw.indexOf('>', i + closing.index);
+      if (close === -1) return out;
+      i = close + 1;
+      continue;
+    }
+    if (parsed.name === 'script') continue;
+    out += parsed.tag;
+  }
+  return out;
+};
 
 /**
  * Replaces template variables with synthetic preview values. HTML previews
@@ -102,7 +230,7 @@ export function renderTemplatePreview(template, { html = false } = {}) {
   // The preview frame is sandboxed without scripts. Scripts and inline event
   // handlers are dropped first, so the browser logs no blocked-script errors;
   // the server sanitises the stored HTML separately.
-  const source = html ? raw.replace(PREVIEW_SCRIPT_PATTERN, '').replace(/<[a-z][^>]*>/gi, (tag) => tag.replace(PREVIEW_HANDLER_PATTERN, '')) : raw;
+  const source = html ? stripActiveHtml(raw) : raw;
   return source.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, name) => {
     const value = TEMPLATE_PREVIEW_VALUES[`{{${name}}}`];
     if (value === undefined) return match;

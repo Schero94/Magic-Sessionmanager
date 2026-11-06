@@ -147,8 +147,11 @@ const Terms = styled.dl`
   margin: 0;
   min-width: 0;
 
+  /* The term column takes its natural width, but never more than 45% of
+     the list: a long term ('403 "Login temporarily unavailable"') wraps
+     instead of squeezing the descriptions into a narrow column. */
   ${({ theme }) => theme.breakpoints.small} {
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: fit-content(45%) minmax(0, 1fr);
     row-gap: ${({ theme }) => theme.spaces[3]};
   }
 

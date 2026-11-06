@@ -39,13 +39,13 @@ export const SETTINGS_DEFAULTS = Object.freeze({
 export const MAX_FAILED_LOGINS_RANGE = Object.freeze({ min: 0, max: 100 });
 
 /** Webhook hosts accepted by the server (sanitizeWebhookUrl). */
-export const WEBHOOK_HOSTS = Object.freeze({
+const WEBHOOK_HOSTS = Object.freeze({
   discordWebhookUrl: ['discord.com', 'discordapp.com'],
   slackWebhookUrl: ['hooks.slack.com'],
 });
 
 /** MMDB filenames accepted by scripts/geoip-updater.cjs. */
-export const GEOIP_DATABASE_FILENAMES = Object.freeze([
+const GEOIP_DATABASE_FILENAMES = Object.freeze([
   'GeoLite2-City.mmdb',
   'GeoLite2-Country.mmdb',
   'GeoIP2-City.mmdb',
@@ -81,7 +81,7 @@ const message = (messageId, defaultMessage, values) => ({ messageId, defaultMess
  * @param {string[]} hosts Allowed host names (subdomains included).
  * @returns {boolean} Whether the server would keep the URL.
  */
-export function isAllowedWebhookUrl(value, hosts) {
+function isAllowedWebhookUrl(value, hosts) {
   if (typeof value !== 'string' || !value.trim()) return true;
   try {
     const parsed = new URL(value.trim());
@@ -98,7 +98,7 @@ export function isAllowedWebhookUrl(value, hosts) {
  * @param {unknown} value Draft value from NumberInput (number or undefined).
  * @returns {null|{messageId: string, defaultMessage: string, values?: object}} Error or null.
  */
-export function validateMaxFailedLogins(value) {
+function validateMaxFailedLogins(value) {
   const { min, max } = MAX_FAILED_LOGINS_RANGE;
   if (value === undefined || value === null || value === '') {
     return message('settings.validation.required', 'Enter a value.');

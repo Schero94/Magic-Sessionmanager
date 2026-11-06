@@ -98,3 +98,45 @@ test('the danger card stacks its button under the text below the small breakpoin
   assert.match(danger, /<ConfirmAction\b/);
   assert.doesNotMatch(danger, /flexShrink:\s*0|rgba\(/);
 });
+
+test('mobile acceptance: narrow tab panels stack field pairs, the open tab is revealed, targets reach 32 px', () => {
+  const page = readSettingsFile('index.jsx');
+  assert.match(page, /container-type:\s*inline-size/, 'the tab panel is a size container');
+  assert.match(page, /@container \(max-width:[^)]*rem\)\s*\{\s*\[data-equal-grid='2'\] > \*\s*\{\s*grid-column:\s*span 12;/,
+    'field pairs stack when the panel is too narrow for two readable columns (768 px with sub-navigation)');
+  assert.match(page, /getRevealScrollDelta\(list\.getBoundingClientRect\(\), tab\.getBoundingClientRect\(\)\)/,
+    'the selected tab scrolls into the tab list, not the page');
+
+  const row = readAdminFile('components/SettingsToggleRow.jsx');
+  assert.match(row, /\[role='switch'\][\s\S]*?height:\s*\$\{\(\{ theme \}\) => theme\.spaces\[7\]\}[\s\S]*?background-clip:\s*padding-box[\s\S]*?margin-block:/,
+    'switch hit area grows to 32 px without moving the track');
+
+  const field = readAdminFile('components/FormField.jsx');
+  assert.match(field, /input\[role='combobox'\]\s*\{[\s\S]*?min-height:\s*\$\{\(\{ theme \}\) => theme\.spaces\[7\]\}/);
+  assert.match(field, /text-overflow:\s*ellipsis/, 'long placeholders end in an ellipsis');
+
+  const retention = readSettingsFile('DataRetentionTab.jsx');
+  assert.match(retention, /const DangerButton = styled\(Button\)`[\s\S]*?white-space:\s*nowrap;/, 'danger label stays on one line');
+});
+
+test('reference lists cap the term column so descriptions stay readable on tablets', () => {
+  const blocks = readSettingsFile('SettingsBlocks.jsx');
+  assert.match(blocks, /grid-template-columns:\s*fit-content\(45%\) minmax\(0, 1fr\);/);
+});
+
+test('email template tabs never break inside a word and stack in narrow editors', () => {
+  const templates = readSettingsFile('EmailTemplatesCard.jsx');
+  const list = templates.slice(templates.indexOf('const TemplateTabsList'), templates.indexOf('const VariableGridFrame'));
+  assert.doesNotMatch(list, /overflow-wrap:\s*anywhere/);
+  assert.match(list, /@container \(max-width: [\d.]+rem\)\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?padding-block:/);
+  assert.match(templates, /<TemplateTabsFrame>\s*<Tabs\.Root/);
+  assert.match(templates, /const VariableGrid = styled\.div`[\s\S]*?& button \{\s*min-width: \$\{\(\{ theme \}\) => theme\.spaces\[7\]\};\s*min-height: \$\{\(\{ theme \}\) => theme\.spaces\[7\]\};/);
+});
+
+test('GeoIP actions give keyboard focus back after their button was disabled while running', () => {
+  const card = readSettingsFile('GeoIpDatabaseCard.jsx');
+  assert.match(card, /refocusIfLost\(buttonRef\.current, accountIdRef\.current\)/);
+  assert.match(card, /onClick=\{keepFocus\(geoIp\.saveCredentials, saveCredentialsRef\)\}/);
+  assert.match(card, /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(false\), updateRef\)\}/);
+  assert.match(card, /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(true\), forceRef\)\}/);
+});

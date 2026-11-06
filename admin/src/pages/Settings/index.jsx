@@ -6,7 +6,13 @@ import styled from 'styled-components';
 import { ConfirmAction, PageShell } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import Alert from '../../components/PersistentAlert';
-import { SETTINGS_TAB_IDS, SETTINGS_TAB_LABELS, buildTabSearch, resolveSettingsTab } from './settingsTabs.mjs';
+import {
+  SETTINGS_TAB_IDS,
+  SETTINGS_TAB_LABELS,
+  buildTabSearch,
+  getRevealScrollDelta,
+  resolveSettingsTab,
+} from './settingsTabs.mjs';
 import SessionsTab from './SessionsTab';
 import LoginProtectionTab from './LoginProtectionTab';
 import LocationDataTab from './LocationDataTab';
@@ -39,6 +45,27 @@ const SettingsTabsList = styled(Tabs.List)`
     text-transform: none;
     letter-spacing: normal;
     font-size: ${({ theme }) => theme.fontSizes[2]};
+  }
+`;
+
+/**
+ * Two-column field pairs fit when a column is at least 28rem wide. The DS
+ * Grid only sees the viewport: at 768–1079 px the Settings sub-navigation
+ * leaves a tab panel of about 49rem, which split fields into 18rem columns
+ * with cut-off labels and placeholders. The panel is a size container; below
+ * 60rem its field pairs stack, as they do below the medium breakpoint.
+ * Wider panels (1024 px and up) keep two columns.
+ */
+const TAB_PANEL_FOLD_REM = 60;
+
+const TabPanelFrame = styled.div`
+  container-type: inline-size;
+  min-width: 0;
+
+  @container (max-width: ${TAB_PANEL_FOLD_REM - 0.01}rem) {
+    [data-equal-grid='2'] > * {
+      grid-column: span 12;
+    }
   }
 `;
 
@@ -103,6 +130,16 @@ const SettingsPage = () => {
     setActiveTab(requestedTab);
   }, [requestedTab]);
 
+  // On narrow screens the tab list scrolls; keep the open tab fully visible
+  // (deep links, "Requires …" links). Only the list scrolls, never the page.
+  useEffect(() => {
+    const list = tabsRef.current?.querySelector('[role="tablist"]');
+    const tab = list?.querySelector('[role="tab"][aria-selected="true"]');
+    if (!list || !tab) return;
+    const delta = getRevealScrollDelta(list.getBoundingClientRect(), tab.getBoundingClientRect());
+    if (delta) list.scrollLeft += delta;
+  }, [activeTab, form.loading]);
+
   const focusActiveTab = useCallback(() => {
     if (typeof window === 'undefined') return;
     // After Discard the trigger is disabled; keep keyboard focus in the page.
@@ -110,6 +147,12 @@ const SettingsPage = () => {
       tabsRef.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus();
     }));
   }, []);
+
+  // A successful save disables Save, which would drop keyboard focus to
+  // <body>; it moves to the open tab, as after Discard.
+  const handleSaveClick = useCallback(async () => {
+    if (await form.handleSave()) focusActiveTab();
+  }, [form.handleSave, focusActiveTab]);
 
   const changeTab = useCallback((tab) => {
     const next = resolveSettingsTab(tab);
@@ -174,7 +217,7 @@ const SettingsPage = () => {
             }}
           />
           <Button
-            onClick={form.handleSave}
+            onClick={handleSaveClick}
             loading={form.saving}
             startIcon={<Check aria-hidden focusable={false} />}
             disabled={!form.canSave}
@@ -211,9 +254,11 @@ const SettingsPage = () => {
               const TabPanel = TAB_COMPONENTS[tab];
               return (
                 <Tabs.Content key={tab} value={tab} forceMount hidden={activeTab !== tab}>
-                  <Flex direction="column" alignItems="stretch" paddingTop={6}>
-                    <TabPanel form={form} />
-                  </Flex>
+                  <TabPanelFrame data-settings-tab-panel="">
+                    <Flex direction="column" alignItems="stretch" paddingTop={6}>
+                      <TabPanel form={form} />
+                    </Flex>
+                  </TabPanelFrame>
                 </Tabs.Content>
               );
             })}

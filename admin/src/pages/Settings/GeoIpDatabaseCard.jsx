@@ -1,16 +1,40 @@
-import { useRef } from 'react';
-import { Badge, Button, Divider, Flex, SingleSelect, SingleSelectOption, TextInput } from '@strapi/design-system';
+import { Fragment, useRef } from 'react';
+import { Badge, Button, Divider, Flex, SingleSelect, SingleSelectOption, TextInput, Typography } from '@strapi/design-system';
 import { Trash } from '@strapi/icons';
 import { ConfirmAction, EqualGrid, PropertyList, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
 import ReadableText from '../../components/ReadableText';
 import Alert from '../../components/PersistentAlert';
 import { formatSessionDate } from '../../utils/sessionDates.mjs';
+import { refocusIfLost } from '../../utils/restoreDialogFocus.mjs';
 import { fieldHasError, usesLocalDatabase } from './settingsTabs.mjs';
 import { AdvancedSection, RequiresNotice } from './SettingsBlocks';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
 const BUILD_DATE_OPTIONS = Object.freeze({ dateStyle: 'medium' });
+
+/**
+ * A file path that may wrap after each "/" (and only mid-segment as a last
+ * resort), so "data/magic-sessionmanager/geoip/GeoLite2-City.mmdb" breaks
+ * between folders on phones instead of inside the file name.
+ *
+ * @param {{ path: string }} props Path.
+ * @returns {import('react').ReactElement} Path text.
+ */
+const PathValue = ({ path }) => {
+  const parts = String(path).split('/');
+  return (
+    <Typography variant="omega" textColor="neutral800">
+      {parts.map((part, index) => (
+        // eslint-disable-next-line react/no-array-index-key -- segments are positional
+        <Fragment key={index}>
+          {part}
+          {index < parts.length - 1 ? <>/<wbr /></> : null}
+        </Fragment>
+      ))}
+    </Typography>
+  );
+};
 
 /**
  * Card "Provider and database" (IA F 3.2): lookup provider, local MaxMind
@@ -27,6 +51,18 @@ const GeoIpDatabaseCard = ({ form }) => {
   // Removing stored credentials also removes the Remove button; focus then
   // moves to the account ID field instead of falling back to the page body.
   const accountIdRef = useRef(null);
+  const saveCredentialsRef = useRef(null);
+  const updateRef = useRef(null);
+  const forceRef = useRef(null);
+
+  // These buttons are disabled while their request runs, which drops keyboard
+  // focus on <body>; afterwards it returns to the button (or the account ID).
+  const keepFocus = (action, buttonRef) => async () => {
+    await action();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      refocusIfLost(buttonRef.current, accountIdRef.current);
+    }));
+  };
   const lookupOff = !settings.enableGeolocation;
   const localDatabase = usesLocalDatabase(settings.geoIpProvider);
   const databaseDisabled = lookupOff || !localDatabase;
@@ -124,6 +160,7 @@ const GeoIpDatabaseCard = ({ form }) => {
                 id: 'file',
                 label: t('settings.config.database.file', 'File'),
                 value: geoIpStatus.databasePath,
+                render: geoIpStatus.databasePath ? <PathValue path={geoIpStatus.databasePath} /> : undefined,
                 kind: 'id',
               },
               {
@@ -184,8 +221,9 @@ const GeoIpDatabaseCard = ({ form }) => {
 
       <Flex gap={2} wrap="wrap">
         <Button
+          ref={saveCredentialsRef}
           variant="secondary"
-          onClick={geoIp.saveCredentials}
+          onClick={keepFocus(geoIp.saveCredentials, saveCredentialsRef)}
           loading={geoIp.savingCredentials}
           disabled={databaseDisabled || fromEnvironment || geoIp.savingCredentials || !geoIp.credentials.accountId || !geoIp.credentials.licenseKey}
         >
@@ -216,15 +254,17 @@ const GeoIpDatabaseCard = ({ form }) => {
       <Flex direction="column" alignItems="stretch" gap={2}>
         <Flex gap={2} wrap="wrap">
           <Button
-            onClick={() => geoIp.updateDatabase(false)}
+            ref={updateRef}
+            onClick={keepFocus(() => geoIp.updateDatabase(false), updateRef)}
             loading={geoIp.updating}
             disabled={databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
           >
             {t('settings.config.database.update', 'Update database')}
           </Button>
           <Button
+            ref={forceRef}
             variant="tertiary"
-            onClick={() => geoIp.updateDatabase(true)}
+            onClick={keepFocus(() => geoIp.updateDatabase(true), forceRef)}
             disabled={databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
           >
             {t('settings.config.database.force', 'Force download')}

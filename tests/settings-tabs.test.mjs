@@ -12,6 +12,7 @@ import {
   buildTabSearch,
   fieldHasError,
   getErrorTab,
+  getRevealScrollDelta,
   resolveSettingsTab,
   usesLocalDatabase,
 } from '../admin/src/pages/Settings/settingsTabs.mjs';
@@ -84,4 +85,14 @@ test('Save sends the hidden rate-limit keys back unchanged (IA F "Not shown, pre
 test('the GeoIP database controls apply to the Automatic and Local database providers only', () => {
   for (const provider of [undefined, '', 'auto', 'local-mmdb']) assert.equal(usesLocalDatabase(provider), true, String(provider));
   for (const provider of ['ipapi', 'disabled']) assert.equal(usesLocalDatabase(provider), false, provider);
+});
+
+test('getRevealScrollDelta scrolls a cut-off tab fully into its scrolling tab list', () => {
+  const list = { left: 16, right: 374 };
+  assert.equal(getRevealScrollDelta(list, { left: 40, right: 120 }), 0, 'visible tab: no scroll');
+  assert.equal(getRevealScrollDelta(list, { left: 300, right: 460 }), 86, 'tab cut off on the right');
+  assert.equal(getRevealScrollDelta(list, { left: -50, right: 30 }), -66, 'tab cut off on the left');
+  assert.equal(getRevealScrollDelta(list, { left: 300, right: 374.4 }), 0, 'sub-pixel overhang is ignored');
+  assert.equal(getRevealScrollDelta(null, { left: 0, right: 10 }), 0);
+  assert.equal(getRevealScrollDelta(list, undefined), 0);
 });

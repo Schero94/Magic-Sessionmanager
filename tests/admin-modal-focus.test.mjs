@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { pickFocusTarget, restoreDialogFocus } from '../admin/src/utils/restoreDialogFocus.mjs';
+import { pickFocusTarget, refocusIfLost, restoreDialogFocus } from '../admin/src/utils/restoreDialogFocus.mjs';
 
 test('dialog focus returns to the connected opener or an available fallback', () => {
   let focused = '';
@@ -49,4 +49,22 @@ test('dashboard retains the actual row or button opener and does not refetch mer
   assert.match(home, /onCloseAutoFocus=\{handleCloseAutoFocus\}/);
   assert.match(modal, /onCloseAutoFocus=\{onCloseAutoFocus\}/);
   assert.match(home, /useEffect\(\(\) => \{\s*fetchSessions\(\);\s*\}, \[\]\)/);
+});
+
+test('refocusIfLost puts focus back on the button that ran a slow action, only when focus fell to <body>', () => {
+  const focused = [];
+  const body = { tagName: 'BODY' };
+  const make = (name, disabled = false) => ({ name, disabled, isConnected: true, focus() { focused.push(name); }, getAttribute: () => null });
+  const button = make('update');
+  const fallback = make('fallback');
+
+  refocusIfLost(button, fallback, { activeElement: body, body });
+  assert.deepEqual(focused, ['update']);
+
+  refocusIfLost(make('disabled', true), fallback, { activeElement: null, body });
+  assert.deepEqual(focused, ['update', 'fallback']);
+
+  // The admin moved on (for example into a field): focus is left alone.
+  refocusIfLost(button, fallback, { activeElement: make('field'), body });
+  assert.deepEqual(focused, ['update', 'fallback']);
 });

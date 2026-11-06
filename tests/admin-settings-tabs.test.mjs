@@ -92,13 +92,16 @@ test('header: title, subtitle, Save and a confirmed Discard changes (IA D5.1, E.
   assert.match(page, /disabled=\{!form\.canSave\}/);
   assert.match(page, /loading=\{form\.saving\}/);
   assert.match(page, /t\('settings\.config\.save', 'Save'\)/);
-  const discard = page.slice(page.indexOf('<ConfirmAction'), page.indexOf('<Button\n            onClick={form.handleSave}'));
+  const discard = page.slice(page.indexOf('<ConfirmAction'), page.indexOf('<Button\n            onClick={handleSaveClick}'));
+  assert.ok(discard.length > 0);
   assert.match(discard, /disabled=\{!form\.hasChanges \|\| form\.saving\}/);
   assert.match(discard, /t\('settings\.config\.discard', 'Discard changes'\)/);
   assert.match(discard, /t\('settings\.config\.discard\.confirmTitle', 'Discard unsaved changes\?'\)/);
   assert.match(discard, /t\('settings\.config\.discard\.confirmBody', 'Your changes on all tabs are lost\.'\)/);
   assert.match(discard, /t\('settings\.config\.discard\.confirmAction', 'Discard'\)/);
   assert.match(discard, /form\.handleReset\(\);\s*focusActiveTab\(\)/, 'discard keeps the open tab and focus');
+  // After a successful save the Save button is disabled; focus moves to the open tab instead of <body>.
+  assert.match(page, /const handleSaveClick = useCallback\(async \(\) => \{\s*if \(await form\.handleSave\(\)\) focusActiveTab\(\);/);
   assert.doesNotMatch(source, /settings\.reset'|'Reset'/);
 });
 

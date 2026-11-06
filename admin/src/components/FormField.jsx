@@ -37,6 +37,19 @@ const FieldControl = styled.div`
     min-width: 0;
     box-sizing: border-box;
   }
+
+  /* A placeholder longer than a phone-width input ends in an ellipsis
+     instead of being cut mid-word. */
+  input {
+    text-overflow: ellipsis;
+  }
+
+  /* The DS Combobox input is only 24 px tall inside its 40 px frame. It
+     grows to the 32 px touch target; negative margins keep the frame. */
+  input[role='combobox'] {
+    min-height: ${({ theme }) => theme.spaces[7]};
+    margin-block: -${({ theme }) => theme.spaces[1]};
+  }
 `;
 
 /** Control with a unit after it ("attempts", "failed sign-ins"); the unit never shrinks the input below its column. */

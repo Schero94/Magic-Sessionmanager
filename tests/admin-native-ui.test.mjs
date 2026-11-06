@@ -177,7 +177,8 @@ test('geofencing country controls wrap without fixed-width mobile overflow', () 
 
   assert.ok(controlsStart >= 0 && controlsEnd > controlsStart, 'geofencing country controls exist');
   assert.match(controls, /<EqualGrid\b[^>]*stackBelow="medium"/, 'picker and code field share a responsive grid');
-  assert.match(source, /<Flex ref=\{chipListRef\} tag="ul" gap=\{2\} wrap="wrap"/, 'country chips wrap');
+  assert.match(source, /<ChipList ref=\{chipListRef\} tag="ul" gap=\{2\} wrap="wrap"/, 'country chips wrap');
+  assert.match(source, /const ChipList = styled\(Flex\)`[\s\S]*?min-height:\s*\$\{\(\{ theme \}\) => theme\.spaces\[7\]\}/, 'chip remove buttons reach 32 px on phones');
   assert.doesNotMatch(controls, /12rem|width: '180px'/);
 });
 

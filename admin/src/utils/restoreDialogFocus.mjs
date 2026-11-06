@@ -30,3 +30,21 @@ export function restoreDialogFocus(event, opener, fallback) {
   event.preventDefault();
   target.focus();
 }
+
+/**
+ * After an action whose button is disabled while it runs (Save, Update
+ * database, Save credentials), the browser drops keyboard focus on <body>.
+ * Focus goes back to that button, or to the fallback, but only when it was
+ * lost; focus the admin moved elsewhere stays where it is.
+ *
+ * @param {any} opener Button that started the action.
+ * @param {any} [fallback] Focus target when the button cannot take focus.
+ * @param {{activeElement: any, body: any}} [doc] Document (injectable for tests).
+ * @returns {void}
+ */
+export function refocusIfLost(opener, fallback, doc = typeof document === 'undefined' ? undefined : document) {
+  if (!doc) return;
+  const active = doc.activeElement;
+  if (active && active !== doc.body) return;
+  pickFocusTarget(opener, fallback)?.focus();
+}

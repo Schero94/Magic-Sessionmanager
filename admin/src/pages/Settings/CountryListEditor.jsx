@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button, Combobox, ComboboxOption, Dialog, Flex, Radio, Tag, TextInput, Typography } from '@strapi/design-system';
 import { ConfirmDialog } from '@strapi/strapi/admin';
 import { Cross, Plus } from '@strapi/icons';
+import styled from 'styled-components';
 import { EqualGrid } from '../../components/ui';
 import FormField from '../../components/FormField';
 import ReadableText from '../../components/ReadableText';
@@ -20,6 +21,25 @@ import {
 } from '../../utils/geofencingMode.mjs';
 import { validateCountryCode } from '../../utils/settingsForm.mjs';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
+
+/**
+ * Country chips. A DS Tag is 28 px tall; below the medium breakpoint the
+ * remove buttons grow to the 32 px touch target (IA D5 mobile).
+ */
+const ChipList = styled(Flex)`
+  & button {
+    min-width: ${({ theme }) => theme.spaces[7]};
+    min-height: ${({ theme }) => theme.spaces[7]};
+    justify-content: center;
+  }
+
+  ${({ theme }) => theme.breakpoints.medium} {
+    & button {
+      min-width: 0;
+      min-height: 0;
+    }
+  }
+`;
 
 /**
  * Country rules editor: "Allow only listed countries" or "Reject listed
@@ -181,7 +201,7 @@ const CountryListEditor = ({ settings, handleChange }) => {
             {t('settings.geofencing.empty', 'No countries configured.')}
           </Typography>
         ) : (
-          <Flex ref={chipListRef} tag="ul" gap={2} wrap="wrap" aria-labelledby={listLabelId} data-country-chips="">
+          <ChipList ref={chipListRef} tag="ul" gap={2} wrap="wrap" aria-labelledby={listLabelId} data-country-chips="">
             {activeList.map((code) => (
               <li key={code}>
                 <Tag
@@ -193,7 +213,7 @@ const CountryListEditor = ({ settings, handleChange }) => {
                 </Tag>
               </li>
             ))}
-          </Flex>
+          </ChipList>
         )}
       </Flex>
 

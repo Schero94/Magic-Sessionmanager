@@ -196,3 +196,19 @@ export function buildSavePayload(draft, saved) {
 export function usesLocalDatabase(provider) {
   return provider === undefined || provider === null || provider === '' || provider === 'auto' || provider === 'local-mmdb';
 }
+
+/**
+ * How far a horizontally scrolling tab list must scroll so that one tab is
+ * fully visible (IA D5 mobile: tabs scroll inside the list). A deep link to a
+ * tab past the right edge would otherwise open with its label cut off.
+ *
+ * @param {{left: number, right: number}|null|undefined} listRect Visible box of the tab list.
+ * @param {{left: number, right: number}|null|undefined} tabRect Box of the tab to reveal.
+ * @returns {number} Pixels to add to the list's scrollLeft (0 when already visible).
+ */
+export function getRevealScrollDelta(listRect, tabRect) {
+  if (!listRect || !tabRect) return 0;
+  if (tabRect.left < listRect.left - 0.5) return Math.round(tabRect.left - listRect.left);
+  if (tabRect.right > listRect.right + 0.5) return Math.round(tabRect.right - listRect.right);
+  return 0;
+}

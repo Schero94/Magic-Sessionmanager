@@ -6,16 +6,17 @@ import {
   formatEnvLine,
   generateEncryptionKey,
 } from '../admin/src/utils/encryptionKey.mjs';
+import * as settingsForm from '../admin/src/utils/settingsForm.mjs';
 import {
-  GEOIP_DATABASE_FILENAMES,
   getAdjustedFields,
-  isAllowedWebhookUrl,
   normalizeSettings,
   validateCountryCode,
-  validateMaxFailedLogins,
   validateSettings,
-  WEBHOOK_HOSTS,
 } from '../admin/src/utils/settingsForm.mjs';
+
+// Single-field checks run through validateSettings, the only entry point the page uses.
+const fieldError = (field, value) => validateSettings({ maxFailedLogins: 5, [field]: value })[field] ?? null;
+const GEOIP_DATABASE_FILENAMES = ['GeoLite2-City.mmdb', 'GeoLite2-Country.mmdb', 'GeoIP2-City.mmdb', 'GeoIP2-Country.mmdb'];
 import {
   fillMissingTemplates,
   findTemplateVariables,
@@ -57,26 +58,40 @@ test('.env lines are quoted so dotenv keeps "#" and other special characters', (
   assert.throws(() => formatEnvLine('KEY', '"\'`'), /quote_styles/);
 });
 
+test('settingsForm exports only what the admin uses (no stale helpers)', () => {
+  assert.deepEqual(Object.keys(settingsForm).sort(), [
+    'MAX_FAILED_LOGINS_RANGE',
+    'SETTINGS_DEFAULTS',
+    'getAdjustedFields',
+    'normalizeSettings',
+    'validateCountryCode',
+    'validateSettings',
+  ]);
+});
+
 test('max failed logins is validated, never clamped (SET-03)', () => {
-  assert.equal(validateMaxFailedLogins(5), null);
-  assert.equal(validateMaxFailedLogins(0), null);
-  assert.equal(validateMaxFailedLogins(100), null);
-  assert.equal(validateMaxFailedLogins(undefined)?.messageId, 'settings.validation.required');
+  assert.equal(fieldError('maxFailedLogins', 5), null);
+  assert.equal(fieldError('maxFailedLogins', 0), null);
+  assert.equal(fieldError('maxFailedLogins', 100), null);
+  assert.equal(fieldError('maxFailedLogins', undefined)?.messageId, 'settings.validation.required');
   for (const value of [-3, 101, 500, 2.5, Number.NaN]) {
-    const error = validateMaxFailedLogins(value);
+    const error = fieldError('maxFailedLogins', value);
     assert.equal(error?.messageId, 'settings.validation.range', String(value));
     assert.deepEqual(error.values, { min: 0, max: 100 });
   }
 });
 
 test('webhook URLs follow the server allowlist and report errors inline', () => {
-  assert.equal(isAllowedWebhookUrl('', WEBHOOK_HOSTS.discordWebhookUrl), true);
-  assert.equal(isAllowedWebhookUrl('https://discord.com/api/webhooks/1/abc', WEBHOOK_HOSTS.discordWebhookUrl), true);
-  assert.equal(isAllowedWebhookUrl('https://ptb.discord.com/api/webhooks/1/abc', WEBHOOK_HOSTS.discordWebhookUrl), true);
-  assert.equal(isAllowedWebhookUrl('http://discord.com/api/webhooks/1/abc', WEBHOOK_HOSTS.discordWebhookUrl), false);
-  assert.equal(isAllowedWebhookUrl('https://evil-discord.com/x', WEBHOOK_HOSTS.discordWebhookUrl), false);
-  assert.equal(isAllowedWebhookUrl('not-a-url', WEBHOOK_HOSTS.discordWebhookUrl), false);
-  assert.equal(isAllowedWebhookUrl('https://hooks.slack.com/services/A/B/C', WEBHOOK_HOSTS.slackWebhookUrl), true);
+  const discordOk = (url) => fieldError('discordWebhookUrl', url) === null;
+  assert.equal(discordOk(''), true);
+  assert.equal(discordOk('https://discord.com/api/webhooks/1/abc'), true);
+  assert.equal(discordOk('https://discordapp.com/api/webhooks/1/abc'), true);
+  assert.equal(discordOk('https://ptb.discord.com/api/webhooks/1/abc'), true);
+  assert.equal(discordOk('http://discord.com/api/webhooks/1/abc'), false);
+  assert.equal(discordOk('https://evil-discord.com/x'), false);
+  assert.equal(discordOk('not-a-url'), false);
+  assert.equal(fieldError('slackWebhookUrl', 'https://hooks.slack.com/services/A/B/C'), null);
+  assert.equal(fieldError('slackWebhookUrl', 'https://discord.com/api/webhooks/1/abc')?.messageId, 'settings.validation.webhookSlack');
 
   const errors = validateSettings({
     maxFailedLogins: 5,
@@ -165,4 +180,29 @@ test('the HTML preview drops scripts and inline handlers, so the sandboxed frame
   assert.match(renderTemplatePreview('<p>Someone onboarding = yes</p>', { html: true }), /Someone onboarding = yes/, 'text outside tags stays');
   // Plain text and subjects are never touched.
   assert.equal(renderTemplatePreview('<script>x</script>'), '<script>x</script>');
+});
+
+test('the HTML preview follows the browser tokenizer, so half-typed tags never become handlers or scripts', () => {
+  const clean = (source) => renderTemplatePreview(source, { html: true });
+  // An attribute without a value is still a handler for the browser.
+  assert.equal(clean('<p onclick\n<html><body>x</body></html>'), '<p\n<html><body>x</body></html>');
+  // A quoted value runs past ">" until its closing quote, as in the browser.
+  assert.equal(clean('<p title="a>b" onclick="x()">t</p>'), '<p title="a>b">t</p>');
+  assert.equal(clean('<p onclick="alert(1)\n<html>\n<body style="a">x'), '<p a">x');
+  // "<!-->" is a complete comment for the browser; the tag after it is real.
+  assert.equal(clean('<!--><p onclick="x()">t</p>-->'), '<!--><p>t</p>-->');
+  // A tag cut off by the end of the source is dropped, as the browser drops it.
+  assert.equal(clean('Hi <p oncl'), 'Hi ');
+  assert.equal(clean('Hi <p class="a'), 'Hi ');
+  // Scripts: closed, unclosed, upper case, with attributes.
+  assert.equal(clean('a<script>alert(1)</script>b'), 'ab');
+  assert.equal(clean('a<SCRIPT src="x.js"></SCRIPT >b'), 'ab');
+  assert.equal(clean('a<script>alert(1)</scr'), 'a');
+  assert.equal(clean('a<script'), 'a');
+  // Unquoted and single-quoted handlers, slashes as separators, SVG, nested srcdoc.
+  assert.equal(clean("<img src=x onerror=alert(3)><svg/onload='x()'>"), '<img src=x><svg>');
+  assert.equal(clean('<iframe srcdoc="<script>x</script>"></iframe>'), '<iframe></iframe>');
+  // Text, comments and end tags stay; "on" words in text are untouched.
+  assert.equal(clean('<!-- <p onclick="x"> --><p>Someone onboarding = yes</p>'), '<!-- <p onclick="x"> --><p>Someone onboarding = yes</p>');
+  assert.equal(clean('<b>{{user.email}}</b> 3 < 4'), '<b>jane.doe@example.com</b> 3 < 4');
 });

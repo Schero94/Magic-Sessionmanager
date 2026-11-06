@@ -53,8 +53,8 @@ test('GeoIP update names edition and build date, and shows the server message on
   assert.match(update, /'GeoIP database updated: \{edition\}, built \{date\}\.'/);
   assert.match(update, /getServerMessage\(err\)\s*\|\| t\('settings\.config\.feedback\.geoipUpdateError'/);
   const card = readSettingsFile('GeoIpDatabaseCard.jsx');
-  assert.match(card, /onClick=\{\(\) => geoIp\.updateDatabase\(false\)\}[\s\S]*?t\('settings\.config\.database\.update', 'Update database'\)/);
-  assert.match(card, /onClick=\{\(\) => geoIp\.updateDatabase\(true\)\}[\s\S]*?t\('settings\.config\.database\.force', 'Force download'\)/);
+  assert.match(card, /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(false\), updateRef\)\}[\s\S]*?t\('settings\.config\.database\.update', 'Update database'\)/);
+  assert.match(card, /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(true\), forceRef\)\}[\s\S]*?t\('settings\.config\.database\.force', 'Force download'\)/);
   assert.match(card, /disabled=\{databaseDisabled \|\| geoIp\.updating \|\| !geoIpStatus\?\.hasCredentials \|\| hasChanges\}/);
 });
 

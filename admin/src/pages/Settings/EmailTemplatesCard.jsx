@@ -27,7 +27,17 @@ const CodeTextarea = styled(Textarea)`
   overflow-wrap: normal;
 `;
 
-/** Equal-width template tabs, also on phones (SET-13 browser). */
+/**
+ * Equal-width template tabs (SET-13 browser). Labels wrap between words, never
+ * inside one. When the editor is too narrow for three columns of whole words
+ * ("Suspicious" broke into "Suspicio-us" on phones) the tabs stack into
+ * equal full-width rows.
+ */
+const TemplateTabsFrame = styled.div`
+  container-type: inline-size;
+  min-width: 0;
+`;
+
 const TemplateTabsList = styled(Tabs.List)`
   width: 100%;
   min-width: 0;
@@ -37,7 +47,17 @@ const TemplateTabsList = styled(Tabs.List)`
 
   & > button {
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+  }
+
+  @container (max-width: 35.99rem) {
+    grid-template-columns: minmax(0, 1fr);
+
+    /* The DS raises the selected tab with extra padding; stacked rows keep
+       one height, the selection shows through colour and shadow. */
+    & > button {
+      padding-block: ${({ theme }) => theme.spaces[3]};
+    }
   }
 `;
 
@@ -61,6 +81,20 @@ const VariableGrid = styled.div`
   @container (min-width: 720px) {
     grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
     column-gap: ${({ theme }) => theme.spaces[4]};
+  }
+
+  /* Copy buttons are DS Tags (28 px); on phones they reach the 32 px target. */
+  & button {
+    min-width: ${({ theme }) => theme.spaces[7]};
+    min-height: ${({ theme }) => theme.spaces[7]};
+    justify-content: center;
+  }
+
+  ${({ theme }) => theme.breakpoints.medium} {
+    & button {
+      min-width: 0;
+      min-height: 0;
+    }
   }
 `;
 
@@ -280,27 +314,29 @@ const EmailTemplatesCard = ({ form }) => {
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6} data-email-templates="">
-      <Tabs.Root value={activeTemplateTab} onValueChange={setActiveTemplateTab} hasError={errorTemplate}>
-        <TemplateTabsList aria-label={t('settings.config.email.templates.field', 'Email templates')}>
-          {TEMPLATE_KEYS.map((key) => (
-            <Tabs.Trigger key={key} value={key}>
-              {t(TEMPLATE_TAB_LABELS[key][0], TEMPLATE_TAB_LABELS[key][1])}
-            </Tabs.Trigger>
+      <TemplateTabsFrame>
+        <Tabs.Root value={activeTemplateTab} onValueChange={setActiveTemplateTab} hasError={errorTemplate}>
+          <TemplateTabsList aria-label={t('settings.config.email.templates.field', 'Email templates')}>
+            {TEMPLATE_KEYS.map((key) => (
+              <Tabs.Trigger key={key} value={key}>
+                {t(TEMPLATE_TAB_LABELS[key][0], TEMPLATE_TAB_LABELS[key][1])}
+              </Tabs.Trigger>
+            ))}
+          </TemplateTabsList>
+          {TEMPLATE_KEYS.map((templateKey) => (
+            <Tabs.Content key={templateKey} value={templateKey}>
+              <TemplateEditor
+                templateKey={templateKey}
+                template={templates[templateKey]}
+                templates={templates}
+                handleChange={handleChange}
+                copyValue={copyValue}
+                errors={errors}
+              />
+            </Tabs.Content>
           ))}
-        </TemplateTabsList>
-        {TEMPLATE_KEYS.map((templateKey) => (
-          <Tabs.Content key={templateKey} value={templateKey}>
-            <TemplateEditor
-              templateKey={templateKey}
-              template={templates[templateKey]}
-              templates={templates}
-              handleChange={handleChange}
-              copyValue={copyValue}
-              errors={errors}
-            />
-          </Tabs.Content>
-        ))}
-      </Tabs.Root>
+        </Tabs.Root>
+      </TemplateTabsFrame>
 
       <Flex direction="column" alignItems="stretch" gap={3}>
         <Flex direction="column" alignItems="stretch" gap={1}>
