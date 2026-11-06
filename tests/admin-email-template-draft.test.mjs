@@ -35,7 +35,9 @@ test('template editors use DS colours, no emoji, translated variables and a conf
   assert.doesNotMatch(editor, /<Badge variant="success"/, 'the main-template badge is neutral');
   assert.match(editor, /t\(definition\.messageId, definition\.defaultMessage\)/, 'variable descriptions are visible and translated');
   assert.match(editor, /<Tag\b[\s\S]*?label=\{t\('settings\.email\.templates\.copyVariable'/);
-  assert.match(editor, /aria-label=\{t\('settings\.email\.templates\.title'/, 'tablist name is translated');
+  assert.match(editor, /aria-label=\{t\('settings\.config\.email\.templates\.field'/, 'tablist name is translated');
+  assert.doesNotMatch(editor, /<SectionCard\b|tag="h\d"/, 'the editor lives inside the Advanced accordion, below its h3');
+  assert.doesNotMatch(editor, /!'\)|Load Default|Copy Template/, 'sentence case, no exclamation marks (IA H.1, H.3)');
   assert.match(editor, /<ConfirmAction\b[\s\S]*?settings\.email\.templates\.loadDefault\.confirmTitle/);
   assert.match(editor, /placeholder=\{t\('settings\.email\.templates\.html\.placeholder'/);
   assert.match(editor, /placeholder=\{t\('settings\.email\.templates\.text\.placeholder'/);

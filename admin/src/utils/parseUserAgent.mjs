@@ -20,7 +20,17 @@ const API_CLIENTS = [
   ['python-requests', 'Python Requests'],
   ['axios/', 'Axios'],
   ['node-fetch', 'node-fetch'],
+  ['undici', 'undici'],
+  ['go-http-client', 'Go HTTP client'],
+  ['cfnetwork/', 'CFNetwork'],
+  ['dart/', 'Dart'],
+  ['java/', 'Java'],
+  ['wget/', 'Wget'],
+  ['httpie/', 'HTTPie'],
 ];
+
+/** Agents that are a bare runtime name, for example Node's fetch ("node"). */
+const RUNTIME_AGENTS = Object.freeze({ node: 'Node.js', deno: 'Deno', bun: 'Bun' });
 
 const BOT_PATTERN = /bot\b|crawler|spider|slurp|headlesschrome/i;
 const TABLET_PATTERN = /(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i;
@@ -69,6 +79,10 @@ export function parseUserAgent(userAgent) {
   }
 
   const ua = raw.toLowerCase();
+  const runtime = RUNTIME_AGENTS[ua.split('/')[0]];
+  if (runtime && !ua.includes(' ')) {
+    return { deviceType: 'api', device: LEGACY_DEVICE_LABELS.api, deviceIcon: 'api', browser: runtime, os: '' };
+  }
   const apiClient = API_CLIENTS.find(([needle]) => ua.includes(needle));
   if (apiClient) {
     return { deviceType: 'api', device: LEGACY_DEVICE_LABELS.api, deviceIcon: 'api', browser: apiClient[1], os: detectOs(ua) };

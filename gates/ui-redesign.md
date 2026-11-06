@@ -1,7 +1,7 @@
 # UI redesign branch gates
 
 Branch: `claude/sessionmanager-ui-redesign` (worktree `.tmp/sessionmanager-ui-redesign`, base `596d4b0` = 4.8.0 + acceptance work, design commit `b21c097`).
-Design: `docs/plans/2026-11-06-ui-redesign-design.md`. Findings: `docs/audits/2026-11-06-ui-acceptance-review.md`.
+Design: `docs/plans/2026-11-06-ui-redesign-design.md`, overridden where they differ by the approved information architecture `docs/plans/2026-11-06-ui-information-architecture.md` (gate IA below). Findings: `docs/audits/2026-11-06-ui-acceptance-review.md`.
 Parent gates: `GATES.md` N1–N6. 4.8.0 was released before acceptance; this branch carries the fixes for the next release (see `GATES.md`, "Release status").
 
 Rules for this file:
@@ -19,6 +19,15 @@ Rules for this file:
   EVIDENCE: 2026-11-06 ~17:45, redesign working tree: 21 tests, 21 pass, 0 todo. Source-level only.
 - [ ] F2: `StatCard` pairs label and value as `dl`/`dt`/`dd`, so screen readers read the label with the value (DUX-20, rest).
   EVIDENCE: open. The dashboard agent fixed tones, icons and reading order; the `dl` pairing is in `StatGrid.jsx`, which the foundation owner has to change.
+
+## Information architecture (round 2)
+
+The approved IA (`docs/plans/2026-11-06-ui-information-architecture.md`, decisions I.3 taken 2026-11-06) is the source of truth for labels, states, navigation, actions and copy. The screen gates below were checked against the round-1 design and do not prove the IA.
+
+- [ ] IA: Every I.1 item (1–29) and every I.3 decision is implemented on the final tree: Active / Idle / Ended badges with an end-reason line and no danger colour for session states (I.1-1, I.1-2); settings links Configuration / Analytics / License and the five Configuration tabs with `?tab=` deep links (I.1-3, I.1-16); dashboard title, header links, stat-card lines, status and End reason filters, device text without version, View details / End session / More actions › Delete record with both delete confirmations, Signed in column, truncation alert, "How sessions work" disclosure, caption and "Last updated" (I.1-4 to I.1-11); dialog state sentence, Ended at, End reason, score note and on-demand "Look up location" (I.1-12 to I.1-15, I.2-7); Discard changes, Delete ended sessions, country-rule wording, load-failure and adjusted-values feedback, read-only rejection cards, Discord/Slack-only webhook inputs, 30-second footer (I.1-17 to I.1-23); Analytics KPIs and descriptions (I.1-24 to I.1-26); widget tiles with `isTrulyActive` (I.1-27, I.2-2); user panel wording and actions (I.1-28); A.1 retirements in all five locales with orphan keys removed (I.1-29); "Reason not recorded" for rows without a reason (I.2-1); stored-`deviceType` analytics buckets (I.2-3); additive "End reason" export column (I.2-4); "Open user" link only if session rows carry the user's `documentId` (I.2-6). README and CHANGELOG use the A glossary.
+  CHECK: node --test tests/*.test.js tests/*.test.mjs && node --test tests/admin-symmetry-contract.test.mjs
+  EXPECT: # fail 0 and # todo 0 in both runs, plus a written walk of section I.1 against the final source (each item with the file that implements it) and the browser gates B1–B3 for the visible copy
+  EVIDENCE: open. README and CHANGELOG [Unreleased] were aligned to the glossary on 2026-11-06; the screens are being changed by the screen owners in round 2. Observed on the round-1 build and to be rechecked: ended sessions by inactivity shown as a red "TERMINATED" badge, duplicated browser versions ("Safari 17.4 17"), "Browser and OS unavailable" on sessions with a user agent, stat cards taller than their content, the dashboard search collapsed to an icon button, uppercase settings tab labels.
 
 ## Screens: source contracts
 
@@ -64,14 +73,14 @@ Each screen gate covers its source-contract and unit tests only. Rendering, equa
   EXPECT: # fail 0 in every run, # skipped 0
   EVIDENCE: 2026-11-06 ~17:40, Strapi 5.61.0 host dependencies: focused server 98/98; isolated HTTP legacy-support 38/38; refresh 40/40; refresh + fallback 41/41; legacy + fallback 39/39; `tests/isolated-fallback-logout-http.test.js` + `tests/isolated-http-portability.test.js` 5/5 (GA-01 portability). This proves the listed cases on one SQLite process. It is not a security sign-off; `gates/complete-acceptance-api.md` A2 stays open.
 - [ ] V2: The client-visible changes are decided and documented for the release: 400 → 500/502/503 for server-side failures, `sessionId` removed from admin session lists, deprecated bodyless toggle. Decide the version number (minor vs. major) accordingly.
-  EVIDENCE: open. Listed in `CHANGELOG.md` [Unreleased]. `README.md:673` still says bodyless toggle requests are rejected with 400 and must be corrected by the README owner.
+  EVIDENCE: open. Listed in `CHANGELOG.md` [Unreleased]. The README toggle-block section was corrected on 2026-11-06: explicit `{ "blocked": true | false }` is recommended, a bodyless request still toggles (deprecated), a non-boolean `blocked` is 400, and the response adds `mode`. The version decision is still open.
 
 ## i18n
 
 - [ ] I1: Every `formatMessage` id used in `admin/src` exists in en, de, fr, es and pt; `defaultMessage` equals the English value; German uses "Sie" and "Sitzung"; obsolete keys are removed. All locale tests run strict (no todo).
   CHECK: node --test tests/dashboard-i18n.test.mjs tests/admin-analytics-license-i18n.test.mjs tests/admin-widget-panel-i18n.test.mjs tests/admin-settings-locales.test.mjs tests/admin-ui-foundation.test.mjs
   EXPECT: # fail 0 and # todo 0
-  EVIDENCE: 2026-11-06 ~17:45, merge in progress: 35 tests, 29 pass, 1 fail, 5 todo. Open by design until the i18n agent merges `scratchpad/i18n/*.json` and flips the todo guards to strict.
+  EVIDENCE: 2026-11-06 ~17:45, merge in progress: 35 tests, 29 pass, 1 fail, 5 todo. Open by design until the new keys are merged into the locale catalogues and the todo guards are flipped to strict.
 - [ ] I2: Locale review in the browser: every screen in all five locales with no English fallback text, no truncated labels, translated dates through the admin locale.
   EVIDENCE: open (browser).
 
@@ -104,7 +113,7 @@ Desktop first, then mobile. Light and dark mode. Each run records widths, screen
 ## Documentation
 
 - [ ] R1: New README screenshots in `pics/` from the same synthetic data, for every screen, desktop and mobile; README text matches the redesigned UI and the server contract (including the toggle-block line).
-  EVIDENCE: open.
+  EVIDENCE: open. Text part done on 2026-11-06 (not yet checked against the final UI): README uses the IA glossary (End / Delete record / Block, Configuration / Analytics / License, five Configuration tabs, login protection on new sign-ins only, IP lockout instead of account block, settings reach other processes within 30 s, Discord and Slack webhooks only) and the restored toggle-block contract; `node --test tests/readme-geoip-privacy.test.mjs tests/admin-session-display.test.mjs` passes. Screenshots in `pics/` are still from the old UI.
 - [ ] R2: The GitHub Page gallery uses the new screenshots and passes `node scripts/check-plugin-pages.mjs Magic-Sessionmanager` in the workbench for this version.
   EVIDENCE: open. The root workbench gate `gates/pages-sessionmanager.md` still points at `plugins/Magic-Sessionmanager` `2f00880` (4.7.2).
 - [x] R3: `CHANGELOG.md` has one `[Unreleased]` section at the top describing this branch, and the stale `[Unreleased]` block below 4.8.0 is gone (GA-13).

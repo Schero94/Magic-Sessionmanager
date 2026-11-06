@@ -26,7 +26,8 @@ test('dashboard, analytics, panel and GeoIP handlers validate their response env
   for (const path of ['pages/HomePage.jsx', 'pages/Analytics.jsx', 'components/SessionInfoPanel.jsx']) {
     assert.match(read(path), /requireSessionList\(data\)/, path);
   }
-  for (const path of ['pages/Settings.jsx', 'components/SessionInfoPanel.jsx']) {
-    assert.equal(((path === 'pages/Settings.jsx' ? readSettingsSource() : read(path)).match(/requireSuccessfulMutation\(response\.data\)/g) || []).length, 2, path);
+  // Settings: save credentials, remove credentials, update database. Panel: end all, block/unblock.
+  for (const [path, count] of [['pages/Settings.jsx', 3], ['components/SessionInfoPanel.jsx', 2]]) {
+    assert.equal(((path === 'pages/Settings.jsx' ? readSettingsSource() : read(path)).match(/requireSuccessfulMutation\(response\.data\)/g) || []).length, count, path);
   }
 });

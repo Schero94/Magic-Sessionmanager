@@ -1,41 +1,45 @@
 import { useState, useEffect, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import {
-  Box,
   Badge,
-  Flex,
   Button,
   Field,
+  Flex,
   IconButton,
-  Loader,
   TextInput,
   Typography,
 } from '@strapi/design-system';
-import { useClipboard, useFetchClient, useNotification } from '@strapi/strapi/admin';
+import { Page, useClipboard, useFetchClient, useNotification } from '@strapi/strapi/admin';
 import {
   ArrowClockwise,
-  Check,
   Duplicate,
   Download,
   Eye,
   EyeStriked,
 } from '@strapi/icons';
 import pluginId from '../pluginId';
-import { PageShell, SectionCard, PropertyList, EqualGrid } from '../components/ui';
+import { PageShell, SectionCard, PropertyList } from '../components/ui';
 import Alert from '../components/PersistentAlert';
 import ReadableText from '../components/ReadableText';
 import { getTranslation } from '../utils/getTranslation';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 import { maskSensitiveValue } from '../utils/maskSensitiveValue.mjs';
-import { buildActivationSummary } from '../utils/activationSummary.mjs';
+import { buildLicenseSummary, getLicenseHolderName } from '../utils/activationSummary.mjs';
+import {
+  LICENSE_EXPIRY_DATE_OPTIONS,
+  LICENSE_FEATURES_MESSAGE,
+  describeLicenseState,
+  getLicenseState,
+} from '../utils/licenseStatus.mjs';
 import { useSessionFormatters } from '../utils/useSessionFormatters';
 
-const FEATURE_MESSAGES = [
-  ['license.features.geolocation', 'IP geolocation with country, city, and timezone'],
-  ['license.features.security', 'Security scoring, VPN and proxy detection, and threat analysis'],
-  ['license.features.analytics', 'Session analytics, CSV and JSON export, and real-time monitoring'],
-  ['license.features.alerts', 'Email alerts, Discord and Slack webhooks, and geofencing'],
-];
+/**
+ * Whether a failed request was refused for missing permissions.
+ *
+ * @param {unknown} error Fetch error.
+ * @returns {boolean} True for a 403 response.
+ */
+const isForbidden = (error) => error?.status === 403 || error?.response?.status === 403;
 
 // ================ MAIN COMPONENT ================
 const LicensePage = () => {
@@ -46,23 +50,23 @@ const LicensePage = () => {
   const { formatDate } = useSessionFormatters();
   const t = (id, defaultMessage, values) =>
     formatMessage({ id: getTranslation(id), defaultMessage }, values);
-  const translate = (descriptor) =>
-    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage });
+  const translate = (descriptor, values) =>
+    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage }, values);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [licenseData, setLicenseData] = useState(null);
   const [showLicenseKey, setShowLicenseKey] = useState(false);
-  const [error, setError] = useState(null);
-  const hasLoadedRef = useRef(false);
+  const [error, setError] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const requestPendingRef = useRef(false);
 
   /**
-   * Reloads optional activation status from the protected plugin endpoint.
-   * Only the very first load shows the full-page loader; later refreshes keep
-   * the page, its focus and the revealed/masked key state mounted (F8). A
-   * failed refresh keeps the last known status and reports the error.
+   * Loads the license status from the protected plugin endpoint. Only the
+   * very first load shows the page loader; "Check again" keeps the page, its
+   * focus and the revealed/masked key state mounted (F8). A failed check keeps
+   * the last known status and shows the error inside the status card.
    *
-   * @param {{announce?: boolean}} [options] Announce a successful refresh.
+   * @param {{announce?: boolean}} [options] Announce a successful check.
    * @returns {Promise<void>}
    */
   const fetchLicenseStatus = async ({ announce = false } = {}) => {
@@ -73,22 +77,17 @@ const LicensePage = () => {
     try {
       const response = await get(`/${pluginId}/license/status`);
       setLicenseData(response.data);
-      setError(null);
-      hasLoadedRef.current = true;
+      setError(false);
       if (announce) {
         toggleNotification({
           type: 'success',
-          message: t('license.success.refreshed', 'Activation status updated.'),
+          message: t('license.success.refreshed', 'License status checked.'),
         });
       }
     } catch (err) {
-      logSafeAdminError('activation.load', err);
-      const message = t('license.error.load', 'Activation information could not be loaded.');
-      if (hasLoadedRef.current) {
-        toggleNotification({ type: 'danger', message });
-      } else {
-        setError(message);
-      }
+      logSafeAdminError('license.load', err);
+      if (isForbidden(err)) setForbidden(true);
+      setError(true);
     } finally {
       requestPendingRef.current = false;
       setRefreshing(false);
@@ -99,7 +98,7 @@ const LicensePage = () => {
   const handleRefresh = () => fetchLicenseStatus({ announce: true });
 
   /**
-   * Copies the locally stored activation key with Strapi's clipboard helper.
+   * Copies the stored license key with Strapi's clipboard helper.
    *
    * @returns {Promise<void>}
    */
@@ -109,27 +108,27 @@ const LicensePage = () => {
       if (!copied) throw new Error('clipboard_unavailable');
       toggleNotification({
         type: 'success',
-        message: t('license.success.copied', 'Activation key copied to clipboard.'),
+        message: t('license.success.copied', 'Copied.'),
       });
     } catch (err) {
-      logSafeAdminError('activation.copyKey', err);
+      logSafeAdminError('license.copyKey', err);
       toggleNotification({
         type: 'danger',
-        message: t('license.error.copy', 'Could not copy the activation key.'),
+        message: t('license.error.copy', 'The key could not be copied.'),
       });
     }
   };
 
   /**
-   * Downloads a text summary of the activation key and holder details in the
-   * admin language, with dates in the admin locale.
+   * Downloads the license key and details as a text file in the admin
+   * language, with dates in the admin locale (F18).
    *
    * @returns {void}
    */
   const handleDownloadLicenseKey = () => {
     try {
-      const content = buildActivationSummary({
-        data: licenseData?.data || {},
+      const content = buildLicenseSummary({
+        response: licenseData,
         translate,
         formatDate,
         generatedAt: Date.now(),
@@ -139,7 +138,7 @@ const LicensePage = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'session-manager-activation.txt';
+      link.download = 'session-manager-license.txt';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -147,13 +146,13 @@ const LicensePage = () => {
 
       toggleNotification({
         type: 'success',
-        message: t('license.success.downloaded', 'Activation key downloaded.'),
+        message: t('license.success.downloaded', 'License details downloaded.'),
       });
     } catch (err) {
-      logSafeAdminError('activation.download', err);
+      logSafeAdminError('license.download', err);
       toggleNotification({
         type: 'danger',
-        message: t('license.error.download', 'Could not download the activation key.'),
+        message: t('license.error.download', 'The file could not be created.'),
       });
     }
   };
@@ -162,107 +161,62 @@ const LicensePage = () => {
     fetchLicenseStatus();
   }, []);
 
-  const title = t('license.title', 'Optional activation');
-  const subtitle = t('license.subtitle', 'An activation key is optional. All features remain available without one.');
-
   if (loading) {
-    return (
-      <PageShell headingId="magic-sessionmanager-activation-title" title={title} subtitle={subtitle}>
-        <Flex justifyContent="center" padding={8}>
-          <Loader>{t('license.loading', 'Loading activation information...')}</Loader>
-        </Flex>
-      </PageShell>
-    );
+    return <Page.Loading />;
   }
 
-  if (error) {
-    return (
-      <PageShell headingId="magic-sessionmanager-activation-title" title={title} subtitle={subtitle}>
-        <Alert
-          variant="danger"
-          title={t('common.error', 'Error')}
-          closeLabel={t('common.close', 'Close')}
-          action={(
-            <Button variant="secondary" onClick={() => fetchLicenseStatus()} loading={refreshing}>
-              {t('common.retry', 'Retry')}
-            </Button>
-          )}
-        >
-          <ReadableText variant="omega" textColor="neutral800" tag="span">
-            {error}
-          </ReadableText>
-        </Alert>
-      </PageShell>
-    );
+  if (forbidden) {
+    return <Page.NoPermissions />;
   }
 
-  const isValid = licenseData?.valid;
-  // `hasKey` is the authoritative "is a key stored" signal from the controller.
-  // Fall back to inspecting the returned key for older responses without it.
-  const data = licenseData?.data || {};
-  const hasKey = licenseData?.hasKey ?? Boolean(data.licenseKey);
-  const keyState = !hasKey
-    ? {
-      variant: 'neutral',
-      label: t('license.status.noKey.title', 'No activation key stored'),
-      description: t('license.status.noKey.description', 'All Session Manager features are available. An activation key is optional and only used for install tracking or display.'),
-    }
-    : isValid
-      ? {
-        variant: 'success',
-        label: t('license.status.stored.title', 'Activation key stored'),
-        description: t('license.status.stored.description', 'Your optional activation key is stored. All features remain available with or without this key.'),
-      }
-      : {
-        variant: 'warning',
-        label: t('license.status.failed.title', 'Activation check failed'),
-        description: t('license.status.failed.description', 'The activation server could not verify this key. The plugin still keeps all features available.'),
-      };
-  const activeLabel = data.isActive ? t('license.active', 'Active') : t('license.inactive', 'Inactive');
-  const holderName = [data.firstName, data.lastName].filter(Boolean).join(' ');
+  const licenseState = licenseData ? getLicenseState(licenseData) : null;
+  const hasKey = licenseState?.hasKey === true;
+  const data = licenseState?.data || {};
+  const statusMessage = licenseState ? describeLicenseState(licenseState, formatDate) : null;
+  const yesNo = (value) => (value ? t('common.yes', 'Yes') : t('common.no', 'No'));
 
-  const statusItems = [
+  const detailItems = [
+    { id: 'holder', label: t('license.details.holder', 'Holder'), value: getLicenseHolderName(data) },
+    { id: 'email', kind: 'email', label: t('license.account.email', 'Email address'), value: data.email },
     {
-      id: 'key-status',
-      label: t('license.status.label', 'Key status'),
-      render: <Badge variant={keyState.variant}>{keyState.label}</Badge>,
+      id: 'expires',
+      label: t('license.details.expires', 'Expires'),
+      value: licenseState?.expiresAt
+        ? formatDate(licenseState.expiresAt, LICENSE_EXPIRY_DATE_OPTIONS)
+        : t('license.details.noExpiry', 'No expiry date'),
+    },
+    { id: 'device-name', label: t('license.details.deviceName', 'Device name'), value: data.deviceName },
+    { id: 'ip', kind: 'id', label: t('license.details.ipAddress', 'IP address'), value: data.ipAddress },
+    {
+      id: 'last-check',
+      label: t('license.details.lastCheck', 'Last check'),
+      value: data.lastPingAt ? formatDate(data.lastPingAt) : null,
     },
     {
-      id: 'feature-access',
-      label: t('license.status.featureAccess', 'Feature access'),
-      value: t('license.features.included', 'All features included'),
+      id: 'device-limit',
+      label: t('license.system.deviceLimit', 'Device limit'),
+      value: t('license.system.deviceLimitValue', '{current} of {max}', {
+        current: Number(data.currentDevices) || 0,
+        max: Number(data.maxDevices) || 1,
+      }),
     },
-    ...(hasKey
-      ? [
-        {
-          id: 'activation',
-          label: t('license.system.activation', 'Activation status'),
-          render: <Badge variant={data.isActive ? 'success' : 'neutral'}>{activeLabel}</Badge>,
-        },
-        {
-          id: 'connection',
-          label: t('license.system.connection', 'Connection'),
-          value: data.isOnline ? t('license.system.online', 'Online') : t('license.system.offline', 'Offline'),
-        },
-        {
-          id: 'last-sync',
-          label: t('license.system.lastSync', 'Last sync'),
-          value: data.lastPingAt ? formatDate(data.lastPingAt) : t('license.value.never', 'Never'),
-        },
-      ]
-      : []),
+    {
+      id: 'server-reachable',
+      label: t('license.details.serverReachable', 'License server reachable'),
+      render: <Badge>{yesNo(licenseState?.serverReachable)}</Badge>,
+    },
   ];
 
   return (
     <PageShell
-      headingId="magic-sessionmanager-activation-title"
-      title={title}
-      subtitle={subtitle}
+      headingId="magic-sessionmanager-license-title"
+      title={t('license.title', 'License')}
+      subtitle={t('license.subtitle', 'Optional license key for this installation.')}
       primaryAction={(
-        <Flex gap={2} wrap="wrap">
+        <Flex gap={2} wrap="wrap" justifyContent="flex-end">
           {hasKey ? (
             <Button variant="secondary" startIcon={<Download aria-hidden />} onClick={handleDownloadLicenseKey}>
-              {t('license.key.download', 'Download as TXT')}
+              {t('license.key.download', 'Download as text')}
             </Button>
           ) : null}
           <Button
@@ -271,20 +225,53 @@ const LicensePage = () => {
             onClick={handleRefresh}
             aria-busy={refreshing}
           >
-            {t('license.refresh', 'Refresh status')}
+            {t('license.refresh', 'Check again')}
           </Button>
         </Flex>
       )}
     >
-      <SectionCard title={t('license.status.title', 'Activation status')} subtitle={keyState.description}>
-        <PropertyList items={statusItems} />
-        {hasKey ? (
+      <SectionCard title={t('license.status.title', 'License status')}>
+        {error ? (
+          <Alert
+            variant="danger"
+            closeLabel={t('common.close', 'Close')}
+            action={(
+              <Button variant="secondary" onClick={() => fetchLicenseStatus()} aria-busy={refreshing}>
+                {t('license.error.retry', 'Try again')}
+              </Button>
+            )}
+          >
+            <ReadableText variant="omega" textColor="neutral800" tag="span">
+              {t('license.error.load', 'The license status could not be checked.')}
+            </ReadableText>
+          </Alert>
+        ) : null}
+        <Flex direction="column" alignItems="stretch" gap={1} aria-live="polite">
+          {statusMessage ? (
+            <Typography variant="delta" tag="p" textColor="neutral800" fontWeight="semiBold">
+              {translate(statusMessage, statusMessage.values)}
+            </Typography>
+          ) : null}
+          <ReadableText variant="omega" textColor="neutral600" tag="p">
+            {translate(LICENSE_FEATURES_MESSAGE)}
+          </ReadableText>
+        </Flex>
+      </SectionCard>
+
+      {hasKey ? (
+        <SectionCard title={t('license.details.title', 'License details')}>
+          <PropertyList items={detailItems} />
+        </SectionCard>
+      ) : null}
+
+      {hasKey ? (
+        <SectionCard title={t('license.key.title', 'License key')}>
           <Field.Root
-            name="activation-key"
-            id="magic-sessionmanager-activation-key"
+            name="license-key"
+            id="magic-sessionmanager-license-key"
             hint={t('license.key.hint', 'The key stays masked until you reveal it.')}
           >
-            <Field.Label>{t('license.key.label', 'Activation key')}</Field.Label>
+            <Field.Label>{t('license.key.label', 'Stored key')}</Field.Label>
             <TextInput
               readOnly
               autoComplete="off"
@@ -311,63 +298,8 @@ const LicensePage = () => {
             />
             <Field.Hint />
           </Field.Root>
-        ) : null}
-      </SectionCard>
-
-      {hasKey ? (
-        <EqualGrid columns={2} stackBelow="medium">
-          <SectionCard fill title={t('license.account.title', 'Account information')}>
-            <PropertyList
-              columns={1}
-              items={[
-                { id: 'email', kind: 'email', label: t('license.account.email', 'Email address'), value: data.email },
-                { id: 'holder', label: t('license.account.holder', 'Activation holder'), value: holderName },
-              ]}
-            />
-          </SectionCard>
-          <SectionCard fill title={t('license.details.title', 'Activation details')}>
-            <PropertyList
-              columns={1}
-              items={[
-                {
-                  id: 'expires',
-                  label: data.isExpired
-                    ? t('license.details.expiredOn', 'Expired on')
-                    : t('license.details.expiresOn', 'Expires on'),
-                  value: data.expiresAt
-                    ? formatDate(data.expiresAt, { dateStyle: 'long' })
-                    : t('license.value.never', 'Never'),
-                },
-                { id: 'device-name', label: t('license.details.deviceName', 'Device name'), value: data.deviceName },
-                { id: 'ip', kind: 'id', label: t('license.details.ipAddress', 'IP address'), value: data.ipAddress },
-                {
-                  id: 'device-limit',
-                  label: t('license.system.deviceLimit', 'Device limit'),
-                  value: t('license.system.deviceLimitValue', '{current} of {max}', {
-                    current: data.currentDevices || 0,
-                    max: data.maxDevices || 1,
-                  }),
-                },
-              ]}
-            />
-          </SectionCard>
-        </EqualGrid>
+        </SectionCard>
       ) : null}
-
-      <SectionCard title={t('license.features.title', 'Features and capabilities')}>
-        <Flex tag="ul" direction="column" alignItems="stretch" gap={2} margin={0} padding={0}>
-          {FEATURE_MESSAGES.map(([id, defaultMessage]) => (
-            <Flex key={id} tag="li" gap={2} alignItems="flex-start">
-              <Box color="success600" shrink={0} aria-hidden>
-                <Check aria-hidden focusable={false} />
-              </Box>
-              <Typography variant="omega" textColor="neutral800">
-                {t(id, defaultMessage)}
-              </Typography>
-            </Flex>
-          ))}
-        </Flex>
-      </SectionCard>
     </PageShell>
   );
 };

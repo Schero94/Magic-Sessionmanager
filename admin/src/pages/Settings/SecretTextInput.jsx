@@ -15,6 +15,7 @@ import { Eye, EyeStriked } from '@strapi/icons';
  *   hideLabel: string,
  *   revealedType?: 'text'|'url',
  *   readOnly?: boolean,
+ *   disabled?: boolean,
  *   placeholder?: string,
  *   name?: string,
  *   revealed?: boolean,
@@ -30,6 +31,7 @@ const SecretTextInput = ({
   hideLabel,
   revealedType = 'text',
   readOnly = false,
+  disabled = false,
   placeholder,
   name,
   revealed: controlledRevealed,
@@ -49,6 +51,7 @@ const SecretTextInput = ({
       type={revealed ? revealedType : 'password'}
       value={value}
       readOnly={readOnly}
+      disabled={disabled}
       placeholder={placeholder}
       autoComplete="off"
       spellCheck={false}

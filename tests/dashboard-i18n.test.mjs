@@ -7,7 +7,10 @@ const read = (path) => readFileSync(new URL(`../admin/src/${path}`, import.meta.
 const DASHBOARD_FILES = [
   'pages/HomePage.jsx',
   'components/SessionDetailModal.jsx',
+  'components/ui/StatusBadge.jsx',
+  'components/ui/EndReason.jsx',
   'utils/sessionSecurity.mjs',
+  'utils/sessionStatus.mjs',
   ...readdirSync(new URL('../admin/src/pages/Dashboard/', import.meta.url))
     .filter((file) => /\.(?:jsx|mjs|js)$/.test(file))
     .map((file) => `pages/Dashboard/${file}`),
@@ -21,7 +24,7 @@ const collectMessages = () => {
     for (const match of source.matchAll(/\bt\(\s*'([^']+)',\s*(['"])((?:\\.|(?!\2).)*)\2/g)) {
       messages.set(match[1], match[3].replace(/\\'/g, "'"));
     }
-    for (const match of source.matchAll(/messageId: '([^']+)', defaultMessage: '([^']*)'/g)) {
+    for (const match of source.matchAll(/messageId: '([^']+)',\s*defaultMessage: '([^']*)'/g)) {
       messages.set(match[1], match[2]);
     }
   }
@@ -31,9 +34,6 @@ const collectMessages = () => {
 const LOCALES = ['en', 'de', 'fr', 'es', 'pt'];
 const translations = Object.fromEntries(LOCALES.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))]));
 const messages = collectMessages();
-const pending = [...messages].filter(([key, defaultMessage]) =>
-  LOCALES.some((locale) => !(key in translations[locale])) || translations.en[key] !== defaultMessage
-);
 
 test('dashboard and session detail texts all go through translation ids', () => {
   assert.ok(messages.size >= 60, `collected ${messages.size} dashboard messages`);
@@ -48,16 +48,29 @@ test('dashboard and session detail texts all go through translation ids', () => 
   }
 });
 
-test('dashboard message ids exist in every locale with matching English defaults', {
-  todo: pending.length ? `pending i18n merge: ${pending.length} key(s)` : false,
-}, () => {
+test('dashboard message ids exist in every locale with matching English defaults', () => {
   for (const [key, defaultMessage] of messages) {
     for (const locale of LOCALES) {
       assert.ok(typeof translations[locale][key] === 'string' && translations[locale][key].trim(), `${key} exists in ${locale}`);
     }
     assert.equal(translations.en[key], defaultMessage, `${key} default matches en`);
   }
-  // German uses "Sitzung" and no developer jargon in confirmations (DUX-03).
-  assert.doesNotMatch(translations.de['modal.confirm.terminate'], /isActive/);
+  // German uses the IA wording and no developer jargon in confirmations (DUX-03, I18N-8).
+  for (const locale of LOCALES) {
+    assert.doesNotMatch(translations[locale]['homepage.confirm.end.body'], /isActive|\bfalse\b/, locale);
+    assert.equal(translations[locale]['homepage.confirm.terminate'], undefined, `${locale} drops the developer-facing copy`);
+  }
+  assert.equal(
+    translations.de['homepage.confirm.end.body'],
+    '{user} wird auf {device} abgemeldet. Andere Sitzungen bleiben bestehen. Der Datensatz bleibt im Verlauf. Dies kann nicht rückgängig gemacht werden.'
+  );
+  assert.equal(translations.de['common.status.idle'], 'Im Leerlauf');
+  assert.equal(translations.de['common.endReason.idle'], 'Zeitüberschreitung');
   assert.equal(translations.de['modal.timeline.minutes'], '{minutes} Min.');
+});
+
+test('no retired session words remain in dashboard defaults (IA A.1)', () => {
+  for (const [key, defaultMessage] of messages) {
+    assert.doesNotMatch(defaultMessage, /\bTerminat|\bLog out\b|Logout|Remove session|\bOnline now\b/, key);
+  }
 });

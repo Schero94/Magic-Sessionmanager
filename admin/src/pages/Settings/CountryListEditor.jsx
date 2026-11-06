@@ -22,8 +22,9 @@ import { validateCountryCode } from '../../utils/settingsForm.mjs';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
 /**
- * Allowlist / blocklist editor. The mode is a DS Radio group; switching it
- * asks for confirmation before the other list is cleared (SET-05). Countries
+ * Country rules editor: "Allow only listed countries" or "Reject listed
+ * countries" (IA F 2.4). The mode is a DS Radio group; switching it asks for
+ * confirmation before the other list is cleared (SET-05, IA E.2). Countries
  * are added through a Combobox with typeahead or a typed ISO code, shown as
  * DS Tags, and stay editable while the feature is off (SET-16). After a chip
  * is removed, focus moves to the next chip, else the previous one, else the
@@ -112,15 +113,16 @@ const CountryListEditor = ({ settings, handleChange }) => {
   };
 
   const pendingImpact = pendingMode ? getModeChangeImpact(settings, mode, pendingMode) : null;
-  const listTitle = mode === 'allowlist'
-    ? t('settings.geofencing.allowed.title', 'Allowed Countries')
-    : t('settings.geofencing.blocked.title', 'Blocked Countries');
+  const modeLabels = {
+    allowlist: t('settings.config.countries.mode.allow', 'Allow only listed countries'),
+    blocklist: t('settings.config.countries.mode.reject', 'Reject listed countries'),
+  };
 
   return (
     <Flex direction="column" alignItems="stretch" gap={4}>
       <Flex direction="column" alignItems="stretch" gap={2}>
         <Typography id={modeLabelId} variant="delta" tag="h3" textColor="neutral800">
-          {t('settings.geofencing.mode.title', 'Mode')}
+          {t('settings.config.countries.mode.label', 'Mode')}
         </Typography>
         <Radio.Group
           ref={modeGroupRef}
@@ -129,22 +131,17 @@ const CountryListEditor = ({ settings, handleChange }) => {
           onValueChange={requestMode}
         >
           <Radio.Item value="allowlist">
-            {t('settings.geofencing.mode.allowlist', 'Allowlist (only selected countries)')}
+            {modeLabels.allowlist}
           </Radio.Item>
           <Radio.Item value="blocklist">
-            {t('settings.geofencing.mode.blocklist', 'Blocklist (block selected countries)')}
+            {modeLabels.blocklist}
           </Radio.Item>
         </Radio.Group>
-        <ReadableText variant="pi" textColor="neutral600" tag="p">
-          {mode === 'allowlist'
-            ? t('settings.geofencing.mode.allowlist.hint', 'Only countries in the list may authenticate. Empty list = no geo restriction.')
-            : t('settings.geofencing.mode.blocklist.hint', 'Every country except those in the list may authenticate.')}
-        </ReadableText>
       </Flex>
 
       <Dialog.Root open={Boolean(pendingMode)} onOpenChange={(open) => { if (!open) { setPendingMode(null); focusSelectedMode(); } }}>
         <ConfirmDialog
-          title={t('settings.geofencing.mode.confirmTitle', 'Switch the geofencing mode?')}
+          title={t('settings.config.countries.switch.title', 'Switch to {mode}?', { mode: modeLabels[pendingMode] ?? '' })}
           variant="danger"
           endAction={(
             <Dialog.Action>
@@ -157,14 +154,14 @@ const CountryListEditor = ({ settings, handleChange }) => {
                   focusSelectedMode();
                 }}
               >
-                {t('settings.geofencing.mode.confirmAction', 'Switch and clear list')}
+                {t('settings.config.countries.switch.action', 'Switch mode')}
               </Button>
             </Dialog.Action>
           )}
         >
           {t(
-            'settings.geofencing.mode.confirmBody',
-            'Switching removes {count, plural, one {# country} other {# countries}} from the current list. The change is saved only when you save the settings.',
+            'settings.config.countries.switch.body',
+            'The current list of {count, plural, one {# country} other {# countries}} is cleared when you save.',
             { count: pendingImpact?.count ?? 0 }
           )}
         </ConfirmDialog>
@@ -172,8 +169,11 @@ const CountryListEditor = ({ settings, handleChange }) => {
 
       <Flex direction="column" alignItems="stretch" gap={2}>
         <Typography id={listLabelId} variant="delta" tag="h3" textColor="neutral800">
-          {listTitle}
+          {t('settings.config.countries.list.label', 'Countries')}
         </Typography>
+        <ReadableText variant="pi" textColor="neutral600" tag="p">
+          {t('settings.config.countries.list.hint', "With 'Allow only listed countries', an empty list allows every country.")}
+        </ReadableText>
         {activeList.length === 0 ? (
           <Typography variant="pi" textColor="neutral600" tag="p">
             {t('settings.geofencing.empty', 'No countries configured.')}

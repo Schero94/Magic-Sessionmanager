@@ -179,15 +179,14 @@ test('German uses the formal Sie throughout (I18N-6, UX-07)', () => {
   assert.deepEqual(hits, []);
 });
 
-test('German uses Sitzung, Leerlauf, Beendet, Abgemeldet and sperren consistently (I18N-12, DUX-12, SET-12)', () => {
+test('German uses Sitzung, Im Leerlauf, Beendet, Abgemeldet and sperren consistently (I18N-12, DUX-12, SET-12, IA A.1)', () => {
   const de = catalogues.de;
-  assert.equal(de['common.status.idle'], 'Leerlauf');
-  assert.equal(de['common.status.loggedOut'], 'Abgemeldet');
-  assert.equal(de['common.status.terminated'], 'Beendet');
+  assert.equal(de['common.status.idle'], 'Im Leerlauf');
+  assert.equal(de['common.status.ended'], 'Beendet');
+  assert.equal(de['common.endReason.logout'], 'Abgemeldet');
   assert.equal(de['common.status.active'], 'Aktiv');
-  for (const id of ['homepage.stats.idle', 'homepage.filter.idle', 'homepage.status.idle', 'modal.status.idle']) {
-    if (id in de) assert.equal(de[id], 'Leerlauf', id);
-  }
+  assert.equal(de['common.status.terminated'], undefined, 'Terminated is retired');
+  assert.equal(de['homepage.stats.idle'], 'Sitzungen im Leerlauf');
   const problems = [];
   for (const [id, raw] of Object.entries(de)) {
     // Ignore code-like tokens: URLs, paths and environment variable names.

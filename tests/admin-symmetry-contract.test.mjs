@@ -7,12 +7,7 @@ import test from 'node:test';
 /**
  * Symmetry contract for the admin UI (docs/plans/2026-11-06-ui-redesign-design.md):
  * DS tokens only, no emoji, no browser dialogs, no custom breakpoints.
- *
- * TODO(integrator): these checks run as { todo: true } while the screens are
- * migrated in parallel. Flip STRICT to true once every screen is migrated.
  */
-const STRICT = false;
-const options = STRICT ? {} : { todo: 'flipped to strict by the integrator after all screens migrate' };
 
 const adminRoot = fileURLToPath(new URL('../admin/src/', import.meta.url));
 
@@ -66,26 +61,26 @@ test('the scan covers the admin JSX sources', () => {
   assert.ok(sources.some(({ file }) => file.startsWith('components/ui/')), 'shared ui blocks are scanned');
 });
 
-test('no window.confirm: destructive actions use ConfirmAction', options, (t) => {
+test('no window.confirm: destructive actions use ConfirmAction', (t) => {
   report(t, 'window.confirm', scan(matchAll(/\bwindow\.confirm\s*\(/g)));
 });
 
-test('no emoji characters in admin JSX', options, (t) => {
+test('no emoji characters in admin JSX', (t) => {
   const emoji = /(?![©®™])\p{Extended_Pictographic}|️/gu;
   report(t, 'emoji', scan(matchAll(emoji)));
 });
 
-test('no hex, rgb or rgba colour literals', options, (t) => {
+test('no hex, rgb or rgba colour literals', (t) => {
   const colours = /(?<=['"`:\s(,])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b|\brgba?\s*\(/g;
   report(t, 'colour literal', scan(matchAll(colours)));
 });
 
-test('no px font sizes', options, (t) => {
+test('no px font sizes', (t) => {
   const fontSizes = /font-?size\s*[:=]\s*[{'"`]*\s*\d+(?:\.\d+)?px/gi;
   report(t, 'px font size', scan(matchAll(fontSizes)));
 });
 
-test('no hard-coded px margin, padding or gap in style props', options, (t) => {
+test('no hard-coded px margin, padding or gap in style props', (t) => {
   const finder = (code) => {
     const found = [];
     for (const block of code.matchAll(/style=\{\{([\s\S]*?)\}\}/g)) {
@@ -99,7 +94,7 @@ test('no hard-coded px margin, padding or gap in style props', options, (t) => {
   report(t, 'px spacing in style prop', scan(finder));
 });
 
-test('no custom @media widths: use DS theme breakpoints', options, (t) => {
+test('no custom @media widths: use DS theme breakpoints', (t) => {
   // Literal widths, interpolated custom constants (`max-width: ${breakpoints.mobile}`)
   // and hand-written matchMedia queries all bypass theme.breakpoints.
   const media = /@media[^{`]*\(\s*(?:max|min)-width\s*:\s*(?:\d+(?:\.\d+)?(?:px|em|rem)|\$\{)|matchMedia\(\s*['"`][^'"`]*\d+px/g;

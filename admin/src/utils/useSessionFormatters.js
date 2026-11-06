@@ -4,7 +4,11 @@ import { getTranslation } from './getTranslation';
 import { formatRelative, formatSessionDate } from './sessionDates.mjs';
 import { MISSING_VALUE_GLYPH } from './missingValue.mjs';
 import { getDevicePresentation } from './devicePresentation.mjs';
-import { getSessionStatusPresentation, getSessionEndReasonPresentation } from './sessionStatus.mjs';
+import {
+  getEndReasonPresentation,
+  getSessionEndReasonPresentation,
+  getSessionStatusPresentation,
+} from './sessionStatus.mjs';
 
 /**
  * Locale-aware formatters bound to the Strapi admin locale (useIntl), so no
@@ -16,10 +20,11 @@ import { getSessionStatusPresentation, getSessionEndReasonPresentation } from '.
  *   formatRelativeTime: (value: unknown, now?: number|Date) => string,
  *   translate: (descriptor: {messageId: string, defaultMessage: string}, values?: object) => string,
  *   statusLabel: (statusOrSession: string|object) => string,
- *   endReasonLabel: (session: object) => string,
+ *   endReasonLabel: (sessionOrReason: string|object) => string,
  *   deviceTypeLabel: (session: object) => string,
  *   deviceSummary: (session: object) => string,
- * }} Bound formatters. Missing values return the shared glyph.
+ * }} Bound formatters. Missing dates return the shared glyph; a missing end
+ *   reason or device summary returns ''.
  */
 export function useSessionFormatters() {
   const { formatMessage, locale } = useIntl();
@@ -36,8 +41,10 @@ export function useSessionFormatters() {
     const formatRelativeTime = (value, now) =>
       formatRelative(value, locale, { now: now ?? Date.now(), fallback: MISSING_VALUE_GLYPH });
     const statusLabel = (statusOrSession) => translate(getSessionStatusPresentation(statusOrSession));
-    const endReasonLabel = (session) => {
-      const reason = getSessionEndReasonPresentation(session);
+    const endReasonLabel = (sessionOrReason) => {
+      const reason = typeof sessionOrReason === 'string'
+        ? getEndReasonPresentation(sessionOrReason)
+        : getSessionEndReasonPresentation(sessionOrReason);
       return reason ? translate(reason) : '';
     };
     const deviceTypeLabel = (session) => translate(getDevicePresentation(session).deviceTypeMessage);

@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import styled from 'styled-components';
 import { Box, Button, Flex, Loader, Typography } from '@strapi/design-system';
-import { Calendar, Clock, ClockCounterClockwise, Lightning, WarningCircle } from '@strapi/icons';
+import { Clock, Lightning, Lock, User, WarningCircle } from '@strapi/icons';
 import * as StrapiAdmin from '@strapi/strapi/admin';
 import { useFetchClient } from '@strapi/strapi/admin';
 import ReadableText from './ReadableText';
+import { MissingValue } from './ui';
 import { getTranslation } from '../utils/getTranslation';
+import { requireSessionList } from '../utils/adminResponse.mjs';
+import { normalizeUserCounts } from '../utils/onlineStats.mjs';
 import { computeWidgetStats } from '../utils/widgetStats.mjs';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
@@ -36,7 +39,8 @@ const hasNativeState = (state) => typeof NativeWidget?.[state] === 'function';
  * grid gap on a neutral200 background draws the cell borders for any column
  * count. Each column is at least half the width, so there are never more than
  * two columns; below 14rem per column the tiles stack into one column, so
- * nothing overflows at 320px (F10).
+ * nothing overflows at 320px (F10). Grid rows stretch, so tiles in one row
+ * share the same height.
  */
 const TileGrid = styled.div`
   display: grid;
@@ -60,12 +64,18 @@ const TileIcon = styled(Flex)`
  * One stat tile. Declared at module scope so the 30-second refresh updates the
  * tiles instead of remounting them (UX-12). The icon is decorative (UX-10).
  *
- * @param {{icon: import('react').ComponentType<any>, tone: string, label: string, value: string}} props Tile content.
+ * @param {{
+ *   icon: import('react').ComponentType<any>,
+ *   tone: string,
+ *   label: string,
+ *   value: string|null,
+ *   detail?: string|null,
+ * }} props Tile content; a null value renders the shared missing marker.
  * @returns {import('react').ReactElement} Tile.
  */
-const StatTile = ({ icon: Icon, tone, label, value }) => (
+const StatTile = ({ icon: Icon, tone, label, value, detail }) => (
   <Box background="neutral0" padding={3} minWidth={0} height="100%" data-widget-tile="">
-    <Flex gap={2} alignItems="center" minWidth={0}>
+    <Flex gap={2} alignItems="flex-start" minWidth={0}>
       <TileIcon
         $tone={tone}
         background={`${tone}100`}
@@ -78,13 +88,22 @@ const StatTile = ({ icon: Icon, tone, label, value }) => (
       >
         <Icon aria-hidden focusable={false} />
       </TileIcon>
-      <Flex direction="column" alignItems="flex-start" minWidth={0}>
+      <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0}>
         <Typography variant="pi" fontWeight="bold" textColor="neutral600">
           {label}
         </Typography>
-        <Typography variant="omega" fontWeight="bold" textColor="neutral800">
-          {value}
-        </Typography>
+        {value === null ? (
+          <MissingValue variant="omega" textColor="neutral800" />
+        ) : (
+          <Typography variant="omega" fontWeight="bold" textColor="neutral800">
+            {value}
+          </Typography>
+        )}
+        {detail ? (
+          <Typography variant="pi" textColor="neutral600">
+            {detail}
+          </Typography>
+        ) : null}
       </Flex>
     </Flex>
   </Box>
@@ -108,23 +127,20 @@ const LoadingState = ({ label }) => {
 /**
  * Error state with a retry action. Uses Widget.Error when available.
  *
- * @param {{title: string, description: string, retryLabel: string, onRetry: () => void}} props Copy and retry handler.
+ * @param {{message: string, retryLabel: string, onRetry: () => void}} props Copy and retry handler.
  * @returns {import('react').ReactElement} Error state.
  */
-const ErrorState = ({ title, description, retryLabel, onRetry }) => (
+const ErrorState = ({ message, retryLabel, onRetry }) => (
   <Flex direction="column" alignItems="center" justifyContent="center" gap={4} height="100%" role="alert">
     {hasNativeState('Error') ? (
-      <NativeWidget.Error>{description}</NativeWidget.Error>
+      <NativeWidget.Error>{message}</NativeWidget.Error>
     ) : (
       <Flex direction="column" alignItems="center" gap={2}>
         <TileIcon $tone="danger" aria-hidden>
           <WarningCircle aria-hidden focusable={false} />
         </TileIcon>
-        <Typography variant="delta" tag="p" textAlign="center">
-          {title}
-        </Typography>
-        <ReadableText variant="omega" textColor="neutral600" tag="p" textAlign="center">
-          {description}
+        <ReadableText variant="omega" textColor="neutral800" tag="p" textAlign="center">
+          {message}
         </ReadableText>
       </Flex>
     )}
@@ -135,7 +151,7 @@ const ErrorState = ({ title, description, retryLabel, onRetry }) => (
 );
 
 /**
- * Empty state when no session has been recorded yet. Uses Widget.NoData when available.
+ * Empty state when no user has signed in yet. Uses Widget.NoData when available.
  *
  * @param {{label: string}} props Message.
  * @returns {import('react').ReactElement} Empty state.
@@ -144,7 +160,7 @@ const EmptyState = ({ label }) => {
   if (hasNativeState('NoData')) return <NativeWidget.NoData>{label}</NativeWidget.NoData>;
   return (
     <Flex height="100%" justifyContent="center" alignItems="center" padding={4}>
-      <ReadableText variant="omega" textColor="neutral600" tag="p" textAlign="center">
+      <ReadableText variant="omega" textColor="neutral700" tag="p" textAlign="center">
         {label}
       </ReadableText>
     </Flex>
@@ -152,22 +168,27 @@ const EmptyState = ({ label }) => {
 };
 
 /**
- * Homepage widget "Online users": unique users online now, in the last 15
- * minutes, the last hour and today. The link to the dashboard is registered
- * with the widget (admin/src/index.js) and rendered in the widget header.
+ * Homepage widget "Online users" (IA D4): who is online right now.
+ * Tiles: Online users (of all registered users), Active sessions, Idle
+ * sessions, Blocked users. "Online" follows the configured inactivity timeout
+ * through the server's `isTrulyActive` flag (decision I.2-2). The link to the
+ * dashboard is registered with the widget (admin/src/index.js) and rendered in
+ * the widget header.
  */
 const OnlineUsersWidget = () => {
   const { formatMessage, formatNumber } = useIntl();
   const { get } = useFetchClient();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [stats, setStats] = useState(null);
+  const [userCounts, setUserCounts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const requestInProgress = useRef(false);
 
   /**
-   * Loads the session list and derives the tile values. A failed refresh
-   * keeps showing the last values; a failed first load shows the error state.
+   * Loads the sessions and the count-only user totals in parallel. A failed
+   * refresh keeps the last values; a failed first session load shows the
+   * error state. When only the user totals fail, the session tiles still show.
    *
    * @param {{showLoading?: boolean}} [options] Whether to show the loading state.
    * @returns {Promise<void>}
@@ -178,11 +199,21 @@ const OnlineUsersWidget = () => {
     if (showLoading) setLoading(true);
 
     try {
-      const { data: sessionResponse } = await get('/magic-sessionmanager/sessions');
-      const sessions = sessionResponse?.data;
-      if (!Array.isArray(sessions)) throw new Error('Invalid session response');
-      setStats(computeWidgetStats(sessions));
+      const [sessionResult, countResult] = await Promise.allSettled([
+        get('/magic-sessionmanager/sessions'),
+        get('/magic-sessionmanager/users/stats'),
+      ]);
+      if (sessionResult.status === 'rejected') throw sessionResult.reason;
+      setStats(computeWidgetStats(requireSessionList(sessionResult.value?.data)));
       setLoadError(false);
+
+      const counts = countResult.status === 'fulfilled' ? normalizeUserCounts(countResult.value?.data) : null;
+      if (counts) {
+        setUserCounts(counts);
+      } else {
+        logSafeAdminError('onlineUsers.loadUserCounts', countResult.status === 'rejected' ? countResult.reason : null);
+        if (showLoading) setUserCounts(null);
+      }
     } catch (error) {
       logSafeAdminError('onlineUsers.loadSessions', error);
       if (showLoading) setLoadError(true);
@@ -207,23 +238,55 @@ const OnlineUsersWidget = () => {
   if (loadError || !stats) {
     return (
       <ErrorState
-        title={t('widget.error.title', 'Session statistics could not be loaded')}
-        description={t('widget.error.description', 'Try again. If the problem continues, check Session Manager API access.')}
-        retryLabel={t('common.retry', 'Retry')}
+        message={t('widget.error.message', 'Online users could not be loaded.')}
+        retryLabel={t('common.tryAgain', 'Try again')}
         onRetry={() => { void fetchStats(); }}
       />
     );
   }
 
   if (stats.sessionCount === 0) {
-    return <EmptyState label={t('widget.empty', 'No sessions recorded yet.')} />;
+    return <EmptyState label={t('widget.empty.noSignIns', 'No users have signed in yet.')} />;
   }
 
+  const onlineUsersDetail = userCounts
+    ? t(
+      'widget.stats.registeredUsers',
+      '{total, plural, one {of # registered user} other {of # registered users}}',
+      { total: userCounts.totalUsers }
+    )
+    : t('widget.stats.userTotalsError', 'User totals could not be loaded.');
+
   const tiles = [
-    { key: 'onlineNow', icon: Lightning, tone: 'success', label: t('widget.stats.onlineNow', 'Online now') },
-    { key: 'last15min', icon: Clock, tone: 'primary', label: t('widget.stats.last15min', 'Last 15 min') },
-    { key: 'lastHour', icon: ClockCounterClockwise, tone: 'secondary', label: t('widget.stats.lastHour', 'Last hour') },
-    { key: 'today', icon: Calendar, tone: 'alternative', label: t('widget.stats.today', 'Today') },
+    {
+      key: 'onlineUsers',
+      icon: User,
+      tone: 'success',
+      label: t('widget.stats.onlineUsers', 'Online users'),
+      value: formatNumber(stats.onlineUsers),
+      detail: onlineUsersDetail,
+    },
+    {
+      key: 'activeSessions',
+      icon: Lightning,
+      tone: 'primary',
+      label: t('widget.stats.activeSessions', 'Active sessions'),
+      value: formatNumber(stats.activeSessions),
+    },
+    {
+      key: 'idleSessions',
+      icon: Clock,
+      tone: 'warning',
+      label: t('widget.stats.idleSessions', 'Idle sessions'),
+      value: formatNumber(stats.idleSessions),
+    },
+    {
+      key: 'blockedUsers',
+      icon: Lock,
+      tone: 'neutral',
+      label: t('widget.stats.blockedUsers', 'Blocked users'),
+      value: userCounts ? formatNumber(userCounts.blockedUsers) : null,
+    },
   ];
 
   return (
@@ -234,12 +297,12 @@ const OnlineUsersWidget = () => {
           icon={tile.icon}
           tone={tile.tone}
           label={tile.label}
-          value={formatNumber(stats[tile.key])}
+          value={tile.value}
+          detail={tile.detail}
         />
       ))}
     </TileGrid>
   );
 };
-
 
 export default OnlineUsersWidget;

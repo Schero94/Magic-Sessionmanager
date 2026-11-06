@@ -4,18 +4,30 @@ import test from 'node:test';
 
 const widgetSource = readFileSync(new URL('../admin/src/components/OnlineUsersWidget.jsx', import.meta.url), 'utf8');
 
-test('Online Users loads sessions through the permission-protected plugin API only', () => {
+test('Online Users loads sessions and count-only user totals through the permission-protected plugin API only', () => {
   assert.match(widgetSource, /get\(['"]\/magic-sessionmanager\/sessions['"]\)/);
+  assert.match(widgetSource, /get\(['"]\/magic-sessionmanager\/users\/stats['"]\)/);
+  assert.match(widgetSource, /Promise\.allSettled\(/, 'a failing user-totals request does not hide the session tiles');
+  assert.match(widgetSource, /normalizeUserCounts\(/);
+  assert.match(widgetSource, /requireSessionList\(/);
   assert.doesNotMatch(widgetSource, /content-manager\/collection-types\/plugin::users-permissions\.user/);
 });
 
-test('Online Users distinguishes load errors and empty data from real zeroes', () => {
+test('Online Users distinguishes load errors and empty data from real zeroes (IA G)', () => {
   assert.match(widgetSource, /loadError/);
   assert.match(widgetSource, /role="alert"/);
-  assert.match(widgetSource, /common\.retry/);
-  assert.match(widgetSource, /widget\.error\.description/);
+  assert.match(widgetSource, /t\('widget\.error\.message', 'Online users could not be loaded\.'\)/);
+  assert.match(widgetSource, /t\('common\.tryAgain', 'Try again'\)/);
   assert.match(widgetSource, /stats\.sessionCount === 0/, 'no session at all shows the NoData state, not four zeroes');
+  assert.match(widgetSource, /t\('widget\.empty\.noSignIns', 'No users have signed in yet\.'\)/);
   assert.match(widgetSource, /if \(showLoading\) setLoadError\(true\)/, 'a failed background refresh keeps the last values');
+  assert.match(widgetSource, /if \(showLoading\) setUserCounts\(null\)/, 'a failed background totals refresh keeps the last totals');
+});
+
+test('when only the user totals fail, the tiles say so and Blocked users shows the missing marker', () => {
+  assert.match(widgetSource, /t\('widget\.stats\.userTotalsError', 'User totals could not be loaded\.'\)/);
+  assert.match(widgetSource, /value: userCounts \? formatNumber\(userCounts\.blockedUsers\) : null/);
+  assert.match(widgetSource, /<MissingValue\b/);
 });
 
 test('Online Users uses Strapi widget state helpers when available and falls back otherwise (UX-06)', () => {
@@ -28,14 +40,23 @@ test('Online Users uses Strapi widget state helpers when available and falls bac
   assert.match(widgetSource, /<Loader small>/, 'local loading fallback uses the DS Loader');
 });
 
-test('Online Users shows four equal tiles in a 2 x 2 grid without overflow (F9, F10)', () => {
-  for (const key of ['widget.stats.onlineNow', 'widget.stats.last15min', 'widget.stats.lastHour', 'widget.stats.today']) {
-    assert.match(widgetSource, new RegExp(key.replace(/\./g, '\\.')), key);
+test('Online Users shows the IA D4 tiles in a 2 x 2 grid without overflow (I.1-27, I.2-2, F9, F10)', () => {
+  const keys = [...widgetSource.matchAll(/key: '(\w+)',\s*icon:/g)].map((match) => match[1]);
+  assert.deepEqual(keys, ['onlineUsers', 'activeSessions', 'idleSessions', 'blockedUsers']);
+  for (const [id, label] of [
+    ['widget.stats.onlineUsers', 'Online users'],
+    ['widget.stats.activeSessions', 'Active sessions'],
+    ['widget.stats.idleSessions', 'Idle sessions'],
+    ['widget.stats.blockedUsers', 'Blocked users'],
+  ]) {
+    assert.match(widgetSource, new RegExp(`t\\('${id.replace(/\./g, '\\.')}', '${label}'\\)`), id);
   }
-  assert.doesNotMatch(widgetSource, /widget\.stats\.(offline|last30min|totalUsers|blocked)/);
+  assert.match(widgetSource, /'\{total, plural, one \{of # registered user\} other \{of # registered users\}\}'/);
+  assert.doesNotMatch(widgetSource, /widget\.stats\.(onlineNow|last15min|last30min|lastHour|today|offline)/, 'retired tiles are gone');
+  assert.doesNotMatch(widgetSource, /15 \* 60|FIFTEEN_MINUTES|ONE_HOUR|startOfLocalDay/, 'no hard-coded activity windows');
   assert.match(widgetSource, /repeat\(auto-fit, minmax\(min\(100%, max\(14rem, calc\(\(100% - 1px\) \/ 2\)\)\), 1fr\)\)/,
     'at most two columns, one column on narrow widgets, never wider than the widget');
-  assert.match(widgetSource, /height="100%"/, 'tiles fill their grid row');
+  assert.match(widgetSource, /height="100%"/, 'tiles fill their grid row, so a row has equal heights');
   assert.doesNotMatch(widgetSource, /gridCols=\{2\}/);
 });
 
@@ -46,11 +67,13 @@ test('Online Users tiles are stable, decorative-icon-only and use theme colours 
   assert.match(widgetSource, /theme\.colors\.neutral200/);
   assert.doesNotMatch(widgetSource, /rgba?\(|#[0-9a-fA-F]{3,8}\b/);
   assert.doesNotMatch(widgetSource, /transition:/);
-  const icons = [...widgetSource.matchAll(/key: '\w+', icon: (\w+), tone/g)].map((match) => match[1]);
+  const icons = [...widgetSource.matchAll(/key: '\w+',\s*icon: (\w+),\s*tone/g)].map((match) => match[1]);
   assert.equal(icons.length, 4);
   assert.equal(new Set(icons).size, 4, 'every metric has its own icon');
 });
 
 test('Online Users formats numbers with the admin locale', () => {
-  assert.match(widgetSource, /formatNumber\(stats\[tile\.key\]\)/);
+  for (const key of ['onlineUsers', 'activeSessions', 'idleSessions']) {
+    assert.match(widgetSource, new RegExp(`formatNumber\\(stats\\.${key}\\)`), key);
+  }
 });

@@ -8,8 +8,12 @@ import { ConfirmDialog } from '@strapi/strapi/admin';
  * the trigger is gone (for example a deleted row), it moves to
  * `fallbackFocusRef` instead of being lost on <body>.
  *
+ * Without a `trigger` the dialog is controlled through `isOpen` and
+ * `onOpenChange`, for actions started from a menu item; focus then returns
+ * to `returnFocusRef` (the menu button), else to `fallbackFocusRef`.
+ *
  * @param {object} props
- * @param {import('react').ReactElement} props.trigger A single DS Button/IconButton (receives ref and onClick).
+ * @param {import('react').ReactElement} [props.trigger] A single DS Button/IconButton (receives ref and onClick).
  * @param {import('react').ReactNode} props.title Dialog title.
  * @param {import('react').ReactNode} props.body Dialog body (string or node).
  * @param {import('react').ReactNode} props.confirmLabel Label of the confirming button.
@@ -17,6 +21,9 @@ import { ConfirmDialog } from '@strapi/strapi/admin';
  * @param {'danger'|'danger-light'|'default'|'secondary'} [props.variant] Confirm button variant.
  * @param {boolean} [props.disabled] Disable the trigger.
  * @param {{current: HTMLElement|null}} [props.fallbackFocusRef] Focus target when the trigger was removed.
+ * @param {boolean} [props.isOpen] Controlled open state (only without `trigger`).
+ * @param {(open: boolean) => void} [props.onOpenChange] Controlled state change (only without `trigger`).
+ * @param {{current: HTMLElement|null}} [props.returnFocusRef] Focus target after a controlled dialog closes.
  * @returns {import('react').ReactElement} Trigger with its confirmation dialog.
  */
 const ConfirmAction = ({
@@ -28,19 +35,30 @@ const ConfirmAction = ({
   variant = 'danger',
   disabled = false,
   fallbackFocusRef,
+  isOpen,
+  onOpenChange,
+  returnFocusRef,
 }) => {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const triggerRef = useRef(null);
+  const controlled = !trigger;
+  const open = controlled ? Boolean(isOpen) : internalOpen;
 
   const restoreFocus = () => {
     if (typeof window === 'undefined') return;
     window.requestAnimationFrame(() => {
       const active = document.activeElement;
       if (active && active !== document.body) return;
-      const target = triggerRef.current?.isConnected ? triggerRef.current : fallbackFocusRef?.current;
+      const ownTrigger = controlled ? returnFocusRef?.current : triggerRef.current;
+      const target = ownTrigger?.isConnected ? ownTrigger : fallbackFocusRef?.current;
       if (target?.isConnected && typeof target.focus === 'function') target.focus();
     });
+  };
+
+  const setOpen = (next) => {
+    if (controlled) onOpenChange?.(next);
+    else setInternalOpen(next);
   };
 
   const handleOpenChange = (next) => {
@@ -65,9 +83,11 @@ const ConfirmAction = ({
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Trigger ref={triggerRef} disabled={disabled}>
-        {trigger}
-      </Dialog.Trigger>
+      {trigger ? (
+        <Dialog.Trigger ref={triggerRef} disabled={disabled}>
+          {trigger}
+        </Dialog.Trigger>
+      ) : null}
       <ConfirmDialog
         title={title}
         variant={variant}

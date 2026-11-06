@@ -33,7 +33,7 @@ test('dashboard retains the actual row or button opener and does not refetch mer
   assert.ok((actions.match(/onView\(session, (?:event|e)\.currentTarget\)/g) || []).length >= 2);
   // A row click hands over the row's View button, so focus returns to a real control.
   assert.match(table, /onView\(session, opener \|\| event\.currentTarget\)/);
-  assert.match(home, /restoreDialogFocus\(event, openerRef\.current, dashboardRef\.current\)/);
+  assert.match(home, /restoreDialogFocus\(event, openerRef\.current, listHeadingRef\.current \|\| dashboardRef\.current\)/);
   assert.match(home, /ref=\{dashboardRef\}[^>]*tabIndex=\{-1\}/);
   assert.match(home, /onCloseAutoFocus=\{handleCloseAutoFocus\}/);
   assert.match(modal, /onCloseAutoFocus=\{onCloseAutoFocus\}/);

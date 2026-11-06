@@ -29,7 +29,7 @@ test('field hints use the same comfortable line-height and control spacing', () 
   assert.ok(/<Field\.Root[^>]*hint=\{description\}/.test(source), 'field descriptions use the Strapi hint context');
 });
 
-test('settings render multi-idea copy as readable paragraphs', () => {
+test('settings render explanatory copy as readable text', () => {
   const readableText = readAdminFile('components/ReadableText.jsx');
   const row = readAdminFile('components/SettingsToggleRow.jsx');
   const settings = readAdminFile('pages/Settings.jsx');
@@ -37,22 +37,10 @@ test('settings render multi-idea copy as readable paragraphs', () => {
   assert.match(readableText, /export const ReadableParagraphs/);
   assert.match(readableText, /split\(/, 'paragraphs are split from translated double line breaks');
   assert.match(row, /ReadableParagraphs/, 'switch descriptions support multiple paragraphs');
-  assert.ok((settings.match(/<ReadableParagraphs\b/g) || []).length >= 3, 'policy, warning, and footer copy retain paragraph boundaries');
-
-  for (const locale of ['de', 'en', 'es', 'fr', 'pt']) {
-    const translations = JSON.parse(
-      readFileSync(new URL(`../admin/src/translations/${locale}.json`, import.meta.url), 'utf8')
-    );
-    for (const key of [
-      'settings.security.enforcement.description',
-      'settings.security.enforcement.strict.description',
-      'settings.security.enforcement.trustedProxies.description',
-      'settings.security.enforcement.warning.body',
-      'settings.footer.description',
-    ]) {
-      assert.match(translations[key], /\n\s*\n/, `${locale} ${key} keeps separate ideas in separate paragraphs`);
-    }
-  }
+  assert.ok((settings.match(/<ReadableParagraphs\b/g) || []).length >= 3, 'warning, lockout and rejection copy keep paragraph boundaries');
+  // Every tab starts with one intro sentence in the shared readable style (IA D5.3).
+  assert.match(settings, /export const IntroText = \(\{ children \}\) => \(\s*<ReadableText\b/);
+  assert.ok((settings.match(/<IntroText>/g) || []).length >= 5, 'one intro per tab');
 });
 
 test('page prose uses shared paragraph rhythm while analytics metrics stay compact', () => {

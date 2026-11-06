@@ -6,11 +6,16 @@ import {
   PANEL_SESSION_LIMIT,
   applyBlockedFormSync,
   buildUserSessionsHref,
+  endOpenSessions,
+  getPanelUserLabel,
   getUserSessionSummary,
   getVisiblePanelSessions,
+  isNotFoundError,
   isUserModel,
   planBlockedFormSync,
 } from '../admin/src/utils/userPanelState.mjs';
+
+const at = (minutesAgo) => new Date(Date.UTC(2026, 10, 6, 12, 0) - minutesAgo * 60 * 1000).toISOString();
 
 test('the panel only renders for the Users & Permissions user model', () => {
   assert.equal(isUserModel('plugin::users-permissions.user'), true);
@@ -19,30 +24,80 @@ test('the panel only renders for the Users & Permissions user model', () => {
   }
 });
 
-test('user summary is active, idle or none and counts current sessions', () => {
-  assert.deepEqual(getUserSessionSummary([]), { status: 'none', currentCount: 0, activeCount: 0 });
-  assert.deepEqual(getUserSessionSummary(null), { status: 'none', currentCount: 0, activeCount: 0 });
-  assert.deepEqual(
-    getUserSessionSummary([{ isActive: true, isTrulyActive: false }, { isActive: true, isTrulyActive: false }]),
-    { status: 'idle', currentCount: 2, activeCount: 0 }
-  );
-  assert.deepEqual(
-    getUserSessionSummary([{ isActive: true, isTrulyActive: true }, { isActive: true, isTrulyActive: false }]),
-    { status: 'active', currentCount: 2, activeCount: 1 }
-  );
+test('summary: online when any open session is active, open count covers active and idle (IA D3)', () => {
+  assert.deepEqual(getUserSessionSummary([]), { isOnline: false, openCount: 0, activeCount: 0, lastActive: null });
+  assert.deepEqual(getUserSessionSummary(null), { isOnline: false, openCount: 0, activeCount: 0, lastActive: null });
+
+  const idleOnly = getUserSessionSummary([
+    { isActive: true, isTrulyActive: false, lastActive: at(40) },
+    { isActive: true, isTrulyActive: false, lastActive: at(50) },
+  ]);
+  assert.equal(idleOnly.isOnline, false, 'idle sessions alone are "Not online"');
+  assert.equal(idleOnly.openCount, 2);
+
+  const mixed = getUserSessionSummary([
+    { isActive: true, isTrulyActive: true, lastActive: at(1) },
+    { isActive: true, isTrulyActive: false, lastActive: at(40) },
+    { isActive: false, isTrulyActive: true, lastActive: at(0) },
+  ]);
+  assert.equal(mixed.isOnline, true);
+  assert.equal(mixed.openCount, 2, 'ended rows are not open');
+  assert.equal(mixed.activeCount, 1);
 });
 
-test('at most five session cards are shown; the rest is counted for "Show all"', () => {
+test('"Last active" is the latest activity over every row the panel receives, ended ones included', () => {
+  const summary = getUserSessionSummary([
+    { isActive: true, isTrulyActive: false, lastActive: at(40) },
+    { isActive: false, lastActive: at(5), terminationReason: 'logout' },
+    { isActive: false, loginTime: at(90) },
+    { isActive: false, lastActive: 'not-a-date' },
+  ]);
+  assert.equal(summary.lastActive?.toISOString(), at(5));
+  assert.equal(summary.openCount, 1);
+  assert.equal(getUserSessionSummary([{ isActive: false }]).lastActive, null, 'no valid time: "No sessions recorded"');
+});
+
+test('at most five open-session cards, newest activity first; the rest is counted for "+n more"', () => {
   assert.equal(PANEL_SESSION_LIMIT, 5);
-  const rows = Array.from({ length: 7 }, (_, index) => ({ id: `s${index}` }));
+  const rows = [3, 1, 7, 2, 6, 4, 5].map((minutes) => ({ id: `s${minutes}`, isActive: true, lastActive: at(minutes) }));
   const { visible, hiddenCount } = getVisiblePanelSessions(rows);
-  assert.equal(visible.length, 5);
+  assert.deepEqual(visible.map((row) => row.id), ['s1', 's2', 's3', 's4', 's5']);
   assert.equal(hiddenCount, 2);
-  assert.deepEqual(getVisiblePanelSessions(rows.slice(0, 3)), { visible: rows.slice(0, 3), hiddenCount: 0 });
+  assert.equal(rows[0].id, 's3', 'the input order is not mutated');
   assert.deepEqual(getVisiblePanelSessions(undefined), { visible: [], hiddenCount: 0 });
+  const undated = getVisiblePanelSessions([{ id: 'none' }, { id: 'dated', loginTime: at(9) }]);
+  assert.deepEqual(undated.visible.map((row) => row.id), ['dated', 'none'], 'rows without a time go last');
 });
 
-test('"Show all" links to the dashboard filtered by the user through the standard _q parameter', () => {
+test('ending all sessions locally keeps history and the last activity (no refetch, no unmount)', () => {
+  const rows = [
+    { id: 'open', isActive: true, isTrulyActive: true, lastActive: at(1) },
+    { id: 'ended', isActive: false, terminationReason: 'logout', lastActive: at(30) },
+  ];
+  const ended = endOpenSessions(rows, 'blocked');
+  assert.deepEqual(ended[0], { id: 'open', isActive: false, isTrulyActive: false, terminationReason: 'blocked', lastActive: at(1) });
+  assert.equal(ended[1], rows[1], 'already ended rows are kept as they are');
+  assert.equal(rows[0].isActive, true, 'the input is not mutated');
+  assert.equal(getUserSessionSummary(ended).lastActive?.toISOString(), at(1));
+  assert.deepEqual(endOpenSessions(null, 'manual'), []);
+});
+
+test('the user is named by user name, then e-mail', () => {
+  assert.equal(getPanelUserLabel({ username: 'anna', email: 'anna@example.invalid' }), 'anna');
+  assert.equal(getPanelUserLabel({ username: '  ', email: 'anna@example.invalid' }), 'anna@example.invalid');
+  assert.equal(getPanelUserLabel({}), '');
+  assert.equal(getPanelUserLabel(null), '');
+});
+
+test('a 404 from the admin fetch client is recognised for the "User not found." message', () => {
+  assert.equal(isNotFoundError({ status: 404 }), true);
+  assert.equal(isNotFoundError({ response: { status: 404 } }), true);
+  assert.equal(isNotFoundError({ response: { status: 500 } }), false);
+  assert.equal(isNotFoundError(new Error('x')), false);
+  assert.equal(isNotFoundError(null), false);
+});
+
+test('"Show all sessions" links to the dashboard search with the e-mail (IA D3, C)', () => {
   assert.equal(DASHBOARD_PATH, '/plugins/magic-sessionmanager');
   assert.equal(
     buildUserSessionsHref({ email: 'anna+test@example.invalid', username: 'anna' }),

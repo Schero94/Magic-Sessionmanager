@@ -10,13 +10,16 @@ import { presentText } from './missingValue.mjs';
 /** Normalised risk levels, lowest first. */
 export const RISK_LEVELS = Object.freeze(['none', 'low', 'medium', 'mediumHigh', 'high']);
 
-/** Translation ids (relative to the plugin namespace) for each risk level. */
+/**
+ * Translated risk levels (IA H.12). Shown only for a live lookup result,
+ * never derived from a stored score.
+ */
 export const RISK_LEVEL_MESSAGES = Object.freeze({
-  none: Object.freeze({ messageId: 'modal.security.risk.none', defaultMessage: 'No known risk' }),
-  low: Object.freeze({ messageId: 'modal.security.risk.low', defaultMessage: 'Low risk' }),
-  medium: Object.freeze({ messageId: 'modal.security.risk.medium', defaultMessage: 'Medium risk' }),
-  mediumHigh: Object.freeze({ messageId: 'modal.security.risk.mediumHigh', defaultMessage: 'Elevated risk' }),
-  high: Object.freeze({ messageId: 'modal.security.risk.high', defaultMessage: 'High risk' }),
+  none: Object.freeze({ messageId: 'modal.security.risk.none', defaultMessage: 'None' }),
+  low: Object.freeze({ messageId: 'modal.security.risk.low', defaultMessage: 'Low' }),
+  medium: Object.freeze({ messageId: 'modal.security.risk.medium', defaultMessage: 'Medium' }),
+  mediumHigh: Object.freeze({ messageId: 'modal.security.risk.mediumHigh', defaultMessage: 'Medium-high' }),
+  high: Object.freeze({ messageId: 'modal.security.risk.high', defaultMessage: 'High' }),
 });
 
 /** DS Badge variant for each risk level. */
@@ -50,18 +53,6 @@ export function normalizeRiskLevel(value) {
 }
 
 /**
- * Derives a level from a stored security score when the server sent no label.
- * Keeps the historical rule: below 50 is high risk.
- *
- * @param {unknown} score Security score 0-100.
- * @returns {''|'low'|'high'} Level, '' without a finite score.
- */
-export function getRiskLevelFromScore(score) {
-  if (typeof score !== 'number' || !Number.isFinite(score)) return '';
-  return score < 50 ? 'high' : 'low';
-}
-
-/**
  * @param {unknown} value Boolean flag from the server.
  * @returns {boolean|null} The flag, or null when it is not a boolean.
  */
@@ -71,7 +62,8 @@ const booleanOrNull = (value) => (typeof value === 'boolean' ? value : null);
  * Normalises a geolocation record (stored on the session or returned by the
  * lookup endpoint) into display facts. Missing values are null or '' so the
  * shared missing-value marker is shown; nothing is invented. Flag emoji are
- * dropped (no emoji in the admin UI).
+ * dropped (no emoji in the admin UI). The risk level comes only from the
+ * record itself; a score is never mapped to a level on the client.
  *
  * @param {object|null|undefined} geo Geolocation record.
  * @param {{securityScore?: unknown}} [fallback] Session-level score when the record has none.
@@ -96,7 +88,7 @@ export function normalizeGeoData(geo, fallback = {}) {
     city,
     timezone,
     securityScore,
-    riskLevel: normalizeRiskLevel(geo.riskLevel) || getRiskLevelFromScore(securityScore),
+    riskLevel: normalizeRiskLevel(geo.riskLevel),
     isVpn: booleanOrNull(geo.isVpn),
     isProxy: booleanOrNull(geo.isProxy),
   };
@@ -104,7 +96,9 @@ export function normalizeGeoData(geo, fallback = {}) {
 
 /**
  * Reads the geolocation stored on a session row (object or JSON string).
- * The security score lives on the session itself.
+ * The security score lives on the session itself. Risk level, VPN and proxy
+ * flags are not stored for past sign-ins, so they stay empty here and the
+ * dialog says so instead of showing "No" (IA D2.6).
  *
  * @param {object} session Session row.
  * @returns {ReturnType<typeof normalizeGeoData>} Display facts or null.
@@ -121,6 +115,30 @@ export function getStoredGeoData(session) {
   if (!geoLocation || typeof geoLocation !== 'object') return null;
   // The stored record never carries a score of its own; only the session's
   // score is trusted, so a stale record cannot claim "no risk".
-  const { securityScore: _ignored, riskLevel: _ignoredLevel, ...facts } = geoLocation;
+  const {
+    securityScore: _ignored,
+    riskLevel: _ignoredLevel,
+    isVpn: _ignoredVpn,
+    isProxy: _ignoredProxy,
+    ...facts
+  } = geoLocation;
   return normalizeGeoData(facts, { securityScore: session?.securityScore });
+}
+
+/**
+ * Interprets the response of the on-demand lookup (GET /geolocation/:ip).
+ * `disabled` means IP location lookup is off on the server; any other
+ * non-ok status (private address, failed provider) or a result without a
+ * location fact means the location could not be determined.
+ *
+ * @param {unknown} payload Response body ({ success, data }).
+ * @returns {{status: 'ok', geo: NonNullable<ReturnType<typeof normalizeGeoData>>}|{status: 'disabled'|'failed', geo: null}} Outcome.
+ */
+export function interpretLookupResult(payload) {
+  const data = /** @type {any} */ (payload)?.data;
+  if (!data || typeof data !== 'object') return { status: 'failed', geo: null };
+  if (data._status === 'disabled') return { status: 'disabled', geo: null };
+  if (data._status && data._status !== 'ok') return { status: 'failed', geo: null };
+  const geo = normalizeGeoData(data);
+  return geo ? { status: 'ok', geo } : { status: 'failed', geo: null };
 }

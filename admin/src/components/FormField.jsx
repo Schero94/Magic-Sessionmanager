@@ -1,4 +1,4 @@
-import { Field } from '@strapi/design-system';
+import { Field, Typography } from '@strapi/design-system';
 import styled from 'styled-components';
 
 const FieldFrame = styled.div`
@@ -39,6 +39,16 @@ const FieldControl = styled.div`
   }
 `;
 
+/** Control with a unit after it ("attempts", "failed sign-ins"); the unit never shrinks the input below its column. */
+const SuffixRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: ${({ theme }) => theme.spaces[2]};
+  width: 100%;
+  min-width: 0;
+`;
+
 const FieldHint = styled.div`
   width: 100%;
   min-width: 0;
@@ -69,16 +79,24 @@ const FieldHint = styled.div`
  *   description?: import('react').ReactNode,
  *   error?: string,
  *   required?: boolean,
+ *   suffix?: import('react').ReactNode,
  *   children: import('react').ReactNode,
- * }} props Field identity, copy, validation state and control.
+ * }} props Field identity, copy, validation state, optional unit suffix
+ *   (IA F: units are input suffixes) and control.
  * @returns {import('react').ReactElement} A responsive, accessible form field.
  */
-const FormField = ({ id, name = id, label, description, error, required = false, children }) => {
+const FormField = ({ id, name = id, label, description, error, required = false, suffix, children }) => {
+  const control = <FieldControl>{children}</FieldControl>;
   return (
     <FieldFrame>
       <Field.Root id={id} name={name} hint={description} error={error || undefined} required={required}>
         <Field.Label>{label}</Field.Label>
-        <FieldControl>{children}</FieldControl>
+        {suffix ? (
+          <SuffixRow>
+            {control}
+            <Typography variant="omega" textColor="neutral600" id={`${id}-suffix`}>{suffix}</Typography>
+          </SuffixRow>
+        ) : control}
         {description || error ? <FieldHint><Field.Hint /><Field.Error /></FieldHint> : null}
       </Field.Root>
     </FieldFrame>

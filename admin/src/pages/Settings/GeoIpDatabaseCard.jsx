@@ -1,114 +1,173 @@
-import { Badge, Button, Flex, TextInput } from '@strapi/design-system';
-import { EqualGrid, PropertyList, SectionCard } from '../../components/ui';
+import { Badge, Button, Flex, SingleSelect, SingleSelectOption, TextInput } from '@strapi/design-system';
+import { Trash } from '@strapi/icons';
+import { ConfirmAction, EqualGrid, PropertyList, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
+import ReadableText from '../../components/ReadableText';
 import Alert from '../../components/PersistentAlert';
+import { formatSessionDate } from '../../utils/sessionDates.mjs';
+import { fieldHasError, usesLocalDatabase } from './settingsTabs.mjs';
+import { AdvancedSection, RequiresNotice } from './SettingsBlocks';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
+const BUILD_DATE_OPTIONS = Object.freeze({ dateStyle: 'medium' });
+
 /**
- * Local MaxMind database status, filename and download controls.
+ * Card "Provider and database" (IA F 3.2): lookup provider, local MaxMind
+ * database status, credentials, download and the advanced file name. A
+ * status failure shows an alert inside this card only (IA G).
  *
  * @param {{ form: ReturnType<typeof import('./hooks/useSettingsForm').useSettingsForm> }} props Settings form.
- * @returns {import('react').ReactElement} GeoIP database section.
+ * @returns {import('react').ReactElement} Provider and database card.
  */
 const GeoIpDatabaseCard = ({ form }) => {
-  const { t, tError } = useSettingsTranslate();
+  const { t, tError, locale } = useSettingsTranslate();
   const { settings, handleChange, errors, hasChanges, geoIp } = form;
   const geoIpStatus = geoIp.status;
+  const lookupOff = !settings.enableGeolocation;
+  const localDatabase = usesLocalDatabase(settings.geoIpProvider);
+  const databaseDisabled = lookupOff || !localDatabase;
+  const credentialSource = geoIpStatus?.credentialSource;
+  const fromEnvironment = credentialSource === 'env';
+  const credentialSourceLabels = {
+    env: t('settings.config.database.credentials.env', 'Environment variables'),
+    store: t('settings.config.database.credentials.store', 'Stored in Strapi'),
+    missing: t('settings.config.database.credentials.missing', 'Missing'),
+  };
 
   return (
     <SectionCard
-      title={t('settings.geofencing.database.title', 'Local GeoIP Database (City recommended)')}
-      subtitle={geoIpStatus
-        ? (geoIpStatus.exists
-          ? t('settings.geofencing.database.exists', 'Database is installed locally. GeoLite2-City enables city-level lookup; Country remains supported.')
-          : t('settings.geofencing.database.missing', 'No local database installed yet. GeoLite2-City is recommended for city-level lookup.'))
-        : undefined}
+      title={t('settings.config.provider.title', 'Provider and database')}
       action={geoIpStatus ? (
         <Badge
-          backgroundColor={geoIpStatus.exists ? 'success100' : 'warning100'}
-          textColor={geoIpStatus.exists ? 'success700' : 'warning700'}
+          backgroundColor={geoIpStatus.exists ? 'success100' : 'neutral150'}
+          textColor={geoIpStatus.exists ? 'success700' : 'neutral700'}
         >
           {geoIpStatus.exists
-            ? t('settings.geofencing.database.installed', 'Installed')
-            : t('settings.geofencing.database.notInstalled', 'Missing')}
+            ? t('settings.config.database.downloaded', 'Downloaded')
+            : t('settings.config.database.notDownloaded', 'Not downloaded')}
         </Badge>
       ) : null}
     >
+      {lookupOff ? (
+        <RequiresNotice>
+          {t('settings.config.requires.geolocation', 'Requires IP location lookup')}
+        </RequiresNotice>
+      ) : null}
+
+      <FormField
+        id="geoip-provider"
+        name="geoIpProvider"
+        label={t('settings.config.provider.label', 'Provider')}
+        description={t(
+          'settings.config.provider.hint',
+          'Automatic uses the local database, else ipapi.co unless lookup failures are set to reject. Local database keeps lookups on this server. ipapi.co sends IP addresses to that service. Off turns lookups off.'
+        )}
+      >
+        <SingleSelect
+          value={settings.geoIpProvider || 'auto'}
+          disabled={lookupOff}
+          onChange={(value) => handleChange('geoIpProvider', value)}
+        >
+          <SingleSelectOption value="auto">{t('settings.config.provider.auto', 'Automatic')}</SingleSelectOption>
+          <SingleSelectOption value="local-mmdb">{t('settings.config.provider.local', 'Local database')}</SingleSelectOption>
+          <SingleSelectOption value="ipapi">{t('settings.config.provider.ipapi', 'ipapi.co')}</SingleSelectOption>
+          <SingleSelectOption value="disabled">{t('settings.config.provider.off', 'Off')}</SingleSelectOption>
+        </SingleSelect>
+      </FormField>
+
+      {!lookupOff && !localDatabase ? (
+        <RequiresNotice>
+          {t('settings.config.requires.localDatabase', 'The database settings below require the Automatic or Local database provider.')}
+        </RequiresNotice>
+      ) : null}
+
       {geoIp.statusError && (
         <Alert
           variant="danger"
           closeLabel={t('common.close', 'Close')}
-          title={t('settings.geofencing.database.statusError', 'Could not load the database status. Try again.')}
-          action={<Button size="S" variant="secondary" onClick={geoIp.fetchStatus}>{t('common.retry', 'Retry')}</Button>}
-        />
+          title=""
+          action={<Button size="S" variant="secondary" onClick={geoIp.fetchStatus}>{t('settings.config.load.retry', 'Try again')}</Button>}
+        >
+          {t('settings.config.database.statusError', 'The database status could not be loaded.')}
+        </Alert>
       )}
 
-      <PropertyList
-        items={[
-          {
-            id: 'path',
-            label: t('settings.geofencing.database.path', 'Path'),
-            value: geoIpStatus?.databasePath || settings.geoIpDatabasePath,
-            kind: 'id',
-          },
-          {
-            id: 'edition',
-            label: t('settings.geofencing.database.edition', 'Edition'),
-            value: geoIpStatus?.editionId,
-          },
-          {
-            id: 'lastModified',
-            label: t('settings.geofencing.database.lastModified', 'Last MaxMind update'),
-            value: geoIpStatus?.metadata?.lastModified,
-          },
-        ]}
-      />
+      {geoIpStatus ? (
+        <Flex direction="column" alignItems="stretch" gap={2}>
+          {!geoIpStatus.exists ? (
+            <ReadableText variant="omega" textColor="neutral600" tag="p">
+              {t('settings.config.database.none', 'No database downloaded yet.')}
+            </ReadableText>
+          ) : null}
+          <PropertyList
+            label={t('settings.config.database.statusLabel', 'Database status')}
+            items={[
+              {
+                id: 'edition',
+                label: t('settings.config.database.edition', 'Edition'),
+                value: geoIpStatus.editionId,
+              },
+              {
+                id: 'built',
+                label: t('settings.config.database.built', 'Build date'),
+                value: formatSessionDate(geoIpStatus.metadata?.lastModified, locale, '', BUILD_DATE_OPTIONS),
+              },
+              {
+                id: 'file',
+                label: t('settings.config.database.file', 'File'),
+                value: geoIpStatus.databasePath,
+                kind: 'id',
+              },
+              {
+                id: 'credentials',
+                label: t('settings.config.database.credentials', 'MaxMind credentials'),
+                value: credentialSourceLabels[credentialSource],
+              },
+            ]}
+          />
+        </Flex>
+      ) : null}
 
-      <FormField
-        id="geoip-database-filename"
-        name="geoIpDatabasePath"
-        label={t('settings.geofencing.databasePath.title', 'Local MMDB filename')}
-        description={t('settings.geofencing.databasePath.help', 'Downloads stay in data/magic-sessionmanager/geoip. Use a supported .mmdb filename.')}
-        error={tError(errors.geoIpDatabasePath)}
-      >
-        <TextInput
-          name="geoIpDatabasePath"
-          value={settings.geoIpDatabasePath || ''}
-          onChange={(event) => handleChange('geoIpDatabasePath', event.target.value)}
-          placeholder="GeoLite2-City.mmdb"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </FormField>
+      {fromEnvironment ? (
+        <Alert variant="default" closeLabel={t('common.close', 'Close')} title="">
+          {t('settings.config.database.credentials.envNote', 'Environment variables are set and take precedence; stored values are ignored.')}
+        </Alert>
+      ) : null}
 
       <EqualGrid columns={2} stackBelow="medium" gap={6}>
         <FormField
           id="maxmind-account-id"
           name="maxmindAccountId"
-          label={t('settings.geofencing.maxmind.accountId', 'MaxMind Account ID')}
-          description={t('settings.geofencing.maxmind.accountId.hint', 'Used only to download the local GeoIP database.')}
+          label={t('settings.config.database.accountId', 'MaxMind account ID')}
+          description={t('settings.config.database.accountId.hint', 'Up to 64 characters. Environment variables take precedence.')}
         >
           <TextInput
             name="maxmindAccountId"
             value={geoIp.credentials.accountId || ''}
             autoComplete="off"
+            maxLength={64}
+            disabled={databaseDisabled}
+            readOnly={fromEnvironment}
             onChange={(event) => geoIp.setCredentials((prev) => ({ ...prev, accountId: event.target.value }))}
           />
         </FormField>
         <FormField
           id="maxmind-license-key"
           name="maxmindLicenseKey"
-          label={t('settings.geofencing.maxmind.licenseKey', 'MaxMind License Key')}
-          description={t('settings.geofencing.maxmind.licenseKey.hint', 'The key is masked while you enter it.')}
+          label={t('settings.config.database.licenseKey', 'MaxMind license key')}
+          description={t('settings.config.database.licenseKey.hint', 'Up to 256 characters. The key is masked and never shown again after saving.')}
         >
           <TextInput
             name="maxmindLicenseKey"
             type="password"
             autoComplete="new-password"
+            maxLength={256}
+            disabled={databaseDisabled}
+            readOnly={fromEnvironment}
             value={geoIp.credentials.licenseKey || ''}
             onChange={(event) => geoIp.setCredentials((prev) => ({ ...prev, licenseKey: event.target.value }))}
-            placeholder={geoIpStatus?.hasCredentials
-              ? t('settings.geofencing.maxmind.licenseStored', 'License key stored')
+            placeholder={credentialSource === 'store'
+              ? t('settings.config.database.licenseKey.stored', 'A license key is stored')
               : undefined}
           />
         </FormField>
@@ -119,31 +178,80 @@ const GeoIpDatabaseCard = ({ form }) => {
           variant="secondary"
           onClick={geoIp.saveCredentials}
           loading={geoIp.savingCredentials}
-          disabled={geoIp.savingCredentials || !geoIp.credentials.accountId || !geoIp.credentials.licenseKey}
+          disabled={databaseDisabled || fromEnvironment || geoIp.savingCredentials || !geoIp.credentials.accountId || !geoIp.credentials.licenseKey}
         >
-          {t('settings.geofencing.credentials.save', 'Save MaxMind Credentials')}
+          {t('settings.config.database.saveCredentials', 'Save credentials')}
         </Button>
-        <Button
-          onClick={() => geoIp.updateDatabase(false)}
-          loading={geoIp.updating}
-          disabled={geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
-        >
-          {t('settings.geofencing.database.update', 'Download / Update DB')}
-        </Button>
-        <Button
-          variant="tertiary"
-          onClick={() => geoIp.updateDatabase(true)}
-          disabled={geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
-        >
-          {t('settings.geofencing.database.force', 'Force Refresh')}
-        </Button>
+        {credentialSource === 'store' ? (
+          <ConfirmAction
+            variant="danger"
+            trigger={(
+              <Button variant="danger-light" startIcon={<Trash aria-hidden focusable={false} />}>
+                {t('settings.config.database.removeCredentials', 'Remove credentials')}
+              </Button>
+            )}
+            title={t('settings.config.database.remove.title', 'Remove stored MaxMind credentials?')}
+            body={t(
+              'settings.config.database.remove.body',
+              'Updates of the GeoIP database stop working unless credentials are set as environment variables.'
+            )}
+            confirmLabel={t('settings.config.database.remove.action', 'Remove')}
+            onConfirm={geoIp.removeCredentials}
+          />
+        ) : null}
       </Flex>
 
-      {hasChanges && (
-        <Alert variant="warning" closeLabel={t('common.close', 'Close')} title="">
-          {t('settings.geofencing.database.saveFirst', 'Save settings before downloading so the server uses the latest database path.')}
-        </Alert>
-      )}
+      <Flex direction="column" alignItems="stretch" gap={2}>
+        <Flex gap={2} wrap="wrap">
+          <Button
+            onClick={() => geoIp.updateDatabase(false)}
+            loading={geoIp.updating}
+            disabled={databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
+          >
+            {t('settings.config.database.update', 'Update database')}
+          </Button>
+          <Button
+            variant="tertiary"
+            onClick={() => geoIp.updateDatabase(true)}
+            disabled={databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
+          >
+            {t('settings.config.database.force', 'Force download')}
+          </Button>
+        </Flex>
+        {geoIpStatus && !geoIpStatus.hasCredentials ? (
+          <RequiresNotice>
+            {t('settings.config.requires.credentials', 'Add MaxMind credentials first.')}
+          </RequiresNotice>
+        ) : null}
+        {hasChanges ? (
+          <RequiresNotice>
+            {t('settings.config.database.saveFirst', 'Save your changes first, so the download uses the current settings.')}
+          </RequiresNotice>
+        ) : null}
+      </Flex>
+
+      <AdvancedSection hasError={fieldHasError(errors, 'geoIpDatabasePath')}>
+        <FormField
+          id="geoip-database-filename"
+          name="geoIpDatabasePath"
+          label={t('settings.config.database.fileName.label', 'Database file name')}
+          description={t(
+            'settings.config.database.fileName.hint',
+            "File name only, inside the plugin's GeoIP folder. Leave empty for the default."
+          )}
+          error={tError(errors.geoIpDatabasePath)}
+        >
+          <TextInput
+            name="geoIpDatabasePath"
+            value={settings.geoIpDatabasePath || ''}
+            disabled={databaseDisabled && !errors.geoIpDatabasePath}
+            onChange={(event) => handleChange('geoIpDatabasePath', event.target.value)}
+            placeholder="GeoLite2-City.mmdb"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </FormField>
+      </AdvancedSection>
     </SectionCard>
   );
 };

@@ -9,7 +9,7 @@ test('session details header has a localized close label', () => {
 });
 
 test('session details uses the native dialog title', () => {
-  assert.match(source, /<Modal\.Title\b[^>]*>\s*\{t\('modal\.title', 'Session Details'\)\}\s*<\/Modal\.Title>/);
+  assert.match(source, /<Modal\.Title\b[^>]*>\s*\{t\('modal\.title', 'Session details'\)\}\s*<\/Modal\.Title>/);
 });
 
 test('the close label is available in every supported locale', () => {

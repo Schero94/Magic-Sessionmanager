@@ -12,6 +12,9 @@ const between = (start, end) => {
   return panel.slice(from, to);
 };
 
+/** Escapes a literal for use in a RegExp. */
+const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 test('panel renders nothing for other models and checks the plugin permission', () => {
   const guard = panel.indexOf('if (!isUserPanel) {');
   assert.ok(guard > 0);
@@ -19,48 +22,127 @@ test('panel renders nothing for other models and checks the plugin permission', 
   assert.match(panel, /useRBAC\(pluginPermissions\.access\)/);
 });
 
-test('both actions use ConfirmAction, never window.confirm (UX-05)', () => {
+test('End all sessions and Block user use ConfirmAction; Unblock user has no confirmation (IA E.1, UX-05)', () => {
   assert.doesNotMatch(panel, /\bconfirm\(/);
   assert.equal((panel.match(/<ConfirmAction\b/g) || []).length, 2);
-  assert.match(panel, /onConfirm=\{handleLogoutAll\}/);
-  assert.match(panel, /onConfirm=\{handleToggleBlock\}/);
-  assert.match(panel, /fallbackFocusRef=\{panelRef\}/, 'focus has a target when the trigger disappears');
+  assert.match(panel, /<ConfirmAction\b[\s\S]*?onConfirm=\{handleEndAll\}/);
+  assert.match(panel, /<ConfirmAction\b[\s\S]*?onConfirm=\{handleBlock\}/);
+  assert.doesNotMatch(panel, /onClick=\{handleEndAll\}|onClick=\{handleBlock\}/);
+  assert.match(panel, /onClick=\{handleUnblock\}/);
+  assert.doesNotMatch(panel, /onConfirm=\{handleUnblock\}/);
+  assert.equal((panel.match(/fallbackFocusRef=\{panelRef\}/g) || []).length, 2, 'focus has a target when the trigger disappears');
 });
 
-test('each action shows its own spinner and both are blocked while one runs (UX-13)', () => {
-  assert.match(panel, /loading=\{pendingAction === 'logoutAll'\}/);
-  assert.match(panel, /loading=\{pendingAction === 'toggleBlock'\}/);
+test('confirmation copy follows IA E.1 and names the user', () => {
+  for (const [id, text] of [
+    ['panel.confirm.endAllTitle', 'End all sessions of {user}?'],
+    ['panel.confirm.endAllBody', '{count, plural, one {# open session ends} other {# open sessions end}} on all devices. {user} can sign in again unless you also block the account.'],
+    ['panel.confirm.blockTitle', 'Block {user}?'],
+    ['panel.confirm.blockBody', '{user} can no longer sign in, and {count, plural, =0 {no open sessions are affected} one {# open session ends now} other {# open sessions end now}}. You can unblock the account later; ended sessions stay ended.'],
+    ['panel.actions.endAll', 'End all sessions'],
+    ['panel.actions.blockUser', 'Block user'],
+    ['panel.actions.unblock', 'Unblock user'],
+  ]) {
+    assert.match(panel, new RegExp(`'${literal(id)}',\\s*'${literal(text)}'`), id);
+  }
+  assert.match(panel, /confirmLabel=\{endAllLabel\}/, 'the confirm button repeats the verb');
+  assert.match(panel, /confirmLabel=\{blockLabel\}/);
+  assert.doesNotMatch(panel, /Log out all|terminateAll|panel\.status\.offline|current session/i, 'retired wording is gone');
+});
+
+test('feedback follows IA E.1: success, 404 "User not found." and retry errors', () => {
+  for (const [id, text] of [
+    ['panel.notify.endAllSuccess', 'All sessions of {user} ended.'],
+    ['panel.notify.endAllError', 'The sessions could not be ended. Please try again.'],
+    ['panel.notify.userNotFound', 'User not found.'],
+    ['panel.notify.blockSuccess', '{user} is blocked.'],
+    ['panel.notify.blockError', 'The user could not be blocked. Please try again.'],
+    ['panel.notify.unblockSuccess', '{user} can sign in again.'],
+    ['panel.notify.unblockError', 'The block could not be removed. Please try again.'],
+  ]) {
+    assert.match(panel, new RegExp(`'${literal(id)}',\\s*'${literal(text)}'`), id);
+  }
+  assert.equal((panel.match(/isNotFoundError\(error\)/g) || []).length, 3);
+});
+
+test('each action shows its own spinner and all are blocked while one runs (UX-13)', () => {
+  assert.match(panel, /loading=\{pendingAction === 'endAll'\}/);
+  assert.match(panel, /loading=\{pendingAction === 'block'\}/);
+  assert.match(panel, /loading=\{pendingAction === 'unblock'\}/);
+  assert.match(panel, /const actionsDisabled = loading \|\| pendingAction !== null;/, 'buttons are disabled while loading too (IA G)');
   assert.doesNotMatch(panel, /actionLoading/);
-  assert.equal((panel.match(/<Button\s+fullWidth\s+size="M"/g) || []).length, 2, 'equal-height full-width buttons');
+  assert.equal((panel.match(/<Button\s+(?:ref=\{blockToggleRef\}\s+)?fullWidth\s+size="M"/g) || []).length, 3, 'equal-height full-width buttons');
 });
 
-test('failed actions notify and keep the dialog open for a retry', () => {
-  for (const handler of ['handleLogoutAll', 'handleToggleBlock']) {
+test('End all sessions is disabled without open sessions and says why (IA D3)', () => {
+  assert.match(panel, /disabled=\{actionsDisabled \|\| !hasOpenSessions\}/);
+  assert.match(panel, /t\('panel\.actions\.noOpenSessions', 'No open sessions'\)/);
+  assert.match(panel, /aria-describedby=\{!loading && !hasOpenSessions \? noOpenSessionsHintId : undefined\}/);
+  assert.match(panel, /'panel\.actions\.hint',\s*'End all sessions lets the user sign in again\. Block user also prevents new sign-ins\.'/);
+});
+
+test('failed confirmed actions notify and keep the dialog open; unblock notifies without re-throwing', () => {
+  for (const handler of ['handleEndAll', 'handleBlock']) {
     const source = between(`const ${handler} = async () => {`, '\n  };');
     assert.match(source, /toggleNotification\(\{\s*type: 'danger'/);
     assert.match(source, /logSafeAdminError\(/);
     assert.match(source, /throw error;/);
     assert.match(source, /setPendingAction\(null\)/);
   }
+  const unblock = between('const handleUnblock = async () => {', '\n  };');
+  assert.match(unblock, /toggleNotification\(\{\s*type: 'danger'/);
+  assert.match(unblock, /logSafeAdminError\(/);
+  assert.doesNotMatch(unblock, /throw error;/, 'no unhandled rejection from a click handler');
 });
 
-test('block/unblock writes the new value into the open edit form (F1, UX-04)', () => {
+test('block/unblock sends an explicit state and writes it into the open edit form (F1, UX-04)', () => {
   assert.match(panel, /import \{[^}]*\buseForm\b[^}]*\} from '@strapi\/strapi\/admin'/);
   for (const selector of ['initialValues', 'modified', 'onChange', 'resetForm']) {
     assert.match(panel, new RegExp(`useForm\\(FORM_CONSUMER, \\(state\\) => state\\.${selector}, false\\)`), selector);
   }
-  const handler = between('const handleToggleBlock = async () => {', '\n  };');
+  const handler = between('const changeBlocked = async (blocked) => {', '\n  };');
+  assert.match(handler, /postRequest\(`\/magic-sessionmanager\/user\/\$\{userId\}\/toggle-block`, \{ blocked \}\)/);
+  assert.match(between('const handleBlock = async () => {', '\n  };'), /changeBlocked\(true\)/);
+  assert.match(between('const handleUnblock = async () => {', '\n  };'), /changeBlocked\(false\)/);
   assert.ok(handler.indexOf('requireSuccessfulMutation') < handler.indexOf('planBlockedFormSync'), 'only a confirmed change is synced');
   assert.match(handler, /applyBlockedFormSync\(plan, \{ resetForm: formResetForm, onChange: formOnChange \}\)/);
   assert.match(handler, /setFormOutOfSync\(!synced\)/);
-  assert.match(panel, /\{formOutOfSync \? \(\s*<Alert\s+variant="warning"/, 'missing form context shows a reload notice');
+  assert.match(panel, /\{formOutOfSync \? \(\s*<Alert variant="warning"/, 'missing form context shows a reload notice');
+  assert.match(panel, /'panel\.form\.reloadNotice', 'Reload this page before saving, or the Blocked field will be overwritten\.'/);
 });
 
-test('session cards translate the device, use a decorative icon and no contradicting status (UX-03, F2, F3)', () => {
+test('successful actions update the panel in place and keep focus on the swapped button', () => {
+  assert.match(between('const handleEndAll = async () => {', '\n  };'), /setSessions\(\(rows\) => endOpenSessions\(rows, 'manual'\)\)/);
+  assert.match(between('const changeBlocked = async (blocked) => {', '\n  };'), /endOpenSessions\(rows, 'blocked'\)/);
+  assert.equal((panel.match(/ref=\{blockToggleRef\}/g) || []).length, 2, 'Block and Unblock share one focus target');
+  assert.match(panel, /blockToggleRef\.current\.focus\(\)/);
+});
+
+test('summary shows Online / Not online, open sessions and the last activity (IA D3, I.1-28)', () => {
+  const summary = between('{/* Summary */}', '{isBlocked ?');
+  assert.match(summary, /<Badge variant=\{summary\.isOnline \? 'success' : 'neutral'\}/);
+  assert.match(summary, /t\('panel\.status\.online', 'Online'\)/);
+  assert.match(summary, /t\('panel\.status\.notOnline', 'Not online'\)/);
+  assert.match(summary, /'panel\.summary\.openCount',\s*'\{count, plural, one \{# open session\} other \{# open sessions\}\}'/);
+  assert.match(summary, /t\('panel\.summary\.openHint', 'Active or idle'\)/);
+  assert.match(summary, /formatRelativeTime\(summary\.lastActive\)/);
+  assert.match(summary, /title=\{formatDate\(summary\.lastActive\)\}/);
+  assert.match(summary, /t\('panel\.summary\.noSessions', 'No sessions recorded'\)/);
+  assert.match(summary, /<Loader small>/, 'the summary area shows the loading state');
+  assert.match(panel, /getUserSessionSummary\(sessions\)/, 'the summary sees all rows, so ended sessions feed "Last active"');
+});
+
+test('blocked alert uses the IA copy and the danger variant', () => {
+  assert.match(panel, /\{isBlocked \? \(\s*<Alert variant="danger"/);
+  assert.match(panel, /t\('panel\.blocked\.message', 'This account is blocked\. The user cannot sign in\.'\)/);
+});
+
+test('open-session cards translate the device, use a decorative icon and neutral activity (UX-03, F2, F3)', () => {
   assert.match(panel, /getDevicePresentation\(session\)/);
   assert.match(panel, /translate\(device\.deviceTypeMessage\)/);
   assert.match(panel, /<DeviceIcon icon=\{device\.icon\} \/>/);
   assert.match(panel, /<StatusBadge session=\{session\} size="S" \/>/);
+  assert.match(panel, /const hasSummary = Boolean\(device\.browserLabel \|\| device\.os\);/, 'no "unavailable" line when nothing is known');
   assert.doesNotMatch(panel, /textColor="success600"/);
   assert.doesNotMatch(panel, /panel\.sessions\.(active|idle|activeAgo|activeNow)'/);
   assert.match(panel, /panel\.sessions\.lastActive/);
@@ -68,17 +150,24 @@ test('session cards translate the device, use a decorative icon and no contradic
   assert.doesNotMatch(panel, /Unavailable on|unavailableValue/);
 });
 
-test('at most five sessions are shown with a "Show all" link to the filtered dashboard', () => {
-  assert.match(panel, /getVisiblePanelSessions\(sessions\)/);
+test('up to five open sessions, newest first, then "+n more" and "Show all sessions" (IA D3)', () => {
+  assert.match(panel, /getVisiblePanelSessions\(openSessions\)/);
+  assert.match(panel, /const openSessions = getManageableSessions\(sessions\);/);
+  assert.match(panel, /t\('panel\.sessions\.openTitle', 'Open sessions'\)/);
+  assert.match(panel, /t\('panel\.sessions\.more', '\{count, plural, other \{\+# more\}\}', \{ count: hiddenCount \}\)/);
   assert.match(panel, /<Link tag=\{NavLink\} to=\{buildUserSessionsHref\(document\)\}>/);
-  assert.match(panel, /panel\.sessions\.showAll/);
+  assert.match(panel, /t\('panel\.sessions\.showAllLink', 'Show all sessions'\)/);
 });
 
-test('panel summary uses the shared StatusBadge and a translated count', () => {
-  const summary = between('{/* Summary */}', '{isBlocked ?');
-  assert.match(summary, /<StatusBadge status=\{summary\.status\} \/>/);
-  assert.match(summary, /panel\.sessions\.currentCount/);
-  assert.match(summary, /panel\.status\.offline/);
+test('empty and unsaved states use the IA copy with readable contrast (IA G, F11)', () => {
+  assert.match(panel, /'panel\.empty\.noOpenSessions',\s*'No open sessions\. \{user\} is not signed in on any device\.'/);
+  assert.match(panel, /t\('panel\.unsaved\.description', 'Save this user before you can manage sessions\.'\)/);
+  assert.match(
+    panel,
+    /<Box padding=\{3\} background="neutral0" borderColor="neutral200" hasRadius>\s*<ReadableText variant="omega" textColor="neutral800" tag="p">\s*\{t\(\s*'panel\.empty\.noOpenSessions'/,
+    'no grey-on-grey empty state: dark text on the panel background'
+  );
+  assert.doesNotMatch(panel, /background="neutral100" hasRadius textAlign="center"/);
 });
 
 test('panel uses DS tokens and shared blocks instead of hand-made styled boxes (UX-11, F11)', () => {
@@ -89,9 +178,9 @@ test('panel uses DS tokens and shared blocks instead of hand-made styled boxes (
   assert.match(panel, /from '\.\/ui'/);
 });
 
-test('error state keys are used (UX-01, I18N-2)', () => {
-  assert.match(panel, /panel\.error\.title/);
-  assert.match(panel, /panel\.error\.description/);
+test('error state follows IA G: one message and "Try again" (UX-01, I18N-2)', () => {
+  assert.match(panel, /t\('panel\.error\.message', 'Sessions could not be loaded\.'\)/);
+  assert.match(panel, /t\('common\.tryAgain', 'Try again'\)/);
 });
 
 test('the unregistered SessionInfoCard is removed (UX-15, I18N-13)', () => {

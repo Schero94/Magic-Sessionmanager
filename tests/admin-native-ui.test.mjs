@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { readSettingsSource } from './helpers/settingsSource.mjs';
+import { LOCALES, readCatalogue } from './helpers/settingsCatalogue.mjs';
 
 // pages/Settings.jsx re-exports the split settings page (pages/Settings/*).
 const readAdminFile = (relativePath) => (relativePath === 'pages/Settings.jsx'
@@ -36,27 +37,28 @@ test('session detail status is shared with the dashboard and uses Strapi badges'
   const table = readAdminFile('pages/Dashboard/SessionTable.jsx');
 
   assert.match(source, /getSessionStatus\(session\)/);
-  // One StatusBadge (DS Badge) for table, cards and modal (DUX-03, DASH-10).
+  // One StatusBadge (DS Badge) for table, cards and dialog (DUX-03, DASH-10).
   assert.match(source, /<StatusBadge\b/);
   assert.match(table, /<StatusBadge\b/);
-  assert.match(source, /<Badge\b/);
+  assert.match(readAdminFile('components/ui/StatusBadge.jsx'), /<Badge\b/);
   assert.doesNotMatch(source, /ModalStatusBadge|StatusDot|modal\.status\./);
 });
 
-test('session terminate actions are disabled when the authoritative session is inactive', () => {
+test('End session is unavailable when the authoritative session has ended', () => {
   const actions = readAdminFile('pages/Dashboard/SessionActions.jsx');
   const modal = readAdminFile('components/SessionDetailModal.jsx');
 
-  assert.match(actions, /const canLogOut = session\.isActive === true/);
-  assert.ok((actions.match(/disabled=\{!canLogOut[^}]*\}/g) || []).length >= 2);
-  assert.match(modal, /const canLogOut = session\.isActive === true/);
-  assert.ok((modal.match(/disabled=\{!canLogOut\}/g) || []).length >= 2);
+  assert.match(actions, /const canEnd = session\.isActive === true/);
+  assert.ok((actions.match(/disabled=\{!canEnd[^}]*\}/g) || []).length >= 2);
+  assert.match(modal, /const canEnd = session\.isActive === true/);
+  assert.ok((modal.match(/disabled=\{!canEnd\}/g) || []).length >= 2);
 });
 
 test('end-user panel includes all current native sessions and uses Strapi actions', () => {
   const source = readAdminFile('components/SessionInfoPanel.jsx');
 
-  assert.match(source, /getManageableSessions\(requireSessionList\(data\)\)/);
+  assert.match(source, /setSessions\(requireSessionList\(data\)\)/);
+  assert.match(source, /const openSessions = getManageableSessions\(sessions\);/);
   assert.match(source, /<Button\b/);
   assert.doesNotMatch(source, /const activeSessions = \(data\.data \|\| \[\]\)\.filter\(s => s\.isTrulyActive\)/);
 });
@@ -74,47 +76,17 @@ test('analytics and activation labels are present in every supported locale', ()
     'homepage.search.label',
     'homepage.filter.label',
     'homepage.noResults.reset',
-    'homepage.error.title',
-    'homepage.pagination.range',
-    'homepage.pagination.filteredRange',
     'license.title',
-    'license.status.noKey.title',
     'license.key.copy',
-    'license.account.title',
-    'license.features.title',
+    'license.state.noKey',
+    'license.details.title',
+    'license.features.always',
     'license.status.title',
-    'common.retry',
-    'settings.geofencing.provider.hint',
-    'settings.geofencing.failureMode.hint',
-    'settings.geofencing.maxmind.accountId.hint',
-    'settings.geofencing.maxmind.licenseKey.hint',
+    'common.tryAgain',
     'settings.geofencing.pick.label',
     'settings.geofencing.pick.hint',
     'settings.geofencing.manual.label',
     'settings.geofencing.manual.hint',
-    'settings.security.enforcement.title',
-    'settings.security.enforcement.badgeRelaxed',
-    'settings.security.enforcement.badgeStrict',
-    'settings.security.enforcement.description',
-    'settings.security.enforcement.strict.title',
-    'settings.security.enforcement.strict.description',
-    'settings.security.enforcement.maxAge.title',
-    'settings.security.enforcement.maxAge.hint',
-    'settings.security.enforcement.maxAge.1day',
-    'settings.security.enforcement.maxAge.7days',
-    'settings.security.enforcement.maxAge.14days',
-    'settings.security.enforcement.maxAge.30days',
-    'settings.security.enforcement.maxAge.60days',
-    'settings.security.enforcement.maxAge.90days',
-    'settings.security.enforcement.maxAge.180days',
-    'settings.security.enforcement.maxAge.365days',
-    'settings.security.enforcement.trustedProxies.title',
-    'settings.security.enforcement.trustedProxies.description',
-    'settings.security.enforcement.warning.title',
-    'settings.security.enforcement.warning.body',
-    'settings.security.encryption.fieldHint',
-    'settings.security.maxFailed.fieldHint',
-    'settings.email.types.description',
     'settings.email.templates.subjectHint',
     'settings.email.templates.html.editorLabel',
     'settings.email.templates.text.editorLabel',
@@ -137,16 +109,19 @@ test('analytics headings use the Strapi Typography tag prop', () => {
   // Section headings come from the shared SectionCard (Typography tag={headingTag}, h2 by default).
   assert.match(sectionCard, /<Typography[\s\S]*?tag=\{headingTag\}/);
   assert.match(sectionCard, /headingTag = 'h2'/);
-  assert.equal((source.match(/<SectionCard\b[^>]*?\btitle=/g) || []).length, 4);
+  // Devices, Browsers and Average session length (IA D6; no hour-of-day timeline, I.2-8).
+  assert.equal((source.match(/<SectionCard\b[^>]*?\btitle=/g) || []).length, 3);
   assert.doesNotMatch(source, /<Typography[^>]*as="h2"/);
 });
 
 test('session detail section headings use the Strapi Typography tag prop', () => {
   const source = readAdminFile('components/SessionDetailModal.jsx');
 
-  // Modal.Title is the dialog's h2; every section heading is one shared h3.
+  // Modal.Title is the dialog's h2; every section heading is one shared h3;
+  // Technical details is a collapsed DS Accordion (IA D2.7).
   assert.match(source, /<Typography variant="delta" tag="h3"/);
-  assert.equal((source.match(/<DetailSection\b/g) || []).length, 5);
+  assert.equal((source.match(/<DetailSection\b/g) || []).length, 4);
+  assert.match(source, /<Accordion\.Trigger>\{t\('modal\.section\.technical'/);
   assert.doesNotMatch(source, /<Typography[^>]*tag="h2"/);
   assert.doesNotMatch(source, /<Typography[^>]*as="h[23]"/);
 });
@@ -168,20 +143,16 @@ test('settings grids define a mobile breakpoint for split fields', () => {
   }
 });
 
-test('cleanup strategy options stay compact and keep the recommendation in helper text', () => {
-  const locales = ['en', 'de', 'es', 'fr', 'pt'];
-
-  for (const locale of locales) {
-    const translations = JSON.parse(
-      readFileSync(new URL(`../admin/src/translations/${locale}.json`, import.meta.url), 'utf8')
-    );
+test('idle check method options stay compact and the helper names the trade-off (IA F 1.1 #5)', () => {
+  for (const locale of LOCALES) {
+    const translations = readCatalogue(locale);
     const documentService = translations['settings.general.cleanupMode.ds'];
     const directSql = translations['settings.general.cleanupMode.db'];
-    const hint = translations['settings.general.cleanupMode.hint'];
+    const hint = translations['settings.config.sessions.idleMethod.hint'];
 
     assert.ok(typeof documentService === 'string', `${locale} has a Document Service label`);
     assert.ok(typeof directSql === 'string', `${locale} has a Direct SQL label`);
-    assert.ok(typeof hint === 'string' && hint.toLowerCase().includes('document service'), `${locale} explains the recommended strategy`);
+    assert.ok(typeof hint === 'string' && hint.toLowerCase().includes('direct sql'), `${locale} explains the Direct SQL trade-off`);
     assert.ok(documentService.length <= 24, `${locale} Document Service label fits a mobile select`);
     assert.ok(directSql.length <= 24, `${locale} Direct SQL label fits a mobile select`);
   }
@@ -226,8 +197,7 @@ test('dashboard paginates the full filtered result set and keeps both layouts al
   // Native Strapi pagination (page links + page size) with URL query state.
   assert.match(source, /<Pagination\.Root\b[\s\S]*?pageCount=\{pageResult\.pageCount\}/);
   assert.match(source, /<Pagination\.Links \/>/);
-  assert.match(source, /homepage\.pagination\.range/);
-  assert.match(source, /homepage\.pagination\.filteredRange/);
+  assert.match(source, /homepage\.caption/);
   assert.ok(tableHeader, 'desktop session table has a header row');
   assert.equal((tableHeader.match(/homepage\.table\.status/g) || []).length, 1);
   assert.match(exportHandlers, /buildSessionCsv\(filteredSessions/);

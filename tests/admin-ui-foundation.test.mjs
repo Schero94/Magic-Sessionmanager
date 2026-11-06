@@ -11,6 +11,7 @@ const UI_FILES = [
   'components/ui/StatGrid.jsx',
   'components/ui/PropertyList.jsx',
   'components/ui/StatusBadge.jsx',
+  'components/ui/EndReason.jsx',
   'components/ui/ConfirmAction.jsx',
   'components/ui/MissingValue.jsx',
   'components/ui/DeviceIcon.jsx',
@@ -21,7 +22,7 @@ test('the shared ui blocks exist and are exported from one barrel', () => {
     assert.ok(existsSync(new URL(`../admin/src/${file}`, import.meta.url)), `${file} exists`);
   }
   const barrel = read('components/ui/index.js');
-  for (const name of ['PageShell', 'SectionCard', 'StatGrid', 'StatCard', 'EqualGrid', 'PropertyList', 'StatusBadge', 'ConfirmAction', 'MissingValue', 'DeviceIcon']) {
+  for (const name of ['PageShell', 'SectionCard', 'StatGrid', 'StatCard', 'EqualGrid', 'PropertyList', 'StatusBadge', 'EndReason', 'ConfirmAction', 'MissingValue', 'DeviceIcon']) {
     assert.match(barrel, new RegExp(`\\b${name}\\b`), `${name} is exported`);
   }
 });
@@ -64,15 +65,20 @@ test('SectionCard follows the white card recipe with responsive padding', () => 
   assert.match(card, /aria-labelledby=/, 'sections are labelled by their heading');
 });
 
-test('StatGrid renders equal-height cards in 4/2/1 DS columns', () => {
+test('StatGrid renders compact equal-height cards in 4/2/1 DS columns', () => {
   const grid = read('components/ui/StatGrid.jsx');
   assert.match(grid, /<Grid\.Root\b/);
   assert.match(grid, /getGridItemSpans\(columns, stackBelow\)/);
   assert.match(grid, /<EqualGrid columns=\{columns\} stackBelow="small" gap=\{4\}/);
   assert.match(grid, /direction="column"\s+alignItems="stretch"/, 'items stretch to the row height');
   assert.match(grid, /minWidth=\{0\}/);
-  assert.match(grid, /variant="alpha"/, 'values use alpha');
+  assert.match(grid, /variant="beta"/, 'values use beta next to the label, so cards stay compact');
+  assert.doesNotMatch(grid, /variant="alpha"/);
+  assert.match(grid, /padding=\{4\}/, 'one compact padding token');
   assert.match(grid, /variant="sigma"/, 'labels use sigma');
+  // Clickable cards are real toggle buttons (IA D1.4).
+  assert.match(grid, /tag: 'button', type: 'button', onClick, 'aria-pressed': Boolean\(pressed\)/);
+  assert.doesNotMatch(grid, /tag="p"/, 'no block elements inside a button card');
   assert.match(grid, /<Icon aria-hidden focusable=\{false\} \/>/, 'icons are decorative');
   assert.match(grid, /theme\.colors\[`\$\{\$tone\}600`\]/, 'icon tone comes from the DS theme');
 });
@@ -91,11 +97,16 @@ test('PropertyList is a description list with equal columns and targeted wrappin
   assert.match(list, /<MissingValue/);
 });
 
-test('StatusBadge uses the shared status vocabulary', () => {
+test('StatusBadge uses the shared state vocabulary and EndReason the shared reasons (I.1 items 1-2)', () => {
   const badge = read('components/ui/StatusBadge.jsx');
   assert.match(badge, /getSessionStatusPresentation/);
   assert.match(badge, /<Badge variant=\{presentation\.tone\}/);
-  assert.match(badge, /formatMessage\(\{\s*id: getTranslation\(presentation\.messageId\)/);
+  assert.match(badge, /const label = translate\(presentation\)/);
+  assert.match(badge, /formatMessage\(\{ id: getTranslation\(descriptor\.messageId\), defaultMessage: descriptor\.defaultMessage \}\)/);
+  assert.doesNotMatch(badge, /danger/, 'danger is not a session-state colour');
+  const reason = read('components/ui/EndReason.jsx');
+  assert.match(reason, /getEndReasonPresentation\(key\)/);
+  assert.match(reason, /if \(!key\) return null;/);
 });
 
 test('ConfirmAction wraps Strapi ConfirmDialog and restores focus', () => {
@@ -103,10 +114,13 @@ test('ConfirmAction wraps Strapi ConfirmDialog and restores focus', () => {
   assert.match(confirm, /import \{ ConfirmDialog \} from '@strapi\/strapi\/admin'/);
   assert.match(confirm, /<Dialog\.Root open=\{open\} onOpenChange=\{handleOpenChange\}>/);
   assert.match(confirm, /<Dialog\.Trigger ref=\{triggerRef\}/);
+  // Menu items open a controlled confirmation; focus returns to the menu button.
+  assert.match(confirm, /const controlled = !trigger;/);
+  assert.match(confirm, /controlled \? returnFocusRef\?\.current : triggerRef\.current/);
   assert.match(confirm, /<ConfirmDialog\b[\s\S]*?title=\{title\}/);
   assert.match(confirm, /variant = 'danger'/);
   assert.match(confirm, /\{confirmLabel\}/);
-  assert.match(confirm, /triggerRef\.current\?\.isConnected \? triggerRef\.current : fallbackFocusRef\?\.current/);
+  assert.match(confirm, /ownTrigger\?\.isConnected \? ownTrigger : fallbackFocusRef\?\.current/);
   assert.match(confirm, /if \(busy\) return;/, 'the dialog cannot be dismissed while the action runs');
   assert.doesNotMatch(confirm, /window\.confirm\s*\(/);
 });
@@ -182,11 +196,8 @@ const translations = Object.fromEntries(
   LOCALES.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))])
 );
 const descriptors = collectDescriptors();
-const pendingKeys = [...descriptors.keys()].filter((key) => LOCALES.some((locale) => !(key in translations[locale])));
 
-test('foundation message ids exist in every locale with matching English defaults', {
-  todo: pendingKeys.length ? `pending i18n merge: ${pendingKeys.length} key(s)` : false,
-}, () => {
+test('foundation message ids exist in every locale with matching English defaults', () => {
   assert.ok(descriptors.size >= 15, 'status, end reason, device and missing-value messages are collected');
   for (const [key, defaultMessage] of descriptors) {
     for (const locale of LOCALES) {
@@ -194,5 +205,6 @@ test('foundation message ids exist in every locale with matching English default
     }
     assert.equal(translations.en[key], defaultMessage, `${key} default matches en`);
   }
-  assert.equal(translations.de['common.status.idle'], 'Leerlauf', 'German separates idle from ended (DUX-12)');
+  assert.equal(translations.de['common.status.idle'], 'Im Leerlauf', 'German separates idle from ended (DUX-12, IA A.1)');
+  assert.equal(translations.de['common.status.ended'], 'Beendet');
 });

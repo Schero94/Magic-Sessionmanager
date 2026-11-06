@@ -41,8 +41,8 @@ export default {
       [
         {
           intlLabel: {
-            id: `${pluginId}.settings.general`,
-            defaultMessage: 'General',
+            id: `${pluginId}.settings.link.configuration`,
+            defaultMessage: 'Configuration',
           },
           id: 'general',
           to: `${pluginId}/general`,
@@ -51,7 +51,7 @@ export default {
         },
         {
           intlLabel: {
-            id: `${pluginId}.settings.analytics`,
+            id: `${pluginId}.settings.link.analytics`,
             defaultMessage: 'Analytics',
           },
           id: 'analytics',
@@ -61,8 +61,8 @@ export default {
         },
         {
           intlLabel: {
-            id: `${pluginId}.settings.license`,
-            defaultMessage: 'Activation',
+            id: `${pluginId}.settings.link.license`,
+            defaultMessage: 'License',
           },
           id: 'license',
           to: `${pluginId}/license`,

@@ -15,16 +15,10 @@ export const DEVICE_TYPE_MESSAGES = Object.freeze({
   unknown: Object.freeze({ messageId: 'common.device.type.unknown', defaultMessage: 'Unknown device' }),
 });
 
-/** "Safari 17 · macOS" style summary with both values present. */
+/** "Safari · macOS" with both values present (IA D1 Device column, H.9). */
 export const DEVICE_SUMMARY_MESSAGE = Object.freeze({
   messageId: 'common.device.summary',
   defaultMessage: '{browser} · {os}',
-});
-
-/** One message when neither browser nor OS is known (never "Unavailable on Unavailable"). */
-export const DEVICE_SUMMARY_UNAVAILABLE_MESSAGE = Object.freeze({
-  messageId: 'common.device.summaryUnavailable',
-  defaultMessage: 'Browser and OS unavailable',
 });
 
 const DEVICE_TYPE_ALIASES = Object.freeze({
@@ -64,19 +58,37 @@ export function getDeviceTypeMessage(deviceType) {
   return DEVICE_TYPE_MESSAGES[deviceType] || DEVICE_TYPE_MESSAGES.unknown;
 }
 
-const majorVersion = (version) => {
-  const text = presentText(version);
-  const major = text.split('.')[0];
-  return /^\d+$/.test(major) ? major : '';
-};
+const TRAILING_VERSION = /\s+v?\d[\w./-]*$/i;
+
+/**
+ * Splits a stored "Chrome 124.0.0.0" / "macOS 10.15.7" / "Windows 10/11"
+ * value into the name and its trailing version. The server stores names with
+ * the version appended; the UI shows names only (IA I.1 item 8), so a
+ * version is never shown twice ("Chrome 124.0.0.0 124").
+ *
+ * @param {unknown} value Stored browser or OS value.
+ * @returns {{name: string, version: string}} Name without version, and the version ('' when none).
+ */
+export function splitNameAndVersion(value) {
+  let name = presentText(value);
+  const versions = [];
+  while (TRAILING_VERSION.test(name)) {
+    const match = name.match(TRAILING_VERSION);
+    versions.unshift(match[0].trim());
+    name = name.slice(0, match.index).trim();
+  }
+  return { name: presentText(name), version: versions.join(' ') };
+}
 
 /**
  * Builds the device presentation for one session row. Every user-visible
- * word is a translation descriptor; only proper names (browser, OS) and
- * numbers are passed through as data. Unknown devices are never shown as
- * "Desktop".
+ * word is a translation descriptor; only proper names (browser, OS) are
+ * passed through as data. The user agent is parsed first because the stored
+ * fields come from a looser server parser (it calls every unrecognised agent
+ * "desktop" and an iPhone "macOS"). Unknown devices are never shown as
+ * "Desktop", and no browser version appears in the summary.
  *
- * @param {object} session Session row (userAgent and/or native deviceType, browserName, osName, browserVersion).
+ * @param {object} session Session row (userAgent and/or stored deviceType, browserName, osName).
  * @returns {{
  *   deviceType: ''|'desktop'|'mobile'|'tablet'|'api'|'bot',
  *   hasDeviceType: boolean,
@@ -86,6 +98,7 @@ const majorVersion = (version) => {
  *   browserVersion: string,
  *   browserLabel: string,
  *   os: string,
+ *   hasSummary: boolean,
  *   summary: {messageId?: string, defaultMessage?: string, values?: object, text?: string},
  * }} Presentation; empty strings mean "missing".
  */
@@ -93,21 +106,23 @@ export function getDevicePresentation(session = {}) {
   const row = session || {};
   const userAgent = presentText(row.userAgent);
   const parsed = userAgent ? parseUserAgent(userAgent) : null;
+  const storedBrowser = splitNameAndVersion(row.browserName);
+  const storedOs = splitNameAndVersion(row.osName);
 
-  const deviceType = normalizeDeviceType(row.deviceType) || parsed?.deviceType || '';
-  const browser = presentText(row.browserName) || parsed?.browser || '';
-  const os = presentText(row.osName) || parsed?.os || '';
-  const browserVersion = (userAgent && getBrowserVersionFromUserAgent(userAgent)) || presentText(row.browserVersion);
-  const major = majorVersion(browserVersion);
-  const browserLabel = browser ? [browser, major].filter(Boolean).join(' ') : '';
+  const deviceType = parsed ? parsed.deviceType : normalizeDeviceType(row.deviceType);
+  const browser = parsed?.browser || storedBrowser.name;
+  const os = parsed?.os || storedOs.name;
+  const browserVersion = (userAgent && getBrowserVersionFromUserAgent(userAgent))
+    || presentText(row.browserVersion)
+    || storedBrowser.version;
 
-  let summary;
-  if (browserLabel && os) {
-    summary = { ...DEVICE_SUMMARY_MESSAGE, values: { browser: browserLabel, os } };
-  } else if (browserLabel || os) {
-    summary = { text: browserLabel || os };
-  } else {
-    summary = { ...DEVICE_SUMMARY_UNAVAILABLE_MESSAGE };
+  // Without browser and OS the summary is empty text: the caller shows
+  // "Unknown device" instead of a sentence about missing data (IA H.9).
+  let summary = { text: '' };
+  if (browser && os) {
+    summary = { ...DEVICE_SUMMARY_MESSAGE, values: { browser, os } };
+  } else if (browser || os) {
+    summary = { text: browser || os };
   }
 
   return {
@@ -117,8 +132,9 @@ export function getDevicePresentation(session = {}) {
     deviceTypeMessage: getDeviceTypeMessage(deviceType),
     browser,
     browserVersion,
-    browserLabel,
+    browserLabel: browser,
     os,
+    hasSummary: Boolean(browser || os),
     summary,
   };
 }

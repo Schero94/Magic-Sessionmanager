@@ -5,28 +5,55 @@ import { areSettingsEqual } from '../../../utils/settingsEquality.mjs';
 import { requireSuccessfulMutation } from '../../../utils/adminResponse.mjs';
 import { logSafeAdminError } from '../../../utils/safeAdminLog.mjs';
 import { copyText } from '../../../utils/copyText.mjs';
+import { formatSessionDate } from '../../../utils/sessionDates.mjs';
 import {
   SETTINGS_DEFAULTS,
-  SETTINGS_TABS,
   getAdjustedFields,
   normalizeSettings,
-  tabHasErrors,
   validateSettings,
 } from '../../../utils/settingsForm.mjs';
 import { fillMissingTemplates } from '../../../utils/emailTemplateDraft.mjs';
+import { SETTINGS_FIELD_LABELS, buildSavePayload, getErrorTab } from '../settingsTabs.mjs';
 import { useSettingsTranslate } from './useSettingsTranslate';
 
 const INITIAL_SETTINGS = { ...SETTINGS_DEFAULTS, emailTemplates: fillMissingTemplates({}) };
+const BUILD_DATE_OPTIONS = Object.freeze({ dateStyle: 'medium' });
 
 /**
- * Settings form state: load, draft, dirty state, validation, save and reset.
- * Server routes, methods and payloads are unchanged; the hook only decides
- * what the UI shows (spec section 3).
+ * Reads the message of a Strapi error response (`{ error: { message } }`).
  *
- * @returns {object} Form state and handlers for the Settings page and tabs.
+ * @param {unknown} error Error thrown by useFetchClient.
+ * @returns {string} Server message, or '' when there is none.
+ */
+const getServerMessage = (error) => {
+  const message = error?.response?.data?.error?.message;
+  return typeof message === 'string' ? message.trim() : '';
+};
+
+/**
+ * Joins translated names as a locale list ("A, B and C").
+ *
+ * @param {string[]} names Names.
+ * @param {string} locale Admin locale.
+ * @returns {string} Joined names.
+ */
+const formatList = (names, locale) => {
+  try {
+    return new Intl.ListFormat(locale || 'en', { style: 'long', type: 'conjunction' }).format(names);
+  } catch {
+    return names.join(', ');
+  }
+};
+
+/**
+ * Configuration form state: load, draft, dirty state, validation, save,
+ * discard and the GeoIP database actions. Server routes, methods and payloads
+ * are unchanged; the hook only decides what the UI shows (IA D5, E.2).
+ *
+ * @returns {object} Form state and handlers for the Configuration page and tabs.
  */
 export function useSettingsForm() {
-  const { t } = useSettingsTranslate();
+  const { t, locale } = useSettingsTranslate();
   const { get, post, put } = useFetchClient();
   const { toggleNotification } = useNotification();
 
@@ -45,7 +72,7 @@ export function useSettingsForm() {
   const hasChanges = !areSettingsEqual(settings, savedSettings);
   const errors = useMemo(() => validateSettings(settings), [settings]);
   const errorCount = Object.keys(errors).length;
-  const errorTab = SETTINGS_TABS.find((tab) => tabHasErrors(errors, tab));
+  const errorTab = getErrorTab(errors);
   const canSave = hasChanges && errorCount === 0 && !saving;
 
   // Read inside async handlers so a save always sends the latest draft.
@@ -77,8 +104,9 @@ export function useSettingsForm() {
 
   /**
    * Loads local GeoIP availability without exposing the stored license key.
+   * A failure only shows an alert inside the database card (IA G).
    *
-   * @returns {Promise<void>}
+   * @returns {Promise<object|null>} The status, or null when it could not be loaded.
    */
   const fetchGeoIpStatus = useCallback(async () => {
     setGeoIpStatus(null);
@@ -94,18 +122,20 @@ export function useSettingsForm() {
         accountId: prev.accountId || status.accountId || '',
         licenseKey: '',
       }));
+      return status;
     } catch (err) {
       setGeoIpStatus(null);
       setGeoIpStatusError(true);
       logSafeAdminError('settings.geoIpStatus', err);
+      return null;
     }
   }, [get]);
 
   /**
    * Loads persisted settings, fills missing email templates and records the
-   * returned values as the reset and dirty-state baseline. A malformed or
+   * returned values as the discard and dirty-state baseline. A malformed or
    * failed response shows the retry state instead of an editable default
-   * draft.
+   * draft (IA G).
    *
    * @returns {Promise<void>}
    */
@@ -138,8 +168,8 @@ export function useSettingsForm() {
   }, []);
 
   /**
-   * Applies a field change to the local settings draft. Changing strict
-   * enforcement shows the relaxed-mode warning again.
+   * Applies a field change to the local settings draft. Changing the token
+   * check shows the relaxed-mode warning again.
    *
    * @param {string} key Settings field name.
    * @param {unknown} value New draft value.
@@ -153,15 +183,17 @@ export function useSettingsForm() {
   }, []);
 
   /**
-   * Persists the draft. On success the form takes the settings from the PUT
-   * response as both draft and saved baseline, so it shows exactly what the
-   * server stored, and warns when the server changed an edited value (for
-   * example a rejected webhook URL). Invalid drafts are never sent.
+   * Persists the draft. The hidden rate-limit keys are sent back with their
+   * stored values, because PUT /settings replaces the whole object (IA F). On
+   * success the form takes the settings from the PUT response as both draft
+   * and saved baseline, so it shows exactly what the server stored, and names
+   * the edited fields the server changed (IA E.2). Invalid drafts are never
+   * sent; on failure the draft stays in the form.
    *
    * @returns {Promise<boolean>} Whether the save succeeded.
    */
   const handleSave = useCallback(async () => {
-    const submitted = settingsRef.current;
+    const submitted = buildSavePayload(settingsRef.current, savedSettingsRef.current);
     const previous = savedSettingsRef.current;
     if (Object.keys(validateSettings(submitted)).length > 0) return false;
 
@@ -178,14 +210,19 @@ export function useSettingsForm() {
       setSettings(stored);
       setSavedSettings(stored);
 
-      const adjusted = getAdjustedFields(submitted, stored, previous);
+      const adjustedNames = [...new Set(
+        getAdjustedFields(submitted, stored, previous)
+          .map((key) => SETTINGS_FIELD_LABELS[key])
+          .filter(Boolean)
+          .map(([id, defaultMessage]) => t(id, defaultMessage))
+      )];
       toggleNotification({
-        type: adjusted.length > 0 ? 'warning' : 'success',
-        message: adjusted.length > 0
+        type: adjustedNames.length > 0 ? 'warning' : 'success',
+        message: adjustedNames.length > 0
           ? t(
-            'notifications.warning.adjusted',
-            'Settings saved. The server changed {count, plural, one {# value} other {# values}}; the form now shows the stored settings.',
-            { count: adjusted.length }
+            'settings.config.feedback.adjusted',
+            'Settings saved. Some values were adjusted to the allowed limits: {fields}.',
+            { fields: formatList(adjustedNames, locale) }
           )
           : t('notifications.success.saved', 'Settings saved.'),
       });
@@ -195,18 +232,18 @@ export function useSettingsForm() {
       logSafeAdminError('settings.save', err);
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.save', 'Failed to save settings to server'),
+        message: t('settings.config.feedback.saveError', 'Settings could not be saved. Your changes are still in the form.'),
       });
       return false;
     } finally {
       setSaving(false);
     }
-  }, [get, put, t, toggleNotification, fetchGeoIpStatus]);
+  }, [get, put, t, locale, toggleNotification, fetchGeoIpStatus]);
 
   /**
-   * Discards the local draft and restores the saved baseline without a
-   * network round trip, so the page stays mounted and keeps the open tab
-   * (SET-11 browser).
+   * Discards the local draft and shows the stored settings again without a
+   * network round trip, so the page stays mounted and keeps the open tab and
+   * focus (IA E.2 "Discard changes", SET-11). It does not restore defaults.
    *
    * @returns {void}
    */
@@ -216,28 +253,35 @@ export function useSettingsForm() {
   }, []);
 
   /**
-   * Removes inactive session details after the admin confirmed it in the
-   * dialog. The server keeps deny hashes for access tokens that have not yet
-   * expired. Throws on failure so the confirmation dialog stays open.
+   * Deletes the records of all ended sessions after the admin confirmed it
+   * (IA E.1 "Delete ended sessions"). Open and idle sessions are not
+   * affected; the tokens of deleted records stay revoked until expiry. Throws
+   * on failure so the confirmation dialog stays open.
    *
    * @returns {Promise<void>}
    */
   const handleCleanInactive = useCallback(async () => {
     try {
       const { data } = await post(`/${pluginId}/sessions/clean-inactive`);
+      const count = Number(data?.deletedCount) || 0;
       toggleNotification({
         type: 'success',
-        message: t(
-          'notifications.success.cleaned',
-          'Removed {count} inactive session records. Unexpired access tokens remain revoked until expiry.',
-          { count: data?.deletedCount ?? 0 }
-        ),
+        message: count > 0
+          ? t(
+            'settings.config.feedback.deletedEnded',
+            '{count, plural, one {# ended session deleted.} other {# ended sessions deleted.}}',
+            { count }
+          )
+          : t('settings.config.feedback.deletedNone', 'There were no ended sessions to delete.'),
       });
     } catch (err) {
       logSafeAdminError('settings.cleanInactive', err);
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.clean', 'Failed to delete inactive sessions'),
+        message: t(
+          'settings.config.feedback.deleteEndedError',
+          'Ended sessions could not be deleted. Some may already be gone; reload to see the current state.'
+        ),
       });
       throw err;
     }
@@ -256,7 +300,7 @@ export function useSettingsForm() {
       requireSuccessfulMutation(response.data);
       toggleNotification({
         type: 'success',
-        message: t('notifications.success.geoipCredentialsSaved', 'MaxMind credentials saved.'),
+        message: t('settings.config.feedback.credentialsSaved', 'Credentials saved.'),
       });
       setGeoIpCredentials((prev) => ({ ...prev, licenseKey: '' }));
       await fetchGeoIpStatus();
@@ -264,7 +308,7 @@ export function useSettingsForm() {
       logSafeAdminError('settings.saveGeoIpCredentials', err);
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.geoipCredentials', 'Failed to save MaxMind credentials.'),
+        message: t('settings.config.feedback.credentialsSaveError', 'The credentials could not be saved. Please try again.'),
       });
     } finally {
       setGeoIpSavingCredentials(false);
@@ -272,10 +316,38 @@ export function useSettingsForm() {
   }, [put, geoIpCredentials, t, toggleNotification, fetchGeoIpStatus]);
 
   /**
-   * Requests a local GeoIP database update. The server owns path validation
-   * and the external download.
+   * Removes the stored MaxMind credentials after confirmation (IA E.2).
+   * Credentials from environment variables are not affected. Throws on
+   * failure so the confirmation dialog stays open.
    *
-   * @param {boolean} force Bypass freshness checks and request a refresh.
+   * @returns {Promise<void>}
+   */
+  const handleRemoveGeoIpCredentials = useCallback(async () => {
+    try {
+      const response = await put(`/${pluginId}/geoip/credentials`, { clear: true });
+      requireSuccessfulMutation(response.data);
+      toggleNotification({
+        type: 'success',
+        message: t('settings.config.feedback.credentialsRemoved', 'Credentials removed.'),
+      });
+      setGeoIpCredentials({ accountId: '', licenseKey: '' });
+      await fetchGeoIpStatus();
+    } catch (err) {
+      logSafeAdminError('settings.removeGeoIpCredentials', err);
+      toggleNotification({
+        type: 'danger',
+        message: t('settings.config.feedback.credentialsRemoveError', 'The credentials could not be removed. Please try again.'),
+      });
+      throw err;
+    }
+  }, [put, t, toggleNotification, fetchGeoIpStatus]);
+
+  /**
+   * Requests a GeoIP database update (`force` for "Force download"). The
+   * server owns path validation and the external download. Success names
+   * the edition and build date; errors show the server's message.
+   *
+   * @param {boolean} force Bypass the freshness check and download again.
    * @returns {Promise<void>}
    */
   const handleUpdateGeoIpDatabase = useCallback(async (force = false) => {
@@ -283,23 +355,29 @@ export function useSettingsForm() {
     try {
       const response = await post(`/${pluginId}/geoip/update`, { force });
       requireSuccessfulMutation(response.data);
+      const status = await fetchGeoIpStatus();
+      const result = response.data.result || {};
+      const values = {
+        edition: status?.editionId || '—',
+        date: formatSessionDate(result.lastModified || status?.metadata?.lastModified, locale, '—', BUILD_DATE_OPTIONS),
+      };
       toggleNotification({
         type: 'success',
-        message: response.data.result?.changed
-          ? t('notifications.success.geoipUpdated', 'GeoIP database updated.')
-          : t('notifications.success.geoipCurrent', 'GeoIP database is already current.'),
+        message: result.changed === false
+          ? t('settings.config.feedback.geoipCurrent', 'The GeoIP database is already up to date: {edition}, built {date}.', values)
+          : t('settings.config.feedback.geoipUpdated', 'GeoIP database updated: {edition}, built {date}.', values),
       });
-      await fetchGeoIpStatus();
     } catch (err) {
       logSafeAdminError('settings.updateGeoIpDatabase', err);
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.geoipUpdate', 'Failed to update GeoIP database.'),
+        message: getServerMessage(err)
+          || t('settings.config.feedback.geoipUpdateError', 'The GeoIP database could not be updated.'),
       });
     } finally {
       setGeoIpUpdating(false);
     }
-  }, [post, t, toggleNotification, fetchGeoIpStatus]);
+  }, [post, t, locale, toggleNotification, fetchGeoIpStatus]);
 
   return {
     loading,
@@ -315,6 +393,7 @@ export function useSettingsForm() {
     relaxedWarningDismissed,
     setRelaxedWarningDismissed,
     copyValue,
+    notify: toggleNotification,
     fetchSettings,
     handleChange,
     handleSave,
@@ -329,6 +408,7 @@ export function useSettingsForm() {
       savingCredentials: geoIpSavingCredentials,
       fetchStatus: fetchGeoIpStatus,
       saveCredentials: handleSaveGeoIpCredentials,
+      removeCredentials: handleRemoveGeoIpCredentials,
       updateDatabase: handleUpdateGeoIpDatabase,
     },
   };

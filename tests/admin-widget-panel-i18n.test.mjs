@@ -6,13 +6,7 @@ import test from 'node:test';
  * Every literal message id in the user panel, the home widget and the widget
  * registration must exist in all five locales, and the code defaultMessage must
  * equal the English catalogue value (UX-01, I18N-2, I18N-9, UX-07).
- *
- * TODO(integrator): the new and changed keys live in the widget-panel i18n
- * hand-off file until the translation merge. Flip MERGED to true afterwards.
  */
-const MERGED = true;
-const options = MERGED ? {} : { todo: 'flipped to strict by the integrator after the widget-panel i18n merge' };
-
 const read = (path) => readFileSync(new URL(`../admin/src/${path}`, import.meta.url), 'utf8');
 const locales = ['en', 'de', 'es', 'fr', 'pt'];
 const catalogues = Object.fromEntries(locales.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))]));
@@ -36,12 +30,20 @@ const messages = [
 
 test('the scan finds the panel, widget and registration messages', () => {
   const ids = new Set(messages.map(({ id }) => id));
-  for (const id of ['panel.error.title', 'panel.error.description', 'panel.sessions.showAll', 'widget.stats.today', 'widget.link']) {
+  for (const id of [
+    'panel.error.message',
+    'panel.confirm.blockBody',
+    'panel.sessions.showAllLink',
+    'widget.stats.onlineUsers',
+    'widget.stats.registeredUsers',
+    'widget.link',
+    'widget.online-users.title',
+  ]) {
     assert.ok(ids.has(id), id);
   }
 });
 
-test('panel and widget messages exist in every locale', options, () => {
+test('panel and widget messages exist in every locale', () => {
   const missing = [];
   for (const { id } of messages) {
     for (const locale of locales) {
@@ -51,18 +53,23 @@ test('panel and widget messages exist in every locale', options, () => {
   assert.deepEqual(missing, []);
 });
 
-test('panel and widget defaultMessages equal the English catalogue', options, () => {
+test('panel and widget defaultMessages equal the English catalogue', () => {
   const drift = messages
     .filter(({ id, defaultMessage }) => catalogues.en[id] !== undefined && catalogues.en[id] !== defaultMessage)
     .map(({ id }) => id);
   assert.deepEqual(drift, []);
 });
 
-test('German panel and widget copy uses "sperren" and "Min." consistently', options, () => {
+test('German panel and widget copy uses the IA glossary: "sperren", "Sitzung", formal "Sie"', () => {
   const de = catalogues.de;
-  for (const id of ['panel.actions.blockUser', 'panel.confirm.blockUserTitle', 'panel.blocked.title', 'notifications.success.blocked']) {
-    assert.match(de[id], /sperr/i, id);
-    assert.doesNotMatch(de[id], /blockier/i, id);
+  const ids = [...new Set(messages.map(({ id }) => id))].filter((id) => /^(panel|widget)\./.test(id));
+  for (const id of ids) {
+    assert.doesNotMatch(de[id], /blockier|\bSession(s)?\b(?! Manager)|\bInaktiv\b|\b(du|dein|deine|dich|dir)\b/i, id);
   }
-  assert.match(de['widget.stats.last15min'], /Min\.$/);
+  for (const id of ['panel.actions.blockUser', 'panel.confirm.blockTitle', 'panel.blocked.message', 'panel.notify.blockSuccess', 'widget.stats.blockedUsers']) {
+    assert.match(de[id], /sperr/i, id);
+  }
+  assert.equal(de['panel.actions.unblock'], 'Sperre aufheben');
+  assert.equal(de['panel.status.notOnline'], 'Nicht online');
+  assert.equal(de['widget.stats.idleSessions'], 'Sitzungen im Leerlauf');
 });

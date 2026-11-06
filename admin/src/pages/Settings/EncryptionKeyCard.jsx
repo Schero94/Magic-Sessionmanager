@@ -2,10 +2,7 @@ import { useState } from 'react';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { Duplicate, Key } from '@strapi/icons';
 import styled from 'styled-components';
-import { SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
-import ReadableText from '../../components/ReadableText';
-import Alert from '../../components/PersistentAlert';
 import { maskSensitiveValue } from '../../utils/maskSensitiveValue.mjs';
 import { ENCRYPTION_KEY_ENV_NAME, formatEnvLine, generateEncryptionKey } from '../../utils/encryptionKey.mjs';
 import { logSafeAdminError } from '../../utils/safeAdminLog.mjs';
@@ -22,18 +19,37 @@ const EnvPreview = styled(Box)`
 `;
 
 /**
- * Generates a SESSION_ENCRYPTION_KEY for the .env file. The key is never sent
- * to the server, stays masked after generation until the admin reveals it,
- * and the copied .env line is quoted so dotenv keeps every character (SET-01,
- * SET-10).
+ * Generated key and its reveal state. Kept by the parent tab, so the key
+ * survives collapsing the Advanced accordion that hosts the generator.
  *
- * @param {{ copyValue: (value: string, message: string, scope: string) => Promise<void>, notify: Function }} props Clipboard and notification helpers.
- * @returns {import('react').ReactElement} Encryption key section.
+ * @returns {{
+ *   encryptionKey: string,
+ *   setEncryptionKey: (value: string) => void,
+ *   showEncryptionKey: boolean,
+ *   setShowEncryptionKey: (value: boolean) => void,
+ * }} Draft state.
  */
-const EncryptionKeyCard = ({ copyValue, notify }) => {
-  const { t } = useSettingsTranslate();
+export const useEncryptionKeyDraft = () => {
   const [encryptionKey, setEncryptionKey] = useState('');
   const [showEncryptionKey, setShowEncryptionKey] = useState(false);
+  return { encryptionKey, setEncryptionKey, showEncryptionKey, setShowEncryptionKey };
+};
+
+/**
+ * Token encryption key generator (IA F 1.2 #3, E.2). Client-side only:
+ * nothing is saved, the key stays masked until the admin reveals it, and the
+ * copied .env line is quoted so dotenv keeps every character (SET-01, SET-10).
+ *
+ * @param {{
+ *   draft: ReturnType<typeof useEncryptionKeyDraft>,
+ *   copyValue: (value: string, message: string, scope: string) => Promise<void>,
+ *   notify: Function,
+ * }} props Key state, clipboard and notification helpers.
+ * @returns {import('react').ReactElement} Generator field and actions.
+ */
+const EncryptionKeyCard = ({ draft, copyValue, notify }) => {
+  const { t } = useSettingsTranslate();
+  const { encryptionKey, setEncryptionKey, showEncryptionKey, setShowEncryptionKey } = draft;
 
   const handleGenerate = () => {
     try {
@@ -53,30 +69,21 @@ const EncryptionKeyCard = ({ copyValue, notify }) => {
   };
 
   return (
-    <SectionCard
-      title={t('settings.security.encryption.title', 'JWT Encryption Key Generator')}
-      subtitle={t(
-        'settings.security.encryption.description',
-        'Generate a random 256-bit key (64 hexadecimal characters). The server uses it to encrypt tokens before storing them in the database.'
-      )}
-    >
-      <Alert variant="default" closeLabel={t('settings.common.close', 'Close')} title={t('settings.security.encryption.important', 'Important')}>
-        <ReadableText variant="omega" tag="span">
-          {t('settings.security.encryption.envHint', 'Add this key to your .env file as SESSION_ENCRYPTION_KEY for production.')}
-        </ReadableText>
-      </Alert>
-
+    <Flex direction="column" alignItems="stretch" gap={4} data-encryption-key-tool="">
       <FormField
         id="session-encryption-key"
         name="sessionEncryptionKey"
-        label={t('settings.security.encryption.label', 'Generated Encryption Key')}
-        description={t('settings.security.encryption.fieldHint', 'The key stays masked until you choose to show it.')}
+        label={t('settings.config.token.key.label', 'Token encryption key')}
+        description={t(
+          'settings.config.token.key.hint',
+          "Session Manager encrypts stored tokens with this environment variable. Not needed in Strapi's refresh-token mode. Nothing is saved here."
+        )}
       >
         <SecretTextInput
           name="sessionEncryptionKey"
           value={encryptionKey}
           readOnly
-          placeholder={t('settings.security.encryption.placeholder', "Click 'Generate Key' to create a secure key")}
+          placeholder={t('settings.config.token.key.placeholder', 'Select Generate key to create a key.')}
           revealed={showEncryptionKey}
           onRevealedChange={setShowEncryptionKey}
           showLabel={t('settings.security.encryption.showKey', 'Show key')}
@@ -85,27 +92,15 @@ const EncryptionKeyCard = ({ copyValue, notify }) => {
       </FormField>
 
       <Flex gap={2} wrap="wrap">
-        <Button variant="default" startIcon={<Key aria-hidden focusable={false} />} onClick={handleGenerate}>
-          {t('settings.security.encryption.generate', 'Generate Key')}
-        </Button>
-        <Button
-          variant="secondary"
-          startIcon={<Duplicate aria-hidden focusable={false} />}
-          onClick={() => copyValue(
-            encryptionKey,
-            t('notifications.success.keyCopied', 'Encryption key copied to clipboard!'),
-            'settings.copyEncryptionKey'
-          )}
-          disabled={!encryptionKey}
-        >
-          {t('settings.security.encryption.copy', 'Copy to Clipboard')}
+        <Button variant="secondary" startIcon={<Key aria-hidden focusable={false} />} onClick={handleGenerate}>
+          {t('settings.config.token.key.generate', 'Generate key')}
         </Button>
         <Button
           variant="secondary"
           startIcon={<Duplicate aria-hidden focusable={false} />}
           onClick={() => copyValue(
             formatEnvLine(ENCRYPTION_KEY_ENV_NAME, encryptionKey),
-            t('notifications.success.envCopied', 'Copied as .env format!'),
+            t('settings.config.token.key.copied', 'Copied. Add it to your server environment and restart Strapi.'),
             'settings.copyEncryptionKeyEnv'
           )}
           disabled={!encryptionKey}
@@ -128,7 +123,7 @@ const EncryptionKeyCard = ({ copyValue, notify }) => {
           </Flex>
         </EnvPreview>
       ) : null}
-    </SectionCard>
+    </Flex>
   );
 };
 

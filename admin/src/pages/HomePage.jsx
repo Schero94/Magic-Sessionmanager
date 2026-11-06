@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
+import { Link } from 'react-router-dom';
 import {
   Pagination,
-  SearchInput,
   useFetchClient,
   useNotification,
   useQueryParams,
@@ -12,15 +12,17 @@ import {
   EmptyStateLayout,
   Flex,
   IconButton,
+  LinkButton,
   Loader,
   MenuItem,
   SimpleMenu,
   SingleSelect,
   SingleSelectOption,
+  Tooltip,
   Typography,
   VisuallyHidden,
 } from '@strapi/design-system';
-import { ArrowClockwise, Check, Clock, Cross, Download, Monitor, Search, User } from '@strapi/icons';
+import { ArrowClockwise, ChartBubble, Check, Clock, Cog, Cross, Download, Monitor, Search, User } from '@strapi/icons';
 import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
@@ -28,6 +30,7 @@ import { getSessionStatus } from '../utils/sessionStatus.mjs';
 import { requireSessionList } from '../utils/adminResponse.mjs';
 import { restoreDialogFocus } from '../utils/restoreDialogFocus.mjs';
 import {
+  END_REASON_FILTER_OPTIONS,
   SESSION_FILTER_OPTIONS,
   filterSessionsBySearch,
   filterSessionsByStatus,
@@ -42,16 +45,30 @@ import Alert from '../components/PersistentAlert';
 import ReadableText from '../components/ReadableText';
 import SessionTable from './Dashboard/SessionTable';
 import SessionCardList from './Dashboard/SessionCardList';
+import SessionSearch from './Dashboard/SessionSearch';
+import HowSessionsWork from './Dashboard/HowSessionsWork';
 import {
   AUTO_REFRESH_INTERVAL_MS,
   DEFAULT_PAGE_SIZE,
   PAGE_SIZE_OPTIONS,
+  encodeSearchQuery,
+  getErrorStatus,
   getExportDeviceInfo,
   getSessionStats,
   hasActiveFilters,
   parseDashboardQuery,
   pickFocusSessionId,
 } from './Dashboard/dashboardModel.mjs';
+
+/** Rows the sessions API returns at most; named in the truncation alert and export labels. */
+const LOADED_SESSIONS_LIMIT = 1000;
+
+/** How often the "Last updated" relative time is re-rendered. */
+const CLOCK_TICK_MS = 30 * 1000;
+
+/** Settings pages of this plugin (relative to the admin root). */
+const ANALYTICS_PATH = `/settings/${pluginId}/analytics`;
+const CONFIGURATION_PATH = `/settings/${pluginId}/general`;
 
 /**
  * Starts a browser download for generated export text.
@@ -72,9 +89,12 @@ const downloadFile = (content, type, extension) => {
 };
 
 /**
- * Session Manager dashboard: native Strapi list view with KPI cards, URL-backed
- * search/filter/pagination, a DS table (cards below the large breakpoint),
- * confirmed row actions and the session detail modal.
+ * Sessions dashboard (IA D1): which sessions exist, and which need action?
+ * Header with Export and links to Analytics and Settings, truncation alert,
+ * "How sessions work" legend, four clickable state cards, a visible search
+ * with Status and End reason filters, a polite caption, the session table
+ * (cards below the DS medium breakpoint) and native pagination. Filters,
+ * search, page and page size live in the URL.
  *
  * @returns {import('react').ReactElement} Dashboard page.
  */
@@ -83,20 +103,23 @@ const HomePage = () => {
   const { get, post, del } = useFetchClient();
   const { toggleNotification } = useNotification();
   const formatters = useSessionFormatters();
-  const { isBelowLarge } = useBreakpoint();
+  const { isBelowMedium, isBelowLarge } = useBreakpoint();
   const [{ query }, setQuery] = useQueryParams();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const dashboard = parseDashboardQuery(query);
 
   const [sessions, setSessions] = useState([]);
+  const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [hasData, setHasData] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
   const [selectedSession, setSelectedSession] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [terminatingSessionId, setTerminatingSessionId] = useState(null);
   const [deletingSessionId, setDeletingSessionId] = useState(null);
-  const [searchResetKey, setSearchResetKey] = useState(0);
   const openerRef = useRef(null);
   const dashboardRef = useRef(null);
   const listHeadingRef = useRef(null);
@@ -104,19 +127,24 @@ const HomePage = () => {
   const requestIdRef = useRef(0);
   const visibleIdsRef = useRef([]);
   const mutationSnapshotRef = useRef([]);
-  const listHeadingId = `session-list-heading-${useId().replace(/:/g, '')}`;
+  const listHeadingId = `session-list-caption-${useId().replace(/:/g, '')}`;
   const mutationPending = Boolean(terminatingSessionId || deletingSessionId);
 
   useEffect(() => {
     fetchSessions();
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
   /**
-   * Loads the complete admin session collection for dashboard filtering,
-   * pagination, detail views and exports. Only the first load shows the page
-   * loader; later loads (refresh button, auto refresh, after a mutation) keep
-   * the list mounted so keyboard focus and scroll position survive (DUX-02,
-   * DASH-17). A failed load hides the stale rows behind the error alert.
+   * Loads the complete admin session collection for filtering, pagination,
+   * the detail dialog and exports. Only the first load shows the page loader;
+   * later loads (Refresh, auto refresh, after an action) keep the list
+   * mounted so keyboard focus and scroll position survive (DUX-02, DASH-17).
+   * A failed refresh keeps the last data and shows the error above it.
    *
    * @returns {Promise<void>}
    */
@@ -131,11 +159,15 @@ const HomePage = () => {
       const list = requireSessionList(data);
       if (requestId !== requestIdRef.current) return;
       setSessions(list);
-      setLoadError(null);
+      setTruncated(data?.meta?.truncated === true);
+      setLoadError(false);
+      setHasData(true);
+      setLastUpdated(Date.now());
+      setNow(Date.now());
       hasLoadedRef.current = true;
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      setLoadError(t('homepage.error.load', 'Session data could not be loaded. Try again.'));
+      setLoadError(true);
       logSafeAdminError('dashboard.loadSessions', err);
     } finally {
       if (requestId === requestIdRef.current) {
@@ -147,7 +179,7 @@ const HomePage = () => {
 
   useEffect(() => {
     // Silent background update every 10 minutes, paused while the detail
-    // dialog is open or a mutation is running so nothing moves under the user.
+    // dialog is open or an action is running so nothing moves under the user.
     if (showDetailModal || mutationPending) return undefined;
     const interval = setInterval(() => {
       fetchSessions();
@@ -157,15 +189,17 @@ const HomePage = () => {
   }, [showDetailModal, mutationPending]);
 
   /**
-   * Logs out one session after ConfirmAction confirmed it, then refreshes the
-   * list in place. Rethrows on failure so the confirmation stays open for a
-   * retry; the notification explains the failure.
+   * Ends one session after ConfirmAction confirmed it (IA E.1), then
+   * refreshes the list in place. A 404 means the session is already gone:
+   * the list is refreshed and the dialog closes. Other failures rethrow so
+   * the confirmation stays open for a retry.
    *
-   * @param {string} sessionId Session ID accepted by the admin API.
+   * @param {object} session Session row.
    * @returns {Promise<void>}
    */
-  const handleTerminateSession = async (sessionId) => {
+  const handleTerminateSession = async (session) => {
     if (terminatingSessionId || deletingSessionId) return;
+    const sessionId = session.id;
     mutationSnapshotRef.current = visibleIdsRef.current;
     setTerminatingSessionId(sessionId);
     try {
@@ -173,13 +207,21 @@ const HomePage = () => {
       await fetchSessions();
       toggleNotification({
         type: 'success',
-        message: t('notifications.success.terminated', 'Session terminated successfully'),
+        message: t('notifications.success.sessionEnded', 'Session ended.'),
       });
     } catch (err) {
       logSafeAdminError('dashboard.terminateSession', err);
+      if (getErrorStatus(err) === 404) {
+        await fetchSessions();
+        toggleNotification({
+          type: 'warning',
+          message: t('notifications.error.sessionGone', 'This session no longer exists. The list was refreshed.'),
+        });
+        return;
+      }
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.terminate', 'Failed to terminate session'),
+        message: t('notifications.error.endSession', 'The session could not be ended. Please try again.'),
       });
       throw err;
     } finally {
@@ -188,15 +230,16 @@ const HomePage = () => {
   };
 
   /**
-   * Removes one session's details after ConfirmAction confirmed it. The
-   * confirmation and result explain that token denial remains in force until
-   * any unexpired access token reaches its expiry.
+   * Deletes one session record after ConfirmAction confirmed it (IA E.1).
+   * The server writes a revocation entry first, so the token stays revoked;
+   * an open session also ends.
    *
-   * @param {string} sessionId Session documentId
+   * @param {object} session Session row.
    * @returns {Promise<void>}
    */
-  const handleDeleteSession = async (sessionId) => {
+  const handleDeleteSession = async (session) => {
     if (terminatingSessionId || deletingSessionId) return;
+    const sessionId = session.id;
     mutationSnapshotRef.current = visibleIdsRef.current;
     setDeletingSessionId(sessionId);
     try {
@@ -204,13 +247,21 @@ const HomePage = () => {
       await fetchSessions();
       toggleNotification({
         type: 'success',
-        message: t('notifications.success.deleted', 'Session details removed. The access-token hash remains blocked until expiry.'),
+        message: t('notifications.success.recordDeleted', 'Session record deleted. Its token stays revoked.'),
       });
     } catch (err) {
       logSafeAdminError('dashboard.deleteSession', err);
+      if (getErrorStatus(err) === 404) {
+        await fetchSessions();
+        toggleNotification({
+          type: 'warning',
+          message: t('notifications.error.sessionGone', 'This session no longer exists. The list was refreshed.'),
+        });
+        return;
+      }
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.delete', 'Failed to delete session'),
+        message: t('notifications.error.deleteRecord', 'The record could not be deleted. Please try again.'),
       });
       throw err;
     } finally {
@@ -223,11 +274,11 @@ const HomePage = () => {
   const filteredSessions = useMemo(
     () =>
       filterSessionsBySearch(
-        filterSessionsByStatus(sessions, dashboard.status),
+        filterSessionsByStatus(sessions, dashboard.status, dashboard.reason),
         dashboard.search,
         formatters.deviceTypeLabel
       ),
-    [sessions, dashboard.status, dashboard.search, formatters]
+    [sessions, dashboard.status, dashboard.reason, dashboard.search, formatters]
   );
   const pageResult = paginateSessions(filteredSessions, dashboard.page, dashboard.pageSize);
   visibleIdsRef.current = pageResult.items.map((session) => String(session.id));
@@ -235,7 +286,8 @@ const HomePage = () => {
   /**
    * Downloads CSV for every session matching the current filters, not only the
    * rows visible on the current page. Columns and values are stable machine
-   * data (see sessionExports.mjs), independent of the admin language.
+   * data (see sessionExports.mjs), independent of the admin language, and
+   * never contain tokens. The download itself is the feedback.
    *
    * @returns {void}
    */
@@ -247,15 +299,11 @@ const HomePage = () => {
         getSessionStatus,
       });
       downloadFile(csvContent, 'text/csv;charset=utf-8;', 'csv');
-      toggleNotification({
-        type: 'success',
-        message: t('notifications.success.exported', 'Exported {count} sessions to {format}', { count: filteredSessions.length, format: 'CSV' }),
-      });
     } catch (err) {
       logSafeAdminError('dashboard.exportCsv', err);
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.export', 'Failed to export sessions'),
+        message: t('notifications.error.exportFailed', 'The export could not be created.'),
       });
     }
   };
@@ -275,17 +323,14 @@ const HomePage = () => {
         unavailableValue: '',
         getDeviceInfo: getExportDeviceInfo,
         getSessionStatus,
+        truncated,
       });
       downloadFile(jsonContent, 'application/json', 'json');
-      toggleNotification({
-        type: 'success',
-        message: t('notifications.success.exported', 'Exported {count} sessions to {format}', { count: filteredSessions.length, format: 'JSON' }),
-      });
     } catch (err) {
       logSafeAdminError('dashboard.exportJson', err);
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.export', 'Failed to export sessions'),
+        message: t('notifications.error.exportFailed', 'The export could not be created.'),
       });
     }
   };
@@ -303,17 +348,13 @@ const HomePage = () => {
 
   /** Restore focus after the native dialog releases its focus trap. */
   const handleCloseAutoFocus = (event) => {
-    restoreDialogFocus(event, openerRef.current, dashboardRef.current);
-  };
-
-  const handleSessionTerminated = () => {
-    fetchSessions();
+    restoreDialogFocus(event, openerRef.current, listHeadingRef.current || dashboardRef.current);
   };
 
   /**
    * Focus target used by ConfirmAction when a row's trigger disappeared after
-   * a mutation refresh: the same row's View button, else the next or previous
-   * row, else the list heading. Resolved lazily, after the refreshed rows render.
+   * an action: the same row's View button, else the next or previous row,
+   * else the table caption (IA E). Resolved lazily, after the rows render.
    *
    * @param {string} sessionId Row whose action ran.
    * @returns {{readonly current: HTMLElement|null}} Ref-like getter.
@@ -339,85 +380,162 @@ const HomePage = () => {
   }, [loading, dashboard.page, pageResult.pageCount, setQuery]);
 
   const handleStatusChange = (value) => {
-    setQuery({ status: value === 'all' ? undefined : value, page: '1' });
+    const status = String(value);
+    setQuery({ status: status === 'all' ? undefined : status, reason: undefined, page: '1' });
   };
 
+  const handleReasonChange = (value) => {
+    const reason = String(value);
+    setQuery({ reason: reason === 'all' ? undefined : reason, page: '1' });
+  };
+
+  const handleSearch = useCallback((value) => {
+    setQuery({ search: encodeSearchQuery(value), _q: undefined, page: '1' }, 'push', true);
+  }, [setQuery]);
+
   const handleClearFilters = () => {
-    setQuery({ _q: undefined, status: undefined, page: '1' });
-    setSearchResetKey((key) => key + 1);
+    setQuery({ search: undefined, _q: undefined, status: undefined, reason: undefined, page: '1' });
     listHeadingRef.current?.focus();
   };
 
   const stats = getSessionStats(sessions);
-  const showSessionData = !loading && !loadError;
+  const showSessionData = !loading && hasData;
   const showToolbar = showSessionData && sessions.length > 0;
   const canExport = showSessionData && filteredSessions.length > 0;
   const filtersActive = hasActiveFilters(dashboard);
+  const exportValues = { count: filteredSessions.length, limit: LOADED_SESSIONS_LIMIT };
 
-  const exportActions = (
+  const exportMenu = (
     <SimpleMenu
       label={t('homepage.export.label', 'Export')}
       variant="secondary"
       startIcon={<Download />}
       disabled={!canExport}
     >
-      <MenuItem onSelect={handleExportCSV}>{t('homepage.export.csv', 'Export CSV')}</MenuItem>
-      <MenuItem onSelect={handleExportJSON}>{t('homepage.export.json', 'Export JSON')}</MenuItem>
+      <MenuItem onSelect={handleExportCSV}>
+        {truncated
+          ? t('homepage.export.csvTruncated', '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}} (latest {limit, number} sessions only)', exportValues)
+          : t('homepage.export.csv', '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}}', exportValues)}
+      </MenuItem>
+      <MenuItem onSelect={handleExportJSON}>
+        {truncated
+          ? t('homepage.export.jsonTruncated', '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}} (latest {limit, number} sessions only)', exportValues)
+          : t('homepage.export.json', '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}}', exportValues)}
+      </MenuItem>
     </SimpleMenu>
   );
 
-  const startActions = showToolbar ? (
-    <SearchInput
-      key={searchResetKey}
-      label={t('homepage.search.label', 'Search sessions')}
-      placeholder={t('homepage.search.placeholder', 'Search sessions')}
-    />
-  ) : null;
+  const primaryAction = canExport || !showSessionData ? exportMenu : (
+    <Tooltip label={t('homepage.export.disabledHint', 'No sessions match the current filter.')}>
+      <span>{exportMenu}</span>
+    </Tooltip>
+  );
 
-  const endActions = showToolbar ? (
-    <Flex gap={2} alignItems="center">
-      {refreshing ? (
-        <Loader small role="status" aria-live="polite">
-          {t('homepage.refreshing', 'Updating sessions')}
-        </Loader>
-      ) : null}
+  const secondaryAction = (
+    <Flex gap={2} wrap="wrap">
+      <LinkButton tag={Link} to={ANALYTICS_PATH} variant="tertiary" size="S" startIcon={<ChartBubble />}>
+        {t('homepage.links.analytics', 'Analytics')}
+      </LinkButton>
+      <LinkButton tag={Link} to={CONFIGURATION_PATH} variant="tertiary" size="S" startIcon={<Cog />}>
+        {t('homepage.links.settings', 'Settings')}
+      </LinkButton>
+    </Flex>
+  );
+
+  // Action bar (IA D1.5): search left, Status / End reason / Refresh right.
+  // Below the medium breakpoint the search is full width and the filters wrap
+  // to the next row.
+  const filterControls = (
+    <Flex gap={2} alignItems="center" wrap="wrap" shrink={0}>
       <SingleSelect
         size="S"
-        aria-label={t('homepage.filter.label', 'Filter sessions by status')}
+        aria-label={t('homepage.filter.label', 'Status')}
         value={dashboard.status}
         onChange={handleStatusChange}
       >
         {SESSION_FILTER_OPTIONS.map((option) => (
           <SingleSelectOption key={option} value={option}>
-            {option === 'all' ? t('homepage.filter.all', 'All statuses') : formatters.statusLabel(option)}
+            {option === 'all' && t('homepage.filter.all', 'All sessions')}
+            {option === 'open' && t('homepage.filter.open', 'Open')}
+            {option !== 'all' && option !== 'open' && formatters.statusLabel(option)}
           </SingleSelectOption>
         ))}
       </SingleSelect>
+      {dashboard.status === 'ended' ? (
+        <SingleSelect
+          size="S"
+          aria-label={t('homepage.filter.reasonLabel', 'End reason')}
+          value={dashboard.reason}
+          onChange={handleReasonChange}
+        >
+          {END_REASON_FILTER_OPTIONS.map((option) => (
+            <SingleSelectOption key={option} value={option}>
+              {option === 'all' ? t('homepage.filter.allReasons', 'All reasons') : formatters.endReasonLabel(option)}
+            </SingleSelectOption>
+          ))}
+        </SingleSelect>
+      ) : null}
       <IconButton label={t('homepage.actions.refresh', 'Refresh sessions')} onClick={() => fetchSessions()}>
         <ArrowClockwise />
       </IconButton>
     </Flex>
-  ) : null;
+  );
+
+  const toolbar = (
+    <Flex direction="column" alignItems="stretch" gap={2} data-session-toolbar="">
+      <Flex
+        direction={{ initial: 'column', medium: 'row' }}
+        alignItems={{ initial: 'stretch', medium: 'center' }}
+        gap={2}
+      >
+        <Flex flex="1 1 auto" minWidth={0} direction="column" alignItems="stretch">
+          <SessionSearch value={dashboard.search} onSearch={handleSearch} />
+        </Flex>
+        {filterControls}
+      </Flex>
+      {lastUpdated ? (
+        <Flex gap={2} alignItems="center" wrap="wrap">
+          <Typography variant="pi" textColor="neutral600" data-last-updated="">
+            {t('homepage.lastUpdated', 'Last updated {time}', {
+              time: formatters.formatRelativeTime(lastUpdated, now),
+            })}
+          </Typography>
+          {refreshing ? (
+            <Loader small role="status" aria-live="polite">
+              {t('homepage.refreshing', 'Updating sessions')}
+            </Loader>
+          ) : null}
+        </Flex>
+      ) : null}
+    </Flex>
+  );
 
   const listProps = {
     sessions: pageResult.items,
     labelledBy: listHeadingId,
     busy: refreshing,
     onView: handleSessionClick,
-    onLogOut: handleTerminateSession,
-    onRemove: handleDeleteSession,
+    onEnd: handleTerminateSession,
+    onDelete: handleDeleteSession,
     mutationPending,
     getFocusFallback,
   };
 
+  const statusCard = (status) => ({
+    onClick: () => handleStatusChange(status),
+    pressed: dashboard.status === status,
+  });
+
   return (
     <PageShell
       headingId="magic-sessionmanager-dashboard-title"
-      title={t('homepage.title', 'Session Manager')}
-      subtitle={t('homepage.subtitle', 'Monitor and manage end-user sessions')}
-      primaryAction={exportActions}
-      startActions={startActions}
-      endActions={endActions}
+      title={t('homepage.title', 'Sessions')}
+      subtitle={t(
+        'homepage.subtitle',
+        'Sign-ins of your app’s users (Users & Permissions). Strapi administrators are not listed.'
+      )}
+      primaryAction={primaryAction}
+      secondaryAction={secondaryAction}
     >
       <Flex
         ref={dashboardRef}
@@ -430,25 +548,38 @@ const HomePage = () => {
         {!loading && loadError ? (
           <Alert
             variant="danger"
-            title={t('homepage.error.title', 'Unable to load sessions')}
             closeLabel={t('common.close', 'Close')}
             action={(
               <Button size="S" variant="secondary" onClick={fetchSessions}>
-                {t('common.retry', 'Retry')}
+                {t('common.tryAgain', 'Try again')}
               </Button>
             )}
           >
+            <ReadableText variant="omega" textColor="neutral800" tag="span">
+              {t('homepage.error.load', 'Sessions could not be loaded.')}
+            </ReadableText>
+          </Alert>
+        ) : null}
+
+        {showSessionData && truncated ? (
+          <Alert variant="default" closeLabel={t('common.close', 'Close')}>
             <ReadableText variant="pi" textColor="neutral700" tag="span">
-              {loadError}
+              {t(
+                'homepage.truncated.body',
+                'Only the latest {limit, number} sessions are loaded. Counts, filters and exports cover these sessions only.',
+                { limit: LOADED_SESSIONS_LIMIT }
+              )}
             </ReadableText>
           </Alert>
         ) : null}
 
         {loading ? (
           <Flex justifyContent="center" padding={8}>
-            <Loader>{t('homepage.loading', 'Loading sessions...')}</Loader>
+            <Loader>{t('homepage.loading', 'Loading sessions')}</Loader>
           </Flex>
         ) : null}
+
+        {showSessionData && sessions.length > 0 ? <HowSessionsWork /> : null}
 
         {showSessionData && (
           <Flex direction="column" alignItems="stretch" gap={2}>
@@ -456,54 +587,75 @@ const HomePage = () => {
               <Typography tag="h2">{t('homepage.stats.label', 'Session statistics')}</Typography>
             </VisuallyHidden>
             <StatGrid label={t('homepage.stats.label', 'Session statistics')}>
-              <StatCard icon={Check} tone="success" label={t('homepage.stats.active', 'Active')} value={stats.active} />
-              <StatCard icon={Clock} tone="warning" label={t('homepage.stats.idle', 'Idle')} value={stats.idle} />
+              <StatCard
+                icon={Check}
+                tone="success"
+                label={t('homepage.stats.active', 'Active sessions')}
+                value={stats.active}
+                description={t('homepage.stats.usersOnline', '{count, plural, one {# user online} other {# users online}}', {
+                  count: stats.usersOnline,
+                })}
+                {...statusCard('active')}
+              />
+              <StatCard
+                icon={Clock}
+                tone="warning"
+                label={t('homepage.stats.idle', 'Idle sessions')}
+                value={stats.idle}
+                {...statusCard('idle')}
+              />
               <StatCard
                 icon={Cross}
                 tone="neutral"
-                label={t('homepage.stats.ended', 'Ended')}
+                label={t('homepage.stats.ended', 'Ended sessions')}
                 value={stats.ended}
-                description={t('homepage.stats.endedBreakdown', '{loggedOut} logged out · {terminated} terminated', {
-                  loggedOut: stats.loggedOut,
-                  terminated: stats.terminated,
-                })}
+                description={t(
+                  'homepage.stats.endedBreakdown',
+                  '{loggedOut, number} logged out · {timedOut, number} timed out · {other, number} other reasons',
+                  { loggedOut: stats.loggedOut, timedOut: stats.timedOut, other: stats.otherReasons }
+                )}
+                {...statusCard('ended')}
               />
-              <StatCard icon={User} tone="primary" label={t('homepage.stats.total', 'Total')} value={stats.total} />
+              <StatCard
+                icon={User}
+                tone="primary"
+                label={t('homepage.stats.total', 'All sessions')}
+                value={stats.total}
+                {...statusCard('all')}
+              />
             </StatGrid>
           </Flex>
         )}
 
-        {showSessionData && sessions.length > 0 && (
+        {showToolbar && (
           <Flex direction="column" alignItems="stretch" gap={4} minWidth={0}>
-            <Flex direction="column" alignItems="flex-start" gap={1}>
-              <Typography
-                id={listHeadingId}
-                ref={listHeadingRef}
-                tabIndex={-1}
-                variant="delta"
-                tag="h2"
-                textColor="neutral800"
-              >
-                {t('homepage.allSessions', 'All sessions')}
+            <VisuallyHidden>
+              <Typography variant="delta" tag="h2">
+                {t('homepage.list.heading', 'Session list')}
               </Typography>
-              <Typography variant="pi" textColor="neutral600" aria-live="polite">
-                {dashboard.search
-                  ? t(
-                      'homepage.pagination.filteredRange',
-                      'Showing {start}-{end} of {count} matching sessions (filtered by "{query}")',
-                      { start: pageResult.startIndex, end: pageResult.endIndex, count: pageResult.total, query: dashboard.search }
-                    )
-                  : t(
-                      'homepage.pagination.range',
-                      'Showing {start}-{end} of {count} sessions',
-                      { start: pageResult.startIndex, end: pageResult.endIndex, count: pageResult.total }
-                    )}
-              </Typography>
-            </Flex>
+            </VisuallyHidden>
+            {toolbar}
+            <Typography
+              id={listHeadingId}
+              ref={listHeadingRef}
+              tabIndex={-1}
+              variant="pi"
+              textColor="neutral600"
+              aria-live="polite"
+              data-session-caption=""
+            >
+              {t('homepage.caption', '{from, number}–{to, number} of {total, plural, one {# session} other {# sessions}}', {
+                from: pageResult.startIndex,
+                to: pageResult.endIndex,
+                total: pageResult.total,
+              })}
+            </Typography>
 
             {filteredSessions.length > 0 ? (
               <>
-                {isBelowLarge ? <SessionCardList {...listProps} /> : <SessionTable {...listProps} />}
+                {isBelowMedium
+                  ? <SessionCardList {...listProps} />
+                  : <SessionTable {...listProps} compact={isBelowLarge} />}
                 <Pagination.Root
                   pageCount={pageResult.pageCount}
                   total={pageResult.total}
@@ -516,7 +668,7 @@ const HomePage = () => {
             ) : (
               <EmptyStateLayout
                 icon={<Search aria-hidden="true" />}
-                content={t('homepage.noResults.description', 'Try adjusting your search or status filter.')}
+                content={t('homepage.noResults.description', 'No sessions match your search or filter.')}
                 action={filtersActive ? (
                   <Button variant="secondary" onClick={handleClearFilters}>
                     {t('homepage.noResults.reset', 'Clear filters')}
@@ -530,7 +682,7 @@ const HomePage = () => {
         {showSessionData && sessions.length === 0 && (
           <EmptyStateLayout
             icon={<Monitor aria-hidden="true" />}
-            content={t('homepage.empty.description', 'Sessions will appear here when end users log in.')}
+            content={t('homepage.empty.description', 'No sessions yet. Sessions appear here when users of your app sign in.')}
           />
         )}
 
@@ -539,7 +691,7 @@ const HomePage = () => {
             session={selectedSession}
             onClose={handleModalClose}
             onCloseAutoFocus={handleCloseAutoFocus}
-            onSessionTerminated={handleSessionTerminated}
+            onEndSession={handleTerminateSession}
           />
         )}
       </Flex>

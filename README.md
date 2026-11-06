@@ -1,8 +1,8 @@
 # Magic Session Manager 🔐
 
-**See who's logged into your Strapi app - and control their sessions!**
+**See who's signed in to your Strapi app - and control their sessions!**
 
-Track logins, monitor active users, and secure your app with one simple plugin. No complicated setup required.
+Session Manager records every sign-in of your app's users (Users & Permissions) as a session and lets admins see, end and analyse them. Strapi admin accounts are not managed here.
 
 Free and open under the MIT license. All features are available without a paid license or activation key.
 
@@ -19,12 +19,12 @@ Free and open under the MIT license. All features are available without a paid l
 
 ![Online Users Widget](pics/widget.png)
 
-**On your Strapi homepage:**
-- See online users instantly
-- Active in last 15/30 minutes
-- Total users count
-- Blocked users count
-- No need to navigate anywhere!
+**On your Strapi homepage, the "Online users" widget shows:**
+- Online users, out of all registered users. A user is online when at least one of their sessions is active.
+- Active sessions (open and used within the inactivity timeout)
+- Idle sessions (open, but unused for longer than the inactivity timeout)
+- Blocked users
+- A link to open Session Manager
 
 ---
 
@@ -32,12 +32,13 @@ Free and open under the MIT license. All features are available without a paid l
 
 ![Dashboard](pics/dashboard.png)
 
-**What you see:**
-- Who is logged in right now (green = online)
-- When they logged in
-- What device they're using
-- Their IP address and location
-- One-click session termination
+**The Sessions page shows:**
+- The state of every session: **Active**, **Idle** or **Ended**. An ended session also shows its end reason: logged out, timed out, expired, ended manually, user blocked, or reason not recorded.
+- Who signed in, when they signed in and when they were last active
+- The device, browser and operating system, and the IP address
+- Search by user, email, IP or device; filter by status and, for ended sessions, by end reason
+- **End session** (the user is signed out on that device, the record stays) and **Delete record** (the record is removed from history, statistics and exports; an open session also ends). Both ask for confirmation.
+- Export of the filtered list as CSV or JSON, including an "End reason" column and never any tokens
 
 ---
 
@@ -45,12 +46,13 @@ Free and open under the MIT license. All features are available without a paid l
 
 ![Session Modal](pics/dashboardsessionmodal.png)
 
-**Click any session to see:**
-- Full device information
-- Browser and operating system
-- Complete session history
-- IP geolocation
-- Security risk score
+**Click any session to see its details:**
+- Why it is in its current state, in one sentence
+- User, sign-in time, last activity, end time and end reason
+- Device type, browser, operating system and IP address
+- Stored location and the security score (0-100)
+- **Look up location** for sessions without a stored location. The lookup runs only when you click it, because it can send the IP address to ipapi.co.
+- Technical details: record ID and raw user agent
 
 ---
 
@@ -58,11 +60,11 @@ Free and open under the MIT license. All features are available without a paid l
 
 ![Session Info Panel](pics/sessioninfopanel.png)
 
-**When viewing a user:**
-- Sidebar shows their active sessions
-- Quick actions (terminate, block)
-- Offline/Online status indicator
-- No need to leave the page!
+**When you edit a user in the Content Manager, the "Sessions" panel shows:**
+- Whether the user is **Online** or **Not online**, and how many open sessions they have
+- **End all sessions**: signs the user out on every device. They can sign in again.
+- **Block user** / **Unblock user**: a blocked user cannot sign in, and all open sessions end. Unblocking allows sign-in again but does not restore ended sessions.
+- Their open sessions, and a link to all of their sessions on the Sessions page
 
 ---
 
@@ -70,20 +72,24 @@ Free and open under the MIT license. All features are available without a paid l
 
 ![Settings 1](pics/settings1.png)
 
-**Easy configuration:**
-- Session timeouts
-- Rate limiting
-- Email alerts
-- Webhook notifications
-- Geo-blocking rules
+**Settings › Session Manager has three pages:** Configuration, Analytics and License.
+
+**Configuration has five tabs:**
+- **Sessions:** inactivity timeout, maximum session age, token check, idle check
+- **Login protection:** temporary IP lockout, trusted proxy headers, rejecting suspicious sign-ins, country rules
+- **Location data:** IP location lookup, security scoring, provider and MaxMind database
+- **Alerts:** security emails to users and team notifications to Discord or Slack
+- **Data and retention:** how long ended sessions are kept, and deleting all ended sessions
 
 ![Settings 2](pics/settings2.png)
 
-**Advanced security:**
-- Encryption key generator (one click!)
-- Country allow/block lists
-- VPN detection
-- Threat blocking
+**Also in Configuration:**
+- A token encryption key generator (Sessions › Advanced)
+- Country rules: allow only listed countries, or reject listed countries
+- Rejection of sign-ins from VPN, proxy or known threat addresses
+- Settings are saved in the database; other server processes apply changes within 30 seconds
+
+**Analytics** shows sessions over time and by device and browser. **License** shows whether an optional license key is stored and valid; all features work without one.
 
 ---
 
@@ -91,23 +97,22 @@ Free and open under the MIT license. All features are available without a paid l
 
 ### Simple Version
 
-**When users login:**
-- Plugin saves who logged in, when, and from where
-- You can see them in the dashboard (see screenshot above)
-- You can force-logout anyone anytime
+**When users sign in:**
+- The plugin records a session: who signed in, when, from which device and from where
+- You see it on the Sessions page (see screenshot above)
 
-**When users logout:**
-- Plugin marks their session as "logged out"
-- They disappear from the active sessions list
-- Manual logout permanently blocks session reactivation (security feature)
+**A session is in one of three states:**
+- **Active:** open and used within the inactivity timeout
+- **Idle:** open, but unused for longer than the inactivity timeout. It ends on its next request or at the next idle check. A token refresh makes it active again.
+- **Ended:** it can no longer be used, and the user has to sign in again on that device. The end reason says why: logged out, timed out, expired (maximum session age reached), ended manually, user blocked, or reason not recorded.
 
-**Session Timeout vs Manual Logout:**
-- **Timeout:** Session can be reactivated on next request (seamless UX)
-- **Manual Logout:** Session is permanently terminated (security-first)
+**Three actions, three meanings:**
+- **End** a session: it stops working, the record stays in the history
+- **Delete** a record: the history entry is removed; if the session is still open, it also ends. Its token stays revoked.
+- **Block** a user: the user cannot sign in, and all open sessions end
 
 **While users are active:**
-- Plugin updates their "last seen" time
-- You always know who's currently using your app
+- The plugin updates "Last active" with a short delay, to save database writes
 
 ---
 
@@ -141,9 +146,9 @@ npm run develop
 ### Step 4: Open Dashboard
 
 1. Go to Strapi Admin: `http://localhost:1337/admin`
-2. Look in the left sidebar for **"Sessions"**
+2. Look in the left sidebar for **"Session Manager"**
 3. Click it!
-4. You'll see the dashboard (like the screenshot above)
+4. You'll see the **Sessions** page (like the screenshot above)
 
 **That's it! You're done!**
 
@@ -153,14 +158,14 @@ npm run develop
 
 ### Encryption Key (Recommended)
 
-Your JWT tokens are encrypted before saving to database. Generate a key:
+Session Manager encrypts the tokens it stores with the `SESSION_ENCRYPTION_KEY` environment variable. It is not needed in Strapi's refresh-token mode (`jwtManagement: 'refresh'`). Generate a key:
 
-**In Admin Panel:**
-1. Go to **Sessions → Settings**
-2. Scroll to **"JWT Encryption Key Generator"**
-3. Click **"Generate Key"**
+**In the admin panel:**
+1. Go to **Settings › Session Manager › Configuration**, tab **Sessions**
+2. Open **Advanced** and find the token encryption key generator
+3. Generate a key. It stays hidden until you reveal it, and nothing is saved in Strapi.
 4. Click **"Copy for .env"**
-5. Paste into your `.env` file
+5. Paste it into your `.env` file
 6. Restart Strapi
 
 **Or generate manually:**
@@ -173,7 +178,7 @@ Then add to `.env`:
 SESSION_ENCRYPTION_KEY=your-key-here
 ```
 
-**Why?** If someone hacks your database, they can't steal user sessions! 🔒
+**Why?** If someone reads your database, they cannot reuse the stored tokens.
 
 ---
 
@@ -181,27 +186,29 @@ SESSION_ENCRYPTION_KEY=your-key-here
 
 ### 1. See Who's Logged In
 
-**Dashboard Tab:**
-- Shows all active users
-- Green badge = currently online
-- Gray badge = logged out
-- Click to see details
+**Sessions page:**
+- Shows every recorded session with its state badge: Active, Idle or Ended
+- Ended sessions show their end reason under the badge
+- The four cards at the top (Active, Idle, Ended, All) filter the list
+- Click a row to see details
 
 ### 2. Force Logout Anyone
 
-**Need to kick someone out?**
+**Need to sign someone out?**
 1. Find their session
-2. Click **"Terminate"**
-3. Magic Sessionmanager asks the configured session manager to revoke it. The behavior depends on the mode below.
+2. Click **"End session"** and confirm
+3. The session ends with the reason "Ended manually" and the record stays in the history. In Strapi's refresh-token mode the Strapi session is revoked first. The behavior depends on the mode below.
+
+To sign a user out everywhere, use **End all sessions** in the user's Sessions panel in the Content Manager. To also stop new sign-ins, use **Block user**.
 
 ### 3. Session Details
 
 **Click any session to see:**
-- When they logged in
-- Last time they did something
-- What browser/device they use
+- When they signed in
+- When they were last active, and when and why the session ended
+- What browser and device they use
 - Their IP address
-- Location
+- Location (stored at sign-in, or looked up when you click **Look up location**)
 
 ### 4. Multiple Devices
 
@@ -211,14 +218,15 @@ SESSION_ENCRYPTION_KEY=your-key-here
 - Tablet
 - All at the same time!
 
-Each login = separate session. You can see them all and logout each individually.
+Each sign-in is a separate session. You can see them all and end each one individually.
 
 ### 5. Auto-Cleanup
 
-**Inactive sessions are automatically cleaned up:**
-- If user doesn't do anything for 15 minutes (configurable)
-- Session is marked as "inactive"
-- Keeps your database clean
+**Idle sessions end automatically, and old history is deleted:**
+- A session unused for longer than the inactivity timeout (15 minutes by default) becomes idle
+- The **idle check** runs on a schedule (every 30 minutes by default, and once at server start) and ends idle sessions as "Timed out". It deletes nothing.
+- **History retention** deletes the records of ended sessions after 90 days by default. Open sessions are never deleted by retention.
+- **Delete ended sessions** (Configuration › Data and retention) removes the records of all ended sessions of all users at once. Open sessions, including idle ones, are not affected.
 
 ---
 
@@ -238,7 +246,7 @@ Set `jwtManagement` to `refresh` in the host application's Users & Permissions c
 }
 ```
 
-In this mode, Strapi issues, rotates and revokes native sessions. Magic Sessionmanager uses that state for end-user sessions while keeping its metadata and session history, such as device, IP, GeoIP and security details. It does not issue or rotate a second token family. Rows created natively without a Magic metadata record can still appear with a `native_` ID. Missing IP, device or GeoIP values are shown as unavailable.
+In this mode, Strapi issues, rotates and revokes native sessions. Magic Sessionmanager uses that state for end-user sessions while keeping its metadata and session history, such as device, IP, GeoIP and security details. It does not issue or rotate a second token family. Rows created natively without a Magic metadata record can still appear with a `native_` ID; the admin marks them as "Strapi session". Their device, IP and location were not recorded and are shown as "—" ("Not recorded").
 
 The existing Magic endpoints keep their paths, methods, permissions and response envelopes. The plugin does not change the host application's authentication configuration or migrate existing session records. Set `jwtManagement: 'refresh'` in the host application to opt into native session management. Its default Content API permission setup targets only the Authenticated role and never adds these actions to Public. If an administrator saves the Authenticated role before the first protected Magic request, the plugin preserves that role's permission choices. Strapi administrator-account sessions are not managed by this plugin.
 
@@ -276,7 +284,7 @@ Local lookups use the downloaded database without contacting MaxMind.
 
 ### Local GeoIP Firewall (Recommended)
 
-For login blocking and city-level session display, use a local MaxMind
+For country rules, suspicious-sign-in checks and city-level session display, use a local MaxMind
 GeoLite2 City database. This avoids remote API timeouts and rate limits in the
 login path while still giving the admin UI city, region, timezone and
 coordinates. Existing GeoLite2 Country databases remain supported as a
@@ -296,8 +304,10 @@ MAXMIND_LICENSE_KEY=your-license-key
 ```
 
 You can also manage this from the Strapi admin UI. Open
-**Magic Session Manager -> Settings -> Geofencing**, choose `local-mmdb`,
-enter the MaxMind account ID and license key, then use **Download / Update DB**.
+**Settings › Session Manager › Configuration**, tab **Location data**, choose
+the provider **Local database** (`local-mmdb`), enter the MaxMind account ID and
+license key, then use **Update database**. Environment variables take
+precedence over stored credentials.
 The plugin stores the credentials in the Strapi plugin store and never returns
 the license key to the browser after saving it.
 
@@ -358,27 +368,28 @@ identify VPNs or proxies.
 
 ### Threat Detection
 
-**Automatically check if IP is:**
+**With IP location lookup on, each sign-in IP address is checked for:**
 - VPN
 - Proxy
 - Known threat
-- Security score (0-100)
+- Security score (0-100, higher is safer). The local database always gives 100, and a failed lookup gives 50.
 
 ### Auto-Blocking
 
-**Block logins from:**
-- Specific countries
-- VPNs or proxies
-- Low security score IPs
-- Known threat IPs
+**Login protection** (Configuration › Login protection) checks **new sign-ins only**. Existing sessions are not affected, and refused sign-ins are not recorded.
+
+- **Temporary IP lockout:** after too many failed sign-ins from one IP address within 15 minutes (5 by default, 0 turns it off), that address is refused for 15 minutes (429 with `Retry-After`). User accounts are not blocked. Failed sign-ins are counted per server process.
+- **Reject suspicious sign-ins:** refuses sign-ins from VPN, proxy or known threat addresses and, with security scoring on, scores below 50 (403).
+- **Country rules:** allow only listed countries, or reject listed countries (403).
+- If the location cannot be determined, the configured failure mode decides whether the sign-in is allowed or refused with "Login temporarily unavailable".
+
+Suspicious-sign-in checks, country rules and alerts need IP location lookup. Blocking a user account is a separate action (**Block user**).
 
 ### Notifications
 
-**Get alerts when:**
-- Suspicious login detected
-- VPN used
-- New location login
-- Send to Discord or Slack!
+**Configuration › Alerts** has two kinds of alerts. Both are sent only when location data is available for the sign-in:
+- **Security emails to users:** sent to the end user's own email address, not to administrators, for a suspicious sign-in, a sign-in from a new country, or a VPN or proxy.
+- **Team notifications:** messages to your **Discord or Slack** channel for every sign-in, as suspicious, new country or success. Only `https://discord.com`, `https://discordapp.com` and `https://hooks.slack.com` webhook URLs are accepted; other URLs are not saved.
 
 ---
 
@@ -455,15 +466,15 @@ SMTP_DEFAULT_REPLY_TO=support@yourapp.com
 
 ### Step 4: Enable in Admin Panel
 
-1. Go to **Sessions → Settings**
-2. Scroll to **"Email Notifications"**
-3. Toggle **"Enable Email Alerts"** to ON
-4. Customize email templates (optional)
+1. Go to **Settings › Session Manager › Configuration**, tab **Alerts**
+2. Find **"Security emails to users"**. It needs IP location lookup (tab **Location data**).
+3. Turn on **"Send security emails"**
+4. Edit the email templates (optional). As soon as any template has content, only your stored templates are used, so fill in all three or none.
 5. Click **Save**
 
 ### Step 5: Test It
 
-Trigger a suspicious login (e.g., use a VPN) and check if the email arrives!
+Trigger a suspicious sign-in (for example through a VPN, with a provider that detects VPNs) and check whether the email arrives.
 
 **Troubleshooting:**
 - Check Strapi logs for email errors
@@ -572,7 +583,7 @@ Authorization: Bearer <JWT>
 
 ### Logout (Current Session)
 
-Terminates only the current session.
+Ends only the current session (end reason `logout`).
 
 ```bash
 POST /api/magic-sessionmanager/logout
@@ -588,7 +599,7 @@ Authorization: Bearer <JWT>
 
 ### Logout All Devices
 
-Terminates ALL sessions for the authenticated user (logs out everywhere).
+Ends all sessions of the authenticated user (signs out everywhere, end reason `logout`).
 
 ```bash
 POST /api/magic-sessionmanager/logout-all
@@ -604,7 +615,7 @@ Authorization: Bearer <JWT>
 
 ### Terminate Specific Session
 
-Terminates a specific session (not the current one). Useful for "Log out other devices".
+Ends a specific session of the authenticated user (not the current one), with the end reason `manual`. Useful for "Sign out other devices".
 Use the `id` / `documentId` value from the session response. The separate `sessionId` field is a tracking identifier stored on the session record.
 
 For a native-only row, use its `native_` value from `id`. Native-only rows may not have a `documentId` or Magic metadata.
@@ -636,7 +647,7 @@ Authorization: Bearer <JWT>
 
 ## 📋 Admin-API Endpoints (For Admin Panel)
 
-These endpoints require admin authentication.
+These endpoints require admin authentication and the plugin's admin access permission. They manage end-user (Users & Permissions) sessions only.
 
 ### Get All Sessions
 
@@ -656,11 +667,23 @@ GET /magic-sessionmanager/sessions/active
 POST /magic-sessionmanager/sessions/:sessionId/terminate
 ```
 
+Ends one session (**End session** in the admin). The session gets the end reason `manual`; in Strapi's refresh-token mode the Strapi session is revoked first. The record stays in the history. The user's next request with that token gets 401.
+
+### Delete Session Record
+
+```bash
+DELETE /magic-sessionmanager/sessions/:sessionId
+```
+
+Deletes one session record (**Delete record** in the admin). The record is removed from history, statistics and exports, and its token stays revoked. If the session is still open, it also ends.
+
 ### Terminate All User Sessions
 
 ```bash
 POST /magic-sessionmanager/user/:userId/terminate-all
 ```
+
+Ends all open sessions of one user (**End all sessions** in the admin) with the end reason `manual`. The user can sign in again unless the account is blocked.
 
 ### Block/Unblock User
 
@@ -668,15 +691,22 @@ POST /magic-sessionmanager/user/:userId/terminate-all
 POST /magic-sessionmanager/user/:userId/toggle-block
 ```
 
-The request must include JSON `{ "blocked": true }` to block or `{ "blocked": false }` to unblock. This endpoint requires the plugin's admin access permission. Blocking also revokes the user's sessions. If revocation fails, the response is 500 and the user can remain blocked while some sessions remain active; retry the same `{ "blocked": true }` request to resume revocation. Repeating a completed request does not reverse its intended state. Different concurrent block and unblock requests are not serialized by this endpoint.
+Sets or toggles the Users & Permissions `blocked` flag of one user (**Block user** / **Unblock user** in the admin). Blocking also ends all open sessions of the user with the end reason `blocked`; the user cannot sign in until unblocked. Unblocking allows sign-in again but does not restore ended sessions.
 
-**Migration:** Bodyless requests are rejected with 400 instead of toggling the current state. Update existing integrations to send the explicit desired boolean before upgrading. This is a breaking API change.
+- **Recommended:** send JSON `{ "blocked": true }` to block or `{ "blocked": false }` to unblock. This sets the state, so it is safe to retry, and it is what the admin UI sends.
+- **Without a body** (or without a `blocked` field) the request still toggles the current state, as in earlier versions. This form is deprecated: a retry after a failed or lost response can reverse the intended state.
+- A `blocked` value that is present but not a boolean returns 400 before anything changes.
+- The response contains `blocked` (the new state) and the additive field `mode`: `explicit` when `blocked` was sent, `toggle` for the bodyless form. Existing fields are unchanged.
+
+If ending the sessions fails, the response is 500 and the user can stay blocked while some sessions remain open; retry the same `{ "blocked": true }` request to resume. Different concurrent block and unblock requests are not serialized by this endpoint.
 
 ### Clean Inactive Sessions
 
 ```bash
 POST /magic-sessionmanager/sessions/clean-inactive
 ```
+
+Deletes the records of all ended sessions of all users (**Delete ended sessions** in the admin). Open sessions, including idle ones, are not affected, and the tokens of deleted sessions stay revoked. This does not run the idle check.
 
 ---
 
@@ -690,18 +720,20 @@ POST /magic-sessionmanager/sessions/clean-inactive
     // How often to update "last seen" (in milliseconds)
     lastSeenRateLimit: 30000,  // Default: 30 seconds
     
-    // When to mark sessions inactive (in milliseconds)
+    // How long a session may stay unused before it becomes idle and then ends (in milliseconds)
     inactivityTimeout: 900000,  // Default: 15 minutes
   },
 }
 ```
 
-**In Admin Panel (Settings Tab):**
-- Email alerts on/off
-- Webhook URLs (Discord/Slack)
-- Countries to block/allow
-- VPN detection on/off
-- Generate encryption key
+**In the admin panel (Settings › Session Manager › Configuration):**
+- **Sessions:** inactivity timeout, maximum session age, token check (strict or relaxed), idle check interval, encryption key generator
+- **Login protection:** temporary IP lockout, trust proxy headers, reject suspicious sign-ins, country rules. These affect new sign-ins only.
+- **Location data:** IP location lookup, security scoring, provider, MaxMind credentials and database updates
+- **Alerts:** security emails to users, team notifications (Discord or Slack webhook URLs only)
+- **Data and retention:** how long ended sessions are kept, and deleting all ended sessions
+
+Settings saved in the admin are stored in the database. Other server processes apply them within 30 seconds.
 
 ---
 
@@ -743,7 +775,7 @@ POST /magic-sessionmanager/sessions/clean-inactive
 - Multi-tenant apps (see which tenant users are online)
 - E-commerce (track customer sessions)
 - Collaboration tools (show who's currently working)
-- Security-critical apps (force-logout compromised accounts)
+- Security-critical apps (end sessions and block compromised accounts)
 - Compliance requirements (session audit logs)
 
 **Not needed if:**
@@ -757,11 +789,11 @@ POST /magic-sessionmanager/sessions/clean-inactive
 
 ### Quick Manual Test
 
-1. **Login to your Strapi app** (frontend or admin)
-2. **Go to Admin → Sessions**
-3. **You should see your session!**
-4. **Click "Terminate" on your session**
-5. **Try to use the app → You're logged out!**
+1. **Sign in to your app as an end user** (Users & Permissions, for example through your frontend). Strapi admin sign-ins are not recorded.
+2. **In the Strapi admin, open Session Manager**
+3. **You should see the session as Active**
+4. **Click "End session" on it and confirm**
+5. **Use the app with the same token → the request is rejected with 401, and the session shows Ended · Ended manually**
 
 ### With Postman
 
@@ -790,18 +822,18 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 When you install this plugin, you get:
 
-- ✅ Dashboard to see all sessions
+- ✅ Sessions page with every recorded session
 - ✅ Session tracking (automatic)
-- ✅ Force logout buttons
-- ✅ Activity monitoring
-- ✅ Encryption (secure)
+- ✅ End session, End all sessions, Delete record, Block user
+- ✅ Activity monitoring and Analytics
+- ✅ Token encryption
 - ✅ Multi-device support
 
 **All features are included for free:**
-- ✅ IP Geolocation
+- ✅ IP location lookup
 - ✅ Threat detection
-- ✅ Auto-blocking
-- ✅ Email/webhook alerts
+- ✅ Login protection (temporary IP lockout, suspicious sign-ins, country rules)
+- ✅ Security emails to users and Discord or Slack team notifications
 
 ---
 
@@ -811,10 +843,10 @@ When you install this plugin, you get:
 A: No! Just install and enable the plugin.
 
 **Q: Will this break my existing logins?**  
-A: No! It just tracks them, doesn't change them.
+A: Existing sign-in flows keep working. Login protection checks new sign-ins only: the temporary IP lockout is on by default (5 failed sign-ins from one IP address within 15 minutes), while suspicious-sign-in and country rules are off until you turn them on.
 
 **Q: Can users see each other's sessions?**  
-A: No! Only admins can see all sessions. Users only see their own.
+A: No. Only admins can see all sessions. Users only see their own.
 
 **Q: What if I uninstall the plugin?**  
 A: Sessions will stop being tracked. Everything else works normally.
@@ -843,7 +875,7 @@ A: Not yet, but it's planned for future versions!
 
 ### Optional license-key activation
 
-The admin panel includes a License page where you can register an optional key. This is only used for install tracking and support context; it does not unlock or restrict any plugin feature.
+**Settings › Session Manager › License** shows whether an optional license key is stored and whether it is valid. It is read-only. The key is only used for install tracking and support context; it does not unlock or restrict any plugin feature. All features work without a key.
 
 See [LICENSE](./LICENSE) for full terms.
 

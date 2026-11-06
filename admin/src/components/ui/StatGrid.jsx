@@ -66,7 +66,27 @@ const IconTile = styled(Flex)`
 const STAT_TONES = new Set(['primary', 'success', 'warning', 'danger', 'neutral', 'secondary', 'alternative']);
 
 /**
- * One KPI card. The label is read before the value; the icon is decorative.
+ * Button reset for clickable cards. The browser focus ring stays; the
+ * pressed card is marked by a primary border and aria-pressed.
+ */
+const CardButton = styled(Box)`
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  width: 100%;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.primary100};
+  }
+`;
+
+/**
+ * One KPI card: icon, label and value in one compact block, an optional
+ * secondary line below. The label is read before the value; the icon is
+ * decorative. With `onClick` the whole card is a toggle button (for example
+ * the dashboard status filter) and `pressed` marks the active choice.
  *
  * @param {object} props
  * @param {import('react').ReactNode} props.label Metric name.
@@ -74,17 +94,27 @@ const STAT_TONES = new Set(['primary', 'success', 'warning', 'danger', 'neutral'
  * @param {import('react').ComponentType<any>} [props.icon] Distinct DS icon.
  * @param {'primary'|'success'|'warning'|'danger'|'neutral'|'secondary'|'alternative'} [props.tone] Semantic tone.
  * @param {import('react').ReactNode} [props.description] Secondary line.
+ * @param {() => void} [props.onClick] Makes the card a button.
+ * @param {boolean} [props.pressed] Toggle state of a clickable card.
+ * @param {string} [props.actionLabel] Accessible name of a clickable card (defaults to its text).
  * @returns {import('react').ReactElement} Stat card filling its grid cell.
  */
-export const StatCard = ({ label, value, icon: Icon, tone = 'neutral', description }) => {
+export const StatCard = ({ label, value, icon: Icon, tone = 'neutral', description, onClick, pressed, actionLabel }) => {
   const safeTone = STAT_TONES.has(tone) ? tone : 'neutral';
+  const clickable = typeof onClick === 'function';
+  const buttonProps = clickable
+    ? { tag: 'button', type: 'button', onClick, 'aria-pressed': Boolean(pressed), 'aria-label': actionLabel }
+    : {};
+  const Card = clickable ? CardButton : Box;
 
   return (
-    <Box
+    <Card
+      {...buttonProps}
       background="neutral0"
       hasRadius
       shadow="tableShadow"
-      padding={{ initial: 4, medium: 6 }}
+      borderColor={clickable ? (pressed ? 'primary600' : 'neutral150') : undefined}
+      padding={4}
       flex="1 1 auto"
       minWidth={0}
       data-stat-card={safeTone}
@@ -105,20 +135,22 @@ export const StatCard = ({ label, value, icon: Icon, tone = 'neutral', descripti
               <Icon aria-hidden focusable={false} />
             </IconTile>
           ) : null}
-          <Typography variant="sigma" textColor="neutral600" tag="p">
-            {label}
-          </Typography>
+          <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0}>
+            <Typography variant="sigma" textColor="neutral600" tag="span">
+              {label}
+            </Typography>
+            <Typography variant="beta" textColor="neutral800" tag="span">
+              {value}
+            </Typography>
+          </Flex>
         </Flex>
-        <Typography variant="alpha" textColor="neutral800" tag="p">
-          {value}
-        </Typography>
         {description ? (
-          <Typography variant="pi" textColor="neutral600" tag="p">
+          <Typography variant="pi" textColor="neutral600" tag="span">
             {description}
           </Typography>
         ) : null}
       </Flex>
-    </Box>
+    </Card>
   );
 };
 

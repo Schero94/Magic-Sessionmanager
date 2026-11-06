@@ -18,11 +18,6 @@ const ids = [...new Set([
   ...[...extraSources.matchAll(/\bmessage\(\s*'([^']+)'/g)].map((match) => match[1]),
 ])];
 
-// Settings keys added or changed in this redesign are delivered through the
-// i18n merge (scratchpad i18n/settings.json). Until that merge lands, the
-// catalogue-dependent checks run as TODO, like the other screens' i18n tests.
-const pendingKeys = ids.filter((id) => typeof messagesFor('en')[id] !== 'string');
-const catalogueOptions = pendingKeys.length > 0 ? { todo: `pending i18n merge: ${pendingKeys.length} key(s)` } : {};
 
 /**
  * Returns the source of every `t('id', …)` call with balanced parentheses.
@@ -68,7 +63,7 @@ const countArgs = (call) => {
   return count;
 };
 
-test('every statically referenced Settings message exists in all five locales', catalogueOptions, () => {
+test('every statically referenced Settings message exists in all five locales', () => {
   for (const locale of LOCALES) {
     const messages = messagesFor(locale);
     const missing = ids.filter((id) => typeof messages[id] !== 'string' || !messages[id].trim());
@@ -76,7 +71,7 @@ test('every statically referenced Settings message exists in all five locales', 
   }
 });
 
-test('every Settings message is valid ICU in every locale (I18N-3)', catalogueOptions, () => {
+test('every Settings message is valid ICU in every locale (I18N-3)', () => {
   for (const locale of LOCALES) {
     const messages = messagesFor(locale);
     for (const id of ids) {
@@ -106,7 +101,7 @@ test('messages with ICU arguments always receive values (I18N-1)', () => {
   assert.deepEqual(offenders, []);
 });
 
-test('Settings defaultMessages equal the English catalogue', catalogueOptions, () => {
+test('Settings defaultMessages equal the English catalogue', () => {
   const english = messagesFor('en');
   const unescape = (text) => text.replace(/\\(.)/g, (match, char) => (char === 'n' ? '\n' : char));
   const pairs = [
@@ -131,7 +126,7 @@ test('one message id is never used with two different default messages (SET-02)'
   assert.deepEqual(conflicts, []);
 });
 
-test('German Settings copy uses the formal address (I18N-6)', catalogueOptions, () => {
+test('German Settings copy uses the formal address (I18N-6)', () => {
   const german = messagesFor('de');
   const informal = /\b(?:du|dein\w*|dich|dir)\b|\b(?:Versuche|Aktiviere|Verwende|Prüfe|Wähle|Gib|Klicke|Speichere)\b(?! Sie)/;
   const offenders = Object.entries(german)
@@ -164,14 +159,14 @@ test('country labels follow the locale, preserve unknown codes and leave flags o
   assert.deepEqual(options.map((option) => option.label), [...options.map((option) => option.label)].sort((a, b) => a.localeCompare(b, 'de')));
 });
 
-test('the session logout confirmation does not expose internal field names (I18N-8)', catalogueOptions, () => {
-  // The dashboard reuses the modal wording instead of the old
+test('the End session confirmation does not expose internal field names (I18N-8)', () => {
+  // Table, cards and the dialog share the IA E.1 wording instead of the old
   // homepage.confirm.terminate ("…set isActive to false…") message.
   const actions = readFileSync(new URL('../admin/src/pages/Dashboard/SessionActions.jsx', import.meta.url), 'utf8');
-  assert.match(actions, /t\('modal\.confirm\.terminate'/);
-  assert.doesNotMatch(actions, /homepage\.confirm\.terminate/);
+  assert.match(actions, /t\(\s*'homepage\.confirm\.end\.body'/);
+  assert.doesNotMatch(actions, /homepage\.confirm\.terminate|isActive to false/);
   for (const locale of LOCALES) {
-    const message = messagesFor(locale)['modal.confirm.terminate'];
+    const message = messagesFor(locale)['homepage.confirm.end.body'];
     assert.equal(typeof message, 'string', locale);
     assert.doesNotMatch(message, /isActive|\bfalse\b/, locale);
     assert.equal(messagesFor(locale)['homepage.confirm.terminate'], undefined, `${locale} drops the developer-facing copy`);

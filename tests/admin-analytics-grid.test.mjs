@@ -48,19 +48,69 @@ test('bar value labels sit outside the fill so contrast does not depend on the v
   assert.match(code, /textColor="neutral800"/, 'labels use body text colour on the card background');
 });
 
-test('bucket labels are translated, only browser names are shown as-is (UX-09, I18N-11)', () => {
+test('bucket labels are translated, only browser names are shown as-is (UX-09, I18N-11, decision I.2-3)', () => {
   assert.match(code, /getDeviceTypeMessage\(/);
-  assert.match(code, /ANALYTICS_OTHER_KEY/);
-  assert.match(code, /analytics\.browser\.other/);
+  assert.match(code, /ANALYTICS_UNKNOWN_KEY/);
+  assert.match(code, /analytics\.bucket\.unknown/);
   assert.doesNotMatch(code, />\{device\}</);
   assert.doesNotMatch(code, />\{browser\}</);
-  assert.doesNotMatch(code, /['"](?:Desktop|Mobile|Tablet|Other|Unknown|API Client)['"]/);
+  const withoutMessages = code.replace(/\bt\(\s*'[\w.]+',\s*'(?:[^'\\]|\\.)*'/g, 't(');
+  assert.doesNotMatch(withoutMessages, /['"](?:Desktop|Mobile|Tablet|Other|Unknown|API Client)['"]/, 'labels only as translated defaults');
+  const note = code.match(/'analytics\.detection\.note',\s*'((?:[^'\\]|\\.)*)'/)?.[1] || '';
+  assert.match(note, /user agent/, 'the footnote says where devices come from');
+  assert.match(note, /Unknown/, 'the footnote explains the Unknown bucket');
 });
 
-test('average duration copy states what is measured (F5)', () => {
+test('KPIs are named after what they count, with rolling windows (IA D6, I.1-24)', () => {
+  const grid = code.match(/<StatGrid\b[\s\S]*?<\/StatGrid>/)?.[0] || '';
+  const labels = [...(grid.match(/<StatCard\b[\s\S]*?\/>/g) || []).join('\n').matchAll(/label=\{t\('([\w.]+)',\s*'([^']*)'\)\}/g)].map((match) => match[2]);
+  assert.deepEqual(labels, [
+    'All sessions',
+    'Active sessions',
+    'Sign-ins in the last 24 hours',
+    'Sign-ins in the last 7 days',
+  ]);
+  assert.doesNotMatch(code, /Online now|today|this week/i, 'no retired KPI wording');
+});
+
+test('average session length states the measured span, including idle time (IA D6, I.1-25)', () => {
+  assert.match(code, /'analytics\.duration\.title',\s*'Average session length'/);
   const description = code.match(/'analytics\.duration\.description',\s*'([^']*)'/)?.[1] || '';
-  assert.match(description, /last recorded activity/i);
-  assert.match(description, /not counted/i);
+  assert.equal(
+    description,
+    'From sign-in to the end of the session, or to its last activity while it is still open. Sessions that timed out include the unused time before they were closed.'
+  );
+});
+
+test('no hour-of-day timeline: hidden analytics stay deferred (I.1-26, decision I.2-8)', () => {
+  assert.doesNotMatch(code, /analytics\.timeline\./);
+  assert.equal((code.match(/<SectionCard\b/g) || []).length, 3, 'Devices, Browsers and Average session length');
+});
+
+test('header: subtitle names the loaded sessions, Refresh keeps the page mounted, link back to the sessions (IA D6)', () => {
+  assert.match(code, /'analytics\.subtitle',\s*'\{count, plural,[^']*Based on the latest # loaded sessions\.\}\}'/);
+  assert.match(code, /<LinkButton\b[^>]*tag=\{NavLink\}[^>]*to=\{SESSION_MANAGER_PATH\}/);
+  assert.match(code, /analytics\.openSessionManager/);
+  const refresh = code.match(/<Button\b(?:(?!<\/Button>)[\s\S])*?onClick=\{fetchAnalytics\}[\s\S]*?<\/Button>/)?.[0] || '';
+  assert.match(refresh, /aria-busy=\{refreshing\}/);
+  assert.doesNotMatch(refresh, /\bdisabled=|\bloading=/, 'a disabled button would drop focus');
+  const fetcher = code.match(/const fetchAnalytics = async[\s\S]*?\n {2}\};/)?.[0] || '';
+  assert.doesNotMatch(fetcher, /setLoading\(true\)/, 'a refresh never returns to the page loader');
+});
+
+test('truncation alert appears only when the API reports meta.truncated (IA D1, D6)', () => {
+  assert.match(code, /data\?\.meta\?\.truncated === true/);
+  const alert = code.match(/\{truncated \? \([\s\S]*?\) : null\}/)?.[0] || '';
+  assert.match(alert, /analytics\.truncated/);
+  assert.match(alert, /Only the latest \{count, number\} sessions are loaded\. Counts, filters and exports cover these sessions only\./);
+});
+
+test('loading, empty, error and no-permission states follow IA G', () => {
+  assert.match(code, /<Page\.Loading\b/);
+  assert.match(code, /<Page\.NoPermissions\b/);
+  assert.match(code, /'analytics\.empty',\s*'No sessions to analyse yet\. Analytics appear after the first sign-ins\.'/);
+  assert.match(code, /'analytics\.error\.title',\s*'Analytics could not be loaded\.'/);
+  assert.match(code, /'analytics\.error\.retry',\s*'Try again'/);
 });
 
 test('analytics uses DS tokens only: no media queries, px spacing, colour literals or console output (UX-11)', () => {

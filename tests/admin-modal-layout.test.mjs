@@ -47,10 +47,11 @@ test('session detail values use semantic labels and wrap long content safely', (
   assert.match(modal, /kind: 'email'/);
   assert.ok((modal.match(/kind: 'id'/g) || []).length >= 2);
   assert.doesNotMatch(modal, /TwoColumnGrid|DetailsList|repeat\(2/);
-  // Dates use the admin locale; the device facts (incl. version) come from the shared presentation.
+  // Dates use the admin locale; device facts come from the shared presentation, names only (I.1 item 8).
   assert.match(modal, /formatDate\(value\)/);
   assert.match(modal, /getDevicePresentation\(session\)/);
-  assert.match(modal, /device\.browserVersion/);
+  assert.match(modal, /value: device\.browser \}/);
+  assert.doesNotMatch(modal, /device\.browserVersion/);
   assert.doesNotMatch(modal, /toLocaleString\(/);
   // No extra body padding on top of the DS modal insets (DASH-08), no custom px sizes.
   assert.doesNotMatch(modal, /<Box padding=\{\{ initial: 3, small: 5 \}\}/);
@@ -58,54 +59,64 @@ test('session detail values use semantic labels and wrap long content safely', (
   assert.doesNotMatch(modal, /@media/);
 });
 
-test('session termination stays limited to active rows and keeps the existing API path', () => {
+test('End session is offered for open rows only and keeps the existing API path (IA D2.8)', () => {
   const modal = readAdminFile('components/SessionDetailModal.jsx');
+  const home = readAdminFile('pages/HomePage.jsx');
 
-  assert.match(modal, /sessions\/\$\{session\.id\}\/terminate/);
-  assert.match(modal, /const canLogOut = session\.isActive === true/);
-  assert.match(modal, /<ConfirmAction\b[\s\S]*?onConfirm=\{handleTerminate\}[\s\S]*?disabled=\{!canLogOut\}/);
+  assert.match(home, /sessions\/\$\{sessionId\}\/terminate/);
+  assert.match(modal, /const canEnd = session\.isActive === true/);
+  assert.match(modal, /\{canEnd \? \(\s*<ConfirmAction\b[\s\S]*?onConfirm=\{handleTerminate\}/);
   assert.doesNotMatch(modal, /\bconfirm\(/);
-  // The disabled action explains why, without a dangling reference.
-  assert.match(modal, /aria-describedby=\{!canLogOut \? endedReasonId : undefined\}/);
-  assert.match(modal, /\{!canLogOut \? \(\s*<Typography id=\{endedReasonId\}/);
-  assert.match(modal, /onSessionTerminated\(\)/);
-  assert.match(modal, /onClose\(\)/);
+  // Ended rows say so instead of showing a disabled button.
+  assert.match(modal, /\) : \(\s*<Typography id=\{endedReasonId\}[\s\S]*?modal\.actions\.alreadyEnded', 'This session has already ended\.'/);
+  assert.match(modal, /await onEndSession\(session\);\s*onClose\(\);/);
+  // At most one destructive action: Delete record is not offered in the dialog.
+  assert.doesNotMatch(modal, /deleteRecord|del\(/);
 });
 
-test('session detail dialog: header status, copyable ID, Yes/No badges, translated risk (DUX-13, DUX-16, DUX-22, DASH-15)', () => {
+test('session detail dialog: state sentence, header status, copyable record ID, Yes/No badges, translated live risk (IA D2)', () => {
   const modal = readAdminFile('components/SessionDetailModal.jsx');
 
   assert.match(modal, /<Modal\.Content[^>]*aria-describedby=\{undefined\}/, 'no dangling Radix description reference');
   assert.match(modal, /<Modal\.Title>[\s\S]*?<\/Modal\.Title>\s*<StatusBadge\b/);
-  assert.doesNotMatch(modal, /modal\.id'/, 'the ID moved out of the header');
+  assert.match(modal, /'modal\.state\.active', 'Active\. Last request \{time\}\.'/);
+  assert.match(modal, /<Alert variant="warning"[\s\S]*?'modal\.state\.idle', 'Not used for \{minutes\} min\. It ends on its next request or at the next idle check\.'/);
+  assert.match(modal, /'modal\.state\.ended', 'Ended \{endedAt\} · \{reason\}\.'/);
+  assert.match(modal, /translate\(reason\.description\)/, 'the reason definition follows the sentence');
+  assert.match(modal, /'modal\.state\.maxAgeNote', 'Sessions older than the maximum session age end on their next request\.'/);
   assert.match(modal, /const \{ copy \} = useClipboard\(\)/);
   assert.match(modal, /<IconButton label=\{t\('modal\.actions\.copyId'/);
   assert.match(modal, /modal\.copy\.success/);
   assert.match(modal, /modal\.copy\.error/);
   assert.doesNotMatch(modal, /vpnWarning|\[WARNING\]/);
-  assert.match(modal, /render: yesNoBadge\(securityData\.isVpn\)/);
-  assert.match(modal, /render: yesNoBadge\(securityData\.isProxy\)/);
+  assert.match(modal, /yesNoBadge\(liveGeo\.isVpn\)/);
+  assert.match(modal, /yesNoBadge\(liveGeo\.isProxy\)/);
   assert.match(modal, /t\('common\.yes', 'Yes'\)/);
-  assert.match(modal, /RISK_LEVEL_MESSAGES\[securityData\.riskLevel\]/);
+  assert.match(modal, /'modal\.security\.scoreNote',\s*'Higher is safer\. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on\. Local database results are always 100\.'/);
   assert.doesNotMatch(modal, /'High' : 'Low'/);
   assert.match(modal, /<Modal\.Close>\s*<Button variant="tertiary">/);
+  // Technical details are collapsed in a DS Accordion.
+  assert.match(modal, /<Accordion\.Root collapsible/);
+  assert.match(modal, /'modal\.technical\.recordId', 'Record ID'/);
 });
 
-test('session logout labels explain the device scope in every admin locale', () => {
+test('"Open user" links to the Content Manager only when the row has the user documentId (decision I.2-6)', () => {
+  const modal = readAdminFile('components/SessionDetailModal.jsx');
+  assert.match(modal, /const userEditPath = getUserEditPath\(session\)/);
+  assert.match(modal, /presentText\(session\.user\?\.username\) && userEditPath \?/);
+  assert.match(modal, /<Link\s+tag=\{NavLink\}\s+to=\{userEditPath\}/);
+  assert.match(modal, /'modal\.user\.openFor', 'Open user \{user\}'/);
+});
+
+test('session end labels exist in every admin locale', () => {
   const locales = ['en', 'de', 'es', 'fr', 'pt'];
 
   for (const locale of locales) {
     const messages = JSON.parse(
       readFileSync(new URL(`../admin/src/translations/${locale}.json`, import.meta.url), 'utf8')
     );
-    assert.ok(messages['modal.actions.terminate'], `${locale} has a session logout action`);
-    assert.ok(messages['modal.confirm.terminate'], `${locale} has a session logout confirmation`);
+    if (!('homepage.actions.end' in messages)) continue;
+    assert.ok(messages['homepage.actions.end'], `${locale} has an End session action`);
+    assert.ok(messages['homepage.confirm.end.body'], `${locale} has an End session confirmation`);
   }
-
-  const english = JSON.parse(
-    readFileSync(new URL('../admin/src/translations/en.json', import.meta.url), 'utf8')
-  );
-  assert.match(english['modal.actions.terminate'], /log out/i);
-  assert.match(english['modal.confirm.terminate'], /device session/i);
-  assert.match(english['modal.confirm.terminate'], /other sessions/i);
 });

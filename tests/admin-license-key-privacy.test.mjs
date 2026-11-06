@@ -16,7 +16,7 @@ test('license key masking keeps only a short suffix visible', async () => {
   assert.equal(maskSensitiveValue(null), '••••••••');
 });
 
-test('activation key is masked by default and has an explicit accessible reveal control', () => {
+test('license key is masked by default and has an explicit accessible reveal control', () => {
   assert.match(licenseSource, /useState\(false\).*showLicenseKey/s);
   assert.match(licenseSource, /showLicenseKey\s*\?\s*data\.licenseKey\s*:\s*maskSensitiveValue\(data\.licenseKey\)/);
   // DS IconButton turns `label` into its accessible name (aria-label).
@@ -31,8 +31,8 @@ test('activation key is masked by default and has an explicit accessible reveal 
   }
 });
 
-test('activation-key download filename does not disclose a key prefix', () => {
-  assert.match(licenseSource, /link\.download\s*=\s*['"]session-manager-activation\.txt['"]/);
+test('license download filename does not disclose a key prefix', () => {
+  assert.match(licenseSource, /link\.download\s*=\s*['"]session-manager-license\.txt['"]/);
   assert.doesNotMatch(licenseSource, /licenseKey\.substring\(0,\s*8\)/);
 });
 

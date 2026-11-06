@@ -35,7 +35,7 @@ test('user panel formats dates with the admin locale and translated values witho
   assert.match(panel, /formatRelativeTime\(lastActivity\)/);
   assert.match(panel, /title=\{formatDate\(lastActivity\)\}/);
   assert.match(panel, /translate\(device\.summary, device\.summary\.values\)/, 'browser and OS use the shared translated summary');
-  assert.match(panel, /panel\.sessions\.showAll[\s\S]*?count: sessions\.length/);
+  assert.match(panel, /panel\.sessions\.more[\s\S]*?count: hiddenCount/);
   assert.doesNotMatch(panel, /toLocaleString\(/);
   assert.doesNotMatch(panel, /\{deviceInfo\.browser\} on \{deviceInfo\.os\}/);
   assert.doesNotMatch(panel, /sessions\.length - 5 !== 1/);
@@ -46,7 +46,7 @@ test('user panel messages format singular, plural and device values in every loc
     const messages = JSON.parse(read(`translations/${locale}.json`));
     const intl = createIntl({ locale, messages, onError: () => {} }, createIntlCache());
     for (const count of [1, 2]) {
-      const text = intl.formatMessage({ id: 'panel.sessions.currentCount' }, { count });
+      const text = intl.formatMessage({ id: 'panel.summary.openCount' }, { count });
       assert.ok(text.includes(String(count)), `${locale} must interpolate count ${count}`);
       assert.doesNotMatch(text, /\{count/);
       assert.ok(!text.includes('(s)') && !text.includes('(en)') && !text.includes('(es)') && !text.includes('(ões)'), `${locale} needs real plural forms`);

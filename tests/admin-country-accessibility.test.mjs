@@ -36,12 +36,17 @@ test('country picker is a DS Combobox with typeahead and a separate typed-code f
   assert.doesNotMatch(source, /1 1 12rem/, 'no rem flex-basis (12rem is 120px in Strapi)');
 });
 
-test('geofencing mode is a labelled DS Radio group with confirmation before a list is cleared (SET-05)', () => {
+test('country rule mode is a labelled DS Radio group with confirmation before a list is cleared (SET-05, IA E.2)', () => {
   assert.match(source, /<Radio\.Group\b[\s\S]*?aria-labelledby=\{modeLabelId\}[\s\S]*?value=\{mode\}[\s\S]*?onValueChange=\{requestMode\}/);
   assert.match(source, /<Radio\.Item value="allowlist">/);
   assert.match(source, /<Radio\.Item value="blocklist">/);
   assert.match(source, /if \(impact\.confirm\) \{\s*setPendingMode\(requestedMode\)/);
-  assert.match(source, /<ConfirmDialog\b[\s\S]*?settings\.geofencing\.mode\.confirmTitle/);
+  assert.match(source, /<ConfirmDialog\b[\s\S]*?t\('settings\.config\.countries\.switch\.title', 'Switch to \{mode\}\?', \{ mode: modeLabels\[pendingMode\] \?\? '' \}\)/);
+  assert.match(source, /'settings\.config\.countries\.switch\.body',\s*'The current list of \{count, plural, one \{# country\} other \{# countries\}\} is cleared when you save\.'/);
+  assert.match(source, /t\('settings\.config\.countries\.switch\.action', 'Switch mode'\)/);
+  assert.match(source, /allowlist: t\('settings\.config\.countries\.mode\.allow', 'Allow only listed countries'\)/);
+  assert.match(source, /blocklist: t\('settings\.config\.countries\.mode\.reject', 'Reject listed countries'\)/);
+  assert.doesNotMatch(source, /Allowlist|Blocklist/, 'retired wording (IA A.1, I.1-19)');
 });
 
 test('country removal label exists in all supported locales', () => {

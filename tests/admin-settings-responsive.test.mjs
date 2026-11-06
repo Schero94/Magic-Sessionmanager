@@ -54,8 +54,8 @@ test('settings field pairs share an equal-height two-column grid that stacks bel
   assert.doesNotMatch(settings, /@media\s*\(/, 'no custom media queries');
 });
 
-test('unpaired max failed login field uses the full card width', () => {
-  const security = readSettingsFile('SecurityTab.jsx');
+test('unpaired temporary IP lockout field uses the full card width', () => {
+  const security = readSettingsFile('LoginProtectionTab.jsx');
   const fieldPosition = security.indexOf('id="max-failed-logins"');
   const before = security.slice(security.lastIndexOf('<SectionCard', fieldPosition), fieldPosition);
   assert.ok(fieldPosition >= 0);
@@ -66,7 +66,7 @@ test('encryption key actions wrap on mobile and the preview uses DS tokens', () 
   const card = readSettingsFile('EncryptionKeyCard.jsx');
   const actionStart = card.indexOf('<Flex gap={2} wrap="wrap">');
   assert.ok(actionStart >= 0, 'key buttons wrap instead of pushing past the mobile viewport');
-  assert.match(card.slice(actionStart, card.indexOf('</Flex>', actionStart)), /settings\.security\.encryption\.generate/);
+  assert.match(card.slice(actionStart, card.indexOf('</Flex>', actionStart)), /settings\.config\.token\.key\.generate/);
   assert.doesNotMatch(card, /fontSize:\s*'12px'|rgba\(|fontFamily:\s*'monospace'/);
 });
 
@@ -90,9 +90,9 @@ test('email template tabs keep equal widths and heights instead of clipping on n
   );
 });
 
-test('the danger zone stacks its button under the text below the small breakpoint (SET-09, SET-03 browser)', () => {
-  const general = readSettingsFile('GeneralTab.jsx');
-  const danger = general.slice(general.indexOf("settings.general.danger.title"));
+test('the danger card stacks its button under the text below the small breakpoint (SET-09, SET-03 browser, IA D5 mobile)', () => {
+  const general = readSettingsFile('DataRetentionTab.jsx');
+  const danger = general.slice(general.indexOf("settings.config.deleteEnded.title"));
   assert.match(danger, /tone="danger"/);
   assert.match(danger, /direction=\{\{ initial: 'column', small: 'row' \}\}/);
   assert.match(danger, /<ConfirmAction\b/);

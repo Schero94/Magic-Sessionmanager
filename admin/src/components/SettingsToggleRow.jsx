@@ -37,9 +37,12 @@ const SettingsCopy = styled.div`
  *   description?: string,
  *   checked: boolean,
  *   onChange: (checked: boolean) => void,
+ *   disabled?: boolean,
  *   children?: import('react').ReactNode,
- * }} props Setting state, copy, switch callback and optional extra content
- *   (for example a privacy note) rendered under the description.
+ * }} props Setting state, copy, switch callback, disabled state (a
+ *   dependent setting whose requirement is off) and optional extra content
+ *   (for example a privacy note or a "Requires …" link) rendered under the
+ *   description.
  * @returns {import('react').ReactElement} An accessible responsive setting row.
  */
 const SettingsToggleRow = ({
@@ -48,6 +51,7 @@ const SettingsToggleRow = ({
   description,
   checked,
   onChange,
+  disabled = false,
   children,
 }) => {
   const titleId = `${id}-title`;
@@ -62,7 +66,7 @@ const SettingsToggleRow = ({
       data-settings-toggle-row=""
     >
       <SettingsCopy>
-        <Typography id={titleId} variant="omega" fontWeight="bold" textColor="neutral800" tag="p">
+        <Typography id={titleId} variant="omega" fontWeight="bold" textColor={disabled ? 'neutral600' : 'neutral800'} tag="p">
           {title}
         </Typography>
         {description ? (
@@ -83,6 +87,7 @@ const SettingsToggleRow = ({
         aria-describedby={description ? descriptionId : undefined}
         checked={checked}
         onCheckedChange={onChange}
+        disabled={disabled}
         visibleLabels={false}
       />
     </SettingsRowCard>

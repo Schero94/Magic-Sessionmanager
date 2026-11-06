@@ -20,58 +20,69 @@ function handlerSource(source, name) {
   return source.slice(start, end);
 }
 
-test('removing a session explains that an unexpired access token remains revoked', () => {
+test('Delete record says it is permanent, and the result says the token stays revoked (IA E.1)', () => {
   const handler = homeSource.slice(homeSource.indexOf('const handleDeleteSession'), homeSource.indexOf('const handleExportCSV'));
   const actionsSource = readFileSync(new URL('../admin/src/pages/Dashboard/SessionActions.jsx', import.meta.url), 'utf8');
-  const removeConfirm = actionsSource.slice(actionsSource.indexOf('const removeConfirm'), actionsSource.indexOf('onConfirm: () => onRemove'));
+  const removeConfirm = actionsSource.slice(actionsSource.indexOf('remove: isOpen'), actionsSource.indexOf('const SessionActions'));
 
   // ConfirmAction (Strapi ConfirmDialog) confirms before the handler runs; never window.confirm.
-  assert.ok(removeConfirm.length > 0, 'the remove action has its own confirmation');
-  assert.match(removeConfirm, /unexpired access token remains blocked until it expires/i);
+  assert.ok(removeConfirm.length > 0, 'the delete action has its own confirmation');
+  assert.equal((removeConfirm.match(/removed (?:permanently )?from history, statistics and exports\. This cannot be undone\./g) || []).length, 2);
+  assert.match(removeConfirm, /This session is still open\. \{user\} will be signed out on \{device\}/);
+  assert.match(actionsSource, /<ConfirmAction\b[\s\S]*?\{\.\.\.copy\.remove\}[\s\S]*?onConfirm=\{\(\) => onDelete\(session\)\}/);
   assert.doesNotMatch(homeSource + actionsSource, /\bconfirm\(/);
-  assert.match(handler, /remains blocked until expiry/i);
+  assert.match(handler, /'Session record deleted\. Its token stays revoked\.'/);
 });
 
-test('bulk logout confirms before sending its mutation request', () => {
-  const handler = handlerSource(panelSource, 'handleLogoutAll');
+test('End all sessions confirms before sending its mutation request', () => {
+  const handler = handlerSource(panelSource, 'handleEndAll');
 
   // The request only runs from the ConfirmAction dialog's confirm button.
   assert.ok(handler.indexOf('postRequest(') >= 0);
-  assert.match(panelSource, /<ConfirmAction\b[\s\S]*?onConfirm=\{handleLogoutAll\}/);
-  assert.doesNotMatch(panelSource, /onClick=\{handleLogoutAll\}/);
+  assert.match(panelSource, /<ConfirmAction\b[\s\S]*?onConfirm=\{handleEndAll\}/);
+  assert.doesNotMatch(panelSource, /onClick=\{handleEndAll\}/);
   assert.doesNotMatch(panelSource, /\bconfirm\(/, 'no browser confirm dialog');
 });
 
-test('block and unblock confirm before changing user access', () => {
-  const handler = handlerSource(panelSource, 'handleToggleBlock');
+test('Block user confirms before changing user access; Unblock user is not destructive (IA E.1)', () => {
+  const block = handlerSource(panelSource, 'handleBlock');
+  const unblock = handlerSource(panelSource, 'handleUnblock');
 
-  assert.match(panelSource, /<ConfirmAction\b[\s\S]*?onConfirm=\{handleToggleBlock\}/);
-  assert.doesNotMatch(panelSource, /onClick=\{handleToggleBlock\}/);
-  assert.match(handler, /postRequest\([^\n]+\{\s*blocked:\s*!isBlocked\s*\}/);
+  assert.match(panelSource, /<ConfirmAction\b[\s\S]*?onConfirm=\{handleBlock\}/);
+  assert.doesNotMatch(panelSource, /onClick=\{handleBlock\}/);
+  assert.match(block, /changeBlocked\(true\)/);
+  assert.match(unblock, /changeBlocked\(false\)/);
+  assert.match(panelSource, /onClick=\{handleUnblock\}/);
+  assert.match(panelSource, /postRequest\([^\n]+toggle-block`, \{ blocked \}\)/, 'an explicit state, never a blind toggle');
 });
 
-test('inactive-session cleanup confirmation explains token revocation retention', () => {
-  // The cleanup runs only from the onConfirm of a DS ConfirmAction dialog (no window.confirm).
-  const trigger = settingsSource.slice(settingsSource.indexOf("settings.general.danger.cleanNow"), settingsSource.indexOf('onConfirm={handleCleanInactive}') + 40);
-  assert.match(trigger, /<\/ConfirmAction|confirmLabel=/);
-  assert.match(settingsSource, /<ConfirmAction\b[\s\S]*?body=\{t\(\s*'settings\.general\.danger\.confirm',\s*'[^']*access tokens remain revoked until they expire[^']*'/i);
-  assert.match(settingsSource, /onConfirm=\{handleCleanInactive\}/);
+test('Delete ended sessions confirms with the IA copy and states that open sessions stay (IA E.1, I.1-18)', () => {
+  // The deletion runs only from the onConfirm of a DS ConfirmAction dialog (no window.confirm).
+  const tab = readFileSync(new URL('../admin/src/pages/Settings/DataRetentionTab.jsx', import.meta.url), 'utf8');
+  const confirm = tab.slice(tab.indexOf('<ConfirmAction'), tab.indexOf('onConfirm={handleCleanInactive}') + 40);
+  assert.match(confirm, /t\('settings\.config\.deleteEnded\.action', 'Delete ended sessions'\)/);
+  assert.match(confirm, /title=\{t\('settings\.config\.deleteEnded\.confirmTitle', 'Delete all ended sessions\?'\)\}/);
+  assert.match(confirm, /'settings\.config\.deleteEnded\.confirmBody',\s*'The records of every ended session of every user are removed permanently from history, statistics and exports\. Open sessions, including idle ones, are not affected\. This cannot be undone\.'/);
+  assert.match(confirm, /confirmLabel=\{t\('settings\.config\.deleteEnded\.action', 'Delete ended sessions'\)\}/);
+  assert.doesNotMatch(settingsSource, /Clean Now|Clean All Inactive|settings\.general\.danger/, 'retired wording (IA A.1)');
   const handlerStart = settingsSource.indexOf('const handleCleanInactive = useCallback(async () => {');
   const handler = settingsSource.slice(handlerStart, settingsSource.indexOf('\n  }, [', handlerStart));
   assert.ok(handlerStart >= 0, 'cleanup handler exists');
   assert.doesNotMatch(handler, /\bconfirm\(/, 'no browser dialog');
-  assert.match(handler, /revoked until expiry/i);
+  assert.match(handler, /'settings\.config\.feedback\.deletedEnded',\s*'\{count, plural, one \{# ended session deleted\.\} other \{# ended sessions deleted\.\}\}'/);
+  assert.match(handler, /'settings\.config\.feedback\.deletedNone', 'There were no ended sessions to delete\.'/);
+  assert.match(handler, /'Ended sessions could not be deleted\. Some may already be gone; reload to see the current state\.'/);
   assert.match(handler, /logSafeAdminError\('settings\.cleanInactive', err\)/);
+  assert.match(handler, /throw err;/, 'the dialog stays open on failure');
 });
 
-test('all supported admin locales explain that unexpired tokens remain blocked after cleanup', () => {
+test('every locale carries both Delete record confirmations without the retired "blocked" token wording', () => {
   for (const [locale, messages] of Object.entries(translations)) {
-    assert.ok(messages['homepage.confirm.delete'], `${locale} session delete confirmation exists`);
-    assert.ok(messages['notifications.success.deleted'], `${locale} session removal result exists`);
-    assert.ok(messages['settings.general.danger.confirm'], `${locale} cleanup confirmation exists`);
-    assert.ok(messages['notifications.success.cleaned'], `${locale} cleanup result exists`);
-    assert.ok(messages['settings.general.danger.description'], `${locale} cleanup description exists`);
-    assert.doesNotMatch(messages['homepage.confirm.delete'], /permanently|dauerhaft|définitivement|permanentemente/i);
-    assert.doesNotMatch(messages['settings.general.danger.confirm'], /permanently|dauerhaft|définitivement|permanentemente/i);
+    if (!('homepage.confirm.deleteEnded.body' in messages)) continue;
+    assert.ok(messages['homepage.confirm.deleteOpen.body'], `${locale} open-row delete confirmation exists`);
+    assert.ok(messages['notifications.success.recordDeleted'], `${locale} delete result exists`);
+    for (const key of ['homepage.confirm.deleteEnded.body', 'homepage.confirm.deleteOpen.body']) {
+      assert.doesNotMatch(messages[key], /\bblocked\b|gesperrt/i, `${locale} ${key} uses the revoke vocabulary`);
+    }
   }
 });

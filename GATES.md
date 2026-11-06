@@ -14,7 +14,7 @@
 
 ## 2026-11-06 full acceptance continuation
 
-The checked G-gates further down are historical evidence for checkout `2f00880` (4.7.2 + native sessions), measured on 2026-10-16 on the workbench host with Strapi 5.58.0. They are not proof for 4.8.0, for the acceptance branch or for the redesign branch. The current objective, ownership boundaries and leaf gates are in `docs/plans/2026-11-06-complete-acceptance.md`, `gates/complete-acceptance-*.md` and, for the redesign branch, `gates/ui-redesign.md`.
+The checked G-gates further down are historical evidence for checkout `2f00880` (4.7.2 + native sessions), measured on 2026-10-16 on the workbench host with Strapi 5.58.0. They are not proof for 4.8.0, for the acceptance branch or for the redesign branch. The current objective, ownership boundaries and leaf gates are in `docs/plans/2026-11-06-complete-acceptance.md`, `gates/complete-acceptance-*.md` and, for the redesign branch, `gates/ui-redesign.md`. For labels, session states, navigation and action copy the approved information architecture `docs/plans/2026-11-06-ui-information-architecture.md` is the source of truth; its implementation is the open gate IA in `gates/ui-redesign.md`, which N2 depends on.
 
 Root workbench gates (`../../gates/sessionmanager.md`, `../../gates/audit-sessionmanager.md`, `../../gates/pages-sessionmanager.md`) check `plugins/Magic-Sessionmanager` at `2f00880` (package version 4.7.2) and the workbench test-app (Strapi 5.58.0). They are historical for that checkout and are not acceptance for 4.8.0 or this branch (GA-07).
 
