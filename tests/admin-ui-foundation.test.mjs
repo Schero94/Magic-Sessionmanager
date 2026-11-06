@@ -100,7 +100,9 @@ test('PropertyList is a description list with equal columns and targeted wrappin
 test('StatusBadge uses the shared state vocabulary and EndReason the shared reasons (I.1 items 1-2)', () => {
   const badge = read('components/ui/StatusBadge.jsx');
   assert.match(badge, /getSessionStatusPresentation/);
-  assert.match(badge, /<Badge variant=\{presentation\.tone\}/);
+  assert.match(badge, /<Badge \{\.\.\.getBadgeColors\(presentation\.tone\)\}/);
+  // The DS warning variant fails WCAG AA (3.6:1); Idle keeps the warning background with neutral800 text.
+  assert.match(badge, /tone === 'warning'\s*\? \{ backgroundColor: 'warning200', textColor: 'neutral800' \}\s*: \{ variant: tone \}/);
   assert.match(badge, /const label = translate\(presentation\)/);
   assert.match(badge, /formatMessage\(\{ id: getTranslation\(descriptor\.messageId\), defaultMessage: descriptor\.defaultMessage \}\)/);
   assert.doesNotMatch(badge, /danger/, 'danger is not a session-state colour');

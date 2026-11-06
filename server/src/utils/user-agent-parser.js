@@ -25,10 +25,13 @@ function parseUserAgent(userAgent) {
   const ua = userAgent.toLowerCase();
 
   // Detect device type
+  // iPad user agents also contain "Mobile/…", so tablets are checked first.
   let deviceType = 'desktop';
-  if (/mobile|android.*mobile|iphone|ipod|blackberry|iemobile|opera mini|opera mobi/i.test(userAgent)) {
+  if (/ipad|tablet|kindle|silk/i.test(userAgent)) {
+    deviceType = 'tablet';
+  } else if (/mobile|android.*mobile|iphone|ipod|blackberry|iemobile|opera mini|opera mobi/i.test(userAgent)) {
     deviceType = 'mobile';
-  } else if (/tablet|ipad|android(?!.*mobile)|kindle|silk/i.test(userAgent)) {
+  } else if (/android(?!.*mobile)/i.test(userAgent)) {
     deviceType = 'tablet';
   } else if (/bot|crawl|spider|slurp|mediapartners/i.test(userAgent)) {
     deviceType = 'bot';
@@ -75,12 +78,13 @@ function parseUserAgent(userAgent) {
       '5.1': 'XP',
     };
     osVersion = winVersionMap[winVersion] || winVersion;
+  } else if (/iphone|ipad|ipod/i.test(userAgent)) {
+    // Checked before macOS: iOS user agents contain "like Mac OS X".
+    osName = 'iOS';
+    osVersion = extractVersion(userAgent, /\bos (\d+[_\.\d]*)/i)?.replace(/_/g, '.');
   } else if (/mac os x/i.test(userAgent)) {
     osName = 'macOS';
     osVersion = extractVersion(userAgent, /mac os x (\d+[_\.\d]*)/i)?.replace(/_/g, '.');
-  } else if (/iphone|ipad|ipod/i.test(userAgent)) {
-    osName = 'iOS';
-    osVersion = extractVersion(userAgent, /os (\d+[_\.\d]*)/i)?.replace(/_/g, '.');
   } else if (/android/i.test(userAgent)) {
     osName = 'Android';
     osVersion = extractVersion(userAgent, /android (\d+[\.\d]*)/i);

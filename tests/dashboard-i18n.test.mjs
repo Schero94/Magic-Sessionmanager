@@ -66,7 +66,8 @@ test('dashboard message ids exist in every locale with matching English defaults
   );
   assert.equal(translations.de['common.status.idle'], 'Im Leerlauf');
   assert.equal(translations.de['common.endReason.idle'], 'Zeitüberschreitung');
-  assert.equal(translations.de['modal.timeline.minutes'], '{minutes} Min.');
+  // IA D2.4: the Session section lists Signed in, Last active, Ended at and End reason only.
+  assert.equal(translations.en['modal.timeline.notUsedFor'], undefined);
 });
 
 test('no retired session words remain in dashboard defaults (IA A.1)', () => {

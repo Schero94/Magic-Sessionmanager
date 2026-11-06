@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Box, SearchForm, Searchbar } from '@strapi/design-system';
+import styled from 'styled-components';
 import { getTranslation } from '../../utils/getTranslation';
+
+/**
+ * The DS Searchbar clear button is 22 px; this gives it the 24 px minimum
+ * target size (WCAG 2.5.8) without changing the field height.
+ */
+const SearchWrapper = styled(Box)`
+  & button {
+    min-width: 2.4rem;
+    min-height: 2.4rem;
+    justify-content: center;
+  }
+`;
 
 /** Delay before typing updates the URL and the list. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -48,7 +61,7 @@ const SessionSearch = ({ value, onSearch }) => {
   };
 
   return (
-    <Box width="100%" data-session-search="">
+    <SearchWrapper width="100%" data-session-search="">
       <SearchForm
         onSubmit={(event) => {
           event.preventDefault();
@@ -69,7 +82,7 @@ const SessionSearch = ({ value, onSearch }) => {
           {t('homepage.search.label', 'Search sessions')}
         </Searchbar>
       </SearchForm>
-    </Box>
+    </SearchWrapper>
   );
 };
 

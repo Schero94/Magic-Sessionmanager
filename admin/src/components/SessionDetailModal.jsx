@@ -3,7 +3,6 @@ import { useIntl } from 'react-intl';
 import { NavLink } from 'react-router-dom';
 import {
   Accordion,
-  Badge,
   Box,
   Button,
   Flex,
@@ -14,6 +13,7 @@ import {
   Typography,
 } from '@strapi/design-system';
 import { Cross, Duplicate, Earth } from '@strapi/icons';
+import styled from 'styled-components';
 import { useClipboard, useFetchClient, useNotification } from '@strapi/strapi/admin';
 import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
@@ -32,6 +32,16 @@ import { getSessionUserLabels, getUserEditPath } from '../pages/Dashboard/dashbo
 import { ConfirmAction, DeviceIcon, EndReason, PropertyList, StatusBadge } from './ui';
 import Alert from './PersistentAlert';
 import ReadableText from './ReadableText';
+
+/**
+ * Inline "Open user" link with a 24 px high hit area (WCAG 2.5.8), without
+ * changing how the text sits on the line.
+ */
+const TargetLink = styled(Link)`
+  min-height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+`;
 
 /** Monospace identifiers (IA H.13). */
 const MONOSPACE = { fontFamily: 'monospace', overflowWrap: 'anywhere', minWidth: 0 };
@@ -204,10 +214,12 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
     );
   };
 
-  const yesNoBadge = (value) => (typeof value === 'boolean' ? (
-    <Badge variant={value ? 'danger' : 'neutral'} size="S">
+  // Plain text: danger colour is reserved for destructive actions and the
+  // blocked-user alert (IA B.3), and the DS danger badge fails AA (3.9:1).
+  const yesNoText = (value) => (typeof value === 'boolean' ? (
+    <Typography variant="omega" textColor="neutral800">
       {value ? t('common.yes', 'Yes') : t('common.no', 'No')}
-    </Badge>
+    </Typography>
   ) : undefined);
 
   const notStoredForPast = (
@@ -228,37 +240,29 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
     {
       id: 'score',
       label: t('modal.security.score', 'Security score'),
-      fullWidth: true,
-      render: score === null ? undefined : (
-        <Flex direction="column" alignItems="stretch" gap={1}>
-          <Typography variant="omega" textColor="neutral800">
-            {t('modal.security.scoreValue', '{score}/100', { score })}
-          </Typography>
-          <Typography variant="pi" textColor="neutral600">
-            {t(
-              'modal.security.scoreNote',
-              'Higher is safer. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on. Local database results are always 100.'
-            )}
-          </Typography>
-        </Flex>
-      ),
+      value: score === null ? null : t('modal.security.scoreValue', '{score}/100', { score }),
     },
-    riskMessage
-      ? { id: 'risk', label: t('modal.security.riskLevel', 'Risk level'), value: translate(riskMessage) }
-      : null,
     {
       id: 'vpn',
       label: t('modal.security.vpn', 'VPN'),
-      render: liveGeo ? yesNoBadge(liveGeo.isVpn) : (storedGeo ? notStoredForPast : undefined),
+      render: liveGeo ? yesNoText(liveGeo.isVpn) : (storedGeo ? notStoredForPast : undefined),
     },
     {
       id: 'proxy',
       label: t('modal.security.proxy', 'Proxy'),
-      render: liveGeo ? yesNoBadge(liveGeo.isProxy) : (storedGeo ? notStoredForPast : undefined),
+      render: liveGeo ? yesNoText(liveGeo.isProxy) : (storedGeo ? notStoredForPast : undefined),
     },
+    riskMessage
+      ? { id: 'risk', label: t('modal.security.riskLevel', 'Risk level'), value: translate(riskMessage), fullWidth: true }
+      : null,
   ];
 
-  const lookupControls = !geo && ipAddress && !native ? (
+  // Without any stored or looked-up data the list would only repeat "—", so
+  // the section shows the on-demand lookup alone (IA D2.6).
+  const canLookUp = !geo && Boolean(ipAddress) && !native;
+  const hasLocationData = Boolean(geo) || score !== null || !canLookUp;
+
+  const lookupControls = canLookUp ? (
     <Flex direction="column" alignItems="flex-start" gap={2}>
       {lookup.status === 'loading' ? (
         <Loader small role="status" aria-live="polite">
@@ -319,13 +323,13 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
                     render: presentText(session.user?.username) && userEditPath ? (
                       <Flex gap={2} alignItems="baseline" wrap="wrap">
                         <Typography variant="omega" textColor="neutral800">{session.user.username}</Typography>
-                        <Link
+                        <TargetLink
                           tag={NavLink}
                           to={userEditPath}
                           aria-label={t('modal.user.openFor', 'Open user {user}', { user: user.accessible })}
                         >
                           {t('modal.user.open', 'Open user')}
-                        </Link>
+                        </TargetLink>
                       </Flex>
                     ) : undefined,
                   },
@@ -343,13 +347,6 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
                     label: t('modal.timeline.lastActive', 'Last active'),
                     value: formatTimestamp(session.lastActive || session.loginTime),
                   },
-                  canEnd
-                    ? {
-                      id: 'notUsedFor',
-                      label: t('modal.timeline.notUsedFor', 'Not used for'),
-                      value: minutes === null ? null : t('modal.timeline.minutes', '{minutes} min', { minutes }),
-                    }
-                    : null,
                   !canEnd
                     ? { id: 'endedAt', label: t('modal.timeline.endedAt', 'Ended at'), value: formatTimestamp(session.logoutTime) }
                     : null,
@@ -382,7 +379,15 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
             </DetailSection>
 
             <DetailSection title={t('modal.section.security', 'Location and security')}>
-              <PropertyList items={locationItems} />
+              {hasLocationData ? <PropertyList items={locationItems} /> : null}
+              {score !== null ? (
+                <Typography variant="pi" textColor="neutral600" data-score-note="">
+                  {t(
+                    'modal.security.scoreNote',
+                    'Higher is safer. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on. Local database results are always 100.'
+                  )}
+                </Typography>
+              ) : null}
               {lookupControls}
             </DetailSection>
 

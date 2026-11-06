@@ -48,6 +48,19 @@ const StatusDetail = ({ session, status }) => {
 };
 
 /**
+ * DS Badge colours for a tone. The DS warning variant (warning700 on
+ * warning200) reaches only 3.6:1 in the light theme, so the Idle badge keeps
+ * the warning background but uses neutral800 text (light about 10:1, dark
+ * white on warning200). Every other tone uses its DS variant.
+ *
+ * @param {string} tone DS Badge variant.
+ * @returns {object} Badge colour props.
+ */
+export const getBadgeColors = (tone) => (tone === 'warning'
+  ? { backgroundColor: 'warning200', textColor: 'neutral800' }
+  : { variant: tone });
+
+/**
  * The one session state badge for every screen (IA B.3): Active (success),
  * Idle (warning), Ended (neutral). Colour never carries meaning alone: the
  * label is the state and, with `detail`, a neutral second line gives the
@@ -69,7 +82,7 @@ const StatusBadge = ({ status, session, detail = false, showEndReason = false, s
     formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage });
   const label = translate(presentation);
   const badge = (
-    <Badge variant={presentation.tone} size={size} data-session-status={presentation.status}>
+    <Badge {...getBadgeColors(presentation.tone)} size={size} data-session-status={presentation.status}>
       {label}
     </Badge>
   );

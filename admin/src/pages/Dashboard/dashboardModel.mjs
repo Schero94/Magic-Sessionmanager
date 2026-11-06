@@ -250,6 +250,46 @@ export function shouldIsolateActionKey(key, fromInsideGroup) {
 }
 
 /**
+ * Narrowest list width (px) at which every table column fits without
+ * squeezing User and Device to an ellipsis. Measured on Strapi 5.61 with the
+ * main menu open: 1440 px viewports give the list 1272 px (fits), 1280 px give
+ * 1112 px (User and Device cut to a few letters).
+ */
+export const FULL_TABLE_MIN_WIDTH = 1200;
+
+/**
+ * Whether the table drops the IP address and Signed in columns (they stay in
+ * the dialog). Below the DS large breakpoint always (IA D1); above it when
+ * the list itself is narrower than FULL_TABLE_MIN_WIDTH, because the Strapi
+ * main menu and page gutters take part of the viewport.
+ *
+ * @param {number|undefined} listWidth Measured list width in px (0/undefined when unknown).
+ * @param {boolean} isBelowLarge Viewport is below the DS large breakpoint.
+ * @returns {boolean} True for the compact table.
+ */
+export function shouldUseCompactTable(listWidth, isBelowLarge) {
+  if (isBelowLarge) return true;
+  if (!Number.isFinite(listWidth) || listWidth <= 0) return false;
+  return listWidth < FULL_TABLE_MIN_WIDTH;
+}
+
+/**
+ * Decides whether an isolated keydown must be handed back to the document.
+ * Radix (ConfirmDialog, SimpleMenu) listens for Escape on the document in the
+ * bubble phase. Portal events bubble through the React tree into the action
+ * group: stopping them hides Escape from Radix, and letting them reach the
+ * DS grid cell lets it call preventDefault(), which Radix reads as "do not
+ * dismiss". So Escape from a portal is stopped and re-dispatched.
+ *
+ * @param {string} key KeyboardEvent.key.
+ * @param {boolean} fromInsideGroup Whether the event target is inside the group's DOM.
+ * @returns {boolean} True to re-dispatch Escape on the document.
+ */
+export function shouldRedispatchEscape(key, fromInsideGroup) {
+  return !fromInsideGroup && key === 'Escape';
+}
+
+/**
  * Picks the session whose row should receive focus after a mutation: the
  * same row when it still exists (for example after ending it), else the
  * row that followed it, else the one before it. Returns null for an empty list.

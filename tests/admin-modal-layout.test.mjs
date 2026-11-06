@@ -89,8 +89,11 @@ test('session detail dialog: state sentence, header status, copyable record ID, 
   assert.match(modal, /modal\.copy\.success/);
   assert.match(modal, /modal\.copy\.error/);
   assert.doesNotMatch(modal, /vpnWarning|\[WARNING\]/);
-  assert.match(modal, /yesNoBadge\(liveGeo\.isVpn\)/);
-  assert.match(modal, /yesNoBadge\(liveGeo\.isProxy\)/);
+  assert.match(modal, /yesNoText\(liveGeo\.isVpn\)/);
+  assert.match(modal, /yesNoText\(liveGeo\.isProxy\)/);
+  assert.doesNotMatch(modal, /variant=\{value \? 'danger'/, 'Yes/No is plain text, not a danger badge (IA B.3)');
+  assert.match(modal, /\{hasLocationData \? <PropertyList items=\{locationItems\} \/> : null\}/, 'no wall of dashes before a lookup');
+  assert.doesNotMatch(modal, /modal\.timeline\.notUsedFor/, 'Session section per IA D2.4');
   assert.match(modal, /t\('common\.yes', 'Yes'\)/);
   assert.match(modal, /'modal\.security\.scoreNote',\s*'Higher is safer\. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on\. Local database results are always 100\.'/);
   assert.doesNotMatch(modal, /'High' : 'Low'/);
@@ -104,7 +107,8 @@ test('"Open user" links to the Content Manager only when the row has the user do
   const modal = readAdminFile('components/SessionDetailModal.jsx');
   assert.match(modal, /const userEditPath = getUserEditPath\(session\)/);
   assert.match(modal, /presentText\(session\.user\?\.username\) && userEditPath \?/);
-  assert.match(modal, /<Link\s+tag=\{NavLink\}\s+to=\{userEditPath\}/);
+  assert.match(modal, /<TargetLink\s+tag=\{NavLink\}\s+to=\{userEditPath\}/);
+  assert.match(modal, /const TargetLink = styled\(Link\)`\s*min-height: 2\.4rem;/, 'the inline link has a 24 px hit area');
   assert.match(modal, /'modal\.user\.openFor', 'Open user \{user\}'/);
 });
 

@@ -5,18 +5,26 @@ import { Cross, Eye, More, Trash } from '@strapi/icons';
 import { getTranslation } from '../../utils/getTranslation';
 import { useSessionFormatters } from '../../utils/useSessionFormatters';
 import { ConfirmAction } from '../../components/ui';
-import { getSessionUserLabels, shouldIsolateActionKey } from './dashboardModel.mjs';
+import { getSessionUserLabels, shouldIsolateActionKey, shouldRedispatchEscape } from './dashboardModel.mjs';
 
 /**
  * Stops keys that the Design System grid cell would swallow (Enter/Space on
- * the row buttons) and every key coming from the confirmation dialog portal.
+ * the row buttons) and every key coming from the confirmation dialog or menu
+ * portal; Escape from a portal is re-dispatched on the document.
  *
  * @param {import('react').KeyboardEvent<HTMLElement>} event Keydown inside the action group.
  * @returns {void}
  */
 const isolateActionKeys = (event) => {
   const fromInsideGroup = event.currentTarget.contains(/** @type {Node} */ (event.target));
-  if (shouldIsolateActionKey(event.key, fromInsideGroup)) event.stopPropagation();
+  if (!shouldIsolateActionKey(event.key, fromInsideGroup)) return;
+  event.stopPropagation();
+  if (shouldRedispatchEscape(event.key, fromInsideGroup)) {
+    // Hand Escape back to Radix's document listener so the open confirmation
+    // or More menu closes (see shouldRedispatchEscape).
+    const { ownerDocument } = event.currentTarget;
+    ownerDocument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  }
 };
 
 /**

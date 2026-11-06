@@ -22,7 +22,8 @@ import {
   Typography,
   VisuallyHidden,
 } from '@strapi/design-system';
-import { ArrowClockwise, ChartBubble, Check, Clock, Cog, Cross, Download, Monitor, Search, User } from '@strapi/icons';
+import { ArrowClockwise, ChartBubble, Check, Clock, Cog, Cross, Download, User } from '@strapi/icons';
+import { EmptyDocuments } from '@strapi/icons/symbols';
 import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
@@ -39,6 +40,7 @@ import { paginateSessions } from '../utils/sessionPagination.mjs';
 import { buildSessionCsv, buildSessionJson } from '../utils/sessionExports.mjs';
 import { useSessionFormatters } from '../utils/useSessionFormatters';
 import { useBreakpoint } from '../utils/useBreakpoint';
+import { useElementWidth } from '../utils/useElementWidth';
 import { PageShell, StatCard, StatGrid } from '../components/ui';
 import SessionDetailModal from '../components/SessionDetailModal';
 import Alert from '../components/PersistentAlert';
@@ -58,6 +60,7 @@ import {
   hasActiveFilters,
   parseDashboardQuery,
   pickFocusSessionId,
+  shouldUseCompactTable,
 } from './Dashboard/dashboardModel.mjs';
 
 /** Rows the sessions API returns at most; named in the truncation alert and export labels. */
@@ -104,6 +107,7 @@ const HomePage = () => {
   const { toggleNotification } = useNotification();
   const formatters = useSessionFormatters();
   const { isBelowMedium, isBelowLarge } = useBreakpoint();
+  const [listWidthRef, listWidth] = useElementWidth();
   const [{ query }, setQuery] = useQueryParams();
   const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const dashboard = parseDashboardQuery(query);
@@ -425,20 +429,24 @@ const HomePage = () => {
     </SimpleMenu>
   );
 
-  const primaryAction = canExport || !showSessionData ? exportMenu : (
+  const exportAction = canExport || !showSessionData ? exportMenu : (
     <Tooltip label={t('homepage.export.disabledHint', 'No sessions match the current filter.')}>
       <span>{exportMenu}</span>
     </Tooltip>
   );
 
-  const secondaryAction = (
-    <Flex gap={2} wrap="wrap">
+  // Header actions sit together on the right, as in native Strapi list views
+  // (Media Library: secondary actions left of the primary one). The links are
+  // tertiary so Export stays the strongest action.
+  const primaryAction = (
+    <Flex gap={2} wrap="wrap" justifyContent="flex-end">
       <LinkButton tag={Link} to={ANALYTICS_PATH} variant="tertiary" size="S" startIcon={<ChartBubble />}>
         {t('homepage.links.analytics', 'Analytics')}
       </LinkButton>
       <LinkButton tag={Link} to={CONFIGURATION_PATH} variant="tertiary" size="S" startIcon={<Cog />}>
         {t('homepage.links.settings', 'Settings')}
       </LinkButton>
+      {exportAction}
     </Flex>
   );
 
@@ -493,22 +501,24 @@ const HomePage = () => {
         </Flex>
         {filterControls}
       </Flex>
-      {lastUpdated ? (
-        <Flex gap={2} alignItems="center" wrap="wrap">
-          <Typography variant="pi" textColor="neutral600" data-last-updated="">
-            {t('homepage.lastUpdated', 'Last updated {time}', {
-              time: formatters.formatRelativeTime(lastUpdated, now),
-            })}
-          </Typography>
-          {refreshing ? (
-            <Loader small role="status" aria-live="polite">
-              {t('homepage.refreshing', 'Updating sessions')}
-            </Loader>
-          ) : null}
-        </Flex>
-      ) : null}
     </Flex>
   );
+
+  // "Last updated" sits on the caption row, right-aligned under Refresh.
+  const lastUpdatedLine = lastUpdated ? (
+    <Flex gap={2} alignItems="center" wrap="wrap" justifyContent="flex-end">
+      {refreshing ? (
+        <Loader small role="status" aria-live="polite">
+          {t('homepage.refreshing', 'Updating sessions')}
+        </Loader>
+      ) : null}
+      <Typography variant="pi" textColor="neutral600" data-last-updated="">
+        {t('homepage.lastUpdated', 'Last updated {time}', {
+          time: formatters.formatRelativeTime(lastUpdated, now),
+        })}
+      </Typography>
+    </Flex>
+  ) : null;
 
   const listProps = {
     sessions: pageResult.items,
@@ -535,7 +545,6 @@ const HomePage = () => {
         'Sign-ins of your app’s users (Users & Permissions). Strapi administrators are not listed.'
       )}
       primaryAction={primaryAction}
-      secondaryAction={secondaryAction}
     >
       <Flex
         ref={dashboardRef}
@@ -628,34 +637,39 @@ const HomePage = () => {
         )}
 
         {showToolbar && (
-          <Flex direction="column" alignItems="stretch" gap={4} minWidth={0}>
+          <Flex ref={listWidthRef} direction="column" alignItems="stretch" gap={4} minWidth={0}>
             <VisuallyHidden>
               <Typography variant="delta" tag="h2">
                 {t('homepage.list.heading', 'Session list')}
               </Typography>
             </VisuallyHidden>
             {toolbar}
-            <Typography
-              id={listHeadingId}
-              ref={listHeadingRef}
-              tabIndex={-1}
-              variant="pi"
-              textColor="neutral600"
-              aria-live="polite"
-              data-session-caption=""
-            >
-              {t('homepage.caption', '{from, number}–{to, number} of {total, plural, one {# session} other {# sessions}}', {
-                from: pageResult.startIndex,
-                to: pageResult.endIndex,
-                total: pageResult.total,
-              })}
-            </Typography>
+            <Flex justifyContent="space-between" alignItems="center" gap={4} wrap="wrap">
+              <Typography
+                id={listHeadingId}
+                ref={listHeadingRef}
+                tabIndex={-1}
+                variant="pi"
+                textColor="neutral600"
+                aria-live="polite"
+                data-session-caption=""
+              >
+                {pageResult.total > 0
+                  ? t('homepage.caption', '{from, number}–{to, number} of {total, plural, one {# session} other {# sessions}}', {
+                    from: pageResult.startIndex,
+                    to: pageResult.endIndex,
+                    total: pageResult.total,
+                  })
+                  : t('homepage.captionNone', '0 sessions')}
+              </Typography>
+              {lastUpdatedLine}
+            </Flex>
 
             {filteredSessions.length > 0 ? (
               <>
                 {isBelowMedium
                   ? <SessionCardList {...listProps} />
-                  : <SessionTable {...listProps} compact={isBelowLarge} />}
+                  : <SessionTable {...listProps} compact={shouldUseCompactTable(listWidth, isBelowLarge)} />}
                 <Pagination.Root
                   pageCount={pageResult.pageCount}
                   total={pageResult.total}
@@ -667,7 +681,7 @@ const HomePage = () => {
               </>
             ) : (
               <EmptyStateLayout
-                icon={<Search aria-hidden="true" />}
+                icon={<EmptyDocuments width="16rem" height="8.8rem" aria-hidden="true" />}
                 content={t('homepage.noResults.description', 'No sessions match your search or filter.')}
                 action={filtersActive ? (
                   <Button variant="secondary" onClick={handleClearFilters}>
@@ -681,7 +695,7 @@ const HomePage = () => {
 
         {showSessionData && sessions.length === 0 && (
           <EmptyStateLayout
-            icon={<Monitor aria-hidden="true" />}
+            icon={<EmptyDocuments width="16rem" height="8.8rem" aria-hidden="true" />}
             content={t('homepage.empty.description', 'No sessions yet. Sessions appear here when users of your app sign in.')}
           />
         )}

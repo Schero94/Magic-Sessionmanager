@@ -97,6 +97,7 @@ test('every row action names the session user (DUX-06, DUX-07, DASH-09)', () => 
 test('DS grid cell keys: row buttons keep Enter/Space and dialog keys never move the grid (DASH-01)', () => {
   assert.match(actions, /onKeyDown=\{isolateActionKeys\}/);
   assert.match(actions, /shouldIsolateActionKey\(event\.key, fromInsideGroup\)/);
+  assert.match(actions, /if \(shouldRedispatchEscape\(event\.key, fromInsideGroup\)\)[\s\S]*?ownerDocument\.dispatchEvent\(new KeyboardEvent\('keydown'/, 'Escape still closes the confirmation and the More menu');
   assert.match(actions, /onClick=\{\(event\) => event\.stopPropagation\(\)\}/, 'dialog clicks do not open the row');
   assert.match(table, /colCount=\{compact \? DASHBOARD_COMPACT_TABLE_COLUMNS : DASHBOARD_TABLE_COLUMNS\}/);
   assert.match(table, /rowCount=\{sessions\.length \+ 1\}/);
@@ -118,9 +119,10 @@ test('the table has no fixed minimum width and lets user/device cells shrink (DU
   assert.match(table, /ellipsis/);
 });
 
-test('responsive tiers: full table from 1080, table without IP and Signed in from 768, cards below (I.1 item 10)', () => {
+test('responsive tiers: full table when the list is wide enough, table without IP and Signed in from 768, cards below (I.1 item 10)', () => {
   assert.match(source, /const \{ isBelowMedium, isBelowLarge \} = useBreakpoint\(\)/);
-  assert.match(source, /isBelowMedium\s*\?\s*<SessionCardList \{\.\.\.listProps\} \/>\s*:\s*<SessionTable \{\.\.\.listProps\} compact=\{isBelowLarge\} \/>/);
+  assert.match(source, /isBelowMedium\s*\?\s*<SessionCardList \{\.\.\.listProps\} \/>\s*:\s*<SessionTable \{\.\.\.listProps\} compact=\{shouldUseCompactTable\(listWidth, isBelowLarge\)\} \/>/);
+  assert.match(source, /<Flex ref=\{listWidthRef\}/, 'the compact decision uses the measured list width');
   assert.match(table, /\{compact \? null : <Th>\{header\('homepage\.table\.ipAddress', 'IP address'\)\}<\/Th>\}/);
   assert.match(table, /\{compact \? null : <Th>\{header\('homepage\.table\.signedIn', 'Signed in'\)\}<\/Th>\}/);
   assert.match(cards, /styled\.ul`/);

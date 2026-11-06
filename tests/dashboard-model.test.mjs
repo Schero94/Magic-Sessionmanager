@@ -17,6 +17,9 @@ import {
   pickFocusSessionId,
   readDisclosureOpen,
   shouldIsolateActionKey,
+  shouldRedispatchEscape,
+  shouldUseCompactTable,
+  FULL_TABLE_MIN_WIDTH,
   writeDisclosureOpen,
 } from '../admin/src/pages/Dashboard/dashboardModel.mjs';
 
@@ -162,6 +165,15 @@ test('table action groups keep Enter/Space for their own buttons and isolate dia
   assert.equal(shouldIsolateActionKey('ArrowDown', false), true);
 });
 
+test('Escape from a dialog or menu portal is handed back to the document so Radix can close it', () => {
+  // Stopping the portal keydown hides it from Radix's document listener, and
+  // letting it bubble lets the DS grid cell call preventDefault, which Radix
+  // reads as "do not dismiss". The group re-dispatches it on the document.
+  assert.equal(shouldRedispatchEscape('Escape', false), true);
+  assert.equal(shouldRedispatchEscape('Escape', true), false);
+  assert.equal(shouldRedispatchEscape('Tab', false), false);
+});
+
 test('focus after a mutation stays on the row, then the next, then the previous row', () => {
   const before = ['a', 'b', 'c'];
   assert.equal(pickFocusSessionId(before, ['a', 'b', 'c'], 'b'), 'b');
@@ -180,4 +192,18 @@ test('fetch errors expose their HTTP status for the 404 message', () => {
   assert.equal(getErrorStatus({ status: 404 }), 404);
   assert.equal(getErrorStatus({ response: { status: 500 } }), 500);
   assert.equal(getErrorStatus(new Error('x')), null);
+});
+
+test('the table hides IP address and Signed in when its own width is too narrow (1080-1280 with the main menu)', () => {
+  // Below the DS large breakpoint the compact table is always used (IA D1).
+  assert.equal(shouldUseCompactTable(1400, true), true);
+  // With the Strapi main menu open, 1080 and 1280 px viewports leave 912 and
+  // 1112 px for the list: the full table would squeeze User and Device to "…".
+  assert.equal(FULL_TABLE_MIN_WIDTH, 1200);
+  assert.equal(shouldUseCompactTable(912, false), true);
+  assert.equal(shouldUseCompactTable(1112, false), true);
+  assert.equal(shouldUseCompactTable(1272, false), false);
+  // Unknown width (first render, no ResizeObserver): trust the breakpoint.
+  assert.equal(shouldUseCompactTable(0, false), false);
+  assert.equal(shouldUseCompactTable(undefined, false), false);
 });
