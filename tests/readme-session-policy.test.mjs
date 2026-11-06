@@ -10,7 +10,7 @@ const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 test('README documents how to attach the opt-in session-required policy and what it checks (API-11)', () => {
   const policies = require('../server/src/policies/index.js');
   assert.equal(typeof policies['session-required'], 'function', 'registered under the documented name');
-  const section = readme.slice(readme.indexOf('## 🛡️ Optional route policy: `session-required`'));
+  const section = readme.slice(readme.indexOf('## Optional route policy: `session-required`'));
   assert.ok(section.length > 0 && readme.includes('Optional route policy'), 'README has the policy section');
   assert.match(section, /policies: \['plugin::magic-sessionmanager\.session-required'\]/);
   assert.match(section, /No plugin route attaches the policy/);

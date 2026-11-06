@@ -1,6 +1,6 @@
-# Magic Session Manager 🔐
+# Magic Session Manager
 
-**See who's signed in to your Strapi app - and control their sessions!**
+**See who is signed in to your Strapi app, and control their sessions.**
 
 Session Manager records every sign-in of your app's users (Users & Permissions) as a session and lets admins see, end and analyse them. Strapi admin accounts are not managed here.
 
@@ -9,124 +9,198 @@ Free and open under the MIT license. All features are available without a paid l
 [![NPM](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Project site](https://schero94.github.io/Magic-Sessionmanager/)
+[Project site](https://schero94.github.io/Magic-Sessionmanager/) · [npm](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager) · [Issues](https://github.com/Schero94/Magic-Sessionmanager/issues) · [Changelog](CHANGELOG.md)
+
+> **Release status.** The admin UI shown here is the redesign on the branch `claude/sessionmanager-ui-redesign`, which carries the fixes for the next release. Version 4.8.0 on npm was published before its acceptance gates closed and is **not accepted**; see [Maintenance status](#maintenance-status).
 
 ---
 
-## 📸 What It Looks Like
+## Contents
 
-### Homepage Widget - Quick Stats at a Glance
-
-![Online Users Widget](pics/widget.png)
-
-**On your Strapi homepage, the "Online users" widget shows:**
-- Online users, out of all registered users. A user is online when at least one of their sessions is active.
-- Active sessions (open and used within the inactivity timeout)
-- Idle sessions (open, but unused for longer than the inactivity timeout)
-- Blocked users
-- A link to open Session Manager
-
----
-
-### Main Dashboard - See All Active Sessions
-
-![Dashboard](pics/dashboard.png)
-
-**The Sessions page shows:**
-- The state of every session: **Active**, **Idle** or **Ended**. An ended session also shows its end reason: logged out, timed out, expired, ended manually, user blocked, or reason not recorded.
-- Who signed in, when they signed in and when they were last active
-- The device, browser and operating system, and the IP address
-- Search by user, email, IP or device; filter by status and, for ended sessions, by end reason
-- **End session** (the user is signed out on that device, the record stays) and **Delete record** (the record is removed from history, statistics and exports; an open session also ends). Both ask for confirmation.
-- Export of the filtered list as CSV or JSON, including an "End reason" column and never any tokens
+- [Screenshots](#screenshots)
+- [Core concepts](#core-concepts)
+- [Screens](#screens)
+- [Compatibility](#compatibility)
+- [Install](#install)
+- [Session management modes](#session-management-modes)
+- [Configuration](#configuration)
+- [Location data and GeoIP](#location-data-and-geoip)
+- [Login protection](#login-protection)
+- [Alerts](#alerts)
+- [Content API](#content-api)
+- [Optional route policy: `session-required`](#optional-route-policy-session-required)
+- [Admin API and permissions](#admin-api-and-permissions)
+- [Security and privacy](#security-and-privacy)
+- [Troubleshooting](#troubleshooting)
+- [Development and tests](#development-and-tests)
+- [Maintenance status](#maintenance-status)
+- [Languages](#languages)
+- [License](#license)
 
 ---
 
-### Session Details Modal
+## Screenshots
 
-![Session Modal](pics/dashboardsessionmodal.png)
+All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61.
 
-**Click any session to see its details:**
-- Why it is in its current state, in one sentence
-- User, sign-in time, last activity, end time and end reason
-- Device type, browser, operating system and IP address
-- Stored location and the security score (0-100)
-- **Look up location** for sessions without a stored location. The lookup runs only when you click it, because it can send the IP address to ipapi.co.
-- Technical details: record ID and raw user agent
+### Sessions dashboard
 
----
+![Sessions dashboard with four stat cards (Active, Idle, Ended, All), search, status filter and a table of sessions with state badges](pics/dashboard.png)
 
-### Content Manager Integration
+Dark mode:
 
-![Session Info Panel](pics/sessioninfopanel.png)
+![Sessions dashboard in the Strapi dark theme](pics/dashboard-dark.png)
 
-**When you edit a user in the Content Manager, the "Sessions" panel shows:**
-- Whether the user is **Online** or **Not online**, and how many open sessions they have
-- **End all sessions**: signs the user out on every device. They can sign in again.
-- **Block user** / **Unblock user**: a blocked user cannot sign in, and all open sessions end. Unblocking allows sign-in again but does not restore ended sessions.
-- Their open sessions, and a link to all of their sessions on the Sessions page
+### Session details
 
----
+![Session details dialog with the state sentence, user, session, device, location and security sections and an End session button](pics/dashboardsessionmodal.png)
 
-### Settings Page
+### Sessions panel in the Content Manager
 
-![Settings 1](pics/settings1.png)
+![Sessions panel next to a user in the Content Manager, showing Online, two open sessions, End all sessions and Block user](pics/sessioninfopanel.png)
 
-**Settings › Session Manager has three pages:** Configuration, Analytics and License.
+### Homepage widget
 
-**Configuration has five tabs:**
-- **Sessions:** inactivity timeout, maximum session age, token check, idle check
-- **Login protection:** temporary IP lockout, trusted proxy headers, rejecting suspicious sign-ins, country rules
-- **Location data:** IP location lookup, security scoring, provider and MaxMind database
-- **Alerts:** security emails to users and team notifications to Discord or Slack
-- **Data and retention:** how long ended sessions are kept, and deleting all ended sessions
+![Online users widget with the tiles Online users, Active sessions, Idle sessions and Blocked users](pics/widget.png)
 
-![Settings 2](pics/settings2.png)
+### Configuration
 
-**Also in Configuration:**
-- A token encryption key generator (Sessions › Advanced)
-- Country rules: allow only listed countries, or reject listed countries
-- Rejection of sign-ins from VPN, proxy or known threat addresses
-- Settings are saved in the database; other server processes apply changes within 30 seconds
+![Configuration page, Sessions tab, with Session lifetime and Token check cards](pics/settings1.png)
 
-**Analytics** shows sessions over time and by device and browser. **License** shows whether an optional license key is stored and valid; all features work without one.
+![Configuration page, Login protection tab, with Failed sign-ins and Client IP address cards](pics/settings2.png)
+
+### Analytics
+
+![Analytics page with four KPIs, Devices and Browsers bar cards and the average session length](pics/analytics.png)
+
+### Mobile (390 px)
+
+<p>
+  <img src="pics/mobile-dashboard.png" width="300" alt="Sessions dashboard at 390 px: the table becomes a card list with Details, End session and More buttons">
+  <img src="pics/mobile-session.png" width="300" alt="Session details dialog at 390 px in one column with Close and End session in the footer">
+</p>
 
 ---
 
-## ✨ What This Plugin Does
+## Core concepts
 
-### Simple Version
-
-**When users sign in:**
-- The plugin records a session: who signed in, when, from which device and from where
-- You see it on the Sessions page (see screenshot above)
+**Session.** One sign-in of a user on one device, from sign-in until it ends. Every session has a **session record** with times, device, IP address and location.
 
 **A session is in one of three states:**
-- **Active:** open and used within the inactivity timeout
-- **Idle:** open, but unused for longer than the inactivity timeout. It ends on its next request or at the next idle check. A token refresh makes it active again.
-- **Ended:** it can no longer be used, and the user has to sign in again on that device. The end reason says why: logged out, timed out, expired (maximum session age reached), ended manually, user blocked, or reason not recorded.
 
-**Three actions, three meanings:**
-- **End** a session: it stops working, the record stays in the history
-- **Delete** a record: the history entry is removed; if the session is still open, it also ends. Its token stays revoked.
-- **Block** a user: the user cannot sign in, and all open sessions end
+| State | Meaning |
+|---|---|
+| **Active** | Open and used within the inactivity timeout. |
+| **Idle** | Open, but not used for longer than the inactivity timeout. It ends on its next request or at the next idle check. A token refresh makes it active again. |
+| **Ended** | The session can no longer be used. The user has to sign in again on this device. |
 
-**While users are active:**
-- The plugin updates "Last active" with a short delay, to save database writes
+**An ended session always shows its end reason:**
+
+| End reason | Stored value | Meaning |
+|---|---|---|
+| Logged out | `logout` | The user signed out. |
+| Timed out | `idle` | Not used for longer than the inactivity timeout. |
+| Expired | `expired` | Reached the maximum session age. |
+| Ended manually | `manual` | Ended from the Strapi admin, or by the user from another of their devices. |
+| User blocked | `blocked` | Ended because the user account was blocked. |
+| Reason not recorded | (none) | No end reason was stored, for example because the session ended in Strapi's own session store or was recorded by an older plugin version. |
+
+**Three verbs, three meanings:**
+
+- **End** a session: it stops working, the record stays in the history.
+- **Delete record**: the record is removed from history, statistics and exports. If the session is still open, it also ends. Its token stays revoked.
+- **Block** a user: the user cannot sign in, and all open sessions end. **Unblock** allows sign-in again but does not restore ended sessions.
+
+**Online** describes users, never sessions: a user is online when at least one of their sessions is Active. The dashboard, the widget and the user panel all use this one rule, based on the configured inactivity timeout.
 
 ---
 
-## 🚀 Quick Install
+## Screens
 
-### Step 1: Install
+| Where | Name | Answers |
+|---|---|---|
+| Main menu | **Session Manager** (page title "Sessions") | Which sessions exist, and which need action? |
+| Dialog on the dashboard | **Session details** | What is this session, and why is it in this state? |
+| Content Manager, User edit view | **Sessions** panel | What access does this user have, and how do I cut it off? |
+| Strapi homepage | **Online users** widget | Who is online right now? |
+| Settings › Session Manager | **Configuration** | How should sessions and sign-ins behave? |
+| Settings › Session Manager | **Analytics** | How are sessions used over time and by device? |
+| Settings › Session Manager | **License** | Is a license key stored, and is it valid? |
+
+### Sessions dashboard
+
+- **Header:** title "Sessions", the links **Analytics** and **Settings** (opens Configuration), and **Export** (CSV or JSON of the filtered list across all pages, with an "End reason" column and never any tokens).
+- **How sessions work:** a collapsed legend of the three states.
+- **Four stat cards** that set the status filter: **Active** ("{n} users online"), **Idle**, **Ended** ("{a} logged out · {b} timed out · {c} other reasons") and **All**.
+- **Action bar:** search by user, email, IP or device; **Status** filter (All sessions, Open, Active, Idle, Ended); an **End reason** filter when Ended is selected; Refresh. "Last updated" shows when the list was loaded; it also refreshes every 10 minutes.
+- **Table:** Status (badge and a second line, for example "Ended manually · {date}"), User, Device, IP address, Signed in, Last active and the row actions **View details**, **End session** (disabled on ended rows) and **More actions › Delete record**. Clicking a row opens the details.
+- Filters, search, page and page size are kept in the URL, so `?search=<email>` is a shareable link.
+- When more than 1,000 sessions exist, an alert says that counts, filters and exports cover the latest 1,000 only.
+- Below the large breakpoint the IP address and Signed in columns are hidden; below the medium breakpoint the table becomes a card list.
+
+### Session details
+
+- A state sentence that explains why the session is in its state, for example "Ended {time} · Ended manually."
+- **User** (with an **Open user** link to the Content Manager), **Session** (Signed in, Last active, Ended at, End reason), **Device** (type, browser, operating system, IP address), **Location and security** (country, city, time zone, security score "{score}/100", VPN and proxy).
+- **Look up location** for sessions without a stored location. The lookup runs only when you click it, because it can send the IP address to ipapi.co.
+- **Technical details** (collapsed): record ID with a copy button and the raw user agent.
+- Footer: **End session** with confirmation on open sessions; ended sessions show "This session has already ended."
+
+### Sessions panel (Content Manager)
+
+Shown on the edit view of a Users & Permissions user only.
+
+- **Online** or **Not online**, "{n} open sessions" (active or idle) and the last activity.
+- **End all sessions:** signs the user out on every device. The user can sign in again unless the account is blocked.
+- **Block user** / **Unblock user:** blocking ends all open sessions and prevents sign-in. The open form's Blocked field is updated, so a later Save does not undo it. Setting the native Blocked field and saving has the same effect.
+- Up to five open sessions, then **Show all sessions**, which opens the dashboard filtered by the user's email.
+- For an unsaved user the panel only says "Save this user before you can manage sessions."
+
+### Online users widget
+
+Strapi 5.13 and later. Four tiles: **Online users** (of all registered users), **Active sessions**, **Idle sessions** and **Blocked users**, plus a link **Open Session Manager**. The widget refreshes every 30 seconds.
+
+### Settings › Session Manager
+
+Three links: **Configuration**, **Analytics** and **License**.
+
+**Configuration** has five tabs, deep-linkable with `?tab=sessions|login-protection|location-data|alerts|data-retention`:
+
+| Tab | Question | Contents |
+|---|---|---|
+| **Sessions** | How long does a session stay valid? | Inactivity timeout, maximum session age; Advanced: "Last active" update interval, idle check interval and method. Token check (Strict / Relaxed); Advanced: grace period after sign-in, token encryption key generator. A read-only card on what your app receives when a session is rejected. |
+| **Login protection** | Which sign-ins are refused, and why? | Temporary IP lockout, Trust proxy headers, Reject suspicious sign-ins, If the location cannot be determined, Country rules (Allow only listed countries / Reject listed countries), a read-only card on why sign-ins are refused. |
+| **Location data** | Where do IP location and risk data come from? | IP location lookup, Security scoring, Provider, GeoIP database status, MaxMind credentials, Update database / Force download. |
+| **Alerts** | Who is told about sign-ins? | Security emails to users (with email templates) and Team notifications to Discord or Slack. |
+| **Data and retention** | How long is session history kept? | Keep ended sessions for, and **Delete ended sessions**. |
+
+**Save** applies the whole form; **Discard changes** re-loads the stored values (it does not restore defaults). Leaving with unsaved changes asks first. Settings are saved in the database; other server processes apply them within 30 seconds.
+
+**Analytics** shows All sessions, Active sessions, Sign-ins in the last 24 hours and in the last 7 days (rolling windows), sessions by device and by browser, and the average session length, all from the latest loaded sessions.
+
+**License** shows whether an optional license key is stored and whether it is valid. It is read-only. All features are available with or without a key.
+
+---
+
+## Compatibility
+
+| Item | Supported |
+|---|---|
+| Strapi | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.61.0. |
+| Node.js | `^22.22.2 \|\| >=24.15.0` (`engines.node`) |
+| Users & Permissions | `jwtManagement: 'refresh'` and `'legacy-support'` |
+| Homepage widget | Strapi 5.13 and later (older versions have no widgets API; the rest works) |
+| Admin peer dependencies | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react` / `react-dom` `^18.3.1`, `react-intl` `^6.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0` |
+
+---
+
+## Install
 
 ```bash
 npm install strapi-plugin-magic-sessionmanager
 ```
 
-### Step 2: Enable Plugin
-
-Add this to `config/plugins.ts`:
+Enable it in `config/plugins.ts`:
 
 ```typescript
 export default () => ({
@@ -136,107 +210,22 @@ export default () => ({
 });
 ```
 
-### Step 3: Rebuild & Start
+Set the encryption key (required when `NODE_ENV=production`, see [Security and privacy](#security-and-privacy)), then rebuild and start:
 
 ```bash
 npm run build
 npm run develop
 ```
 
-### Step 4: Open Dashboard
-
-1. Go to Strapi Admin: `http://localhost:1337/admin`
-2. Look in the left sidebar for **"Session Manager"**
-3. Click it!
-4. You'll see the **Sessions** page (like the screenshot above)
-
-**That's it! You're done!**
+Open the Strapi admin and select **Session Manager** in the main menu. Super Admins have access automatically; for other admin roles, grant **Plugins › Session Manager › Access the Session Manager plugin** under Settings › Administration Panel › Roles.
 
 ---
 
-## 🔐 Security Features (Optional)
+## Session management modes
 
-### Encryption Key (Recommended)
+Session Manager supports Users & Permissions end-user sessions in both the native refresh mode and the `legacy-support` mode.
 
-Session Manager encrypts the tokens it stores with the `SESSION_ENCRYPTION_KEY` environment variable. It is not needed in Strapi's refresh-token mode (`jwtManagement: 'refresh'`). Generate a key:
-
-**In the admin panel:**
-1. Go to **Settings › Session Manager › Configuration**, tab **Sessions**
-2. Open **Advanced** and find the token encryption key generator
-3. Generate a key. It stays hidden until you reveal it, and nothing is saved in Strapi.
-4. Click **"Copy for .env"**
-5. Paste it into your `.env` file
-6. Restart Strapi
-
-**Or generate manually:**
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
-
-Then add to `.env`:
-```
-SESSION_ENCRYPTION_KEY=your-key-here
-```
-
-**Why?** If someone reads your database, they cannot reuse the stored tokens.
-
----
-
-## 🎯 Main Features Explained Simply
-
-### 1. See Who's Logged In
-
-**Sessions page:**
-- Shows every recorded session with its state badge: Active, Idle or Ended
-- Ended sessions show their end reason under the badge
-- The four cards at the top (Active, Idle, Ended, All) filter the list
-- Click a row to see details
-
-### 2. Force Logout Anyone
-
-**Need to sign someone out?**
-1. Find their session
-2. Click **"End session"** and confirm
-3. The session ends with the reason "Ended manually" and the record stays in the history. In Strapi's refresh-token mode the Strapi session is revoked first. The behavior depends on the mode below.
-
-To sign a user out everywhere, use **End all sessions** in the user's Sessions panel in the Content Manager. To also stop new sign-ins, use **Block user**.
-
-### 3. Session Details
-
-**Click any session to see:**
-- When they signed in
-- When they were last active, and when and why the session ended
-- What browser and device they use
-- Their IP address
-- Location (stored at sign-in, or looked up when you click **Look up location**)
-
-### 4. Multiple Devices
-
-**Users can login from:**
-- Desktop computer
-- Phone
-- Tablet
-- All at the same time!
-
-Each sign-in is a separate session. You can see them all and end each one individually.
-
-### 5. Auto-Cleanup
-
-**Idle sessions end automatically, and old history is deleted:**
-- A session unused for longer than the inactivity timeout (15 minutes by default) becomes idle
-- The **idle check** runs on a schedule (every 30 minutes by default, and once at server start) and ends idle sessions as "Timed out". It deletes nothing.
-- **History retention** deletes the records of ended sessions after 90 days by default. Open sessions are never deleted by retention.
-- **Delete ended sessions** (Configuration › Data and retention) removes the records of all ended sessions of all users at once. Open sessions, including idle ones, are not affected.
-
----
-
-## 🔒 Session management modes
-
-Magic Sessionmanager supports Strapi Users & Permissions end-user sessions in both the native refresh mode and the existing `legacy-support` mode.
-
-### Native Users & Permissions sessions
-
-Set `jwtManagement` to `refresh` in the host application's Users & Permissions configuration to use Strapi's native session manager:
+### Native Users & Permissions sessions (`jwtManagement: 'refresh'`)
 
 ```typescript
 'users-permissions': {
@@ -246,94 +235,22 @@ Set `jwtManagement` to `refresh` in the host application's Users & Permissions c
 }
 ```
 
-In this mode, Strapi issues, rotates and revokes native sessions. Magic Sessionmanager uses that state for end-user sessions while keeping its metadata and session history, such as device, IP, GeoIP and security details. It does not issue or rotate a second token family. Rows created natively without a Magic metadata record can still appear with a `native_` ID; the admin marks them as "Strapi session". Their device, IP and location were not recorded and are shown as "—" ("Not recorded").
+In this mode Strapi issues, rotates and revokes native sessions. Session Manager uses that state for end-user sessions and keeps its own metadata and history (device, IP address, location, security score). It does not issue or rotate a second token family. Rows created natively without a Session Manager record can appear with a `native_` ID; the admin marks them as "Strapi session", and their device, IP address and location are shown as "—" ("Not recorded").
 
-The existing Magic endpoints keep their paths, methods, permissions and response envelopes. The plugin does not change the host application's authentication configuration or migrate existing session records. Set `jwtManagement: 'refresh'` in the host application to opt into native session management. Its default Content API permission setup targets only the Authenticated role and never adds these actions to Public. If an administrator saves the Authenticated role before the first protected Magic request, the plugin preserves that role's permission choices. Strapi administrator-account sessions are not managed by this plugin.
+### `legacy-support` mode
 
-### Existing `legacy-support` mode
+With `jwtManagement: 'legacy-support'`, Session Manager keeps its plugin-owned session behavior. It does not switch the host to refresh mode or migrate existing session records.
 
-When Users & Permissions uses `jwtManagement: 'legacy-support'`, Magic Sessionmanager keeps its existing plugin-owned session behavior. It does not switch the host to refresh mode or migrate legacy session records. Existing Magic endpoints remain available in either mode.
+In both modes the existing Magic endpoints keep their paths, methods, permissions and response envelopes. The plugin does not change the host application's authentication configuration or migrate existing session records. Strapi administrator-account sessions are not managed by this plugin. The default Content API permission setup targets only the Authenticated role and never adds these actions to Public. If an administrator saves the Authenticated role before the first protected request, the plugin keeps that role's permission choices.
 
 ---
 
-## 🌍 Security Features
+## Configuration
 
-### IP Geolocation
+Settings come from two places:
 
-**See where users login from:**
-- Country (with flag! 🇩🇪🇺🇸🇬🇧)
-- City
-- ISP Provider
-- Coordinates (for map)
-
-IP geolocation is enabled by default and the default provider is `auto`.
-When no local database is available, `auto` sends the session IP address to
-ipapi.co for a lookup. If a local lookup fails, `auto` can also send the IP
-address to ipapi.co. With `geoLookupFailureMode: 'block'`, a failed local
-lookup does not fall back to ipapi.co. This setting does not prevent the
-remote lookup when no local database is available.
-
-To avoid remote IP lookups, choose `local-mmdb`, which uses a local database
-and does not fall back to ipapi.co. Choose `disabled` for no GeoIP lookup,
-or set `enableGeolocation: false` for no GeoIP lookup. These choices affect
-geolocation and can affect geofencing decisions when a lookup is unavailable.
-
-The MaxMind database download is a separate authenticated network request;
-the MaxMind database download does not send end-user session IP addresses.
-Local lookups use the downloaded database without contacting MaxMind.
-
-### Local GeoIP Firewall (Recommended)
-
-For country rules, suspicious-sign-in checks and city-level session display, use a local MaxMind
-GeoLite2 City database. This avoids remote API timeouts and rate limits in the
-login path while still giving the admin UI city, region, timezone and
-coordinates. Existing GeoLite2 Country databases remain supported as a
-country-only fallback.
-
-1. Create a free MaxMind account and download `GeoLite2-City.mmdb`:
-   https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/
-2. Store the file on your Strapi server, for example:
-   `/var/lib/strapi/GeoLite2-City.mmdb`
-3. Configure the plugin:
-
-```bash
-MAGIC_SESSIONMANAGER_GEOIP_DATABASE=/var/lib/strapi/GeoLite2-City.mmdb
-MAXMIND_EDITION_ID=GeoLite2-City
-MAXMIND_ACCOUNT_ID=your-account-id
-MAXMIND_LICENSE_KEY=your-license-key
-```
-
-You can also manage this from the Strapi admin UI. Open
-**Settings › Session Manager › Configuration**, tab **Location data**, choose
-the provider **Local database** (`local-mmdb`), enter the MaxMind account ID and
-license key, then use **Update database**. Environment variables take
-precedence over stored credentials.
-The plugin stores the credentials in the Strapi plugin store and never returns
-the license key to the browser after saving it.
-
-Download or update the database. The CLI updater needs your MaxMind
-credentials via environment variables (the in-admin updater stores them in the
-Strapi plugin store instead):
-
-```bash
-export MAXMIND_ACCOUNT_ID=your_account_id
-export MAXMIND_LICENSE_KEY=your_license_key
-export MAXMIND_EDITION_ID=GeoLite2-City
-npm run geoip:update
-```
-
-When installed as a package in a Strapi project, run the packaged binary:
-
-```bash
-npx strapi-magic-sessionmanager-geoip
-```
-
-The updater checks MaxMind's `Last-Modified` header first and skips the download
-when the local metadata is current. Use `npm run geoip:update -- --force` in the
-plugin repo or `npx strapi-magic-sessionmanager-geoip --force` in an installed
-Strapi project to force a refresh. Schedule it weekly or twice weekly with
-cron/systemd. MaxMind requires GeoLite databases to stay up to date and
-currently limits GeoLite users to 30 database downloads per day.
+1. **Static config** in `config/plugins.ts` (`config` below). Time values are in **milliseconds**.
+2. **Admin settings** (Settings › Session Manager › Configuration), stored in the plugin store in user-facing units (minutes, seconds, days). **A value saved in the admin overrides the static config.** Once the Configuration page has been saved, every field shown there comes from the stored settings.
 
 ```typescript
 // config/plugins.ts
@@ -341,315 +258,197 @@ export default () => ({
   'magic-sessionmanager': {
     enabled: true,
     config: {
-      geoIpProvider: 'local-mmdb',
-      geoIpDatabasePath: process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE,
-      // "auto": fail closed for suspicious-session blocking, fail open for plain geofencing
-      // "block": fail closed whenever GEOIP lookup is unavailable
-      // "allow": fail open whenever GEOIP lookup is unavailable
-      geoLookupFailureMode: 'block',
-      enableGeofencing: true,
-      allowedCountries: ['DE', 'AT', 'CH'],
+      inactivityTimeout: 15 * 60 * 1000, // ms
+      lastSeenRateLimit: 30 * 1000,      // ms
+      cleanupInterval: 30 * 60 * 1000,   // ms
+      maxSessionAgeDays: 30,
+      retentionDays: 90,                 // -1 keeps ended sessions forever
+      strictSessionEnforcement: false,
+      geoIpProvider: 'auto',             // 'auto' | 'local-mmdb' | 'ipapi' | 'disabled'
+      geoLookupFailureMode: 'auto',      // 'auto' | 'allow' | 'block'
     },
   },
 });
 ```
 
-Provider options:
-- `local-mmdb`: local MaxMind-compatible database only
-- `auto`: use a local database when available, with remote fallback as described above
-- `ipapi`: send the IP address to ipapi.co for a remote lookup
-- `disabled`: no GEOIP lookup
+### Reference
 
-Local City and Country databases both support country firewall rules. City
-databases additionally populate city, region, timezone, coordinates and postal
-data for the admin UI. VPN/proxy/threat detection still requires a provider
-that supplies those risk signals; free GeoLite databases do not reliably
-identify VPNs or proxies.
+Static defaults from `server/src/config/index.js`; admin units and ranges from the settings validation in `server/src/controllers/settings.js`. Out-of-range admin values are rejected with a field error, not clamped silently.
 
-### Threat Detection
+| Key | Default | Admin unit and range | Configuration tab | Meaning |
+|---|---|---|---|---|
+| `inactivityTimeout` | 15 min (`900000` ms) | min, 1–1440 | Sessions | Unused this long, a session becomes idle and then ends as "Timed out". Also decides who counts as online. |
+| `maxSessionAgeDays` | 30 | days, 1–365 | Sessions | Maximum age from sign-in, regardless of activity. Applied on the session's next request. |
+| `lastSeenRateLimit` | 30 s (`30000` ms) | s, 5–300 | Sessions › Advanced | Minimum interval between "Last active" updates. |
+| `cleanupInterval` | 30 min (`1800000` ms) | min, 5–1440 | Sessions › Advanced | How often the idle check runs. It ends idle sessions and deletes nothing. It also runs once at server start. |
+| `cleanupUseDbDirect` | `false` | boolean | Sessions › Advanced | Idle check with one SQL update instead of the Document Service (skips lifecycle hooks). |
+| `strictSessionEnforcement` | `false` (Relaxed) | boolean | Sessions | Strict rejects tokens without a session record and requests where the check itself fails. Ended, expired and revoked sessions and blocked users are rejected in both modes. |
+| `sessionCreationGraceMs` | `5000` | ms, 0–30000 (shown in seconds) | Sessions › Advanced | Window after sign-in in which a token is accepted while its record is being created. |
+| `maxFailedLogins` | 5 | 0–100, 0 = off | Login protection | Temporary IP lockout threshold (failed sign-ins from one IP within 15 minutes). |
+| `trustedProxies` | off | boolean | Login protection | Read the client IP from proxy headers. Only behind a proxy you control. |
+| `blockSuspiciousSessions` | `false` | boolean | Login protection | Reject suspicious sign-ins. |
+| `geoLookupFailureMode` | `'auto'` | auto, allow, block | Login protection | What happens when the location cannot be determined. |
+| `enableGeofencing` | `false` | boolean | Login protection | Use country rules. |
+| `allowedCountries` / `blockedCountries` | `[]` | ISO 3166-1 alpha-2 codes | Login protection | Allow only listed countries / Reject listed countries. |
+| `enableGeolocation` | `true` | boolean | Location data | IP location lookup at sign-in. Required by country rules, suspicious-sign-in checks and alerts. |
+| `enableSecurityScoring` | `true` | boolean | Location data | Apply the security score thresholds (below 70: suspicious-sign-in email, below 50: rejection if enabled). |
+| `geoIpProvider` | `'auto'` | auto, local-mmdb, ipapi, disabled | Location data | Where location data comes from. |
+| `geoIpDatabasePath` | `MAGIC_SESSIONMANAGER_GEOIP_DATABASE` or `''` | file name | Location data › Advanced | Local MaxMind-compatible database. |
+| `enableEmailAlerts` | `false` | boolean | Alerts | Security emails to users. |
+| `alertOnSuspiciousLogin` / `alertOnNewLocation` / `alertOnVpnProxy` | `true` | boolean | Alerts | Which events send an email. |
+| `enableWebhooks` | `false` | boolean | Alerts | Team notifications. |
+| `discordWebhookUrl` / `slackWebhookUrl` | `''` | https URL on discord.com / discordapp.com, or hooks.slack.com | Alerts | Any other host is rejected. |
+| `retentionDays` | 90 | days, 1–365 or -1 (forever) | Data and retention | How long records of ended sessions are kept. Checked once a day, the first time about 24 hours after the server starts. Open sessions are never deleted by retention. |
+| `rateLimitWriteMax` / `rateLimitReadMax` / `rateLimitWindowSeconds` | 10 / 120 / 60 | 1–1000 / 1–10000 / 10–3600 | not shown | Content API rate limits. Not editable in the UI; Save keeps the stored values. The write limit can only be made stricter than the route floor. |
+| `emailTemplates` | empty | subject ≤ 200, HTML ≤ 10,000 (sanitised), text ≤ 5,000 characters | Alerts › Edit email templates | As soon as any template has content, only stored templates are used. Fill in all three, or none. |
 
-**With IP location lookup on, each sign-in IP address is checked for:**
-- VPN
-- Proxy
-- Known threat
-- Security score (0-100, higher is safer). The local database always gives 100, and a failed lookup gives 50.
+### Environment variables
 
-### Auto-Blocking
-
-**Login protection** (Configuration › Login protection) checks **new sign-ins only**. Existing sessions are not affected, and refused sign-ins are not recorded.
-
-- **Temporary IP lockout:** after too many failed sign-ins from one IP address within 15 minutes (5 by default, 0 turns it off), that address is refused for 15 minutes (429 with `Retry-After`). User accounts are not blocked. Failed sign-ins are counted per server process.
-- **Reject suspicious sign-ins:** refuses sign-ins from VPN, proxy or known threat addresses and, with security scoring on, scores below 50 (403).
-- **Country rules:** allow only listed countries, or reject listed countries (403).
-- If the location cannot be determined, the configured failure mode decides whether the sign-in is allowed or refused with "Login temporarily unavailable".
-
-Suspicious-sign-in checks, country rules and alerts need IP location lookup. Blocking a user account is a separate action (**Block user**).
-
-### Notifications
-
-**Configuration › Alerts** has two kinds of alerts. Both are sent only when location data is available for the sign-in:
-- **Security emails to users:** sent to the end user's own email address, not to administrators, for a suspicious sign-in, a sign-in from a new country, or a VPN or proxy.
-- **Team notifications:** messages to your **Discord or Slack** channel for every sign-in, as suspicious, new country or success. Only `https://discord.com`, `https://discordapp.com` and `https://hooks.slack.com` webhook URLs are accepted; other URLs are not saved.
+| Variable | Purpose |
+|---|---|
+| `SESSION_ENCRYPTION_KEY` | Key for AES-256-GCM encryption of stored tokens. Required when `NODE_ENV=production` (startup fails without it). Keep it stable. |
+| `MAGIC_SESSIONMANAGER_GEOIP_DATABASE` | Path of a local MaxMind-compatible database (also `GEOIP_DATABASE_PATH`, `GEOLITE2_CITY_MMDB`, `GEOIP_CITY_DATABASE_PATH`, `GEOLITE2_COUNTRY_MMDB`, `GEOIP_COUNTRY_DATABASE_PATH`). |
+| `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY` | MaxMind credentials for database updates. They take precedence over credentials stored in the admin. |
+| `MAXMIND_EDITION_ID` | Edition for the CLI updater, for example `GeoLite2-City`. |
 
 ---
 
-## 📧 Email Alerts Setup
+## Location data and GeoIP
 
-The Session Manager uses **Strapi's Email Plugin** to send notifications. You need to configure an email provider first.
+### IP geolocation
 
-### Step 1: Install Email Provider
+IP geolocation is enabled by default and the default provider is `auto`. When no local database is available, `auto` sends the session IP address to ipapi.co for a lookup. If a local lookup fails, `auto` can also send the IP address to ipapi.co. With `geoLookupFailureMode: 'block'`, a failed local lookup does not fall back to ipapi.co. This setting does not prevent the remote lookup when no local database is available.
 
-Choose one of these providers:
+| Provider | Behavior |
+|---|---|
+| `auto` | Local database when available, with the remote fallback described above. |
+| `local-mmdb` | Local MaxMind-compatible database only. |
+| `ipapi` | Always sends the IP address to ipapi.co. |
+| `disabled` | No lookup. |
 
-**Option A: Nodemailer (Recommended)**
+To avoid remote IP lookups, choose `local-mmdb`, which uses a local database and does not fall back to ipapi.co. Choose `disabled` for no GeoIP lookup, or set `enableGeolocation: false` for no GeoIP lookup. Country rules, suspicious-sign-in checks and alerts need location data, so these choices also affect them.
+
+The MaxMind database download is a separate authenticated network request; the MaxMind database download does not send end-user session IP addresses. Local lookups use the downloaded database without contacting MaxMind.
+
+### Local MaxMind database (recommended)
+
+A local GeoLite2 City database avoids remote lookups in the sign-in path and gives country, city, region, time zone and coordinates. GeoLite2 Country databases are supported as a country-only fallback. Free GeoLite databases do not detect VPNs or proxies, and local results always score 100.
+
+1. Create a free MaxMind account: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/
+2. In **Configuration › Location data**, choose the provider **Local database**, enter the MaxMind account ID and license key, and click **Update database**. The license key is stored in the plugin store and never returned to the browser.
+
+Or use the CLI updater with environment variables:
+
 ```bash
-npm install @strapi/provider-email-nodemailer
+export MAXMIND_ACCOUNT_ID=your_account_id
+export MAXMIND_LICENSE_KEY=your_license_key
+export MAXMIND_EDITION_ID=GeoLite2-City
+npx strapi-magic-sessionmanager-geoip          # in a Strapi project
+npm run geoip:update                           # in the plugin repository
 ```
 
-**Option B: SendGrid**
-```bash
-npm install @strapi/provider-email-sendgrid
-```
+The updater checks MaxMind's `Last-Modified` header and skips the download when the local copy is current; add `--force` to download anyway. Schedule it weekly or twice weekly. MaxMind requires GeoLite databases to stay current and limits GeoLite users to 30 downloads per day.
 
-**Option C: Mailgun**
-```bash
-npm install @strapi/provider-email-mailgun
-```
+---
 
-### Step 2: Configure Email Plugin
+## Login protection
 
-Add to `config/plugins.ts`:
+Configuration › Login protection checks **new sign-ins only**. Existing sessions are not affected, and refused sign-ins are not recorded.
+
+| Rule | Response | Notes |
+|---|---|---|
+| Temporary IP lockout | 429 with `Retry-After` | After `maxFailedLogins` failed sign-ins from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Counted per server process. |
+| Reject suspicious sign-ins | 403 | VPN, proxy or known threat address, or, with security scoring on, a score below 50. |
+| Country rules | 403 | Allow only listed countries, or reject listed countries. With "Allow only listed countries", an empty list allows every country. |
+| Location cannot be determined | 403 "Login temporarily unavailable" | When `geoLookupFailureMode` says reject (`auto` rejects only when "Reject suspicious sign-ins" is on). |
+
+Requests with an ended session get **401** with the header `X-Session-Terminated-Reason` (`logout`, `manual`, `idle`, `expired` or `blocked`).
+
+---
+
+## Alerts
+
+Configuration › Alerts. Both kinds are sent only when location data is available for the sign-in.
+
+- **Security emails to users** go to the end user's own email address, not to administrators: suspicious sign-in, sign-in from a new country (differs from the user's last 50 sessions), VPN or proxy. They use Strapi's Email plugin, so configure an email provider first (for example `@strapi/provider-email-nodemailer`).
+- **Team notifications** post every sign-in to Discord or Slack as `login.suspicious`, otherwise `login.new_location`, otherwise `login.success`. Only `https://discord.com`, `https://discordapp.com` and `https://hooks.slack.com` URLs are accepted; Save rejects any other URL with a field error, and an empty field clears the URL.
+
+Example email provider configuration:
 
 ```typescript
-export default () => ({
-  // Email configuration
+// config/plugins.ts
+export default ({ env }) => ({
   email: {
     config: {
       provider: 'nodemailer',
       providerOptions: {
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: process.env.SMTP_PORT || 587,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASSWORD,
-        },
+        host: env('SMTP_HOST'),
+        port: env.int('SMTP_PORT', 587),
+        auth: { user: env('SMTP_USER'), pass: env('SMTP_PASSWORD') },
       },
       settings: {
-        defaultFrom: process.env.SMTP_DEFAULT_FROM || 'noreply@yourapp.com',
-        defaultReplyTo: process.env.SMTP_DEFAULT_REPLY_TO || 'support@yourapp.com',
+        defaultFrom: env('SMTP_DEFAULT_FROM'),
+        defaultReplyTo: env('SMTP_DEFAULT_REPLY_TO'),
       },
     },
   },
-  
-  // Session Manager configuration
-  'magic-sessionmanager': {
-    enabled: true,
-  },
+  'magic-sessionmanager': { enabled: true },
 });
 ```
 
-### Step 3: Add Environment Variables
-
-Add to your `.env` file:
-
-```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_DEFAULT_FROM=noreply@yourapp.com
-SMTP_DEFAULT_REPLY_TO=support@yourapp.com
-```
-
-**For Gmail:**
-- Use an [App Password](https://support.google.com/accounts/answer/185833), not your regular password!
-
-### Step 4: Enable in Admin Panel
-
-1. Go to **Settings › Session Manager › Configuration**, tab **Alerts**
-2. Find **"Security emails to users"**. It needs IP location lookup (tab **Location data**).
-3. Turn on **"Send security emails"**
-4. Edit the email templates (optional). As soon as any template has content, only your stored templates are used, so fill in all three or none.
-5. Click **Save**
-
-### Step 5: Test It
-
-Trigger a suspicious sign-in (for example through a VPN, with a provider that detects VPNs) and check whether the email arrives.
-
-**Troubleshooting:**
-- Check Strapi logs for email errors
-- Verify SMTP credentials are correct
-- Test SMTP connection with a tool like [smtp-tester](https://www.npmjs.com/package/smtp-tester)
-
 ---
 
-## 📋 Content-API Endpoints (For Frontend/Apps)
+## Content API
 
-All Content-API endpoints require a valid JWT token in the `Authorization` header.
-Users can only access their **own** sessions.
+Prefix `/api/magic-sessionmanager`. Every route requires a Users & Permissions JWT (`Authorization: Bearer <JWT>`), works on the caller's **own** sessions only and is rate-limited (writes 10, reads 120 requests per minute by default; 429 with `Retry-After`).
 
-### Get My Sessions
+| Method | Path | Purpose | Response |
+|---|---|---|---|
+| GET | `/my-sessions` | Own sessions (up to 200), current session first | `{ data: [...], meta: { count, active, hasMore, limit } }` |
+| GET | `/current-session` | The session of the current token | `{ data: {..., isCurrentSession: true } }`; 404 when none |
+| GET | `/user/:userId/sessions` | Sessions of a user; only your own `userId` | 403 for another user |
+| POST | `/logout` | End the current session (reason `logout`) | `{ message, terminated }` |
+| POST | `/logout-all` | End all own sessions (reason `logout`) | `{ message, terminatedCount }` |
+| POST | `/logout-others` | End all own sessions except the current one | `{ message, terminatedCount, currentSessionPreserved }` |
+| DELETE | `/my-sessions/:sessionId` | End one own session that is not the current one (reason `manual`) | `{ message, success, alreadyTerminated }`; 400 for the current session, 404 for unknown or foreign IDs |
 
-Returns all sessions for the authenticated user.
+`POST /api/auth/logout` also ends the current session; the plugin mounts it when Users & Permissions does not provide it.
 
-```bash
-GET /api/magic-sessionmanager/my-sessions
-Authorization: Bearer <JWT>
-```
+Session objects contain `id`, `documentId`, `sessionId`, `ipAddress`, `userAgent`, `loginTime`, `lastActive`, `logoutTime`, `isActive`, `terminationReason`, `deviceType`, `browserName`, `osName`, `geoLocation`, `securityScore`, `isTrulyActive` (Active rather than Idle), `minutesSinceActive` and `isCurrentSession`. Tokens and token hashes are never returned. Use `id` / `documentId` (or the `native_` ID of a native-only row) for `DELETE /my-sessions/:sessionId`.
 
-**Response:**
+Example:
+
 ```json
 {
   "data": [
     {
-      "id": "abc123xyz",
-      "documentId": "abc123xyz",
+      "id": "k2v8m1x0q9w7e5r3t1y6u4i2",
+      "documentId": "k2v8m1x0q9w7e5r3t1y6u4i2",
       "sessionId": "sess_m5k2h_8a3b1c2d_f9e8d7c6",
-      "ipAddress": "192.168.1.100",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36...",
-      "loginTime": "2026-01-02T10:30:00.000Z",
-      "lastActive": "2026-01-02T13:45:00.000Z",
+      "ipAddress": "203.0.113.24",
+      "loginTime": "2026-11-06T10:30:00.000Z",
+      "lastActive": "2026-11-06T13:45:00.000Z",
       "logoutTime": null,
       "isActive": true,
       "deviceType": "desktop",
-      "browserName": "Chrome 143",
-      "osName": "macOS 10.15.7",
-      "geoLocation": null,
-      "securityScore": null,
-      "isCurrentSession": true,
+      "browserName": "Chrome",
+      "osName": "macOS",
       "isTrulyActive": true,
-      "minutesSinceActive": 2
-    },
-    {
-      "id": "def456uvw",
-      "documentId": "def456uvw",
-      "sessionId": "sess_m5k1g_7b2a0c1d_e8d7c6b5",
-      "ipAddress": "10.0.0.50",
-      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)...",
-      "loginTime": "2026-01-01T08:15:00.000Z",
-      "lastActive": "2026-01-01T12:00:00.000Z",
-      "logoutTime": null,
-      "isActive": true,
-      "deviceType": "mobile",
-      "browserName": "Safari",
-      "osName": "iOS 17",
-      "geoLocation": null,
-      "securityScore": null,
-      "isCurrentSession": false,
-      "isTrulyActive": false,
-      "minutesSinceActive": 1545
+      "minutesSinceActive": 2,
+      "isCurrentSession": true
     }
   ],
-  "meta": {
-    "count": 2,
-    "active": 1
-  }
-}
-```
-
-### Get Current Session
-
-Returns only the session associated with the current JWT token.
-
-```bash
-GET /api/magic-sessionmanager/current-session
-Authorization: Bearer <JWT>
-```
-
-**Response:**
-```json
-{
-  "data": {
-    "id": "abc123xyz",
-    "documentId": "abc123xyz",
-    "sessionId": "sess_m5k2h_8a3b1c2d_f9e8d7c6",
-    "ipAddress": "192.168.1.100",
-    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36...",
-    "loginTime": "2026-01-02T10:30:00.000Z",
-    "lastActive": "2026-01-02T13:45:00.000Z",
-    "logoutTime": null,
-    "isActive": true,
-    "deviceType": "desktop",
-    "browserName": "Chrome 143",
-    "osName": "macOS 10.15.7",
-    "geoLocation": null,
-    "securityScore": null,
-    "isCurrentSession": true,
-    "isTrulyActive": true,
-    "minutesSinceActive": 2
-  }
-}
-```
-
-### Logout (Current Session)
-
-Ends only the current session (end reason `logout`).
-
-```bash
-POST /api/magic-sessionmanager/logout
-Authorization: Bearer <JWT>
-```
-
-**Response:**
-```json
-{
-  "message": "Logged out successfully"
-}
-```
-
-### Logout All Devices
-
-Ends all sessions of the authenticated user (signs out everywhere, end reason `logout`).
-
-```bash
-POST /api/magic-sessionmanager/logout-all
-Authorization: Bearer <JWT>
-```
-
-**Response:**
-```json
-{
-  "message": "Logged out from all devices successfully"
-}
-```
-
-### Terminate Specific Session
-
-Ends a specific session of the authenticated user (not the current one), with the end reason `manual`. Useful for "Sign out other devices".
-Use the `id` / `documentId` value from the session response. The separate `sessionId` field is a tracking identifier stored on the session record.
-
-For a native-only row, use its `native_` value from `id`. Native-only rows may not have a `documentId` or Magic metadata.
-
-```bash
-DELETE /api/magic-sessionmanager/my-sessions/:documentId
-Authorization: Bearer <JWT>
-```
-
-**Response:**
-```json
-{
-  "message": "Session abc123xyz terminated successfully",
-  "success": true
-}
-```
-
-**Error (trying to terminate current session):**
-```json
-{
-  "error": {
-    "status": 400,
-    "message": "Cannot terminate current session. Use /logout instead."
-  }
+  "meta": { "count": 1, "active": 1, "hasMore": false, "limit": 200 }
 }
 ```
 
 ---
 
-## 🛡️ Optional route policy: `session-required`
+## Optional route policy: `session-required`
 
-You do **not** need this policy for session revocation. The plugin wraps the Users & Permissions JWT check for every Content-API request, so an ended, expired or revoked session is rejected on all routes without any configuration. No plugin route attaches the policy.
+You do **not** need this policy for session revocation. The plugin wraps the Users & Permissions JWT check for every Content API request, so an ended, expired or revoked session is rejected on all routes without configuration. No plugin route attaches the policy.
 
-The policy is opt-in for projects that want an explicit, per-route check on their **own** routes. It follows the same "Strict token check" setting as the global check, so it cannot make a single route stricter than the rest. Attach it in the route config of your API:
+The policy is opt-in for an explicit, per-route check on your **own** routes. It follows the same Token check setting as the global check, so it cannot make a single route stricter than the rest.
 
 ```js
 // src/api/order/routes/order.js
@@ -663,273 +462,123 @@ module.exports = factories.createCoreRouter('api::order.order', {
 });
 ```
 
-For a custom route, add the same name to `config.policies` of that route.
-
-What it checks, in this order:
-
-| Case | Strict token check on | Strict token check off (relaxed) |
-|------|----------------------|----------------------------------|
-| No authenticated user on the request (public route, API token) | allowed — the policy does nothing; the route's own auth decides | allowed |
+| Case | Strict token check | Relaxed token check |
+|---|---|---|
+| No authenticated user on the request (public route, API token) | allowed; the route's own auth decides | allowed |
 | User cannot be resolved to a `documentId` | 401 | allowed |
 | No `Authorization: Bearer` token | 401 | allowed |
 | `jwtManagement: 'refresh'` and Strapi verified no native session id | 401 | allowed |
-| A session row matches user + token hash (+ native session id in `refresh` mode) and is active | allowed | allowed |
-| That session row is ended (`isActive: false` or ended manually) | 401 "Session terminated" | 401 "Session terminated" |
+| A matching session row is open | allowed | allowed |
+| The matching session row is ended | 401 "Session terminated" | 401 "Session terminated" |
 | No session row matches | 401 | allowed, with a warning in the log |
 | Settings or the session lookup fail | 401 | allowed |
 
-The 401 is Strapi's `UnauthorizedError`. The policy never reactivates a session; that is done only by the JWT wrapper.
+---
+
+## Admin API and permissions
+
+Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authenticated Strapi admin **and** the permission `plugin::magic-sessionmanager.access` ("Access the Session Manager plugin"). The same permission controls the menu link, the settings links, the widget and the user panel. Admin responses never contain tokens or the internal `sessionId`.
+
+| Method | Path | Admin UI action |
+|---|---|---|
+| GET | `/sessions` | Sessions dashboard, widget, Analytics (latest 1,000; `meta.truncated` when more exist) |
+| GET | `/sessions/active` | Open sessions only |
+| GET | `/user/:userId/sessions` | Sessions panel |
+| POST | `/sessions/:sessionId/terminate` | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays) |
+| DELETE | `/sessions/:sessionId` | **Delete record** (record removed, token stays revoked; an open session also ends) |
+| POST | `/sessions/clean-inactive` | **Delete ended sessions** (all users; open and idle sessions are not affected; does not run the idle check) |
+| POST | `/user/:userId/terminate-all` | **End all sessions** (reason `manual`) |
+| POST | `/user/:userId/toggle-block` | **Block user** / **Unblock user** |
+| GET | `/users/stats` | Widget totals (`totalUsers`, `blockedUsers`) |
+| GET | `/geolocation/:ipAddress` | **Look up location** |
+| GET | `/geoip/status` | GeoIP database status |
+| PUT | `/geoip/credentials` | Save or remove (`{ "clear": true }`) MaxMind credentials |
+| POST | `/geoip/update` | Update database / Force download |
+| GET, PUT | `/settings` | Configuration (PUT validates every field and returns `error.details.errors` on invalid input) |
+| GET | `/license/status` | License page |
+| POST | `/license/auto-create`, `/license/create`, `/license/ping`, `/license/store-key` | License service routes (no admin UI) |
+| POST | `/sessions/:sessionId/simulate-timeout` | Development only; removed when `NODE_ENV` is `production` or `staging` |
+
+**Block / unblock** (`toggle-block`): send `{ "blocked": true }` or `{ "blocked": false }`. This sets the state, is safe to retry and is what the admin UI sends. A request without a body still toggles, but is deprecated, because a retry after a lost response can reverse the intended state. A non-boolean `blocked` returns 400. The response contains `blocked` and `mode` (`explicit` or `toggle`). Blocking ends all open sessions with the reason `blocked`; if that fails, the response is 500 and the request can be retried.
+
+Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404 for unknown IDs, 500 for server-side failures (502 for a failed MaxMind download, 503 when the license server is unreachable).
 
 ---
 
-## 📋 Admin-API Endpoints (For Admin Panel)
+## Security and privacy
 
-These endpoints require admin authentication and the plugin's admin access permission. They manage end-user (Users & Permissions) sessions only.
+- **Encryption key.** Stored tokens are encrypted with AES-256-GCM using `SESSION_ENCRYPTION_KEY`. In production, startup fails without it. Outside production a derived development key is used with a warning. Changing the key makes existing encrypted tokens unreadable, so keep it stable. Generate one in **Configuration › Sessions › Advanced** ("Copy for .env" copies `SESSION_ENCRYPTION_KEY="…"`; nothing is saved in Strapi) or with:
 
-### Get All Sessions
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+  ```
+
+- **Ownership.** Content API routes only return or end the caller's own sessions. A foreign session ID answers exactly like a missing one, so IDs cannot be probed.
+- **Revocation.** Ended, expired and revoked sessions and blocked users are rejected on every Content API request, in both token check modes. Tokens of deleted records stay on a revocation list.
+- **Password reset.** A successful password reset ends every older session of the user in both JWT modes.
+- **Privacy.** Session records contain IP addresses, user agents and location data. With the `auto` or `ipapi` provider, IP addresses can be sent to ipapi.co; use `local-mmdb` or turn off IP location lookup to avoid that. The details dialog never looks up a location unless you click **Look up location**. Set **Keep ended sessions for** to match your retention policy, and use **Delete ended sessions** or **Delete record** to remove history.
+- **Secrets.** MaxMind license keys are never returned to the browser. Webhook URLs grant posting rights to your channel; treat them as secrets. Exports never contain tokens.
+- **Admin sessions** of Strapi administrators are out of scope.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| No Session Manager menu item | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin". |
+| No sessions appear | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log. |
+| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart. |
+| 401 on every request after a sign-in | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected. |
+| 429 on sign-in | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client. |
+| Location is always "—" | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data. |
+| Numbers differ from 4.x | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions". |
+
+The plugin stores sessions in the `magic_sessions` table and revocations in its own revoked-token table.
+
+---
+
+## Development and tests
 
 ```bash
-GET /magic-sessionmanager/sessions
+npm ci --legacy-peer-deps
+npm test                  # node --test tests/*.test.js tests/*.test.mjs
+npm run test:ts:front
+npm run test:ts:back
+npm run build
+npm run verify
+npm run verify:runtime
 ```
 
-### Get Active Sessions Only
+HTTP integration tests need Strapi host dependencies: set `SESSION_HTTP_STRAPI_NODE_MODULES` to the `node_modules` of a Strapi 5 host; without it they skip with a message.
 
-```bash
-GET /magic-sessionmanager/sessions/active
-```
+Quick manual check: sign in to your app as an end user (`POST /api/auth/local`), open Session Manager and find the session as **Active**, click **End session** and confirm, then call any Content API route with the same token: it returns 401 and the row shows **Ended · Ended manually**.
 
-### Force Terminate Session
-
-```bash
-POST /magic-sessionmanager/sessions/:sessionId/terminate
-```
-
-Ends one session (**End session** in the admin). The session gets the end reason `manual`; in Strapi's refresh-token mode the Strapi session is revoked first. The record stays in the history. The user's next request with that token gets 401.
-
-### Delete Session Record
-
-```bash
-DELETE /magic-sessionmanager/sessions/:sessionId
-```
-
-Deletes one session record (**Delete record** in the admin). The record is removed from history, statistics and exports, and its token stays revoked. If the session is still open, it also ends.
-
-### Terminate All User Sessions
-
-```bash
-POST /magic-sessionmanager/user/:userId/terminate-all
-```
-
-Ends all open sessions of one user (**End all sessions** in the admin) with the end reason `manual`. The user can sign in again unless the account is blocked.
-
-### Block/Unblock User
-
-```bash
-POST /magic-sessionmanager/user/:userId/toggle-block
-```
-
-Sets or toggles the Users & Permissions `blocked` flag of one user (**Block user** / **Unblock user** in the admin). Blocking also ends all open sessions of the user with the end reason `blocked`; the user cannot sign in until unblocked. Unblocking allows sign-in again but does not restore ended sessions.
-
-- **Recommended:** send JSON `{ "blocked": true }` to block or `{ "blocked": false }` to unblock. This sets the state, so it is safe to retry, and it is what the admin UI sends.
-- **Without a body** (or without a `blocked` field) the request still toggles the current state, as in earlier versions. This form is deprecated: a retry after a failed or lost response can reverse the intended state.
-- A `blocked` value that is present but not a boolean returns 400 before anything changes.
-- The response contains `blocked` (the new state) and the additive field `mode`: `explicit` when `blocked` was sent, `toggle` for the bodyless form. Existing fields are unchanged.
-
-If ending the sessions fails, the response is 500 and the user can stay blocked while some sessions remain open; retry the same `{ "blocked": true }` request to resume. Different concurrent block and unblock requests are not serialized by this endpoint.
-
-### Clean Inactive Sessions
-
-```bash
-POST /magic-sessionmanager/sessions/clean-inactive
-```
-
-Deletes the records of all ended sessions of all users (**Delete ended sessions** in the admin). Open sessions, including idle ones, are not affected, and the tokens of deleted sessions stay revoked. This does not run the idle check.
+Releases use Conventional Commits and semantic-release on Node.js 22 with npm Trusted Publishing (GitHub OIDC).
 
 ---
 
-## ⚙️ Settings You Can Change
+## Maintenance status
 
-**In `config/plugins.ts`:**
+As of 2026-11-06:
 
-```typescript
-'magic-sessionmanager': {
-  config: {
-    // How often to update "last seen" (in milliseconds)
-    lastSeenRateLimit: 30000,  // Default: 30 seconds
-    
-    // How long a session may stay unused before it becomes idle and then ends (in milliseconds)
-    inactivityTimeout: 900000,  // Default: 15 minutes
-  },
-}
-```
+- **4.8.0 is not accepted.** It was released before its acceptance gates closed. Known defects in 4.8.0, fixed on the redesign branch: the Session details dialog had no accessible name; Settings field hints, including the GeoIP privacy note, did not render; three Settings alerts had unnamed close buttons and country chips could not be removed with the keyboard; in `legacy-support` mode a password reset left older sessions usable; a failed block followed by a retry of the bodyless toggle unblocked the user; the Content API rate limiter could be bypassed by varying the path. See [CHANGELOG.md](CHANGELOG.md).
+- **Accepted on the redesign branch:** clean install, 749 of 749 tests, both type checks, build, `verify` and `verify:runtime`, `npm pack --dry-run`; desktop and mobile browser passes for every screen on an isolated Strapi 5.61.0 host with synthetic data; the strict source symmetry contract (no `window.confirm`, emoji, colour literals, px font sizes or custom media queries).
+- **Still open before the next release:** full keyboard and screen-reader walks in five locales, dark-mode contrast, the complete state matrix, measured layout symmetry at every breakpoint, a fresh-database host boot, and a consent decision for the `auto` provider's ipapi.co default.
+- **Dependency advisories:** the recorded high-severity findings come through the Strapi 5 core dependency chain (`braces` GHSA-vfj7-8cjw-p6xm, Zod GHSA-mrhx-c7xc-m3w5 via `@strapi/utils` 5.61.0). No compatible fix exists; the forced npm fix downgrades to Strapi 4, so none was applied.
 
-**In the admin panel (Settings › Session Manager › Configuration):**
-- **Sessions:** inactivity timeout, maximum session age, token check (strict or relaxed), idle check interval, encryption key generator
-- **Login protection:** temporary IP lockout, trust proxy headers, reject suspicious sign-ins, country rules. These affect new sign-ins only.
-- **Location data:** IP location lookup, security scoring, provider, MaxMind credentials and database updates
-- **Alerts:** security emails to users, team notifications (Discord or Slack webhook URLs only)
-- **Data and retention:** how long ended sessions are kept, and deleting all ended sessions
-
-Settings saved in the admin are stored in the database. Other server processes apply them within 30 seconds.
+Report bugs at https://github.com/Schero94/Magic-Sessionmanager/issues.
 
 ---
 
-## 🐛 Common Problems & Fixes
+## Languages
 
-### I don't see the Sessions menu
-
-**Fix:**
-1. Make sure plugin is in `config/plugins.ts`
-2. Run `npm run build`
-3. Restart Strapi
-4. Refresh browser (Cmd+Shift+R)
-
-### Sessions not being created
-
-**Fix:**
-1. Check Strapi logs for errors
-2. Make sure users are logging in (not already logged in)
-3. Check database is working
-
-### 401 or 403 errors
-
-**Fix:**
-- 401 = Not logged in (need to login as admin)
-- 403 = Not allowed (check you're admin, not regular user)
-
-### Database table "sessions" already exists
-
-**Fix:**
-- This plugin uses `magic_sessions` table (not `sessions`)
-- If you see this error, another plugin is using that name
-- Our plugin automatically uses the correct name
+The admin interface is available in English, German (formal "Sie"), French, Spanish and Portuguese, and follows the Strapi admin language. Dates use the admin locale.
 
 ---
 
-## 💡 When To Use This Plugin
+## License
 
-**Perfect for:**
-- Multi-tenant apps (see which tenant users are online)
-- E-commerce (track customer sessions)
-- Collaboration tools (show who's currently working)
-- Security-critical apps (end sessions and block compromised accounts)
-- Compliance requirements (session audit logs)
+MIT License. Copyright © 2025 Schero D. See [LICENSE](./LICENSE).
 
-**Not needed if:**
-- Single-user app
-- No need to see who's logged in
-- No security requirements
-
----
-
-## 🔧 How To Test It
-
-### Quick Manual Test
-
-1. **Sign in to your app as an end user** (Users & Permissions, for example through your frontend). Strapi admin sign-ins are not recorded.
-2. **In the Strapi admin, open Session Manager**
-3. **You should see the session as Active**
-4. **Click "End session" on it and confirm**
-5. **Use the app with the same token → the request is rejected with 401, and the session shows Ended · Ended manually**
-
-### With Postman
-
-**1. Login:**
-```
-POST http://localhost:1337/api/auth/local
-Body: { "identifier": "user@test.com", "password": "pass123" }
-```
-
-**2. Check session created:**
-```
-GET http://localhost:1337/magic-sessionmanager/sessions
-```
-
-**3. Logout:**
-```
-POST http://localhost:1337/api/auth/logout
-Authorization: Bearer YOUR_JWT_TOKEN
-```
-
-**Done!**
-
----
-
-## 📦 What Gets Installed
-
-When you install this plugin, you get:
-
-- ✅ Sessions page with every recorded session
-- ✅ Session tracking (automatic)
-- ✅ End session, End all sessions, Delete record, Block user
-- ✅ Activity monitoring and Analytics
-- ✅ Token encryption
-- ✅ Multi-device support
-
-**All features are included for free:**
-- ✅ IP location lookup
-- ✅ Threat detection
-- ✅ Login protection (temporary IP lockout, suspicious sign-ins, country rules)
-- ✅ Security emails to users and Discord or Slack team notifications
-
----
-
-## 🙋 FAQ
-
-**Q: Do I need to change my Strapi code?**  
-A: No! Just install and enable the plugin.
-
-**Q: Will this break my existing logins?**  
-A: Existing sign-in flows keep working. Login protection checks new sign-ins only: the temporary IP lockout is on by default (5 failed sign-ins from one IP address within 15 minutes), while suspicious-sign-in and country rules are off until you turn them on.
-
-**Q: Can users see each other's sessions?**  
-A: No. Only admins can see all sessions. Users only see their own.
-
-**Q: What if I uninstall the plugin?**  
-A: Sessions will stop being tracked. Everything else works normally.
-
-**Q: Does it slow down my app?**  
-A: No! It has smart rate-limiting to prevent database spam.
-
-**Q: Can I customize the dashboard?**  
-A: Not yet, but it's planned for future versions!
-
----
-
-## 📚 Resources
-
-- **NPM:** https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager
-- **GitHub:** https://github.com/Schero94/Magic-Sessionmanager
-- **Report Bugs:** https://github.com/Schero94/Magic-Sessionmanager/issues
-
----
-
-## 📄 License
-
-**MIT License** - Free to use for personal and commercial projects!
-
-**Copyright © 2025 Schero D.**
-
-### Optional license-key activation
-
-**Settings › Session Manager › License** shows whether an optional license key is stored and whether it is valid. It is read-only. The key is only used for install tracking and support context; it does not unlock or restrict any plugin feature. All features work without a key.
-
-See [LICENSE](./LICENSE) for full terms.
-
----
-
-## 🌐 Supported Languages
-
-The admin interface is available in **5 languages:**
-
-- 🇬🇧 **English** - Default
-- 🇩🇪 **Deutsch** - German
-- 🇪🇸 **Español** - Spanish
-- 🇫🇷 **Français** - French
-- 🇵🇹 **Português** - Portuguese
-
-Language automatically follows your Strapi admin interface setting.
-
----
-
-**Made for Strapi v5**
+**License page.** Settings › Session Manager › License shows whether an optional license key is stored and valid. The key is used for install tracking and support context only; it does not unlock or restrict any feature.
