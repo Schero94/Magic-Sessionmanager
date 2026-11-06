@@ -258,6 +258,7 @@ test('changed non-trivial admin handlers include JSDoc contracts', () => {
     ['pages/Settings/hooks/useSettingsForm.js', 'handleReset'],
     ['pages/Analytics.jsx', 'fetchAnalytics'],
     ['pages/License.jsx', 'fetchLicenseStatus'],
+    ['pages/License.jsx', 'checkLicenseStatus'],
     ['pages/License.jsx', 'handleCopyLicenseKey'],
     ['pages/License.jsx', 'handleDownloadLicenseKey'],
     ['components/SessionDetailModal.jsx', 'handleTerminate'],

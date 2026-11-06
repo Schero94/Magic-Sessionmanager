@@ -98,7 +98,7 @@ module.exports = ({ strapi, sessionService }) => {
       return;
     }
 
-    let thisSession = null;
+    let thisSession;
     try {
       const filters = { user: { documentId: userDocId } };
       if (nativeSessionId) {

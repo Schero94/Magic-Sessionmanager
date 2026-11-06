@@ -5,9 +5,6 @@
  * Use this if old fields persist in database after removing injection
  */
 
-const fs = require('fs');
-const path = require('path');
-
 console.log('╔════════════════════════════════════════════════════════════╗');
 console.log('║  🧹 Remove isOnline, lastLogin, lastLogout, lastSeen      ║');
 console.log('╚════════════════════════════════════════════════════════════╝\n');

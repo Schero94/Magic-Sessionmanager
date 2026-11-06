@@ -30,12 +30,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_FETCH_TIM
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // eslint-disable-next-line no-await-in-loop
       return await fetch(url, { ...options, signal: controller.signal });
     } catch (err) {
       lastError = err;
       if (attempt < FETCH_RETRIES) {
-        // eslint-disable-next-line no-await-in-loop
         await new Promise((r) => setTimeout(r, FETCH_RETRY_BACKOFF_MS));
         continue;
       }

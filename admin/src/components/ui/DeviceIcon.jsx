@@ -22,7 +22,8 @@ export const getDeviceIconComponent = (icon) => DEVICE_ICONS[icon] || Informatio
  * @returns {import('react').ReactElement} Hidden-from-AT icon.
  */
 const DeviceIcon = ({ icon }) => {
-  const Icon = getDeviceIconComponent(icon);
+  // Select one of the module-level icon components; never create one in render.
+  const Icon = DEVICE_ICONS[icon] || Information;
   return <Icon aria-hidden focusable={false} />;
 };
 

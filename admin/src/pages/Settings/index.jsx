@@ -130,12 +130,15 @@ const SettingsPage = () => {
   const [{ query }] = useQueryParams();
   const requestedTab = resolveSettingsTab(query?.tab);
   const [activeTab, setActiveTab] = useState(requestedTab);
+  const [followedTab, setFollowedTab] = useState(requestedTab);
   const tabsRef = useRef(null);
 
-  // Follow links that change ?tab= while the page is open.
-  useEffect(() => {
+  // Follow links that change ?tab= while the page is open. Adjusting state
+  // during render avoids an extra effect pass.
+  if (requestedTab !== followedTab) {
+    setFollowedTab(requestedTab);
     setActiveTab(requestedTab);
-  }, [requestedTab]);
+  }
 
   // On narrow screens the tab list scrolls; keep the open tab fully visible
   // (deep links, "Requires …" links). Only the list scrolls, never the page.
@@ -159,9 +162,10 @@ const SettingsPage = () => {
 
   // A successful save disables Save, which would drop keyboard focus to
   // <body>; it moves to the open tab, as after Discard.
+  const { handleSave } = form;
   const handleSaveClick = useCallback(async () => {
-    if (await form.handleSave()) focusActiveTab();
-  }, [form.handleSave, focusActiveTab]);
+    if (await handleSave()) focusActiveTab();
+  }, [handleSave, focusActiveTab]);
 
   const changeTab = useCallback((tab) => {
     const next = resolveSettingsTab(tab);

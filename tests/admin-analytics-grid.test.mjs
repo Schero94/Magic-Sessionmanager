@@ -129,12 +129,16 @@ test('header: subtitle names the loaded sessions, Refresh keeps the page mounted
   assert.match(code, /analytics\.openSessionManager/);
   const refresh =
     code.match(
-      /<Button\b(?:(?!<\/Button>)[\s\S])*?onClick=\{fetchAnalytics\}[\s\S]*?<\/Button>/
+      /<Button\b(?:(?!<\/Button>)[\s\S])*?onClick=\{handleRefresh\}[\s\S]*?<\/Button>/
     )?.[0] || '';
   assert.match(refresh, /aria-busy=\{refreshing\}/);
   assert.doesNotMatch(refresh, /\bdisabled=|\bloading=/, 'a disabled button would drop focus');
-  const fetcher = code.match(/const fetchAnalytics = async[\s\S]*?\n {2}\};/)?.[0] || '';
+  const fetcher = code.match(
+    /const fetchAnalytics = useCallback\(async[\s\S]*?\n {2}\}, \[get\]\);/
+  )?.[0];
+  assert.ok(fetcher, 'fetchAnalytics is a stable callback');
   assert.doesNotMatch(fetcher, /setLoading\(true\)/, 'a refresh never returns to the page loader');
+  assert.match(code, /const handleRefresh = \(\) => \{[\s\S]*?setRefreshing\(true\);/);
 });
 
 test('truncation alert appears only when the API reports meta.truncated (IA D1, D6)', () => {

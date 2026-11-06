@@ -47,7 +47,6 @@ function getEncryptionKey() {
 
   if (!warnedMissingKey) {
     warnedMissingKey = true;
-    // eslint-disable-next-line no-console
     console.warn(
       '[magic-sessionmanager] SESSION_ENCRYPTION_KEY not set — using dev fallback derived from ' +
         'APP_KEYS/API_TOKEN_SALT. Set this env var before deploying (it is NOT rotatable).'
@@ -89,7 +88,7 @@ function encryptToken(token) {
         err?.name || 'Error'
       );
     }
-    throw new Error('Failed to encrypt token');
+    throw new Error('Failed to encrypt token', { cause: err });
   }
 }
 
@@ -115,7 +114,9 @@ function decryptToken(encryptedToken) {
     const authTag = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
+      authTagLength: AUTH_TAG_LENGTH,
+    });
     decipher.setAuthTag(authTag);
 
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');

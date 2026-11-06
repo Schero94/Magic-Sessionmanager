@@ -13,11 +13,11 @@ const howItWorks = read('pages/Dashboard/HowSessionsWork.jsx');
 const badge = read('components/ui/StatusBadge.jsx');
 
 function getHandler(name) {
-  const start = source.indexOf(`const ${name} = async`);
+  const start = source.search(new RegExp(`const ${name} = (?:useCallback\\()?async`));
   assert.notEqual(start, -1, `expected ${name} handler`);
-  const end = source.indexOf('\n  };', start);
-  assert.notEqual(end, -1, `expected ${name} handler end`);
-  return source.slice(start, end);
+  const length = source.slice(start).search(/\n {2}\}(?:;|, \[)/);
+  assert.notEqual(length, -1, `expected ${name} handler end`);
+  return source.slice(start, start + length);
 }
 
 test('End session runs only after ConfirmAction, locks the row, awaits refresh, and reports all outcomes (IA E.1)', () => {

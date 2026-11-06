@@ -97,11 +97,11 @@ test('GeoIP update names edition and build date, and shows the server message on
   const card = readSettingsFile('GeoIpDatabaseCard.jsx');
   assert.match(
     card,
-    /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(false\), updateRef\)\}[\s\S]*?t\('settings\.config\.database\.update', 'Update database'\)/
+    /onClick=\{\(\) => keepFocus\(\(\) => geoIp\.updateDatabase\(false\), updateRef\)\}[\s\S]*?t\('settings\.config\.database\.update', 'Update database'\)/
   );
   assert.match(
     card,
-    /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(true\), forceRef\)\}[\s\S]*?t\('settings\.config\.database\.force', 'Force download'\)/
+    /onClick=\{\(\) => keepFocus\(\(\) => geoIp\.updateDatabase\(true\), forceRef\)\}[\s\S]*?t\('settings\.config\.database\.force', 'Force download'\)/
   );
   assert.match(
     unwrapSource(card),

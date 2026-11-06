@@ -35,7 +35,6 @@ const PathValue = ({ path }) => {
   return (
     <Typography variant="omega" textColor="neutral800">
       {parts.map((part, index) => (
-        // eslint-disable-next-line react/no-array-index-key -- segments are positional
         <Fragment key={index}>
           {part}
           {index < parts.length - 1 ? (
@@ -70,7 +69,8 @@ const GeoIpDatabaseCard = ({ form }) => {
 
   // These buttons are disabled while their request runs, which drops keyboard
   // focus on <body>; afterwards it returns to the button (or the account ID).
-  const keepFocus = (action, buttonRef) => async () => {
+  // Called from the click handler only, so the refs are never read during render.
+  const keepFocus = async (action, buttonRef) => {
     await action();
     window.requestAnimationFrame(() =>
       window.requestAnimationFrame(() => {
@@ -277,7 +277,7 @@ const GeoIpDatabaseCard = ({ form }) => {
         <Button
           ref={saveCredentialsRef}
           variant="secondary"
-          onClick={keepFocus(geoIp.saveCredentials, saveCredentialsRef)}
+          onClick={() => keepFocus(geoIp.saveCredentials, saveCredentialsRef)}
           loading={geoIp.savingCredentials}
           disabled={
             databaseDisabled ||
@@ -315,7 +315,7 @@ const GeoIpDatabaseCard = ({ form }) => {
         <Flex gap={2} wrap="wrap">
           <Button
             ref={updateRef}
-            onClick={keepFocus(() => geoIp.updateDatabase(false), updateRef)}
+            onClick={() => keepFocus(() => geoIp.updateDatabase(false), updateRef)}
             loading={geoIp.updating}
             disabled={
               databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges
@@ -326,7 +326,7 @@ const GeoIpDatabaseCard = ({ form }) => {
           <Button
             ref={forceRef}
             variant="tertiary"
-            onClick={keepFocus(() => geoIp.updateDatabase(true), forceRef)}
+            onClick={() => keepFocus(() => geoIp.updateDatabase(true), forceRef)}
             disabled={
               databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges
             }

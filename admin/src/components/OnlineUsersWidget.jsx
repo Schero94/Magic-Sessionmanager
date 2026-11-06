@@ -229,14 +229,16 @@ const OnlineUsersWidget = () => {
    * refresh keeps the last values; a failed first session load shows the
    * error state. When only the user totals fail, the session tiles still show.
    *
-   * @param {{showLoading?: boolean}} [options] Whether to show the loading state.
+   * The loading state starts as true and "Try again" sets it before calling,
+   * so this function only clears it.
+   *
+   * @param {{showLoading?: boolean}} [options] Whether this load owns the loading and error state.
    * @returns {Promise<void>}
    */
   const fetchStats = useCallback(
     async ({ showLoading = true } = {}) => {
       if (requestInProgress.current) return;
       requestInProgress.current = true;
-      if (showLoading) setLoading(true);
 
       try {
         const [sessionResult, countResult] = await Promise.allSettled([
@@ -270,6 +272,7 @@ const OnlineUsersWidget = () => {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after await; the compiler cannot see through the callback
     void fetchStats();
     const interval = setInterval(() => {
       void fetchStats({ showLoading: false });
@@ -287,6 +290,7 @@ const OnlineUsersWidget = () => {
         message={t('widget.error.message', 'Online users could not be loaded.')}
         retryLabel={t('common.tryAgain', 'Try again')}
         onRetry={() => {
+          setLoading(true);
           void fetchStats();
         }}
       />

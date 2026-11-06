@@ -104,7 +104,7 @@ async function resolveLimits({ profile, routeMax, routeWindowMs, strapi }) {
     return { max: cachedEntry.max, windowMs: cachedEntry.windowMs };
   }
 
-  let settings = {};
+  let settings;
   try {
     settings = await getPluginSettings(strapi);
   } catch {

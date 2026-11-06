@@ -82,7 +82,7 @@ test('dashboard retains the actual row or button opener and does not refetch mer
   assert.match(home, /ref=\{dashboardRef\}[^>]*tabIndex=\{-1\}/);
   assert.match(home, /onCloseAutoFocus=\{handleCloseAutoFocus\}/);
   assert.match(modal, /onCloseAutoFocus=\{onCloseAutoFocus\}/);
-  assert.match(home, /useEffect\(\(\) => \{\s*fetchSessions\(\);\s*\}, \[\]\)/);
+  assert.match(home, /useEffect\(\(\) => \{[^}]*fetchSessions\(\);\s*\}, \[fetchSessions\]\)/);
 });
 
 test('refocusIfLost puts focus back on the button that ran a slow action, only when focus fell to <body>', () => {

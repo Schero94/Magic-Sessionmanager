@@ -1,4 +1,3 @@
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme, SingleSelect, SingleSelectOption, TextInput } from '@strapi/design-system';

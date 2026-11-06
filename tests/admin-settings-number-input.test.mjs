@@ -70,7 +70,7 @@ test('the lockout input shows the stored value again after Discard changes and a
     save,
     /setSavedSettings\(stored\);\s*setDraftVersion\(\(version\) => version \+ 1\)/
   );
-  assert.match(hook, /\n    draftVersion,\n/);
+  assert.match(hook, /\n {4}draftVersion,\n/);
 
   const valueIndex = login.indexOf('value={settings.maxFailedLogins}');
   const numberInput = login.slice(login.lastIndexOf('<NumberInput', valueIndex), valueIndex);

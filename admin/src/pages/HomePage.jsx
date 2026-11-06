@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Link } from 'react-router-dom';
 import { Pagination, useFetchClient, useNotification, useQueryParams } from '@strapi/strapi/admin';
@@ -164,10 +164,6 @@ const HomePage = () => {
   const mutationPending = Boolean(terminatingSessionId || deletingSessionId);
 
   useEffect(() => {
-    fetchSessions();
-  }, []);
-
-  useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
     return () => clearInterval(timer);
   }, []);
@@ -178,10 +174,11 @@ const HomePage = () => {
    * later loads (Refresh, auto refresh, after an action) keep the list
    * mounted so keyboard focus and scroll position survive (DUX-02, DASH-17).
    * A failed refresh keeps the last data and shows the error above it.
+   * `get` is stable, so the callback is created once.
    *
    * @returns {Promise<void>}
    */
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     if (hasLoadedRef.current) setRefreshing(true);
@@ -208,7 +205,14 @@ const HomePage = () => {
         setRefreshing(false);
       }
     }
-  };
+  }, [get]);
+
+  useEffect(() => {
+    // The first load: loading is already true and hasLoadedRef is false, so
+    // fetchSessions sets state only after its request settles.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after await; the compiler cannot see through the callback
+    fetchSessions();
+  }, [fetchSessions]);
 
   useEffect(() => {
     // Silent background update every 10 minutes, paused while the detail
@@ -219,7 +223,7 @@ const HomePage = () => {
     }, AUTO_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [showDetailModal, mutationPending]);
+  }, [showDetailModal, mutationPending, fetchSessions]);
 
   /**
    * Ends one session after ConfirmAction confirmed it (IA E.1), then
@@ -329,7 +333,11 @@ const HomePage = () => {
     [sessions, dashboard.status, dashboard.reason, dashboard.search, formatters]
   );
   const pageResult = paginateSessions(filteredSessions, dashboard.page, dashboard.pageSize);
-  visibleIdsRef.current = pageResult.items.map((session) => String(session.id));
+  const visibleIds = pageResult.items.map((session) => String(session.id));
+  // Handlers read the ids of the rows on screen after the latest commit.
+  useLayoutEffect(() => {
+    visibleIdsRef.current = visibleIds;
+  });
 
   /**
    * Downloads CSV for every session matching the current filters, not only the
@@ -846,6 +854,7 @@ const HomePage = () => {
         {showDetailModal && selectedSession && (
           <SessionDetailModal
             session={selectedSession}
+            now={now}
             onClose={handleModalClose}
             onCloseAutoFocus={handleCloseAutoFocus}
             onEndSession={handleTerminateSession}

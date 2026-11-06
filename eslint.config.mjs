@@ -25,6 +25,14 @@ export default defineConfig([
     linterOptions: {
       reportUnusedDisableDirectives: 'error',
     },
+    rules: {
+      // `_name` marks a parameter a signature requires but the body does not use;
+      // properties destructured next to `...rest` are the documented way to omit fields.
+      'no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', ignoreRestSiblings: true, reportUsedIgnorePattern: true },
+      ],
+    },
   },
 
   // Admin panel (React, browser, ESM)
@@ -84,6 +92,14 @@ export default defineConfig([
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: { ...globals.node },
+    },
+  },
+
+  // Playwright snippet: the page.evaluate callbacks run in the browser
+  {
+    files: ['tests/ui-field-fixture/check.js'],
+    languageOptions: {
+      globals: { ...globals.browser },
     },
   },
 

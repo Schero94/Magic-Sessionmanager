@@ -310,10 +310,7 @@ test('a persisted revocation rejects a JWT after its session row is deleted in r
         revocation: { documentId: 'revoked-token-1', expiresAt: new Date(Date.now() + 3600_000) },
         session: null,
       });
-      await bootstrap.__private.registerSessionAwareAuthStrategy(
-        harness.strapi,
-        harness.strapi.log
-      );
+      await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi);
 
       assert.equal(await harness.jwtService.verify(token), null);
       assert.equal(harness.getUserIdLookups(), 0);
@@ -327,7 +324,7 @@ test('expired revocation records do not block relaxed tokens by themselves', asy
     revocation: { documentId: 'expired-token-1', expiresAt: new Date(Date.now() - 1000) },
     session: null,
   });
-  await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi, harness.strapi.log);
+  await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi);
 
   assert.equal((await harness.jwtService.verify(harness.token)).id, 7);
 });
@@ -336,10 +333,7 @@ test('strict JWT enforcement rejects unresolved users but relaxed mode preserves
   for (const strict of [true, false]) {
     await t.test(`strictSessionEnforcement=${strict}`, async () => {
       const harness = createJwtHarness({ strict, resolveUser: null });
-      await bootstrap.__private.registerSessionAwareAuthStrategy(
-        harness.strapi,
-        harness.strapi.log
-      );
+      await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi);
       const result = await harness.jwtService.verify(harness.token);
 
       assert.equal(result === null, strict);
@@ -349,7 +343,7 @@ test('strict JWT enforcement rejects unresolved users but relaxed mode preserves
 
 test('strict JWT enforcement rejects a missing user record', async () => {
   const harness = createJwtHarness({ strict: true, userRecord: null });
-  await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi, harness.strapi.log);
+  await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi);
 
   assert.equal(await harness.jwtService.verify(harness.token), null);
 });
@@ -362,10 +356,7 @@ test('strict JWT enforcement rejects user-record and session lookup failures imm
         failUserLookup: failure === 'user',
         failSessionLookup: failure === 'session',
       });
-      await bootstrap.__private.registerSessionAwareAuthStrategy(
-        harness.strapi,
-        harness.strapi.log
-      );
+      await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi);
 
       assert.equal(await harness.jwtService.verify(harness.token), null);
     });
@@ -374,7 +365,7 @@ test('strict JWT enforcement rejects user-record and session lookup failures imm
 
 test('JWT validation fails closed if persistent revocation lookup fails', async () => {
   const harness = createJwtHarness({ strict: false, failRevocationLookup: true });
-  await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi, harness.strapi.log);
+  await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi);
 
   assert.equal(await harness.jwtService.verify(harness.token), null);
 });

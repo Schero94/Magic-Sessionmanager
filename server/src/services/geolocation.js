@@ -81,10 +81,6 @@ function resolveDatabaseCandidates(settings = {}) {
   ]);
 }
 
-function resolveDatabasePath(settings = {}) {
-  return resolveDatabaseCandidates(settings)[0] || '';
-}
-
 /**
  * Selects the first existing local database, falling back to the preferred
  * configured path so the caller can report a useful missing-file error.

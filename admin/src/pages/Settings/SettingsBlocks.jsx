@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import {
   Accordion,
   Box,
@@ -82,10 +82,14 @@ export const AdvancedSection = ({ label, hasError = false, disabled = false, chi
   const { t } = useSettingsTranslate();
   const itemValue = useId();
   const [open, setOpen] = useState('');
+  const [hadError, setHadError] = useState(false);
 
-  useEffect(() => {
+  // Open when a field inside becomes invalid. Adjusting state during render
+  // avoids an extra effect pass.
+  if (hasError !== hadError) {
+    setHadError(hasError);
     if (hasError) setOpen(itemValue);
-  }, [hasError, itemValue]);
+  }
 
   return (
     <Accordion.Root value={open} onValueChange={setOpen} data-advanced-section="">

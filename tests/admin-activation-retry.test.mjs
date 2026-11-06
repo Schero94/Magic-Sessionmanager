@@ -16,14 +16,16 @@ test('license status errors appear in the status card with an explicit Try again
 
   assert.match(errorBranch, /<Alert\b/);
   assert.match(errorBranch, /action=\{/);
-  assert.match(errorBranch, /fetchLicenseStatus/);
+  assert.match(errorBranch, /checkLicenseStatus\(\{ announce: false \}\)/);
   assert.match(errorBranch, /license\.error\.retry', 'Try again'/);
   assert.match(errorBranch, /license\.error\.load/);
 });
 
 test('a failed check keeps the last known status and key visible', () => {
   const fetcher =
-    licenseSource.match(/const fetchLicenseStatus = async[\s\S]*?\n {2}\};/)?.[0] || '';
+    licenseSource.match(
+      /const fetchLicenseStatus = useCallback\(async[\s\S]*?\n {2}\}, \[get\]\);/
+    )?.[0] || '';
   const catchBlock = fetcher.match(/catch \(err\) \{[\s\S]*?\}\s*finally/)?.[0] || '';
   assert.ok(catchBlock, 'the fetcher has a catch block');
   assert.doesNotMatch(catchBlock, /setLicenseData\(/, 'the last status is not cleared on error');

@@ -36,6 +36,8 @@ import { useSettingsTranslate } from './hooks/useSettingsTranslate';
  * Country chips. A DS Tag is 28 px tall; below the medium breakpoint the
  * remove buttons grow to the 32 px touch target (IA D5 mobile).
  */
+const NO_COUNTRIES = [];
+
 const ChipList = styled(Flex)`
   & button {
     min-width: ${({ theme }) => theme.spaces[7]};
@@ -71,39 +73,46 @@ const CountryListEditor = ({ settings, handleChange }) => {
   const [pendingMode, setPendingMode] = useState(null);
   // A new key remounts the Combobox with an empty input after each pick.
   const [pickerKey, setPickerKey] = useState(0);
-  const [refocusPicker, setRefocusPicker] = useState(false);
   const [manualCode, setManualCode] = useState('');
-  const [focusIndex, setFocusIndex] = useState(undefined);
+  // Focus targets set by the handlers and applied once the list or the
+  // remounted picker has rendered.
+  const pendingFocusIndexRef = useRef(undefined);
+  const refocusPickerRef = useRef(false);
   const chipListRef = useRef(null);
   const pickerRef = useRef(null);
   const modeGroupRef = useRef(null);
 
   const activeField = getGeofencingField(mode);
-  const activeList = Array.isArray(settings[activeField]) ? settings[activeField] : [];
+  const activeList = Array.isArray(settings[activeField]) ? settings[activeField] : NO_COUNTRIES;
   const options = useMemo(() => getCountryOptions(locale, activeList), [locale, activeList]);
   const manualError = tError(validateCountryCode(manualCode, activeList));
 
   // Keep the mode in sync when the draft is reset or reloaded from the server.
+  // Adjusting state during render avoids an extra effect pass.
   const inferredMode = inferGeofencingMode(settings);
   const allowedCount = settings.allowedCountries?.length || 0;
   const blockedCount = settings.blockedCountries?.length || 0;
-  useEffect(() => {
+  const listSignature = `${inferredMode}:${allowedCount}:${blockedCount}`;
+  const [syncedSignature, setSyncedSignature] = useState(listSignature);
+  if (listSignature !== syncedSignature) {
+    setSyncedSignature(listSignature);
     if (allowedCount > 0 || blockedCount > 0) setMode(inferredMode);
-  }, [inferredMode, allowedCount, blockedCount]);
+  }
 
   useEffect(() => {
+    const focusIndex = pendingFocusIndexRef.current;
     if (focusIndex === undefined) return;
+    pendingFocusIndexRef.current = undefined;
     const chips = chipListRef.current?.querySelectorAll('button') || [];
     if (focusIndex !== null && chips[focusIndex]) chips[focusIndex].focus();
     else pickerRef.current?.focus();
-    setFocusIndex(undefined);
-  }, [focusIndex, activeList.length]);
+  }, [activeList.length]);
 
   useEffect(() => {
-    if (!refocusPicker) return;
+    if (!refocusPickerRef.current) return;
+    refocusPickerRef.current = false;
     pickerRef.current?.focus();
-    setRefocusPicker(false);
-  }, [refocusPicker, pickerKey]);
+  }, [pickerKey]);
 
   const applyMode = (requestedMode) => {
     const selection = selectGeofencingMode(mode, requestedMode);
@@ -139,7 +148,7 @@ const CountryListEditor = ({ settings, handleChange }) => {
     const index = activeList.indexOf(code);
     const next = activeList.filter((entry) => entry !== code);
     handleChange(activeField, next);
-    setFocusIndex(getFocusIndexAfterRemoval(index, next.length));
+    pendingFocusIndexRef.current = getFocusIndexAfterRemoval(index, next.length);
   };
 
   const pendingImpact = pendingMode ? getModeChangeImpact(settings, mode, pendingMode) : null;
@@ -274,8 +283,8 @@ const CountryListEditor = ({ settings, handleChange }) => {
             placeholder={t('settings.geofencing.pick', 'Pick a country to add…')}
             onChange={(code) => {
               if (code && addCode(code)) {
+                refocusPickerRef.current = true;
                 setPickerKey((key) => key + 1);
-                setRefocusPicker(true);
               }
             }}
             noOptionsMessage={() => t('settings.geofencing.pick.noResults', 'No matching country')}

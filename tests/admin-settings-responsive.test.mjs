@@ -215,7 +215,13 @@ test('email template tabs never break inside a word and stack in narrow editors'
 test('GeoIP actions give keyboard focus back after their button was disabled while running', () => {
   const card = readSettingsFile('GeoIpDatabaseCard.jsx');
   assert.match(card, /refocusIfLost\(buttonRef\.current, accountIdRef\.current\)/);
-  assert.match(card, /onClick=\{keepFocus\(geoIp\.saveCredentials, saveCredentialsRef\)\}/);
-  assert.match(card, /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(false\), updateRef\)\}/);
-  assert.match(card, /onClick=\{keepFocus\(\(\) => geoIp\.updateDatabase\(true\), forceRef\)\}/);
+  assert.match(card, /onClick=\{\(\) => keepFocus\(geoIp\.saveCredentials, saveCredentialsRef\)\}/);
+  assert.match(
+    card,
+    /onClick=\{\(\) => keepFocus\(\(\) => geoIp\.updateDatabase\(false\), updateRef\)\}/
+  );
+  assert.match(
+    card,
+    /onClick=\{\(\) => keepFocus\(\(\) => geoIp\.updateDatabase\(true\), forceRef\)\}/
+  );
 });

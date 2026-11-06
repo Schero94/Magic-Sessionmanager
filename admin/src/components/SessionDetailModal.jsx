@@ -54,6 +54,7 @@ const TargetLink = styled(Link)`
 
 /** Monospace identifiers (IA H.13). */
 const MONOSPACE = { fontFamily: 'monospace', overflowWrap: 'anywhere', minWidth: 0 };
+const IDLE_LOOKUP = { status: 'idle', geo: null };
 
 /**
  * One titled block of label/value pairs inside the dialog body.
@@ -101,27 +102,30 @@ const getMinutesSinceActive = (session, now) => {
  *
  * @param {object} props
  * @param {object} props.session Session row from the dashboard.
+ * @param {number} props.now Current time in ms from the dashboard clock, so the dialog and the list agree.
  * @param {() => void} props.onClose Closes the dialog.
  * @param {(event: Event) => void} [props.onCloseAutoFocus] Restores focus to the opener.
  * @param {(session: object) => Promise<void>} props.onEndSession Ends the session (notifies and refreshes); throws on failure.
  * @returns {import('react').ReactElement|null} Dialog.
  */
-const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }) => {
+const SessionDetailModal = ({ session, now, onClose, onCloseAutoFocus, onEndSession }) => {
   const { formatMessage } = useIntl();
   const { get } = useFetchClient();
   const { toggleNotification } = useNotification();
   const { copy } = useClipboard();
   const { formatDate, formatRelativeTime, deviceTypeLabel, deviceSummary } = useSessionFormatters();
-  const [lookup, setLookup] = useState({ status: 'idle', geo: null });
+  // A lookup result belongs to the session it was requested for; a different
+  // row starts without a previous result.
+  const [lookupState, setLookupState] = useState({ sessionId: null, ...IDLE_LOOKUP });
+  const lookup = lookupState.sessionId === session?.id ? lookupState : IDLE_LOOKUP;
   const lookupRequest = useRef(0);
   const endedReasonId = `session-ended-reason-${useId().replace(/:/g, '')}`;
   const t = (id, defaultMessage, values) =>
     formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
-  // A different row starts without a previous lookup result.
+  // Switching rows invalidates a lookup that is still in flight.
   useEffect(() => {
     lookupRequest.current += 1;
-    setLookup({ status: 'idle', geo: null });
   }, [session?.id]);
 
   if (!session) return null;
@@ -138,7 +142,6 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
   const storedGeo = getStoredGeoData(session);
   const liveGeo = lookup.status === 'ok' ? lookup.geo : null;
   const geo = liveGeo || storedGeo;
-  const now = Date.now();
   const minutes = getMinutesSinceActive(session, now);
   const reason = getSessionEndReasonPresentation(session);
   const translate = (descriptor, values) =>
@@ -158,6 +161,7 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
     if (!ipAddress) return;
     const requestId = lookupRequest.current + 1;
     lookupRequest.current = requestId;
+    const setLookup = (next) => setLookupState({ ...next, sessionId: session.id });
     setLookup({ status: 'loading', geo: null });
     try {
       const { data } = await get(`/${pluginId}/geolocation/${encodeURIComponent(ipAddress)}`);

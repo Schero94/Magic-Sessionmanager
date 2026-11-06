@@ -18,10 +18,7 @@ const { createLogger } = require('./utils/logger');
 const { resolveUserDocumentId } = require('./utils/resolve-user');
 const { getPluginSettings, getSessionCreationGraceMs } = require('./utils/settings-loader');
 const { extractBearerToken } = require('./utils/extract-token');
-const {
-  setSessionRejectionReason,
-  consumeSessionRejectionReason,
-} = require('./utils/rejection-cache');
+const { setSessionRejectionReason } = require('./utils/rejection-cache');
 const { evaluateGeoFirewall } = require('./utils/geo-firewall');
 const { REVOCATION_UID } = require('./utils/session-revocation');
 const { getNativeSessionManager } = require('./utils/native-session-manager');
@@ -45,7 +42,7 @@ const JWT_WRAPPED_FLAG = Symbol.for('magic-sessionmanager.jwt.wrapped');
 const deferredContentApiPermissionSetup = new WeakMap();
 
 async function getRequestSettings(strapi, ctx) {
-  let settings = {};
+  let settings;
   try {
     settings = await getPluginSettings(strapi);
   } catch {
@@ -78,7 +75,7 @@ module.exports = async ({ strapi }) => {
   try {
     await ensureSessionLookupIndexes(strapi, log);
 
-    await registerSessionAwareAuthStrategy(strapi, log);
+    await registerSessionAwareAuthStrategy(strapi);
 
     const licenseGuardService = strapi.plugin('magic-sessionmanager').service('license-guard');
     await licenseGuardService.initialize();
@@ -1470,10 +1467,9 @@ function isSessionExpired(session, maxAgeDays = 30) {
  * scenarios without double-wrapping the verify function.
  *
  * @param {object} strapi
- * @param {object} log Strapi logger
  * @returns {Promise<void>}
  */
-async function registerSessionAwareAuthStrategy(strapi, log) {
+async function registerSessionAwareAuthStrategy(strapi) {
   try {
     const usersPermissionsPlugin = strapi.plugin('users-permissions');
 

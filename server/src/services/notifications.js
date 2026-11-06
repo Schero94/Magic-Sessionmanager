@@ -38,7 +38,7 @@ module.exports = ({ strapi }) => ({
           return settings.emailTemplates;
         }
       }
-    } catch (err) {
+    } catch {
       strapi.log.warn(
         '[magic-sessionmanager/notifications] Could not load templates from DB; using defaults'
       );

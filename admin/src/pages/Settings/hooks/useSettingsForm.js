@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import pluginId from '../../../pluginId';
 import { areSettingsEqual } from '../../../utils/settingsEquality.mjs';
@@ -80,11 +80,14 @@ export function useSettingsForm() {
   const errorTab = getErrorTab(errors);
   const canSave = hasChanges && errorCount === 0 && !saving;
 
-  // Read inside async handlers so a save always sends the latest draft.
+  // Read inside async handlers so a save always sends the latest draft. The
+  // refs are updated after each commit, before any later event handler runs.
   const settingsRef = useRef(settings);
-  settingsRef.current = settings;
   const savedSettingsRef = useRef(savedSettings);
-  savedSettingsRef.current = savedSettings;
+  useLayoutEffect(() => {
+    settingsRef.current = settings;
+    savedSettingsRef.current = savedSettings;
+  }, [settings, savedSettings]);
 
   /**
    * Copies text after a user action and reports the result.
@@ -174,7 +177,9 @@ export function useSettingsForm() {
   // Load once on mount. The ref keeps this independent of whether the host's
   // useFetchClient returns stable functions (older 5.x releases may not).
   const fetchSettingsRef = useRef(fetchSettings);
-  fetchSettingsRef.current = fetchSettings;
+  useLayoutEffect(() => {
+    fetchSettingsRef.current = fetchSettings;
+  }, [fetchSettings]);
   useEffect(() => {
     fetchSettingsRef.current();
   }, []);

@@ -53,7 +53,7 @@ test('Check again keeps the page mounted and keeps focus (F8)', () => {
   assert.match(code, /aria-busy=\{refreshing\}/);
   assert.match(code, /license\.success\.refreshed/);
 
-  assert.match(code, /const handleRefresh = \(\) => fetchLicenseStatus\(\{ announce: true \}\);/);
+  assert.match(code, /const handleRefresh = \(\) => checkLicenseStatus\(\{ announce: true \}\);/);
   const refreshButton =
     code.match(
       /<Button\b(?:(?!<\/Button>)[\s\S])*?onClick=\{handleRefresh\}[\s\S]*?<\/Button>/

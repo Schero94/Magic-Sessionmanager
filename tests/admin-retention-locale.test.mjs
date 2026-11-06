@@ -4,14 +4,6 @@ import { IntlMessageFormat } from 'intl-messageformat';
 import { readSettingsFile } from './helpers/settingsSource.mjs';
 import { readCatalogue } from './helpers/settingsCatalogue.mjs';
 
-const UNIT_KEYS = [
-  'settings.config.unit.days',
-  'settings.config.unit.minutes',
-  'settings.config.unit.seconds',
-  'settings.config.option.forever',
-  'settings.config.option.custom',
-];
-
 test('retention is a preset select with "Forever" for -1 and a numeric value (IA F Tab 5)', () => {
   const tab = readSettingsFile('DataRetentionTab.jsx');
   const field = tab.match(/<PresetSelect\s+id="session-retention-period"[\s\S]*?\/>/)?.[0] || '';

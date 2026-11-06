@@ -184,7 +184,7 @@ test('header: title, subtitle, Save and a confirmed Discard changes (IA D5.1, E.
   // After a successful save the Save button is disabled; focus moves to the open tab instead of <body>.
   assert.match(
     page,
-    /const handleSaveClick = useCallback\(async \(\) => \{\s*if \(await form\.handleSave\(\)\) focusActiveTab\(\);/
+    /const handleSaveClick = useCallback\(async \(\) => \{\s*if \(await handleSave\(\)\) focusActiveTab\(\);/
   );
   assert.doesNotMatch(source, /settings\.reset'|'Reset'/);
 });

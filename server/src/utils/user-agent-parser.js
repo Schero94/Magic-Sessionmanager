@@ -22,8 +22,6 @@ function parseUserAgent(userAgent) {
     };
   }
 
-  const ua = userAgent.toLowerCase();
-
   // Detect device type
   // iPad user agents also contain "Mobile/…", so tablets are checked first.
   let deviceType = 'desktop';
@@ -45,22 +43,22 @@ function parseUserAgent(userAgent) {
 
   if (/edg\//i.test(userAgent)) {
     browserName = 'Edge';
-    browserVersion = extractVersion(userAgent, /edg\/(\d+[\.\d]*)/i);
+    browserVersion = extractVersion(userAgent, /edg\/(\d+[.\d]*)/i);
   } else if (/opr\//i.test(userAgent) || /opera/i.test(userAgent)) {
     browserName = 'Opera';
-    browserVersion = extractVersion(userAgent, /(?:opr|opera)[\s\/](\d+[\.\d]*)/i);
+    browserVersion = extractVersion(userAgent, /(?:opr|opera)[\s/](\d+[.\d]*)/i);
   } else if (/chrome|crios/i.test(userAgent) && !/edg/i.test(userAgent)) {
     browserName = 'Chrome';
-    browserVersion = extractVersion(userAgent, /(?:chrome|crios)\/(\d+[\.\d]*)/i);
+    browserVersion = extractVersion(userAgent, /(?:chrome|crios)\/(\d+[.\d]*)/i);
   } else if (/firefox|fxios/i.test(userAgent)) {
     browserName = 'Firefox';
-    browserVersion = extractVersion(userAgent, /(?:firefox|fxios)\/(\d+[\.\d]*)/i);
+    browserVersion = extractVersion(userAgent, /(?:firefox|fxios)\/(\d+[.\d]*)/i);
   } else if (/safari/i.test(userAgent) && !/chrome|chromium/i.test(userAgent)) {
     browserName = 'Safari';
-    browserVersion = extractVersion(userAgent, /version\/(\d+[\.\d]*)/i);
+    browserVersion = extractVersion(userAgent, /version\/(\d+[.\d]*)/i);
   } else if (/msie|trident/i.test(userAgent)) {
     browserName = 'Internet Explorer';
-    browserVersion = extractVersion(userAgent, /(?:msie |rv:)(\d+[\.\d]*)/i);
+    browserVersion = extractVersion(userAgent, /(?:msie |rv:)(\d+[.\d]*)/i);
   }
 
   // Detect OS
@@ -69,7 +67,7 @@ function parseUserAgent(userAgent) {
 
   if (/windows nt/i.test(userAgent)) {
     osName = 'Windows';
-    const winVersion = extractVersion(userAgent, /windows nt (\d+[\.\d]*)/i);
+    const winVersion = extractVersion(userAgent, /windows nt (\d+[.\d]*)/i);
     // Map Windows NT versions to marketing names
     const winVersionMap = {
       '10.0': '10/11',
@@ -83,13 +81,13 @@ function parseUserAgent(userAgent) {
   } else if (/iphone|ipad|ipod/i.test(userAgent)) {
     // Checked before macOS: iOS user agents contain "like Mac OS X".
     osName = 'iOS';
-    osVersion = extractVersion(userAgent, /\bos (\d+[_\.\d]*)/i)?.replace(/_/g, '.');
+    osVersion = extractVersion(userAgent, /\bos (\d+[_.\d]*)/i)?.replace(/_/g, '.');
   } else if (/mac os x/i.test(userAgent)) {
     osName = 'macOS';
-    osVersion = extractVersion(userAgent, /mac os x (\d+[_\.\d]*)/i)?.replace(/_/g, '.');
+    osVersion = extractVersion(userAgent, /mac os x (\d+[_.\d]*)/i)?.replace(/_/g, '.');
   } else if (/android/i.test(userAgent)) {
     osName = 'Android';
-    osVersion = extractVersion(userAgent, /android (\d+[\.\d]*)/i);
+    osVersion = extractVersion(userAgent, /android (\d+[.\d]*)/i);
   } else if (/linux/i.test(userAgent)) {
     osName = 'Linux';
   } else if (/cros/i.test(userAgent)) {

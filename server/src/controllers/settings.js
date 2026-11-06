@@ -78,7 +78,7 @@ function sanitizeEmailTemplates(templates) {
 
   if (!templates || typeof templates !== 'object') return defaults;
 
-  let sanitizeHtml = null;
+  let sanitizeHtml;
   try {
     sanitizeHtml = require('sanitize-html');
   } catch {

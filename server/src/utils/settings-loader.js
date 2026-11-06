@@ -202,7 +202,7 @@ async function getPluginSettings(strapi) {
   }
 
   const staticConfig = strapi.config.get(`plugin::${PLUGIN_ID}`) || {};
-  let storedSettings = {};
+  let storedSettings;
 
   try {
     const pluginStore = strapi.store({ type: 'plugin', name: PLUGIN_ID });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { NavLink } from 'react-router-dom';
 import { Page, useFetchClient } from '@strapi/strapi/admin';
@@ -167,14 +167,14 @@ const AnalyticsPage = () => {
    * Loads the session collection and derives analytics locally. Only the first
    * load shows the page loader; a refresh keeps the page, its focus and scroll
    * position mounted. A failed refresh keeps the last data and shows the error
-   * above it. Failures are logged without response data.
+   * above it. Failures are logged without response data. `get` is stable, so
+   * the callback is created once.
    *
    * @returns {Promise<void>}
    */
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     if (requestPendingRef.current) return;
     requestPendingRef.current = true;
-    setRefreshing(true);
     try {
       const { data } = await get(`/${pluginId}/sessions`);
       const sessions = requireSessionList(data);
@@ -191,11 +191,23 @@ const AnalyticsPage = () => {
       setRefreshing(false);
       setLoading(false);
     }
+  }, [get]);
+
+  /**
+   * Refresh and "Try again": marks the button busy, then reloads in place.
+   *
+   * @returns {void}
+   */
+  const handleRefresh = () => {
+    if (requestPendingRef.current) return;
+    setRefreshing(true);
+    void fetchAnalytics();
   };
 
   useEffect(() => {
-    fetchAnalytics();
-  }, []);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after await; the compiler cannot see through the callback
+    void fetchAnalytics();
+  }, [fetchAnalytics]);
 
   if (loading) {
     return <Page.Loading />;
@@ -239,7 +251,7 @@ const AnalyticsPage = () => {
       <Button
         variant="secondary"
         startIcon={<ArrowClockwise aria-hidden />}
-        onClick={fetchAnalytics}
+        onClick={handleRefresh}
         aria-busy={refreshing}
       >
         {t('analytics.refresh', 'Refresh')}
@@ -252,7 +264,7 @@ const AnalyticsPage = () => {
       variant="danger"
       closeLabel={t('common.close', 'Close')}
       action={
-        <Button variant="secondary" onClick={fetchAnalytics} aria-busy={refreshing}>
+        <Button variant="secondary" onClick={handleRefresh} aria-busy={refreshing}>
           {t('analytics.error.retry', 'Try again')}
         </Button>
       }

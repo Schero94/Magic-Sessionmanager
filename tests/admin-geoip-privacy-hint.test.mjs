@@ -11,7 +11,6 @@ const fragments = {
   fr: ['Automatique', 'ipapi.co', 'adresses IP', 'Base de données locale', 'Désactivé'],
   pt: ['Automático', 'ipapi.co', 'endereços IP', 'Base de dados local', 'Desativado'],
 };
-const PRIVACY_KEYS = ['settings.config.provider.hint', 'settings.config.lookup.enable.privacy'];
 
 test('GeoIP provider field discloses remote lookups in its associated hint', () => {
   const source = readSettingsFile('GeoIpDatabaseCard.jsx');

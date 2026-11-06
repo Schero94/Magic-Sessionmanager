@@ -39,7 +39,10 @@ test('focus moves to the next chip, else the previous one, else the picker (SET-
   assert.equal(getFocusIndexAfterRemoval(0, 2), 0);
   assert.equal(getFocusIndexAfterRemoval(2, 2), 1);
   assert.equal(getFocusIndexAfterRemoval(0, 0), null);
-  assert.match(source, /setFocusIndex\(getFocusIndexAfterRemoval\(index, next\.length\)\)/);
+  assert.match(
+    source,
+    /pendingFocusIndexRef\.current = getFocusIndexAfterRemoval\(index, next\.length\)/
+  );
   assert.match(source, /chips\[focusIndex\]\.focus\(\)/);
   assert.match(source, /else pickerRef\.current\?\.focus\(\)/);
 });

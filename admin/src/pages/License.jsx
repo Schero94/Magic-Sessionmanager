@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import {
   Badge,
@@ -62,37 +62,51 @@ const LicensePage = () => {
    * very first load shows the page loader; "Check again" keeps the page, its
    * focus and the revealed/masked key state mounted (F8). A failed check keeps
    * the last known status and shows the error inside the status card.
+   * `get` is stable, so the callback is created once.
    *
-   * @param {{announce?: boolean}} [options] Announce a successful check.
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} Whether the status was loaded.
    */
-  const fetchLicenseStatus = async ({ announce = false } = {}) => {
-    if (requestPendingRef.current) return;
+  const fetchLicenseStatus = useCallback(async () => {
+    if (requestPendingRef.current) return false;
     requestPendingRef.current = true;
-    setRefreshing(true);
 
     try {
       const response = await get(`/${pluginId}/license/status`);
       setLicenseData(response.data);
       setError(false);
-      if (announce) {
-        toggleNotification({
-          type: 'success',
-          message: t('license.success.refreshed', 'License status checked.'),
-        });
-      }
+      return true;
     } catch (err) {
       logSafeAdminError('license.load', err);
       if (isForbidden(err)) setForbidden(true);
       setError(true);
+      return false;
     } finally {
       requestPendingRef.current = false;
       setRefreshing(false);
       setLoading(false);
     }
+  }, [get]);
+
+  /**
+   * "Check again" and "Try again": marks the button busy, reloads the status
+   * in place and, for "Check again", announces a successful check.
+   *
+   * @param {{announce: boolean}} options Announce a successful check.
+   * @returns {Promise<void>}
+   */
+  const checkLicenseStatus = async ({ announce }) => {
+    if (requestPendingRef.current) return;
+    setRefreshing(true);
+    const loaded = await fetchLicenseStatus();
+    if (loaded && announce) {
+      toggleNotification({
+        type: 'success',
+        message: t('license.success.refreshed', 'License status checked.'),
+      });
+    }
   };
 
-  const handleRefresh = () => fetchLicenseStatus({ announce: true });
+  const handleRefresh = () => checkLicenseStatus({ announce: true });
 
   /**
    * Copies the stored license key with Strapi's clipboard helper.
@@ -155,8 +169,9 @@ const LicensePage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after await; the compiler cannot see through the callback
     fetchLicenseStatus();
-  }, []);
+  }, [fetchLicenseStatus]);
 
   if (loading) {
     return <Page.Loading />;
@@ -257,7 +272,7 @@ const LicensePage = () => {
             action={
               <Button
                 variant="secondary"
-                onClick={() => fetchLicenseStatus()}
+                onClick={() => checkLicenseStatus({ announce: false })}
                 aria-busy={refreshing}
               >
                 {t('license.error.retry', 'Try again')}
