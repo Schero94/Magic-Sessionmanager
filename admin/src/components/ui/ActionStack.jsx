@@ -14,13 +14,12 @@ const ActionStack = styled.div`
   gap: ${({ theme }) => theme.spaces[2]};
   min-width: 0;
 
+  /* The buttons are the plugin's own children; wrapped labels centre
+     through inheritance, not through a selector into the DS button. */
   & > button {
     height: auto;
     min-height: 3.2rem;
     padding-block: ${({ theme }) => theme.spaces[1]};
-  }
-
-  & > button > span {
     text-align: center;
   }
 `;

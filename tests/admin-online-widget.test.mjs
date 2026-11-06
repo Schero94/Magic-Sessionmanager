@@ -93,3 +93,30 @@ test('Online Users formats numbers with the admin locale', () => {
     assert.match(widgetSource, new RegExp(`formatNumber\\(stats\\.${key}\\)`), key);
   }
 });
+
+/**
+ * F10 regression: at 320 px the widget must not overflow. Overflow is
+ * prevented only if the min-content width of every tile collapses to a single
+ * character, which needs all of the following at once. If any link in this
+ * chain is removed, a long translated label pushes the grid wider than the
+ * widget (the frame would then only clip it).
+ */
+test('widget tiles cannot force a min-content width wider than a 320 px screen (F10)', () => {
+  const tile = widgetSource.slice(widgetSource.indexOf('const StatTile = '), widgetSource.indexOf('const LoadingState'));
+  assert.ok(tile.length > 0, 'StatTile found');
+
+  // 1. Grid columns may shrink below their content.
+  assert.match(widgetSource, /const TileGrid = styled\.div`[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*?min-width: 0;/);
+  // 2. Every box between the grid cell and the text resets the flex/grid min-width.
+  assert.match(tile, /<Box [^>]*minWidth=\{0\}[^>]*data-widget-tile=""/, 'tile box');
+  assert.match(tile, /<Flex gap=\{2\} alignItems="flex-start" minWidth=\{0\}>/, 'icon + text row');
+  assert.match(tile, /<Flex direction="column" alignItems="flex-start" minWidth=\{0\}>/, 'text column');
+  // 3. Text can break anywhere, so its min-content is one character.
+  assert.match(widgetSource, /& > \[data-widget-tile\] \{[\s\S]*?overflow-wrap: anywhere;\s*\}/);
+  // 4. Nothing inside a tile has a fixed width, refuses to wrap or truncates.
+  assert.doesNotMatch(tile, /\bwidth=|nowrap|ellipsis/);
+  // 5. The only fixed-width child, the decorative icon, is removed below 28rem
+  //    (280 px), the frame width on a 320 px screen.
+  assert.match(widgetSource, /@container \(max-width: 28rem\) \{\s*& \[data-tile-icon\] \{\s*display: none;/);
+  assert.match(widgetSource, /const TileFrame = styled\.div`[\s\S]*?width: 100%;[\s\S]*?min-width: 0;[\s\S]*?container-type: inline-size;/);
+});

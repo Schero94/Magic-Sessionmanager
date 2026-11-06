@@ -8,20 +8,20 @@ const readAdminFile = (relativePath) => (relativePath === 'pages/Settings.jsx'
   ? readSettingsSource()
   : readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8'));
 
-test('relaxed-mode warning title and body occupy separate full-width rows', () => {
+test('relaxed-mode warning is the unmodified DS Alert (SET-17)', () => {
   const settings = readAdminFile('pages/Settings.jsx');
 
-  assert.match(settings, /const RelaxedModeAlert = styled\(DesignSystemAlert\)/);
-  assert.match(settings, /\[role=['"]status['"]\]\s*>\s*p/);
-  assert.match(settings, /flex:\s*0 0 100%/);
-  // No custom breakpoint: the body row wraps under the title at every width.
-  assert.doesNotMatch(settings.slice(settings.indexOf('const RelaxedModeAlert')), /^[^`]*@media/);
+  // Layout overrides that selected into the DS Alert markup were removed;
+  // title and body wrap the way every Strapi alert does.
+  assert.doesNotMatch(settings, /RelaxedModeAlert/);
+  assert.doesNotMatch(settings, /\[role=['"]status['"]\]\s*>\s*p/);
+  assert.match(settings, /<DesignSystemAlert\s+variant="warning"/);
 });
 
 test('relaxed-mode warning close button dismisses the alert and strict-setting changes restore it', () => {
   const settings = readAdminFile('pages/Settings.jsx');
-  const alertStart = settings.indexOf('<RelaxedModeAlert');
-  const alertEnd = settings.indexOf('</RelaxedModeAlert>', alertStart);
+  const alertStart = settings.indexOf('<DesignSystemAlert');
+  const alertEnd = settings.indexOf('</DesignSystemAlert>', alertStart);
   const alertUsage = settings.slice(settings.lastIndexOf('{!settings.strictSessionEnforcement', alertStart), alertEnd);
   const handlerStart = settings.indexOf('const handleChange = useCallback((key, value) => {');
   const handlerEnd = settings.indexOf('\n  }, []);', handlerStart);

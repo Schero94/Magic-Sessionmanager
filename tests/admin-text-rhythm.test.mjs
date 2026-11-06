@@ -37,7 +37,10 @@ test('settings render explanatory copy as readable text', () => {
   assert.match(readableText, /export const ReadableParagraphs/);
   assert.match(readableText, /split\(/, 'paragraphs are split from translated double line breaks');
   assert.match(row, /ReadableParagraphs/, 'switch descriptions support multiple paragraphs');
-  assert.ok((settings.match(/<ReadableParagraphs\b/g) || []).length >= 3, 'warning, lockout and rejection copy keep paragraph boundaries');
+  // Lockout and rejection copy keep paragraph boundaries. The relaxed-mode
+  // warning is one paragraph in the unmodified DS Alert body (SET-17), so it
+  // is plain text there.
+  assert.ok((settings.match(/<ReadableParagraphs\b/g) || []).length >= 2, 'lockout and rejection copy keep paragraph boundaries');
   // Every tab starts with one intro sentence in the shared readable style (IA D5.3).
   assert.match(settings, /export const IntroText = \(\{ children \}\) => \(\s*<ReadableText\b/);
   assert.ok((settings.match(/<IntroText>/g) || []).length >= 5, 'one intro per tab');

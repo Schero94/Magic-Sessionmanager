@@ -101,9 +101,9 @@ test('"Show all sessions" links to the dashboard search with the e-mail (IA D3, 
   assert.equal(DASHBOARD_PATH, '/plugins/magic-sessionmanager');
   assert.equal(
     buildUserSessionsHref({ email: 'anna+test@example.invalid', username: 'anna' }),
-    '/plugins/magic-sessionmanager?_q=anna%2Btest%40example.invalid'
+    '/plugins/magic-sessionmanager?search=anna%2Btest%40example.invalid'
   );
-  assert.equal(buildUserSessionsHref({ email: '  ', username: 'carla' }), '/plugins/magic-sessionmanager?_q=carla');
+  assert.equal(buildUserSessionsHref({ email: '  ', username: 'carla' }), '/plugins/magic-sessionmanager?search=carla');
   assert.equal(buildUserSessionsHref({}), '/plugins/magic-sessionmanager');
   assert.equal(buildUserSessionsHref(null), '/plugins/magic-sessionmanager');
 });

@@ -49,12 +49,11 @@ export const RequiresGeolocation = () => {
 
 /**
  * The DS accordion marks keyboard focus only with a faint border tint. The
- * trigger gets the same 2 px primary focus ring as other DS controls.
+ * trigger gets the same 2 px primary focus ring as other DS controls; the
+ * styled trigger receives the class itself, no DS markup is selected (SET-17).
  */
-const AdvancedFrame = styled.div`
-  min-width: 0;
-
-  & button[data-radix-collection-item][aria-expanded]:not([role]):focus-visible {
+const AdvancedTrigger = styled(Accordion.Trigger)`
+  &&:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary600};
     outline-offset: -2px;
   }
@@ -82,22 +81,20 @@ export const AdvancedSection = ({ label, hasError = false, disabled = false, chi
   }, [hasError, itemValue]);
 
   return (
-    <AdvancedFrame>
-      <Accordion.Root value={open} onValueChange={setOpen} data-advanced-section="">
-        <Accordion.Item value={itemValue} disabled={disabled && !hasError}>
-          <Accordion.Header>
-            <Accordion.Trigger>{label || t('settings.config.advanced', 'Advanced')}</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Content>
-            <Box padding={{ initial: 4, medium: 6 }}>
-              <Flex direction="column" alignItems="stretch" gap={6}>
-                {children}
-              </Flex>
-            </Box>
-          </Accordion.Content>
-        </Accordion.Item>
-      </Accordion.Root>
-    </AdvancedFrame>
+    <Accordion.Root value={open} onValueChange={setOpen} data-advanced-section="">
+      <Accordion.Item value={itemValue} disabled={disabled && !hasError}>
+        <Accordion.Header>
+          <AdvancedTrigger>{label || t('settings.config.advanced', 'Advanced')}</AdvancedTrigger>
+        </Accordion.Header>
+        <Accordion.Content>
+          <Box padding={{ initial: 4, medium: 6 }}>
+            <Flex direction="column" alignItems="stretch" gap={6}>
+              {children}
+            </Flex>
+          </Box>
+        </Accordion.Content>
+      </Accordion.Item>
+    </Accordion.Root>
   );
 };
 

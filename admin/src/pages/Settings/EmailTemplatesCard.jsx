@@ -45,17 +45,25 @@ const TemplateTabsList = styled(Tabs.List)`
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
 
-  & > button {
+  @container (max-width: 35.99rem) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
+
+/**
+ * Template tab trigger. Styled directly instead of selecting into the DS
+ * list markup (SET-17).
+ */
+const TemplateTabTrigger = styled(Tabs.Trigger)`
+  && {
     min-width: 0;
     overflow-wrap: break-word;
   }
 
   @container (max-width: 35.99rem) {
-    grid-template-columns: minmax(0, 1fr);
-
     /* The DS raises the selected tab with extra padding; stacked rows keep
        one height, the selection shows through colour and shadow. */
-    & > button {
+    && {
       padding-block: ${({ theme }) => theme.spaces[3]};
     }
   }
@@ -318,9 +326,9 @@ const EmailTemplatesCard = ({ form }) => {
         <Tabs.Root value={activeTemplateTab} onValueChange={setActiveTemplateTab} hasError={errorTemplate}>
           <TemplateTabsList aria-label={t('settings.config.email.templates.field', 'Email templates')}>
             {TEMPLATE_KEYS.map((key) => (
-              <Tabs.Trigger key={key} value={key}>
+              <TemplateTabTrigger key={key} value={key}>
                 {t(TEMPLATE_TAB_LABELS[key][0], TEMPLATE_TAB_LABELS[key][1])}
-              </Tabs.Trigger>
+              </TemplateTabTrigger>
             ))}
           </TemplateTabsList>
           {TEMPLATE_KEYS.map((templateKey) => (

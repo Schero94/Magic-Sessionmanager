@@ -13,8 +13,11 @@ const read = (path) => (path === 'pages/Settings.jsx'
 test('persistent notices use the shared non-dismissible Strapi alert', () => {
   assert.ok(existsSync(new URL('../admin/src/components/PersistentAlert.jsx', import.meta.url)));
   const component = read('components/PersistentAlert.jsx');
-  assert.match(component, /styled\(Alert\)/);
-  assert.match(component, /& > button:last-child\s*\{\s*display: none;/);
+  // Composed from public DS props: no DS Alert, so no close button to hide
+  // and no selector into DS markup (SET-17).
+  assert.doesNotMatch(component, /\bAlert\b[^B]*from '@strapi\/design-system'/);
+  assert.doesNotMatch(component, /button:last-child|\[role=/);
+  assert.match(component, /role=\{variant === 'danger' \? 'alert' : 'status'\}/);
   for (const path of ['pages/HomePage.jsx', 'pages/Analytics.jsx', 'pages/License.jsx', 'pages/Settings.jsx', 'components/OnlineUsersWidget.jsx', 'components/SessionInfoPanel.jsx']) {
     const source = read(path);
     // The home widget renders its states through Strapi's Widget helpers (or a
@@ -25,7 +28,8 @@ test('persistent notices use the shared non-dismissible Strapi alert', () => {
     assert.doesNotMatch(source, /onClose=\{\(\) => \{\}\}/);
   }
   const settings = read('pages/Settings.jsx');
-  assert.match(settings, /styled\(DesignSystemAlert\)/);
+  assert.match(settings, /<DesignSystemAlert\b/);
+  assert.doesNotMatch(settings, /styled\(DesignSystemAlert\)/, 'the dismissible DS alert is used as is (SET-17)');
   assert.match(settings, /onClose=\{\(\) => setRelaxedWarningDismissed\(true\)\}/);
 });
 

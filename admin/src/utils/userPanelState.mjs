@@ -98,8 +98,9 @@ export function isNotFoundError(error) {
 
 /**
  * Builds the "Show all sessions" link: the dashboard with its search set to
- * the user's e-mail (IA C, D3). The dashboard search is Strapi's SearchInput,
- * which keeps its value in the standard `_q` query parameter.
+ * the user's e-mail (IA C, D3). The dashboard keeps its search in the
+ * documented `search` query parameter (`?search=<email>`); `_q` is only read
+ * for older links.
  *
  * @param {{email?: unknown, username?: unknown}|null|undefined} user Content Manager document.
  * @returns {string} Dashboard path, filtered when the user has an e-mail or user name.
@@ -107,7 +108,7 @@ export function isNotFoundError(error) {
 export function buildUserSessionsHref(user) {
   const query = presentText(user?.email) || presentText(user?.username);
   if (!query) return DASHBOARD_PATH;
-  return `${DASHBOARD_PATH}?${new URLSearchParams({ _q: query }).toString()}`;
+  return `${DASHBOARD_PATH}?${new URLSearchParams({ search: query }).toString()}`;
 }
 
 /**

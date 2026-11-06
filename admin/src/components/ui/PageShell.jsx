@@ -20,10 +20,13 @@ const PageContent = styled(Flex)`
 /**
  * Native Strapi page frame used by every plugin screen:
  * Page.Main + Layouts.Header + optional Layouts.Action + Layouts.Content.
+ * A string title also becomes the document title through Page.Title, so the
+ * browser tab does not keep the previous page's title after navigation.
  *
  * @param {object} props
  * @param {string} [props.headingId] Id of the h1; generated when omitted.
  * @param {import('react').ReactNode} props.title Page title (h1).
+ * @param {string} [props.documentTitle] Document title; defaults to a string `title`.
  * @param {import('react').ReactNode} [props.subtitle] Page subtitle.
  * @param {import('react').ReactNode} [props.primaryAction] Primary header action.
  * @param {import('react').ReactNode} [props.secondaryAction] Secondary header action.
@@ -36,6 +39,7 @@ const PageContent = styled(Flex)`
 const PageShell = ({
   headingId,
   title,
+  documentTitle,
   subtitle,
   primaryAction,
   secondaryAction,
@@ -47,9 +51,11 @@ const PageShell = ({
   const generatedId = useId();
   const titleId = headingId || `page-title-${generatedId.replace(/:/g, '')}`;
   const hasActionBar = Boolean(startActions || endActions);
+  const tabTitle = documentTitle || (typeof title === 'string' ? title : '');
 
   return (
     <Page.Main aria-labelledby={titleId}>
+      {tabTitle ? <Page.Title>{tabTitle}</Page.Title> : null}
       <Layouts.Header
         id={titleId}
         title={title}

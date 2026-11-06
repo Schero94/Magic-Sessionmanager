@@ -155,8 +155,8 @@ test('device icons are decorative and the unknown device is not a monitor', () =
 
 test('alert bodies align with the alert title (F7)', () => {
   const alert = read('components/PersistentAlert.jsx');
-  assert.match(alert, /styled\(Alert\)/);
-  assert.match(alert, /& \[role='status'\] > p > \*,\s*& \[role='alert'\] > p > \* \{[^}]*display: inline;[^}]*max-width: none;[^}]*font-size: inherit;[^}]*line-height: inherit;/);
+  assert.match(alert, /const AlertBody = styled\(Typography\)`[\s\S]*?& > \* \{[^}]*display: inline;[^}]*max-width: none;[^}]*font-size: inherit;[^}]*line-height: inherit;/);
+  assert.match(alert, /<AlertBody tag="div" variant="omega" textColor="neutral800">/);
 });
 
 test('readable text spacing uses DS spacing tokens', () => {

@@ -35,17 +35,24 @@ const SettingsTabsList = styled(Tabs.List)`
   overflow-y: hidden;
   max-width: 100%;
   border-bottom: 1px solid ${({ theme }) => theme.colors.neutral150};
+`;
 
-  & > [role='tab'] {
+/** Tabs keep their text width and never wrap; the list scrolls instead. */
+const SettingsTabTrigger = styled(Tabs.Trigger)`
+  && {
     flex: 0 0 auto;
     white-space: nowrap;
   }
+`;
 
-  & > [role='tab'] > span:first-child {
-    text-transform: none;
-    letter-spacing: normal;
-    font-size: ${({ theme }) => theme.fontSizes[2]};
-  }
+/**
+ * Own label element inside the trigger: it resets the DS sigma uppercase
+ * without selecting into the DS markup (SET-17).
+ */
+const SettingsTabLabel = styled.span`
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: ${({ theme }) => theme.fontSizes[2]};
 `;
 
 /**
@@ -244,9 +251,9 @@ const SettingsPage = () => {
           >
             <SettingsTabsList aria-label={t('settings.config.tabs.label', 'Configuration sections')}>
               {SETTINGS_TAB_IDS.map((tab) => (
-                <Tabs.Trigger key={tab} value={tab}>
-                  {t(SETTINGS_TAB_LABELS[tab][0], SETTINGS_TAB_LABELS[tab][1])}
-                </Tabs.Trigger>
+                <SettingsTabTrigger key={tab} value={tab}>
+                  <SettingsTabLabel>{t(SETTINGS_TAB_LABELS[tab][0], SETTINGS_TAB_LABELS[tab][1])}</SettingsTabLabel>
+                </SettingsTabTrigger>
               ))}
             </SettingsTabsList>
             {/* All panels stay mounted (hidden) so drafts, local key state and validation survive tab switches. */}

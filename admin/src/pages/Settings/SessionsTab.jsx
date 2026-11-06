@@ -1,5 +1,4 @@
 import { Alert as DesignSystemAlert, Badge, Flex, SingleSelect, SingleSelectOption, Typography } from '@strapi/design-system';
-import styled from 'styled-components';
 import { EqualGrid, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
 import { ReadableParagraphs } from '../../components/ReadableText';
@@ -9,31 +8,6 @@ import EncryptionKeyCard, { useEncryptionKeyDraft } from './EncryptionKeyCard';
 import { AdvancedSection, IntroText, PresetSelect, TermList } from './SettingsBlocks';
 import { useOptionLabels } from './hooks/useOptionLabels';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
-
-/**
- * The DS Alert puts title and body on one row. The relaxed-mode body takes
- * its own full-width row under the title. Only the DS role container is
- * targeted; a source-contract test pins this override (SET-17).
- */
-const RelaxedModeAlert = styled(DesignSystemAlert)`
-  [role='status'] > p {
-    flex: 0 0 100%;
-    width: 100%;
-    min-width: 0;
-  }
-
-  /* The DS close button is a bare 16 px icon; its hit area grows to 32 px
-     while negative margins keep the icon where the DS draws it. */
-  & > button:last-child {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: ${({ theme }) => theme.spaces[7]};
-    min-height: ${({ theme }) => theme.spaces[7]};
-    margin: -${({ theme }) => theme.spaces[2]};
-    border-radius: ${({ theme }) => theme.borderRadius};
-  }
-`;
 
 /** Session end reasons sent in X-Session-Terminated-Reason (IA A.4, F 1.3). */
 const REJECTION_REASONS = [
@@ -207,22 +181,18 @@ const SessionsTab = ({ form }) => {
         />
 
         {!settings.strictSessionEnforcement && !relaxedWarningDismissed && (
-          <RelaxedModeAlert
+          <DesignSystemAlert
             variant="warning"
             closeLabel={t('common.close', 'Close')}
             onClose={() => setRelaxedWarningDismissed(true)}
             title={t('settings.config.token.relaxed', 'Relaxed')}
           >
-            <ReadableParagraphs
-              variant="omega"
-              textColor="neutral800"
-              tag="span"
-              text={t(
-                'settings.config.token.relaxedWarning',
-                'Tokens without a session record are accepted. If the check itself fails, up to 10 requests per minute are still allowed.'
-              )}
-            />
-          </RelaxedModeAlert>
+            {/* Plain text: the DS Alert body is already a paragraph next to the title. */}
+            {t(
+              'settings.config.token.relaxedWarning',
+              'Tokens without a session record are accepted. If the check itself fails, up to 10 requests per minute are still allowed.'
+            )}
+          </DesignSystemAlert>
         )}
 
         <AdvancedSection>

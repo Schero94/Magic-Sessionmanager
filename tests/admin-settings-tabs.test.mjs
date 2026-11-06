@@ -67,10 +67,14 @@ test('five DS tabs in IA order with sentence-case labels (IA I.1-16, F)', () => 
 
 test('tab labels are not rendered uppercase and scroll inside the tab list (IA H.3, D5 mobile)', () => {
   const list = page.match(/const SettingsTabsList = styled\(Tabs\.List\)`([\s\S]*?)`;/)?.[1] || '';
+  const trigger = page.match(/const SettingsTabTrigger = styled\(Tabs\.Trigger\)`([\s\S]*?)`;/)?.[1] || '';
+  const label = page.match(/const SettingsTabLabel = styled\.span`([\s\S]*?)`;/)?.[1] || '';
   assert.match(list, /overflow-x:\s*auto/);
-  assert.match(list, /white-space:\s*nowrap/);
-  assert.match(list, /text-transform:\s*none/, 'the DS sigma uppercase is reset');
-  assert.match(list, /font-size:\s*\$\{\(\{ theme \}\) => theme\.fontSizes\[2\]\}/, 'theme token, no px');
+  assert.match(trigger, /white-space:\s*nowrap/);
+  assert.match(label, /text-transform:\s*none/, 'the DS sigma uppercase is reset on the own label element');
+  assert.match(label, /font-size:\s*\$\{\(\{ theme \}\) => theme\.fontSizes\[2\]\}/, 'theme token, no px');
+  assert.match(page, /<SettingsTabTrigger key=\{tab\} value=\{tab\}>\s*<SettingsTabLabel>/);
+  assert.doesNotMatch(list, /\[role=|span:first-child/, 'no selector into DS markup (SET-17)');
   assert.doesNotMatch(list, /flex-wrap:\s*wrap/);
 });
 

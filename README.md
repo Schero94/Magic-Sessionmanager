@@ -645,6 +645,43 @@ Authorization: Bearer <JWT>
 
 ---
 
+## 🛡️ Optional route policy: `session-required`
+
+You do **not** need this policy for session revocation. The plugin wraps the Users & Permissions JWT check for every Content-API request, so an ended, expired or revoked session is rejected on all routes without any configuration. No plugin route attaches the policy.
+
+The policy is opt-in for projects that want an explicit, per-route check on their **own** routes. It follows the same "Strict token check" setting as the global check, so it cannot make a single route stricter than the rest. Attach it in the route config of your API:
+
+```js
+// src/api/order/routes/order.js
+const { factories } = require('@strapi/strapi');
+
+module.exports = factories.createCoreRouter('api::order.order', {
+  config: {
+    find: { policies: ['plugin::magic-sessionmanager.session-required'] },
+    findOne: { policies: ['plugin::magic-sessionmanager.session-required'] },
+  },
+});
+```
+
+For a custom route, add the same name to `config.policies` of that route.
+
+What it checks, in this order:
+
+| Case | Strict token check on | Strict token check off (relaxed) |
+|------|----------------------|----------------------------------|
+| No authenticated user on the request (public route, API token) | allowed — the policy does nothing; the route's own auth decides | allowed |
+| User cannot be resolved to a `documentId` | 401 | allowed |
+| No `Authorization: Bearer` token | 401 | allowed |
+| `jwtManagement: 'refresh'` and Strapi verified no native session id | 401 | allowed |
+| A session row matches user + token hash (+ native session id in `refresh` mode) and is active | allowed | allowed |
+| That session row is ended (`isActive: false` or ended manually) | 401 "Session terminated" | 401 "Session terminated" |
+| No session row matches | 401 | allowed, with a warning in the log |
+| Settings or the session lookup fail | 401 | allowed |
+
+The 401 is Strapi's `UnauthorizedError`. The policy never reactivates a session; that is done only by the JWT wrapper.
+
+---
+
 ## 📋 Admin-API Endpoints (For Admin Panel)
 
 These endpoints require admin authentication and the plugin's admin access permission. They manage end-user (Users & Permissions) sessions only.
