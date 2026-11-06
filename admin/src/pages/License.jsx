@@ -248,7 +248,7 @@ const LicensePage = () => {
         ) : null}
         <Flex direction="column" alignItems="stretch" gap={1} aria-live="polite">
           {statusMessage ? (
-            <Typography variant="delta" tag="p" textColor="neutral800" fontWeight="semiBold">
+            <Typography variant="omega" tag="p" textColor="neutral800" fontWeight="semiBold" data-license-state="">
               {translate(statusMessage, statusMessage.values)}
             </Typography>
           ) : null}

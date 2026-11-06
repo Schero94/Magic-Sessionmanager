@@ -12,6 +12,7 @@ import {
   VisuallyHidden,
 } from '@strapi/design-system';
 import { ArrowClockwise, Calendar, ChartBubble, Clock, User } from '@strapi/icons';
+import { EmptyDocuments } from '@strapi/icons/symbols';
 import pluginId from '../pluginId';
 import {
   ANALYTICS_UNKNOWN_KEY,
@@ -188,13 +189,29 @@ const AnalyticsPage = () => {
 
   const title = t('analytics.title', 'Analytics');
   const totalSessions = Number(analytics?.totalSessions) || 0;
-  const subtitle = analytics
-    ? t(
-      'analytics.subtitle',
-      '{count, plural, =0 {No sessions are loaded yet.} one {Based on the latest # loaded session.} other {Based on the latest # loaded sessions.}}',
-      { count: totalSessions }
-    )
-    : undefined;
+  // The load time belongs to the header metadata, next to what was loaded,
+  // instead of a lonely line between the header and the KPIs. A non-string
+  // subtitle is rendered as-is by Layouts.Header, so it carries the header's
+  // own subtitle typography (epsilon, neutral600, <p>).
+  const subtitle = analytics ? (
+    <Typography variant="epsilon" textColor="neutral600" tag="p">
+      {t(
+        'analytics.subtitle',
+        '{count, plural, =0 {No sessions are loaded yet.} one {Based on the latest # loaded session.} other {Based on the latest # loaded sessions.}}',
+        { count: totalSessions }
+      )}
+      {updatedAt ? (
+        <>
+          {' '}
+          <span aria-live="polite" data-analytics-updated="">
+            {t('analytics.lastUpdated', 'Last updated {time}', {
+              time: formatDate(updatedAt, { timeStyle: 'short' }),
+            })}
+          </span>
+        </>
+      ) : null}
+    </Typography>
+  ) : undefined;
 
   const headerActions = (
     <Flex gap={2} wrap="wrap" justifyContent="flex-end">
@@ -276,17 +293,9 @@ const AnalyticsPage = () => {
         </Alert>
       ) : null}
 
-      {updatedAt ? (
-        <Typography variant="pi" textColor="neutral600" tag="p" aria-live="polite">
-          {t('analytics.lastUpdated', 'Last updated {time}', {
-            time: formatDate(updatedAt, { timeStyle: 'short' }),
-          })}
-        </Typography>
-      ) : null}
-
       {hasSessions ? (
         <>
-          <StatGrid label={t('analytics.stats.label', 'Session overview')}>
+          <StatGrid label={t('analytics.stats.label', 'Session overview')} alignValues>
             <StatCard
               icon={ChartBubble}
               tone="primary"
@@ -364,7 +373,7 @@ const AnalyticsPage = () => {
         </>
       ) : (
         <EmptyStateLayout
-          icon={<ChartBubble aria-hidden="true" />}
+          icon={<EmptyDocuments width="16rem" height="8.8rem" aria-hidden="true" />}
           content={t('analytics.empty', 'No sessions to analyse yet. Analytics appear after the first sign-ins.')}
         />
       )}

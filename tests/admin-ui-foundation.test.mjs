@@ -81,6 +81,19 @@ test('StatGrid renders compact equal-height cards in 4/2/1 DS columns', () => {
   assert.doesNotMatch(grid, /tag="p"/, 'no block elements inside a button card');
   assert.match(grid, /<Icon aria-hidden focusable=\{false\} \/>/, 'icons are decorative');
   assert.match(grid, /theme\.colors\[`\$\{\$tone\}600`\]/, 'icon tone comes from the DS theme');
+  // A wrapped label must not push its icon or value off the row's line (Analytics desktop acceptance).
+  assert.match(grid, /const IconTile = styled\(Flex\)`\s*align-self: flex-start;/, 'icons stay at the top of every card');
+  // Settings pages lose ~230 px to the sub-navigation; a narrow KPI row folds to 2 x 2.
+  assert.match(grid, /container-type: inline-size;/, 'the KPI row is a size container');
+  assert.match(grid, /@container \(min-width: \$\{DS_SMALL_REM\}rem\) and \(max-width: \$\{STAT_GRID_FOLD_REM - 0\.01\}rem\)/, 'phones keep the DS one-column layout');
+  assert.match(grid, /const STAT_GRID_FOLD_REM = \(4 \* 200 \+ 3 \* 16\) \/ 10;/, 'rem in the ten-pixel-root DS convention');
+  assert.match(grid, /const DS_SMALL_REM = 52;/);
+  // Values pin to the card bottom only on request: a row that mixes cards with and
+  // without a secondary line (dashboard) keeps values directly under the labels.
+  assert.match(grid, /&\[data-align-values\] \[data-stat-body\] \{\s*flex: 1 1 auto;/, 'opt-in: the body stretches to the row height');
+  assert.match(grid, /&\[data-align-values\] \[data-stat-text\] \{\s*justify-content: space-between;/, 'opt-in: values share one line across a row');
+  assert.match(grid, /<Flex gap=\{3\} alignItems="stretch" minWidth=\{0\} data-stat-body="">/, 'by default the body keeps its content height');
+  assert.match(grid, /alignValues = false/);
 });
 
 test('PropertyList is a description list with equal columns and targeted wrapping', () => {

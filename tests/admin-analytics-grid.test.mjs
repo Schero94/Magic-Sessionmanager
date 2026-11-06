@@ -126,3 +126,26 @@ test('decorative icons are hidden from assistive technology', () => {
     assert.match(icon, /aria-hidden/, icon);
   }
 });
+
+test('the load time sits in the header subtitle, not as a lonely line above the KPIs (desktop acceptance)', () => {
+  const subtitle = code.match(/const subtitle = analytics \? \([\s\S]*?\) : undefined;/)?.[0] || '';
+  assert.match(subtitle, /<Typography variant="epsilon" textColor="neutral600" tag="p">/, 'same typography as a string subtitle');
+  assert.match(subtitle, /analytics\.subtitle/);
+  assert.match(subtitle, /analytics\.lastUpdated/);
+  assert.match(subtitle, /aria-live="polite"/, 'a refresh is announced');
+  assert.equal((code.match(/analytics\.lastUpdated/g) || []).length, 1, 'shown once');
+});
+
+test('the empty state uses the native Strapi illustration, not a text-sized icon (desktop acceptance)', () => {
+  const empty = code.match(/<EmptyStateLayout\b[\s\S]*?\n\s*\/>/)?.[0] || '';
+  assert.match(code, /import \{ EmptyDocuments \} from '@strapi\/icons\/symbols';/);
+  assert.match(empty, /icon=\{<EmptyDocuments width="16rem" height="8\.8rem" aria-hidden="true" \/>\}/);
+  assert.match(empty, /analytics\.empty', 'No sessions to analyse yet\. Analytics appear after the first sign-ins\.'/);
+});
+
+test('analytics KPIs have no secondary lines, so their values share one line across the row (desktop acceptance)', () => {
+  const grid = code.match(/<StatGrid\b[^>]*>/)?.[0] || '';
+  assert.match(grid, /\balignValues\b/);
+  const cards = code.match(/<StatGrid\b[\s\S]*?<\/StatGrid>/)?.[0] || '';
+  assert.doesNotMatch(cards, /description=/, 'a secondary line would break the shared value line');
+});

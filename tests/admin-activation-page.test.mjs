@@ -101,3 +101,11 @@ test('the legacy LicenseGuard never blocks access', () => {
   const guard = readFileSync(new URL('../admin/src/components/LicenseGuard.jsx', import.meta.url), 'utf8');
   assert.match(guard, /const LicenseGuard = \(\{ children \}\) => <>\{children\}<\/>;/);
 });
+
+test('the state sentence is body text under the card heading, never a second heading (desktop acceptance)', () => {
+  const statusCard = code.match(/<SectionCard title=\{t\('license\.status\.title'[\s\S]*?<\/SectionCard>/)?.[0] || '';
+  const state = statusCard.match(/<Typography[^>]*data-license-state=""[^>]*>/)?.[0] || '';
+  assert.match(state, /variant="omega"/);
+  assert.match(state, /fontWeight="semiBold"/);
+  assert.doesNotMatch(statusCard, /variant="(?:alpha|beta|gamma|delta)" tag="p"/, 'no heading-sized paragraph next to the h2');
+});

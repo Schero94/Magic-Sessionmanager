@@ -40,19 +40,67 @@ export const EqualGrid = ({ columns = 2, stackBelow = 'medium', gap = 6, label, 
 };
 
 /**
+ * Width of a four-up KPI row below which it folds to 2 × 2: four 20rem cards
+ * plus three spacing-4 gaps. Units follow the DS convention of the Strapi
+ * admin, whose root font size is ten pixels (DS font sizes are 1.1rem–3.2rem). The
+ * lower bound is the DS small breakpoint (52rem), where the DS spans are
+ * already two-up, so phones keep their one-column layout.
+ */
+const STAT_GRID_FOLD_REM = (4 * 200 + 3 * 16) / 10;
+const DS_SMALL_REM = 52;
+
+/**
+ * The viewport breakpoints cannot see the Settings sub-navigation, which
+ * leaves a four-up KPI row only about 17rem per card in a 1024–1080 wide
+ * window. The frame is a size container: when it is narrower than four
+ * 20rem cards the row folds to two columns. Phones are untouched.
+ */
+const StatGridFrame = styled.div`
+  container-type: inline-size;
+  min-width: 0;
+
+  @container (min-width: ${DS_SMALL_REM}rem) and (max-width: ${STAT_GRID_FOLD_REM - 0.01}rem) {
+    [data-equal-grid='4'] > * {
+      grid-column: span 6;
+    }
+  }
+
+  /* Rows without secondary lines: pin every value to the card bottom, so a
+     label that wraps onto two lines does not push its value off the row's line. */
+  &[data-align-values] [data-stat-body] {
+    flex: 1 1 auto;
+  }
+
+  &[data-align-values] [data-stat-text] {
+    justify-content: space-between;
+  }
+`;
+
+/**
  * KPI row: four equal cards on desktop, two from the small breakpoint, one on
- * phones. Cards in a row always share the same height.
+ * phones, and two when the row itself is too narrow for four readable cards.
+ * Cards in a row always share the same height.
  *
- * @param {{columns?: number, label?: string, children: import('react').ReactNode}} props Grid props.
+ * @param {object} props
+ * @param {number} [props.columns] Columns at the large breakpoint.
+ * @param {string} [props.label] Accessible name for the group.
+ * @param {boolean} [props.alignValues] Pin values to the card bottom. Only for
+ *   rows whose cards have no secondary line (a secondary line would sit under
+ *   some values and not others).
+ * @param {import('react').ReactNode} props.children Stat cards.
  * @returns {import('react').ReactElement} Equal KPI grid.
  */
-export const StatGrid = ({ columns = 4, label, children }) => (
-  <EqualGrid columns={columns} stackBelow="small" gap={4} label={label}>
-    {children}
-  </EqualGrid>
+export const StatGrid = ({ columns = 4, label, alignValues = false, children }) => (
+  <StatGridFrame data-stat-grid="" data-align-values={alignValues ? '' : undefined}>
+    <EqualGrid columns={columns} stackBelow="small" gap={4} label={label}>
+      {children}
+    </EqualGrid>
+  </StatGridFrame>
 );
 
 const IconTile = styled(Flex)`
+  align-self: flex-start;
+
   svg {
     width: ${({ theme }) => theme.spaces[5]};
     height: ${({ theme }) => theme.spaces[5]};
@@ -84,7 +132,9 @@ const CardButton = styled(Box)`
 
 /**
  * One KPI card: icon, label and value in one compact block, an optional
- * secondary line below. The label is read before the value; the icon is
+ * secondary line below. The icon sits at the top and the value at the bottom
+ * of the stretched body, so icons and values line up across a row even when
+ * one label wraps onto two lines. The label is read before the value; the icon is
  * decorative. With `onClick` the whole card is a toggle button (for example
  * the dashboard status filter) and `pressed` marks the active choice.
  *
@@ -120,7 +170,7 @@ export const StatCard = ({ label, value, icon: Icon, tone = 'neutral', descripti
       data-stat-card={safeTone}
     >
       <Flex direction="column" alignItems="stretch" gap={2} height="100%">
-        <Flex gap={3} alignItems="center" minWidth={0}>
+        <Flex gap={3} alignItems="stretch" minWidth={0} data-stat-body="">
           {Icon ? (
             <IconTile
               $tone={safeTone}
@@ -135,7 +185,7 @@ export const StatCard = ({ label, value, icon: Icon, tone = 'neutral', descripti
               <Icon aria-hidden focusable={false} />
             </IconTile>
           ) : null}
-          <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0}>
+          <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0} flex="1 1 auto" data-stat-text="">
             <Typography variant="sigma" textColor="neutral600" tag="span">
               {label}
             </Typography>
