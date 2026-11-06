@@ -31,9 +31,18 @@ import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 // ================ BAR LIST ================
 // Label, track and count are three grid cells. The count never overlaps the
 // fill, so its contrast is the card's body-text contrast in both themes
-// (UX-02, F4). Below the DS small breakpoint the track moves under the label.
+// (UX-02, F4). In a narrow list the track moves under the label.
+
+/**
+ * Inline size of the bar list from which label, track and count share one
+ * line. It is the list's own width, not the viewport: at 768 px the two cards
+ * sit side by side but are only about 18rem wide inside. Units follow the DS
+ * convention of the Strapi admin (root font size ten pixels).
+ */
+const BAR_ROW_INLINE_REM = 24;
 
 const BarList = styled.ul`
+  container-type: inline-size;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -54,7 +63,7 @@ const BarRow = styled.li`
   align-items: center;
   min-width: 0;
 
-  ${({ theme }) => theme.breakpoints.small} {
+  @container (min-width: ${BAR_ROW_INLINE_REM}rem) {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 6ch;
     grid-template-areas: 'label track count';
   }
@@ -62,7 +71,7 @@ const BarRow = styled.li`
   & > [data-bar-label] {
     grid-area: label;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   & > [data-bar-count] {

@@ -149,3 +149,15 @@ test('analytics KPIs have no secondary lines, so their values share one line acr
   const cards = code.match(/<StatGrid\b[\s\S]*?<\/StatGrid>/)?.[0] || '';
   assert.doesNotMatch(cards, /description=/, 'a secondary line would break the shared value line');
 });
+
+test('bar rows switch to label, track, count by the width of their card, not the viewport', () => {
+  // At 768 px the two breakdown cards are only about 18rem wide each, while the
+  // viewport is past the DS small breakpoint: a viewport query squeezed the label
+  // column until "Desktop" and "Unknown" broke mid-word.
+  const list = code.match(/const BarList = styled\.ul`[\s\S]*?`;/)?.[0] || '';
+  const row = code.match(/const BarRow = styled\.li`[\s\S]*?`;/)?.[0] || '';
+  assert.match(list, /container-type:\s*inline-size/, 'the bar list is a size container');
+  assert.match(row, /@container \(min-width: \$\{BAR_ROW_INLINE_REM\}rem\)/, 'three columns only when the list is wide enough');
+  assert.doesNotMatch(row, /theme\.breakpoints/, 'no viewport breakpoint for the bar row');
+  assert.doesNotMatch(row, /overflow-wrap:\s*anywhere/, 'labels never break inside a word that fits');
+});
