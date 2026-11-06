@@ -14,8 +14,10 @@ The current source snapshot was copied to `/tmp/sessionmanager-build-review.hwrn
 
 - [ ] I1: Re-run each leaf check and inspect its evidence and diffs; no unresolved severe findings are hidden.
   EVIDENCE: pending
-- [ ] I2: Full plugin tests, frontend/backend type checks, build, SDK verification, runtime verification and package inspection pass on final code.
-  EVIDENCE: pending
+- [x] I2: Full plugin tests, frontend/backend type checks, build, SDK verification, runtime verification and package inspection pass on final code.
+  CHECK: clean copy (`git archive HEAD` into an empty directory), then npm ci && npm test && npm run -s test:ts:front && npm run -s test:ts:back && npm run build && npm run verify && npm run verify:runtime && npm pack --dry-run
+  EXPECT: every step exit 0; # fail 0, # skipped 0, # todo 0
+  EVIDENCE: 2026-11-06 ~21:30, redesign branch code `449564c`, Node v22.23.1, npm 10.9.8, `SESSION_HTTP_STRAPI_NODE_MODULES` on the Strapi 5.61.0 host: npm ci 0; npm test 749/749 pass, 0 fail, 0 skipped, 0 todo; both type checks 0; build 0; verify 0; verify:runtime 0 ("Server bundle runtime check passed"); pack --dry-run 0 (44 files, 2.9 MB / 5.0 MB unpacked, version still 4.8.0 — the version decision is `gates/ui-redesign.md` V2). Details in `gates/ui-redesign.md` B0. Later commits that change code must re-run this.
 - [ ] I3: Fresh isolated integration host builds and boots with the final plugin and compatible Strapi version, without affecting existing host data or external services.
   EVIDENCE: pending
 - [ ] I4: All reachable UI pages, actions, loading/empty/error/success states and permission-backed navigation are exercised via Playwright CLI; record measured desktop/mobile breakpoint matrix, keyboard focus and console errors.

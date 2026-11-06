@@ -21,6 +21,10 @@ New regression coverage on this branch (server agent): every Content API route a
 
 A2 stays open: races and partial writes, fallback-route rate limiting, current-session 202/404 over HTTP, other malformed IDs, DB failures in more places, multi-process and non-SQLite databases. These runs are green tests, not a security sign-off.
 
+Opt-in policy (API-11), 2026-11-06: no plugin route attaches `plugin::magic-sessionmanager.session-required`; revocation is enforced for every Users & Permissions request by the JWT wrapper. The README section "Optional route policy: `session-required`" states how a project attaches it (`config.policies` of its own routes) and what it checks in strict and relaxed mode. `tests/readme-session-policy.test.mjs` pins the registered name, the documented cases and that no plugin route uses it; `tests/session-policy.test.js` and `tests/server-api-hardening.test.js` ("API-11") cover the behaviour.
+
+Status codes in the route table below (GA-12): the license, GeoIP and settings rows were measured on 4.8.0 (400 for every server-side failure). On the redesign branch they are 500/502/503 (API-7); the rows now name both. The other rows are unchanged.
+
 ## Retry-safe contract implementation, 2026-11-06
 
 Superseded in part on the redesign branch (GA-09/API-4): bodyless requests are **no longer** rejected. A request without `blocked` keeps the pre-4.9 toggle behaviour (deprecated, response `mode: 'toggle'`); `{ blocked: true | false }` sets the state retry-safely (`mode: 'explicit'`); a `blocked` value that is present but not boolean is still a 400 before any mutation. The README toggle-block section was corrected on 2026-11-06 and now describes this contract (explicit state recommended, bodyless toggle deprecated, additive `mode`). The text below describes the acceptance worktree.
@@ -109,7 +113,7 @@ Minimum design and proof obligations for a narrower failed-revocation fix:
 
 The marker therefore remains a candidate for the narrower failed-revocation scenario, not a demonstrated safe implementation. Strict retry safety after a successful but unacknowledged operation needs an explicit request identity or desired state and a migration plan for bodyless callers. Latest isolated verification: `SESSION_HTTP_MODE=legacy-support node --test --test-reporter=dot tests/isolated-http-access.test.js` passed 30 tests; `SESSION_HTTP_MODE=refresh node --test --test-reporter=dot tests/isolated-http-access.test.js` passed 32 tests. No real provider, build or install was used.
 
-**Open security defect; no product fix applied.** The admin route accepts a bodyless toggle. The controller saves `blocked: true` before terminating sessions. The user lifecycle also tries termination on that update and catches its failure; the controller tries again and returns a sanitized 500 if that attempt fails. An injected failure at both calls leaves the user blocked and the Magic session active. The existing token is denied while the block remains. The next identical POST returns 200 and unblocks the user without revoking that session. In refresh mode the test also confirms that the synthetic native session is still active after the retry. It does not establish whether a particular token can be used after unblocking.
+**Historical (acceptance worktree / 4.8.0).** On the redesign branch the admin block revokes sessions once (API-12) and callers can send an explicit `{ "blocked": true | false }` that is applied idempotently; a bodyless request still toggles and is deprecated (GA-09/API-4, `tests/server-api-hardening.test.js`). A bodyless retry after a failed block is therefore still ambiguous for old callers, and the durable-intent design below is not implemented; A2 stays open. Original text: **Open security defect; no product fix applied.** The admin route accepts a bodyless toggle. The controller saves `blocked: true` before terminating sessions. The user lifecycle also tries termination on that update and catches its failure; the controller tries again and returns a sanitized 500 if that attempt fails. An injected failure at both calls leaves the user blocked and the Magic session active. The existing token is denied while the block remains. The next identical POST returns 200 and unblocks the user without revoking that session. In refresh mode the test also confirms that the synthetic native session is still active after the retry. It does not establish whether a particular token can be used after unblocking.
 
 Failing-first evidence: temporarily asserting that the retry returns `blocked: true` failed in both isolated real Strapi HTTP modes, with actual `false`. A separate test in the same runs passed for a deliberately pre-blocked user with an active synthetic session: the same bodyless POST is the established explicit unblock and returns `blocked: false`. The normal suite retains passing characterization assertions, not a false claim of a fix. The two scenarios prove the conflict for these fixtures; the server currently records no request intent for the controller to distinguish them. The UI currently sends the same bodyless request for both actions and is outside this leaf.
 
@@ -152,17 +156,17 @@ Input classification for each registered route is below. `none` means there is n
 | POST /user/:userId/terminate-all | user ID; admin-wide | missing 404, DB lookup exception 500; concurrent deletion open |
 | POST /user/:userId/toggle-block | user ID; admin-wide | missing 404, document lookup exception 500; lifecycle/partial mutation failure open |
 | GET /users/stats | none; admin-wide | database exception 500 |
-| GET /license/status | none; admin-wide | fake provider exception 400 |
-| POST /license/auto-create | admin identity; no request body; admin-wide | fake provider exception 400 |
-| POST /license/create | email, firstName, lastName; admin-wide | invalid input and fake provider exception 400 |
-| POST /license/ping | stored key, no request body; admin-wide | fake provider exception 400; missing stored key 400 before any provider call (HTTP, see "Missing license key") |
-| POST /license/store-key | key and optional email; admin-wide | invalid key, fake provider exception and email mismatch 400 |
+| GET /license/status | none; admin-wide | store/provider exception 500 on the redesign branch (API-7, `tests/server-api-hardening.test.js`); was 400 in 4.8.0 |
+| POST /license/auto-create | admin identity; no request body; admin-wide | provider unreachable 503, other failures 500 (API-7); was 400 in 4.8.0 |
+| POST /license/create | email, firstName, lastName; admin-wide | invalid input 400; provider unreachable 503, other failures 500 (API-7); was 400 in 4.8.0 |
+| POST /license/ping | stored key, no request body; admin-wide | store/provider exception 500 (API-7; was 400 in 4.8.0); missing stored key 400 before any provider call (HTTP, see "Missing license key") |
+| POST /license/store-key | key and optional email; admin-wide | non-string input (API-8), invalid key and email mismatch 400; provider/store exception 500 (API-7; was 400 in 4.8.0) |
 | GET /geolocation/:ipAddress | IP address; admin-wide | invalid IP 400, fake provider exception 500 |
-| GET /geoip/status | none; admin-wide | plugin-store exception 400 |
-| PUT /geoip/credentials | credential pair or clear; admin-wide | missing credentials and store exception 400 |
-| POST /geoip/update | optional force and stored credentials; admin-wide | missing credentials 400; fake updater success 200 / thrown failure 400; no live provider |
-| GET /settings | none; admin-wide | store exception 400 |
-| PUT /settings | settings object; admin-wide | invalid body and store exception 400; partial writes open |
+| GET /geoip/status | none; admin-wide | plugin-store exception 500 (API-7; was 400 in 4.8.0) |
+| PUT /geoip/credentials | credential pair or clear; admin-wide | missing credentials 400; store exception 500 (API-7; was 400 in 4.8.0) |
+| POST /geoip/update | optional force and stored credentials; admin-wide | missing credentials 400; fake updater success 200 / updater failure 502, local failure 500 (API-7; was 400 in 4.8.0); no live provider |
+| GET /settings | none; admin-wide | store exception 500 (API-7; was 400 in 4.8.0) |
+| PUT /settings | settings object; admin-wide | invalid body 400 with field errors (API-6); store exception 500 (API-7; was 400 in 4.8.0); partial PUT merges over stored settings (API-6); partial writes under failure open |
 | POST /sessions/:sessionId/simulate-timeout | session ID; admin-wide, development only | missing 404, document exception 500; production/staging absence remains host-level gap |
 | POST /logout; POST /logout-all; POST /logout-others | caller identity, bearer where applicable; caller's own sessions | service exception 500; injected failure leaves another own session active; races open |
 | GET /my-sessions; GET /current-session | caller identity/bearer; caller's own sessions | document failure (legacy) / service failure (refresh) 500; 202 pending and missing current session HTTP cases open |

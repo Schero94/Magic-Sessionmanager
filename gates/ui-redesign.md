@@ -11,6 +11,39 @@ Rules for this file:
 - All test commands run from the worktree root with `SESSION_HTTP_STRAPI_NODE_MODULES="/Volumes/Crucial X10/Privat.nosync/Strapi Plugins /.tmp/sessionmanager-complete-host/node_modules"` (`@strapi/strapi` 5.61.0). Without it, the HTTP tests fall back to the workbench 5.58.0 test-app.
 - Snapshot evidence below was taken on 2026-11-06 between ~17:35 and ~17:45 while other agents were still editing (the i18n merge was in progress). Z1 repeats everything on the final tree.
 
+## Release block (GA-03, R4) — read before any release
+
+- **4.8.0 is not accepted.** It was tagged and released (`c9ba929 chore(release): 4.8.0`) before this acceptance, although its own release-readiness audit said "Do not publish". The known defects of the released build are listed in `GATES.md` "Release status". Nothing in this file is evidence for 4.8.0.
+- **The next release (4.9.0 or 5.0.0, see V2) must not be cut until all of the following are checked on the release commit:** `GATES.md` N1–N6; in this file IA, F2, V2, I2, Y2, B0–B4, R1, R2 and Z1; `gates/complete-acceptance-api.md` A2 and A3; `gates/complete-acceptance-ui.md` U2–U4; `gates/complete-acceptance-privacy.md` open handoff gates (consent/legal-basis decision for `geolocation=auto`); `gates/complete-acceptance-integration.md` open I-gates.
+- The release workflow (`.github/workflows`, semantic-release on `main`) does **not** check these gates. Until it does, the release is blocked by this manual checklist: the owner signs it below with the release commit and date, after re-reading every listed gate. An unsigned checklist means "do not release".
+
+  Release commit: ________  Date: ________  Owner sign-off: ________
+
+## Acceptance evidence (GA-16)
+
+Browser acceptance on the isolated Strapi 5.61.0 review host (`http://127.0.0.1:1351`, synthetic users `*.example.test`, IPs `203.0.113.x`, outbound network blocked), desktop first and then mobile. Each pass fixed what it found and was committed:
+
+| Pass | Screens | Commit |
+| --- | --- | --- |
+| Desktop | Sessions dashboard, detail dialog | `7dabcf5` fix(admin): sessions dashboard desktop acceptance |
+| Desktop | Configuration (five tabs) | `297a663` fix(admin): configuration desktop acceptance |
+| Desktop | Analytics, License | `34a550a` fix(admin): analytics and license desktop acceptance |
+| Desktop | Home widget, Content Manager user panel | `14d942f` fix(admin): widget and user panel desktop acceptance |
+| Mobile | Sessions dashboard | `0d06e6d` fix(admin): sessions dashboard mobile acceptance |
+| Mobile | Configuration | `3a67244` fix(admin): configuration mobile acceptance |
+| Mobile | Analytics, License | `ef901b2` fix(admin): analytics and license mobile acceptance |
+| Mobile | Home widget, user panel | `4b8d7b4` fix(admin): widget and user panel mobile acceptance |
+
+The per-pass measurements (widths, screenshots, console) were taken by the pass owners and are not repeated here; this file only records that the passes ran and which commit carries each result. They do not close B1–B4: keyboard/screen-reader walks across five locales, dark mode contrast, the full state matrix and the B4 block round-trip were not part of every pass.
+
+Follow-up on the final tree (`449564c`, rebuilt with the review host's `rebuild.sh`, 2026-11-06 ~21:25), measured by the closing agent in Playwright:
+
+- User panel "Show all sessions": 113×32 px at 1440 px and 127×32 px at 390 px (was 214×20); `href` is `/admin/plugins/magic-sessionmanager?search=<email>` as IA C/D3 specifies (was `?_q=`); the dashboard opens with the search field prefilled and 8 rows for the synthetic user.
+- Document title: panel page "anna.beispiel | Strapi" → after the link "Sessions | Strapi" (was unchanged). `PageShell` now renders `Page.Title`; Configuration shows "Session Manager configuration | Strapi", Analytics "Analytics | Strapi".
+- Console: the "useRBAC: The first argument should be an array of permissions" warning comes from the host, not the plugin. The plugin's only `useRBAC` call (`SessionInfoPanel.jsx`) passes the array `pluginPermissions.access`; the object form is passed by Strapi's Content Manager (`@strapi/content-manager/dist/admin/features/DocumentRBAC.mjs`, `useRBAC(contentTypePermissions, …)`) and the warning also appears on Content Manager pages without the panel. Remaining errors on those pages are host requests (favicon 500, `api.github.com` blocked, i18n AI-localization and preview 404).
+- SET-17 after the change: Configuration tab labels `text-transform: none`, `white-space: nowrap`, no flex grow; the Advanced trigger shows a 2 px solid outline on keyboard focus; the persistent load-error notice renders with the DS danger tone, `role="alert"`, its "Try again" action and no close button; the relaxed-mode warning is the unmodified DS Alert (its close button is the DS default 16×16 px, isolated in the alert's corner, so the WCAG 2.5.8 spacing exception applies).
+- Widget at 320 px: tile frame 236 px, grid 237 px (the intended 1 px border overlap, clipped), each tile 118 px with `scrollWidth == clientWidth`, document overflow 0.
+
 ## Foundation (shared blocks in `admin/src/components/ui/`)
 
 - [x] F1: `PageShell`, `SectionCard`, `StatGrid`/`StatCard`, `PropertyList`, `StatusBadge`, `ConfirmAction`, `DeviceIcon` and `MissingValue` exist and meet their source contracts and helper unit tests.
@@ -56,15 +89,15 @@ Each screen gate covers its source-contract and unit tests only. Rendering, equa
 - [x] W1: Home widget "Online users": 2×2 tiles, loading/error/empty states, permission-backed registration.
   CHECK: node --test tests/admin-online-widget.test.mjs tests/admin-widget-permissions.test.mjs tests/widget-stats.test.mjs tests/online-stats.test.mjs
   EXPECT: # fail 0 and # todo 0
-  EVIDENCE: 2026-11-06 ~17:45: 19 tests, 19 pass. "No overflow at 320 px" is B2.
+  EVIDENCE: 2026-11-06 ~17:45: 19 tests, 19 pass. Final tree `449564c` (~21:25): 19 tests, 19 pass, including the F10 regression "widget tiles cannot force a min-content width wider than a 320 px screen", which pins the whole min-content chain (shrinkable grid columns, `minWidth={0}` on every box down to the text, `overflow-wrap: anywhere`, no fixed width/nowrap/ellipsis in a tile, icons removed below 28rem). Browser at 320 px: no tile overflow (see "Acceptance evidence").
 - [x] P1: User panel (Content Manager → User): summary, equal-height "Log out all" and "Block/Unblock" through `ConfirmAction`, form sync of `blocked` after block/unblock, nothing rendered for other models.
   CHECK: node --test tests/admin-user-panel.test.mjs tests/user-panel-state.test.mjs
   EXPECT: # fail 0 and # todo 0
   EVIDENCE: 2026-11-06 ~17:45: 19 tests, 19 pass. That a later Save no longer reverts a block must be shown in a real Content Manager (B1).
-- [ ] X1: Cross-screen contracts (accessibility, destructive confirmations, native UI, layout, text rhythm, response envelopes, privacy logging, registration, localized alerts) pass on the final tree.
+- [x] X1: Cross-screen contracts (accessibility, destructive confirmations, native UI, layout, text rhythm, response envelopes, privacy logging, registration, localized alerts) pass on the final tree.
   CHECK: node --test tests/admin-accessibility.test.mjs tests/admin-destructive-confirmations.test.mjs tests/admin-native-ui.test.mjs tests/admin-layout-contract.test.mjs tests/admin-text-rhythm.test.mjs tests/admin-privacy-logging.test.mjs tests/admin-response-contract.test.mjs tests/admin-registration.test.mjs tests/admin-initializer.test.mjs tests/admin-alert-and-panel-localization.test.mjs tests/admin-animation-references.test.mjs
   EXPECT: # fail 0
-  EVIDENCE: 2026-11-06 ~17:45: 50 tests, 49 pass, 1 fail ("analytics and activation labels are present in every supported locale") while the i18n merge was being written. Re-run after I1.
+  EVIDENCE: 2026-11-06 ~17:45: 50 tests, 49 pass, 1 fail while the i18n merge was being written. Final tree `449564c`, 2026-11-06 ~21:35: 50 tests, 50 pass, 0 todo. Source contracts only. SET-17 is additionally guarded by `tests/admin-ds-internals.test.mjs` (3 tests, 3 pass): no Radix data attributes, positional selectors, DS layout roles or label-span selectors in the styled blocks of `pages/Settings/*`, `PersistentAlert`, `ActionStack`, `FormField` and `SettingsToggleRow`, and `admin/src/utils/theme.js` (DUX-11, unused static palette) is deleted. Not covered by that guard and left as known residuals: `HomePage.jsx` `PaginationTargets` (`& > div > div > span` into the admin pagination) and the touch-target rules on DS controls (`[role='switch']`, `input[role='combobox']`, `& button` in the chip list, variable grid and search field).
 
 ## Server fixes
 
@@ -77,19 +110,19 @@ Each screen gate covers its source-contract and unit tests only. Rendering, equa
 
 ## i18n
 
-- [ ] I1: Every `formatMessage` id used in `admin/src` exists in en, de, fr, es and pt; `defaultMessage` equals the English value; German uses "Sie" and "Sitzung"; obsolete keys are removed. All locale tests run strict (no todo).
+- [x] I1: Every `formatMessage` id used in `admin/src` exists in en, de, fr, es and pt; `defaultMessage` equals the English value; German uses "Sie" and "Sitzung"; obsolete keys are removed. All locale tests run strict (no todo).
   CHECK: node --test tests/dashboard-i18n.test.mjs tests/admin-analytics-license-i18n.test.mjs tests/admin-widget-panel-i18n.test.mjs tests/admin-settings-locales.test.mjs tests/admin-ui-foundation.test.mjs
   EXPECT: # fail 0 and # todo 0
-  EVIDENCE: 2026-11-06 ~17:45, merge in progress: 35 tests, 29 pass, 1 fail, 5 todo. Open by design until the new keys are merged into the locale catalogues and the todo guards are flipped to strict.
+  EVIDENCE: 2026-11-06 ~17:45, merge in progress: 35 tests, 29 pass, 1 fail, 5 todo. Final tree `449564c`, ~21:35: 37 tests, 37 pass, 0 todo (strict). Widget and panel (UX-17): `tests/admin-widget-panel-i18n.test.mjs` 4/4 — the scan finds the panel, widget and registration messages; every message exists in en, de, fr, es, pt; `defaultMessage` equals the English catalogue; German uses "sperren", "Sitzung" and "Sie". Rendered locale review is I2.
 - [ ] I2: Locale review in the browser: every screen in all five locales with no English fallback text, no truncated labels, translated dates through the admin locale.
   EVIDENCE: open (browser).
 
 ## Symmetry
 
-- [ ] Y1: Source symmetry contract runs strict: no `window.confirm`, no emoji in JSX, no hex/rgb colours, no px font sizes, no px spacing in style props, no custom `@media` widths.
+- [x] Y1: Source symmetry contract runs strict: no `window.confirm`, no emoji in JSX, no hex/rgb colours, no px font sizes, no px spacing in style props, no custom `@media` widths.
   CHECK: node --test tests/admin-symmetry-contract.test.mjs
   EXPECT: # fail 0 and # todo 0
-  EVIDENCE: 2026-11-06 ~17:40: 7 tests, 1 pass, 6 todo. The six todo checks currently report no violations, but they are not enforced yet. Flip them to strict after all screens are migrated.
+  EVIDENCE: 2026-11-06 ~17:40: 7 tests, 1 pass, 6 todo. Final tree `449564c`, ~21:35: 7 tests, 7 pass, 0 todo (strict).
 - [ ] Y2: Measured in the browser for every screen at 1440, 1080, 1024, 768, 520, 390 and 320 px: height difference of siblings in one grid row = 0 px; gaps between siblings in {4, 8, 12, 16, 24, 32} px; left edges of section cards equal the page title's; no horizontal document overflow.
   EVIDENCE: open. Nothing measured on the redesigned build yet.
 
@@ -100,7 +133,7 @@ Desktop first, then mobile. Light and dark mode. Each run records widths, screen
 - [ ] B0: Plugin build, verify, verify:runtime and the shared host admin build pass on the final tree; the host boots on a fresh SQLite database with outbound network blocked.
   CHECK: npm run build && npm run verify && npm run verify:runtime
   EXPECT: exit 0
-  EVIDENCE: not run on this tree (builds were not allowed in this step).
+  EVIDENCE: Clean install (GA-17), 2026-11-06 ~21:30: `git archive 449564c` extracted into an empty scratch directory (`…/scratchpad/sm-clean`), Node v22.23.1, npm 10.9.8, `SESSION_HTTP_STRAPI_NODE_MODULES` on the Strapi 5.61.0 host. `npm ci --no-audit --no-fund` exit 0 (1910 packages, 20 s; deprecation warnings only for rimraf 3, glob 7, @koa/router 12); `npm test` exit 0 — 749 tests, 749 pass, 0 fail, 0 skipped, 0 todo; `test:ts:front` 0; `test:ts:back` 0; `npm run build` exit 0 (vite 6.4.4, 92 admin modules, server bundle `dist/server/index.mjs` 465.8 kB); `npm run verify` exit 0 (package.json and exports verified); `npm run verify:runtime` exit 0 ("Server bundle runtime check passed"); `npm pack --dry-run` exit 0 (`strapi-plugin-magic-sessionmanager-4.8.0.tgz`, 44 files, 2.9 MB packed, 5.0 MB unpacked). The isolated review host on 1351 rebuilt its admin with this plugin build and booted with outbound requests blocked (`rebuild.sh`), but on its existing synthetic SQLite database, not a fresh one; the shared eight-plugin host was not built. Stays open until the fresh-database boot and the shared host build are recorded.
 - [ ] B1: Desktop 1440, 1080 and 1024 px: every screen (dashboard, modal, Settings tabs, Analytics, Activation, widget, user panel) and every state (loading, empty, no results, error/retry, success, confirmation cancel/confirm, unsaved-changes blocker); 0 plugin console errors.
   EVIDENCE: open.
 - [ ] B2: Mobile 768, 520, 390 and 320 px: same screens and states; dashboard card list; touch targets ≥ 32 px; widget without overflow at 320 px.
@@ -121,11 +154,11 @@ Desktop first, then mobile. Light and dark mode. Each run records widths, screen
   EXPECT: CHANGELOG_OK
   EVIDENCE: 2026-11-06: CHANGELOG_OK.
 - [ ] R4: A release cannot be cut while `GATES.md` N-gates or this file's B-gates are open (GA-03): either a check in the release workflow or a documented manual release checklist that the owner signs.
-  EVIDENCE: open. 4.8.0 shows that the current workflow does not stop this.
+  EVIDENCE: 2026-11-06: the manual release block with the gate list and an owner sign-off line is in place at the top of this file ("Release block"); `GATES.md` "Release status" points to it. Stays open: the release workflow still does not check the gates, and the checklist has not been signed.
 
 ## Final
 
 - [ ] Z1: On the final combined tree: full suite `node --test tests/*.test.js tests/*.test.mjs` with 0 fail and 0 todo, both type checks, all gates above re-run and their evidence updated, no credentials or real user data in artifacts.
   CHECK: node --test tests/*.test.js tests/*.test.mjs && npm run -s test:ts:front && npm run -s test:ts:back
   EXPECT: # fail 0, # todo 0, exit 0
-  EVIDENCE: snapshot only, 2026-11-06 ~17:35 on Strapi 5.61.0 host dependencies: 627 tests, 609 pass, 0 fail, 18 todo; `test:ts:front` and `test:ts:back` exit 0. Not final: other agents were still editing and the i18n merge was not done.
+  EVIDENCE: snapshot, 2026-11-06 ~17:35: 627 tests, 609 pass, 0 fail, 18 todo. Final tree `449564c` (and again in the clean install, see B0), Strapi 5.61.0 host dependencies: 749 tests, 749 pass, 0 fail, 0 skipped, 0 todo; `test:ts:front` and `test:ts:back` exit 0. Open: not every gate above is closed (IA, F2, V2, I2, Y2, B0–B4, R1, R2, R4).

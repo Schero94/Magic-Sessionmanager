@@ -23,6 +23,7 @@ When `auto` falls back after a local reader failure, log only a fixed message. R
   EXPECT: exit 0
   EVIDENCE: 45 passed, 0 failed; `npm test` at the integration snapshot passed 348 tests, 0 failed; `npm run test:ts:back` and `git diff --check` passed. Other owners were concurrently changing their files; integration must rerun against final combined state.
   RECHECK 2026-11-06 ~17:40, redesign working tree (GA-12): the CHECK command passed 45/45 again. The full suite there is 627 tests (609 pass, 0 fail, 18 todo) with `SESSION_HTTP_STRAPI_NODE_MODULES` on the Strapi 5.61.0 host; the 348 above is a historical snapshot. `npm run test:ts:back` exit 0. The dependency audit was not re-run (no registry access).
+  RECHECK 2026-11-06 ~21:35, redesign branch `449564c` (GA-12): CHECK 45/45 pass; full suite 749 tests, 749 pass, 0 fail, 0 todo on the Strapi 5.61.0 host dependencies, also in a clean `npm ci` copy (`gates/ui-redesign.md` B0). Dependency audit still not re-run.
 
 ## Data flow and compatibility
 
