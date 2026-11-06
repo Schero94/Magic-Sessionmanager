@@ -18,9 +18,8 @@ export function logSafeAdminError(scope, error) {
     status = undefined;
   }
 
-  const statusSuffix = Number.isInteger(status) && status >= 400 && status <= 599
-    ? ` (HTTP ${status})`
-    : '';
+  const statusSuffix =
+    Number.isInteger(status) && status >= 400 && status <= 599 ? ` (HTTP ${status})` : '';
 
   console.error(`[${safeScope}] Request failed${statusSuffix}`);
 }

@@ -62,7 +62,12 @@ const List = styled.dl`
  * @returns {import('react').ReactElement} Description list.
  */
 const PropertyList = ({ items = [], columns = 2, label, columnGap }) => (
-  <List $columns={columns === 1 ? 1 : 2} $columnGap={columnGap} aria-label={label} data-property-list="">
+  <List
+    $columns={columns === 1 ? 1 : 2}
+    $columnGap={columnGap}
+    aria-label={label}
+    data-property-list=""
+  >
     {items.filter(Boolean).map((item) => {
       const wrapsAnywhere = item.kind === 'id' || item.kind === 'email';
       const missing = item.render === undefined && isMissingValue(item.value);
@@ -77,11 +82,11 @@ const PropertyList = ({ items = [], columns = 2, label, columnGap }) => (
             {missing ? (
               <MissingValue variant="omega" />
             ) : (
-              item.render ?? (
+              (item.render ?? (
                 <Typography variant="omega" textColor="neutral800">
                   {String(item.value)}
                 </Typography>
-              )
+              ))
             )}
           </dd>
         </div>

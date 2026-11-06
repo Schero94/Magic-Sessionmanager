@@ -97,4 +97,3 @@ production code changes and cover:
 6. Failed authentication does not terminate any session.
 7. A token belonging to another user cannot terminate that user's session.
 8. Existing refresh, login, last-seen, and session-service suites remain green.
-

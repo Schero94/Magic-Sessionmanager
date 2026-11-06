@@ -57,7 +57,10 @@ const DataRetentionTab = ({ form }) => {
         </EqualGrid>
       </SectionCard>
 
-      <SectionCard title={t('settings.config.deleteEnded.title', 'Delete ended sessions')} tone="danger">
+      <SectionCard
+        title={t('settings.config.deleteEnded.title', 'Delete ended sessions')}
+        tone="danger"
+      >
         <Flex
           direction={{ initial: 'column', small: 'row' }}
           alignItems={{ initial: 'flex-start', small: 'center' }}
@@ -72,11 +75,14 @@ const DataRetentionTab = ({ form }) => {
             )}
           </ReadableText>
           <ConfirmAction
-            trigger={(
-              <DangerButton variant="danger-light" startIcon={<Trash aria-hidden focusable={false} />}>
+            trigger={
+              <DangerButton
+                variant="danger-light"
+                startIcon={<Trash aria-hidden focusable={false} />}
+              >
                 {t('settings.config.deleteEnded.action', 'Delete ended sessions')}
               </DangerButton>
-            )}
+            }
             title={t('settings.config.deleteEnded.confirmTitle', 'Delete all ended sessions?')}
             body={t(
               'settings.config.deleteEnded.confirmBody',

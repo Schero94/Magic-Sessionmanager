@@ -58,7 +58,13 @@ test('admin user summary returns a stable internal error without raw database de
   const previousStrapi = global.strapi;
   const logged = [];
   global.strapi = {
-    db: { query: () => ({ count: async () => { throw new Error('database-secret-example.invalid'); } }) },
+    db: {
+      query: () => ({
+        count: async () => {
+          throw new Error('database-secret-example.invalid');
+        },
+      }),
+    },
     log: { error: (...args) => logged.push(args.map((arg) => String(arg)).join(' ')) },
   };
 

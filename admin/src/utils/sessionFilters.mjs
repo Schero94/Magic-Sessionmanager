@@ -58,13 +58,19 @@ const matchesStatus = (session, status) => {
  * @param {string} [reason] End reason filter, used only with status "ended".
  * @returns {object[]} Rows matching the filters, in their original order.
  */
-export function filterSessionsByStatus(sessions, status = DEFAULT_SESSION_FILTER, reason = DEFAULT_END_REASON_FILTER) {
+export function filterSessionsByStatus(
+  sessions,
+  status = DEFAULT_SESSION_FILTER,
+  reason = DEFAULT_END_REASON_FILTER
+) {
   if (!Array.isArray(sessions) || !VALID_SESSION_FILTERS.has(status)) return [];
-  const byReason = status === 'ended' && isEndReasonFilter(reason) && reason !== DEFAULT_END_REASON_FILTER;
+  const byReason =
+    status === 'ended' && isEndReasonFilter(reason) && reason !== DEFAULT_END_REASON_FILTER;
   if (status === 'all') return sessions;
 
-  return sessions.filter((session) =>
-    matchesStatus(session, status) && (!byReason || getSessionEndReason(session) === reason)
+  return sessions.filter(
+    (session) =>
+      matchesStatus(session, status) && (!byReason || getSessionEndReason(session) === reason)
   );
 }
 

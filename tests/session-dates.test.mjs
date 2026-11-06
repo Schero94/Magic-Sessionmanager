@@ -59,5 +59,8 @@ test('formatRelative is localized and never interpolates missing values (DUX-15)
   );
   assert.equal(formatRelative(undefined, 'de', { now, fallback: '—' }), '—');
   assert.equal(formatRelative('garbage', 'en', { now, fallback: '—' }), '—');
-  assert.doesNotMatch(formatRelative(undefined, 'en', { now, fallback: '—' }), /undefined|Unavailable/);
+  assert.doesNotMatch(
+    formatRelative(undefined, 'en', { now, fallback: '—' }),
+    /undefined|Unavailable/
+  );
 });

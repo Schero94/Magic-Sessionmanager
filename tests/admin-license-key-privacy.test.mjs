@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const licenseSource = readFileSync(new URL('../admin/src/pages/License.jsx', import.meta.url), 'utf8');
+const licenseSource = readFileSync(
+  new URL('../admin/src/pages/License.jsx', import.meta.url),
+  'utf8'
+);
 import { readSettingsFile } from './helpers/settingsSource.mjs';
 
 const settingsSource = readSettingsFile('EncryptionKeyCard.jsx');
@@ -18,7 +21,10 @@ test('license key masking keeps only a short suffix visible', async () => {
 
 test('license key is masked by default and has an explicit accessible reveal control', () => {
   assert.match(licenseSource, /useState\(false\).*showLicenseKey/s);
-  assert.match(licenseSource, /showLicenseKey\s*\?\s*data\.licenseKey\s*:\s*maskSensitiveValue\(data\.licenseKey\)/);
+  assert.match(
+    licenseSource,
+    /showLicenseKey\s*\?\s*data\.licenseKey\s*:\s*maskSensitiveValue\(data\.licenseKey\)/
+  );
   // DS IconButton turns `label` into its accessible name (aria-label).
   assert.match(licenseSource, /<IconButton\b[^>]*?\b(?:aria-)?label=\{t\(\s*showLicenseKey\s*\?/s);
 
@@ -26,8 +32,16 @@ test('license key is masked by default and has an explicit accessible reveal con
     const translations = JSON.parse(
       readFileSync(new URL(`../admin/src/translations/${locale}.json`, import.meta.url), 'utf8')
     );
-    assert.equal(typeof translations['license.key.show'], 'string', `${locale} needs a show-key label`);
-    assert.equal(typeof translations['license.key.hide'], 'string', `${locale} needs a hide-key label`);
+    assert.equal(
+      typeof translations['license.key.show'],
+      'string',
+      `${locale} needs a show-key label`
+    );
+    assert.equal(
+      typeof translations['license.key.hide'],
+      'string',
+      `${locale} needs a hide-key label`
+    );
   }
 });
 
@@ -45,12 +59,18 @@ test('encryption key remains masked in the .env preview until the show control i
 });
 
 test('a generated encryption key stays hidden until revealed and the reveal toggle reports its state (SET-10)', () => {
-  const generate = settingsSource.slice(settingsSource.indexOf('const handleGenerate'), settingsSource.indexOf('return (', settingsSource.indexOf('const handleGenerate')));
+  const generate = settingsSource.slice(
+    settingsSource.indexOf('const handleGenerate'),
+    settingsSource.indexOf('return (', settingsSource.indexOf('const handleGenerate'))
+  );
   assert.match(generate, /setEncryptionKey\(generateEncryptionKey\(\)\)/);
   assert.match(generate, /setShowEncryptionKey\(false\)/);
   assert.doesNotMatch(generate, /setShowEncryptionKey\(true\)/);
   assert.match(settingsSource, /revealed=\{showEncryptionKey\}/);
-  const secretInput = readFileSync(new URL('../admin/src/pages/Settings/SecretTextInput.jsx', import.meta.url), 'utf8');
+  const secretInput = readFileSync(
+    new URL('../admin/src/pages/Settings/SecretTextInput.jsx', import.meta.url),
+    'utf8'
+  );
   assert.match(secretInput, /aria-pressed=\{revealed\}/);
   assert.match(secretInput, /type=\{revealed \? revealedType : 'password'\}/);
 });

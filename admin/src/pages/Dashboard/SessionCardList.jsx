@@ -71,11 +71,20 @@ const SessionCardList = ({
             <StatusBadge session={session} size="S" detail />
 
             <Flex direction="column" alignItems="stretch" minWidth={0}>
-              <Typography variant="delta" tag="h3" textColor="neutral800" style={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                variant="delta"
+                tag="h3"
+                textColor="neutral800"
+                style={{ overflowWrap: 'anywhere' }}
+              >
                 {user.primary || <MissingValue variant="delta" />}
               </Typography>
               {user.secondary ? (
-                <Typography variant="pi" textColor="neutral600" style={{ overflowWrap: 'anywhere' }}>
+                <Typography
+                  variant="pi"
+                  textColor="neutral600"
+                  style={{ overflowWrap: 'anywhere' }}
+                >
                   {user.secondary}
                 </Typography>
               ) : null}

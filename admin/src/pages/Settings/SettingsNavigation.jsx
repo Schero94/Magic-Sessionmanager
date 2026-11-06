@@ -39,7 +39,8 @@ export const SettingsTabLink = ({ tab, children }) => {
     <TabLink
       href={buildTabSearch(search, tab)}
       onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+          return;
         event.preventDefault();
         selectTab(tab);
       }}

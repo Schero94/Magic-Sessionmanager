@@ -64,7 +64,11 @@ const SectionCard = ({
                 </Typography>
               ) : null}
             </Flex>
-            {action ? <Flex gap={2} wrap="wrap">{action}</Flex> : null}
+            {action ? (
+              <Flex gap={2} wrap="wrap">
+                {action}
+              </Flex>
+            ) : null}
           </Flex>
         ) : null}
         {children}

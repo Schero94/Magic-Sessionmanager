@@ -44,7 +44,12 @@ export const SETTINGS_TAB_FIELDS = Object.freeze({
     'allowedCountries',
     'blockedCountries',
   ],
-  'location-data': ['enableGeolocation', 'enableSecurityScoring', 'geoIpProvider', 'geoIpDatabasePath'],
+  'location-data': [
+    'enableGeolocation',
+    'enableSecurityScoring',
+    'geoIpProvider',
+    'geoIpDatabasePath',
+  ],
   alerts: [
     'enableEmailAlerts',
     'alertOnSuspiciousLogin',
@@ -62,21 +67,34 @@ export const SETTINGS_TAB_FIELDS = Object.freeze({
  * Not shown in the UI (IA F "Not shown, preserved on Save"). PUT /settings
  * replaces the whole object, so Save sends the stored values back unchanged.
  */
-export const PRESERVED_SETTINGS_KEYS = Object.freeze(['rateLimitWriteMax', 'rateLimitReadMax', 'rateLimitWindowSeconds']);
+export const PRESERVED_SETTINGS_KEYS = Object.freeze([
+  'rateLimitWriteMax',
+  'rateLimitReadMax',
+  'rateLimitWindowSeconds',
+]);
 
 /** Field names used in "Some values were adjusted to the allowed limits: {fields}." */
 export const SETTINGS_FIELD_LABELS = Object.freeze({
   inactivityTimeout: ['settings.config.sessions.inactivity.label', 'Inactivity timeout'],
   maxSessionAgeDays: ['settings.config.sessions.maxAge.label', 'Maximum session age'],
-  lastSeenRateLimit: ['settings.config.sessions.lastSeen.label', 'Update "Last active" at most every'],
+  lastSeenRateLimit: [
+    'settings.config.sessions.lastSeen.label',
+    'Update "Last active" at most every',
+  ],
   cleanupInterval: ['settings.config.sessions.idleCheck.label', 'Run idle check every'],
   cleanupUseDbDirect: ['settings.config.sessions.idleMethod.label', 'Idle check method'],
   strictSessionEnforcement: ['settings.config.token.check.label', 'Strict token check'],
   sessionCreationGraceMs: ['settings.config.token.grace.label', 'Grace period after sign-in'],
   maxFailedLogins: ['settings.config.failed.lockout.label', 'Temporary IP lockout after'],
   trustedProxies: ['settings.config.clientIp.trustProxy.label', 'Trust proxy headers'],
-  blockSuspiciousSessions: ['settings.config.suspicious.reject.label', 'Reject suspicious sign-ins'],
-  geoLookupFailureMode: ['settings.config.suspicious.failureMode.label', 'If the location cannot be determined'],
+  blockSuspiciousSessions: [
+    'settings.config.suspicious.reject.label',
+    'Reject suspicious sign-ins',
+  ],
+  geoLookupFailureMode: [
+    'settings.config.suspicious.failureMode.label',
+    'If the location cannot be determined',
+  ],
   enableGeofencing: ['settings.config.countries.enable.label', 'Use country rules'],
   allowedCountries: ['settings.config.countries.list.label', 'Countries'],
   blockedCountries: ['settings.config.countries.list.label', 'Countries'],
@@ -194,7 +212,13 @@ export function buildSavePayload(draft, saved) {
  * @returns {boolean} True for Automatic and Local database.
  */
 export function usesLocalDatabase(provider) {
-  return provider === undefined || provider === null || provider === '' || provider === 'auto' || provider === 'local-mmdb';
+  return (
+    provider === undefined ||
+    provider === null ||
+    provider === '' ||
+    provider === 'auto' ||
+    provider === 'local-mmdb'
+  );
 }
 
 /**

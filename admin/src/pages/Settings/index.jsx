@@ -150,9 +150,11 @@ const SettingsPage = () => {
   const focusActiveTab = useCallback(() => {
     if (typeof window === 'undefined') return;
     // After Discard the trigger is disabled; keep keyboard focus in the page.
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      tabsRef.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus();
-    }));
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        tabsRef.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus();
+      })
+    );
   }, []);
 
   // A successful save disables Save, which would drop keyboard focus to
@@ -167,15 +169,21 @@ const SettingsPage = () => {
     writeTabToAddressBar(next);
   }, []);
 
-  const navigation = useMemo(() => ({
-    selectTab: (tab) => {
-      changeTab(tab);
-      focusActiveTab();
-    },
-  }), [changeTab, focusActiveTab]);
+  const navigation = useMemo(
+    () => ({
+      selectTab: (tab) => {
+        changeTab(tab);
+        focusActiveTab();
+      },
+    }),
+    [changeTab, focusActiveTab]
+  );
 
   const title = t('settings.config.title', 'Session Manager configuration');
-  const subtitle = t('settings.config.subtitle', 'Applies to all end-user sessions of this Strapi instance.');
+  const subtitle = t(
+    'settings.config.subtitle',
+    'Applies to all end-user sessions of this Strapi instance.'
+  );
 
   if (form.loading) {
     return <Page.Loading />;
@@ -190,10 +198,17 @@ const SettingsPage = () => {
           variant="danger"
           title=""
           closeLabel={t('common.close', 'Close')}
-          action={<Button variant="secondary" onClick={form.fetchSettings}>{t('settings.config.load.retry', 'Try again')}</Button>}
+          action={
+            <Button variant="secondary" onClick={form.fetchSettings}>
+              {t('settings.config.load.retry', 'Try again')}
+            </Button>
+          }
         >
           <ReadableText variant="omega" tag="span">
-            {t('settings.config.load.error', 'Settings could not be loaded. Nothing can be saved until they load.')}
+            {t(
+              'settings.config.load.error',
+              'Settings could not be loaded. Nothing can be saved until they load.'
+            )}
           </ReadableText>
         </Alert>
       </PageShell>
@@ -205,16 +220,16 @@ const SettingsPage = () => {
       headingId={HEADING_ID}
       title={title}
       subtitle={subtitle}
-      primaryAction={(
+      primaryAction={
         <Flex gap={2} wrap="wrap">
           <ConfirmAction
             variant="danger"
             disabled={!form.hasChanges || form.saving}
-            trigger={(
+            trigger={
               <Button variant="secondary" disabled={!form.hasChanges || form.saving}>
                 {t('settings.config.discard', 'Discard changes')}
               </Button>
-            )}
+            }
             title={t('settings.config.discard.confirmTitle', 'Discard unsaved changes?')}
             body={t('settings.config.discard.confirmBody', 'Your changes on all tabs are lost.')}
             confirmLabel={t('settings.config.discard.confirmAction', 'Discard')}
@@ -232,13 +247,17 @@ const SettingsPage = () => {
             {t('settings.config.save', 'Save')}
           </Button>
         </Flex>
-      )}
+      }
     >
       <SettingsNavigationProvider value={navigation}>
         <Flex direction="column" alignItems="stretch" gap={6}>
           {form.errorCount > 0 ? (
             <Alert variant="danger" closeLabel={t('common.close', 'Close')} title="">
-              {t('settings.validation.summary', 'Fix {count, plural, one {# field} other {# fields}} before saving.', { count: form.errorCount })}
+              {t(
+                'settings.validation.summary',
+                'Fix {count, plural, one {# field} other {# fields}} before saving.',
+                { count: form.errorCount }
+              )}
             </Alert>
           ) : null}
 
@@ -249,10 +268,14 @@ const SettingsPage = () => {
             onValueChange={changeTab}
             hasError={form.errorTab}
           >
-            <SettingsTabsList aria-label={t('settings.config.tabs.label', 'Configuration sections')}>
+            <SettingsTabsList
+              aria-label={t('settings.config.tabs.label', 'Configuration sections')}
+            >
               {SETTINGS_TAB_IDS.map((tab) => (
                 <SettingsTabTrigger key={tab} value={tab}>
-                  <SettingsTabLabel>{t(SETTINGS_TAB_LABELS[tab][0], SETTINGS_TAB_LABELS[tab][1])}</SettingsTabLabel>
+                  <SettingsTabLabel>
+                    {t(SETTINGS_TAB_LABELS[tab][0], SETTINGS_TAB_LABELS[tab][1])}
+                  </SettingsTabLabel>
                 </SettingsTabTrigger>
               ))}
             </SettingsTabsList>
@@ -282,7 +305,10 @@ const SettingsPage = () => {
           </Tabs.Root>
 
           <Typography variant="pi" textColor="neutral600" tag="p" data-settings-footer="">
-            {t('settings.config.footer', 'Saved in the database. Other server processes apply changes within 30 seconds.')}
+            {t(
+              'settings.config.footer',
+              'Saved in the database. Other server processes apply changes within 30 seconds.'
+            )}
           </Typography>
         </Flex>
       </SettingsNavigationProvider>

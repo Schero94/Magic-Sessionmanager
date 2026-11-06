@@ -35,11 +35,12 @@ function withGlobalStrapi(value, fn) {
 }
 
 function createCtx({ body, params = {}, state = {}, headers = {} } = {}) {
-  const respond = (status) => function respondWith(message, details) {
-    this.status = status;
-    this.body = { data: null, error: { status, message, details } };
-    return this.body;
-  };
+  const respond = (status) =>
+    function respondWith(message, details) {
+      this.status = status;
+      this.body = { data: null, error: { status, message, details } };
+      return this.body;
+    };
   let responseBody;
   const ctx = {
     params,
@@ -47,8 +48,13 @@ function createCtx({ body, params = {}, state = {}, headers = {} } = {}) {
     request: { body, headers },
     status: undefined,
     headers: {},
-    set(name, value) { this.headers[name] = value; },
-    send(payload) { this.status = 200; this.body = payload; },
+    set(name, value) {
+      this.headers[name] = value;
+    },
+    send(payload) {
+      this.status = 200;
+      this.body = payload;
+    },
     badRequest: respond(400),
     unauthorized: respond(401),
     forbidden: respond(403),
@@ -60,7 +66,9 @@ function createCtx({ body, params = {}, state = {}, headers = {} } = {}) {
   // Like Koa: assigning a body without an explicit status implies 200.
   Object.defineProperty(ctx, 'body', {
     enumerable: true,
-    get() { return responseBody; },
+    get() {
+      return responseBody;
+    },
     set(value) {
       responseBody = value;
       if (ctx.status === undefined) ctx.status = 200;
@@ -86,7 +94,11 @@ function createRateLimitContext({ path, method = 'DELETE', route, userId = 4242 
 test('API-1: write buckets are keyed on the route template, not the raw request path', async () => {
   rateLimit.__private.reset();
   const middleware = rateLimit({ max: 3, window: 60_000 }, { strapi: { log: silentLog } });
-  const route = { method: 'DELETE', path: '/my-sessions/:sessionId', handler: 'session.terminateOwnSession' };
+  const route = {
+    method: 'DELETE',
+    path: '/my-sessions/:sessionId',
+    handler: 'session.terminateOwnSession',
+  };
   const variants = [
     '/api/magic-sessionmanager/my-sessions/a',
     '/api/magic-sessionmanager/my-sessions/b',
@@ -105,7 +117,10 @@ test('API-1: write buckets are keyed on the route template, not the raw request 
 test('API-1: without route info the fallback key ignores case and trailing slashes', async () => {
   rateLimit.__private.reset();
   const middleware = rateLimit({ max: 1, window: 60_000 }, { strapi: { log: silentLog } });
-  const first = createRateLimitContext({ path: '/api/magic-sessionmanager/logout', method: 'POST' });
+  const first = createRateLimitContext({
+    path: '/api/magic-sessionmanager/logout',
+    method: 'POST',
+  });
   await middleware(first, async () => {});
   for (const path of ['/API/MAGIC-SESSIONMANAGER/LOGOUT', '/api/magic-sessionmanager/logout/']) {
     const ctx = createRateLimitContext({ path, method: 'POST' });
@@ -119,9 +134,24 @@ test('API-1: different callers and different routes keep separate buckets', asyn
   const middleware = rateLimit({ max: 1, window: 60_000 }, { strapi: { log: silentLog } });
   const logout = { method: 'POST', path: '/logout', handler: 'session.logout' };
   const logoutAll = { method: 'POST', path: '/logout-all', handler: 'session.logoutAll' };
-  const a = createRateLimitContext({ path: '/api/magic-sessionmanager/logout', method: 'POST', route: logout, userId: 1 });
-  const b = createRateLimitContext({ path: '/api/magic-sessionmanager/logout', method: 'POST', route: logout, userId: 2 });
-  const c = createRateLimitContext({ path: '/api/magic-sessionmanager/logout-all', method: 'POST', route: logoutAll, userId: 1 });
+  const a = createRateLimitContext({
+    path: '/api/magic-sessionmanager/logout',
+    method: 'POST',
+    route: logout,
+    userId: 1,
+  });
+  const b = createRateLimitContext({
+    path: '/api/magic-sessionmanager/logout',
+    method: 'POST',
+    route: logout,
+    userId: 2,
+  });
+  const c = createRateLimitContext({
+    path: '/api/magic-sessionmanager/logout-all',
+    method: 'POST',
+    route: logoutAll,
+    userId: 1,
+  });
   for (const ctx of [a, b, c]) {
     await middleware(ctx, async () => {});
     assert.equal(ctx.status, 200);
@@ -138,14 +168,26 @@ test('API-5: settings can shorten neither the write window nor raise the write r
   };
   try {
     const write = await rateLimit.__private.resolveLimits({
-      profile: 'write', routeMax: 10, routeWindowMs: 60_000, strapi,
+      profile: 'write',
+      routeMax: 10,
+      routeWindowMs: 60_000,
+      strapi,
     });
     assert.equal(write.max, 10);
-    assert.ok(write.windowMs >= 60_000, `write window ${write.windowMs} must not undercut the route window`);
-    assert.ok(write.max / write.windowMs <= 10 / 60_000, 'write rate must not exceed the route rate');
+    assert.ok(
+      write.windowMs >= 60_000,
+      `write window ${write.windowMs} must not undercut the route window`
+    );
+    assert.ok(
+      write.max / write.windowMs <= 10 / 60_000,
+      'write rate must not exceed the route rate'
+    );
 
     const read = await rateLimit.__private.resolveLimits({
-      profile: 'read', routeMax: 120, routeWindowMs: 60_000, strapi,
+      profile: 'read',
+      routeMax: 120,
+      routeWindowMs: 60_000,
+      strapi,
     });
     assert.equal(read.windowMs, 10_000, 'read limits may still be relaxed by settings');
   } finally {
@@ -164,7 +206,10 @@ test('API-5: a longer settings window and a lower write max still tighten writes
   };
   try {
     const write = await rateLimit.__private.resolveLimits({
-      profile: 'write', routeMax: 10, routeWindowMs: 60_000, strapi,
+      profile: 'write',
+      routeMax: 10,
+      routeWindowMs: 60_000,
+      strapi,
     });
     assert.deepEqual(write, { max: 3, windowMs: 300_000 });
   } finally {
@@ -182,7 +227,10 @@ function createSettingsStrapi(stored) {
     strapi: {
       store: () => ({
         get: async () => state.stored,
-        set: async ({ value }) => { state.writes += 1; state.stored = value; },
+        set: async ({ value }) => {
+          state.writes += 1;
+          state.stored = value;
+        },
       }),
       log: silentLog,
     },
@@ -231,7 +279,9 @@ test('API-6: a partial email template update keeps the other templates', async (
     },
   });
   await withGlobalStrapi(strapi, async () => {
-    const ctx = createCtx({ body: { emailTemplates: { newLocation: { subject: 'New', html: '', text: '' } } } });
+    const ctx = createCtx({
+      body: { emailTemplates: { newLocation: { subject: 'New', html: '', text: '' } } },
+    });
     await settingsController.updateSettings(ctx);
     assert.equal(ctx.status, 200);
     assert.equal(state.stored.emailTemplates.suspiciousLogin.subject, 'Keep me');
@@ -295,7 +345,12 @@ test('API-6: invalid values are rejected with field errors instead of being clam
       assert.equal(ctx.status, 400, `${field}=${JSON.stringify(value)}`);
       const errors = ctx.body.error.details?.errors || [];
       assert.ok(
-        errors.some((error) => Array.isArray(error.path) && error.path[0] === field && typeof error.message === 'string'),
+        errors.some(
+          (error) =>
+            Array.isArray(error.path) &&
+            error.path[0] === field &&
+            typeof error.message === 'string'
+        ),
         `${field} must be named in the field errors`
       );
       assert.equal(state.writes, 0, `${field} must not be persisted`);
@@ -304,7 +359,9 @@ test('API-6: invalid values are rejected with field errors instead of being clam
 });
 
 test('API-6: clearing a webhook with an empty string is still allowed', async () => {
-  const { strapi, state } = createSettingsStrapi({ discordWebhookUrl: 'https://discord.com/api/webhooks/old' });
+  const { strapi, state } = createSettingsStrapi({
+    discordWebhookUrl: 'https://discord.com/api/webhooks/old',
+  });
   await withGlobalStrapi(strapi, async () => {
     const ctx = createCtx({ body: { discordWebhookUrl: '' } });
     await settingsController.updateSettings(ctx);
@@ -317,8 +374,12 @@ test('API-7: settings store failures return 500 with a safe message', async () =
   const detail = 'synthetic-store-detail';
   const strapi = {
     store: () => ({
-      get: async () => { throw new Error(detail); },
-      set: async () => { throw new Error(detail); },
+      get: async () => {
+        throw new Error(detail);
+      },
+      set: async () => {
+        throw new Error(detail);
+      },
     }),
     log: silentLog,
   };
@@ -334,18 +395,35 @@ test('API-7: settings store failures return 500 with a safe message', async () =
 
 // ---------------------------------------------------------------- API-7 / API-8 (license, GeoIP)
 
-function createLicenseHarness({ createResult = { licenseKey: 'synthetic-license-key' }, failStore = false } = {}) {
+function createLicenseHarness({
+  createResult = { licenseKey: 'synthetic-license-key' },
+  failStore = false,
+} = {}) {
   const calls = [];
   const guard = {
-    createLicense: async (input) => { calls.push(['createLicense', input]); return createResult; },
-    verifyLicense: async (key) => { calls.push(['verifyLicense', key]); return { valid: true, data: {} }; },
-    getLicenseByKey: async (key) => { calls.push(['getLicenseByKey', key]); return null; },
-    storeLicenseKey: async (key) => { calls.push(['storeLicenseKey', key]); },
+    createLicense: async (input) => {
+      calls.push(['createLicense', input]);
+      return createResult;
+    },
+    verifyLicense: async (key) => {
+      calls.push(['verifyLicense', key]);
+      return { valid: true, data: {} };
+    },
+    getLicenseByKey: async (key) => {
+      calls.push(['getLicenseByKey', key]);
+      return null;
+    },
+    storeLicenseKey: async (key) => {
+      calls.push(['storeLicenseKey', key]);
+    },
   };
   const strapi = {
     plugin: () => ({ service: () => guard }),
     store: () => ({
-      get: async () => { if (failStore) throw new Error('synthetic-store-detail'); return 'synthetic-license-key'; },
+      get: async () => {
+        if (failStore) throw new Error('synthetic-store-detail');
+        return 'synthetic-license-key';
+      },
     }),
     log: silentLog,
   };
@@ -358,7 +436,9 @@ test('API-7: an unreachable license provider returns 503, internal failures 500'
   await unreachable.controller.autoCreate(ctx);
   assert.equal(ctx.status, 503);
 
-  const manual = createCtx({ body: { email: 'owner@example.invalid', firstName: 'Test', lastName: 'Owner' } });
+  const manual = createCtx({
+    body: { email: 'owner@example.invalid', firstName: 'Test', lastName: 'Owner' },
+  });
   await unreachable.controller.createAndActivate(manual);
   assert.equal(manual.status, 503);
 
@@ -397,11 +477,21 @@ test('API-7: GeoIP store failures return 500 and updater failures 502', async ()
   invalidateSettingsCache();
   const failingStrapi = {
     config: { get: () => ({}) },
-    store: () => ({ get: async () => { throw new Error(detail); }, set: async () => { throw new Error(detail); } }),
+    store: () => ({
+      get: async () => {
+        throw new Error(detail);
+      },
+      set: async () => {
+        throw new Error(detail);
+      },
+    }),
     log: silentLog,
   };
   const controller = createGeoipController({ strapi: failingStrapi });
-  for (const [action, body] of [['getStatus'], ['storeCredentials', { accountId: '1', licenseKey: 'k' }]]) {
+  for (const [action, body] of [
+    ['getStatus'],
+    ['storeCredentials', { accountId: '1', licenseKey: 'k' }],
+  ]) {
     const ctx = createCtx({ body });
     await controller[action](ctx);
     assert.equal(ctx.status, 500, action);
@@ -411,12 +501,17 @@ test('API-7: GeoIP store failures return 500 and updater failures 502', async ()
   invalidateSettingsCache();
   const storedStrapi = {
     config: { get: () => ({}) },
-    store: () => ({ get: async ({ key }) => (key === 'geoipCredentials' ? { accountId: '1', licenseKey: 'synthetic' } : null) }),
+    store: () => ({
+      get: async ({ key }) =>
+        key === 'geoipCredentials' ? { accountId: '1', licenseKey: 'synthetic' } : null,
+    }),
     log: silentLog,
   };
   const updater = createGeoipController({
     strapi: storedStrapi,
-    updateGeoIpDatabase: async () => { throw new Error(detail); },
+    updateGeoIpDatabase: async () => {
+      throw new Error(detail);
+    },
   });
   const ctx = createCtx({ body: {} });
   await updater.updateDatabase(ctx);
@@ -454,7 +549,10 @@ function createCleanupHarness({ rows, failingIds }) {
         return {
           findFirst: async () => null,
           create: async () => ({}),
-          findMany: async () => { events.push('revocation-cleanup'); return []; },
+          findMany: async () => {
+            events.push('revocation-cleanup');
+            return [];
+          },
           delete: async () => {},
         };
       }
@@ -465,7 +563,10 @@ function createCleanupHarness({ rows, failingIds }) {
 }
 
 test('API-9: inactive cleanup continues past a failed row and reports partial counts', async () => {
-  const rows = Array.from({ length: 205 }, (_, index) => ({ documentId: `ended-${index}`, isActive: false }));
+  const rows = Array.from({ length: 205 }, (_, index) => ({
+    documentId: `ended-${index}`,
+    isActive: false,
+  }));
   const harness = createCleanupHarness({ rows, failingIds: ['ended-0', 'ended-150'] });
   const service = createSessionService({ strapi: harness.strapi });
 
@@ -484,10 +585,18 @@ test('API-9: inactive cleanup continues past a failed row and reports partial co
 
 test('API-9: the cleanup endpoint returns the partial counts with a 500', async () => {
   const partial = Object.assign(new Error('partial'), {
-    name: 'PartialCleanupError', deletedCount: 7, failedCount: 1,
+    name: 'PartialCleanupError',
+    deletedCount: 7,
+    failedCount: 1,
   });
   const strapi = {
-    plugin: () => ({ service: () => ({ deleteInactiveSessions: async () => { throw partial; } }) }),
+    plugin: () => ({
+      service: () => ({
+        deleteInactiveSessions: async () => {
+          throw partial;
+        },
+      }),
+    }),
     log: silentLog,
   };
   await withGlobalStrapi(strapi, async () => {
@@ -499,7 +608,10 @@ test('API-9: the cleanup endpoint returns the partial counts with a 500', async 
 });
 
 test('API-9: a fully successful cleanup keeps the existing response contract', async () => {
-  const rows = [{ documentId: 'ended-a', isActive: false }, { documentId: 'ended-b', isActive: false }];
+  const rows = [
+    { documentId: 'ended-a', isActive: false },
+    { documentId: 'ended-b', isActive: false },
+  ];
   const harness = createCleanupHarness({ rows, failingIds: [] });
   const service = createSessionService({ strapi: harness.strapi });
   assert.equal(await service.deleteInactiveSessions(), 2);
@@ -509,19 +621,32 @@ test('API-9: a fully successful cleanup keeps the existing response contract', a
 
 test('API-10: a foreign and an absent session id get the same 404 response', async () => {
   const sessions = {
-    'foreign-session': { documentId: 'foreign-session', isActive: true, user: { documentId: 'someone-else' } },
+    'foreign-session': {
+      documentId: 'foreign-session',
+      isActive: true,
+      user: { documentId: 'someone-else' },
+    },
   };
   let terminated = false;
   const strapi = {
     config: { get: (_key, fallback) => fallback },
-    plugin: () => ({ service: () => ({ terminateSession: async () => { terminated = true; } }) }),
+    plugin: () => ({
+      service: () => ({
+        terminateSession: async () => {
+          terminated = true;
+        },
+      }),
+    }),
     documents: () => ({ findOne: async ({ documentId }) => sessions[documentId] || null }),
     log: silentLog,
   };
   await withGlobalStrapi(strapi, async () => {
     const responses = [];
     for (const sessionId of ['foreign-session', 'absent-session']) {
-      const ctx = createCtx({ params: { sessionId }, state: { user: { id: 1, documentId: 'owner' } } });
+      const ctx = createCtx({
+        params: { sessionId },
+        state: { user: { id: 1, documentId: 'owner' } },
+      });
       await sessionController.terminateOwnSession(ctx);
       responses.push({ status: ctx.status, body: ctx.body });
     }
@@ -539,13 +664,20 @@ async function createBlockHarness({ blocked = false } = {}) {
   const terminateCalls = [];
   const user = { id: 9, documentId: 'synthetic-block-user', blocked };
   const sessionService = {
-    terminateSession: async (args) => { terminateCalls.push(args); return { terminatedCount: 1 }; },
+    terminateSession: async (args) => {
+      terminateCalls.push(args);
+      return { terminatedCount: 1 };
+    },
   };
   const strapi = {
     admin: { services: { permission: { actionProvider: { registerMany() {} } } } },
     contentType: () => ({ attributes: {} }),
     db: {
-      lifecycles: { subscribe(value) { if (value.models?.includes(USER_UID)) lifecycle = value; } },
+      lifecycles: {
+        subscribe(value) {
+          if (value.models?.includes(USER_UID)) lifecycle = value;
+        },
+      },
       query: () => ({ findOne: async () => ({ documentId: user.documentId }) }),
     },
     entityService: { findOne: async () => ({ documentId: user.documentId }) },
@@ -571,8 +703,15 @@ test('API-12: an admin block revokes sessions once and surfaces errors from that
     const ctx = createCtx({ params: { userId: harness.user.documentId }, body: { blocked: true } });
     await sessionController.toggleUserBlock(ctx);
     assert.equal(ctx.status, 200);
-    assert.equal(harness.terminateCalls.length, 1, 'lifecycle must not repeat the controller revocation');
-    assert.deepEqual(harness.terminateCalls[0], { userId: harness.user.documentId, reason: 'blocked' });
+    assert.equal(
+      harness.terminateCalls.length,
+      1,
+      'lifecycle must not repeat the controller revocation'
+    );
+    assert.deepEqual(harness.terminateCalls[0], {
+      userId: harness.user.documentId,
+      reason: 'blocked',
+    });
   });
 });
 
@@ -586,7 +725,11 @@ test('API-12: a block from outside the controller is still revoked by the lifecy
 });
 
 test('GA-09/API-4: a bodyless toggle-block keeps the legacy toggle and the old response fields', async () => {
-  for (const [initial, body] of [[false, undefined], [true, undefined], [false, {}]]) {
+  for (const [initial, body] of [
+    [false, undefined],
+    [true, undefined],
+    [false, {}],
+  ]) {
     const harness = await createBlockHarness({ blocked: initial });
     await withGlobalStrapi(harness.strapi, async () => {
       const ctx = createCtx({ params: { userId: harness.user.documentId }, body });
@@ -640,7 +783,14 @@ const RAW_SESSION = {
   refreshTokenHash: 'synthetic-refresh-hash',
   isTrulyActive: true,
 };
-const FORBIDDEN_ADMIN_FIELDS = ['sessionId', 'nativeSessionId', 'tokenHash', 'token', 'refreshToken', 'refreshTokenHash'];
+const FORBIDDEN_ADMIN_FIELDS = [
+  'sessionId',
+  'nativeSessionId',
+  'tokenHash',
+  'token',
+  'refreshToken',
+  'refreshTokenHash',
+];
 
 test('F12: admin session lists never expose raw session identifiers or token material', async () => {
   const service = {
@@ -648,10 +798,17 @@ test('F12: admin session lists never expose raw session identifiers or token mat
     getActiveSessions: async () => [{ ...RAW_SESSION }],
     getUserSessions: async () => [{ ...RAW_SESSION }],
   };
-  const strapi = { config: { get: (_k, fallback) => fallback }, plugin: () => ({ service: () => service }), log: silentLog };
+  const strapi = {
+    config: { get: (_k, fallback) => fallback },
+    plugin: () => ({ service: () => service }),
+    log: silentLog,
+  };
   await withGlobalStrapi(strapi, async () => {
     for (const action of ['getAllSessionsAdmin', 'getActiveSessions', 'getUserSessions']) {
-      const ctx = createCtx({ params: { userId: 'synthetic-user' }, state: { userAbility: {}, user: { id: 1 } } });
+      const ctx = createCtx({
+        params: { userId: 'synthetic-user' },
+        state: { userAbility: {}, user: { id: 1 } },
+      });
       await sessionController[action](ctx);
       const row = ctx.body.data[0];
       assert.equal(row.documentId, 'doc-1', `${action} keeps the action identifier`);
@@ -664,9 +821,16 @@ test('F12: admin session lists never expose raw session identifiers or token mat
 
 test('F12: content API lists keep the documented tracking id but drop native ids and tokens', async () => {
   const service = { getUserSessions: async () => [{ ...RAW_SESSION }] };
-  const strapi = { config: { get: (_k, fallback) => fallback }, plugin: () => ({ service: () => service }), log: silentLog };
+  const strapi = {
+    config: { get: (_k, fallback) => fallback },
+    plugin: () => ({ service: () => service }),
+    log: silentLog,
+  };
   await withGlobalStrapi(strapi, async () => {
-    const ctx = createCtx({ params: { userId: 'owner' }, state: { user: { id: 1, documentId: 'owner' } } });
+    const ctx = createCtx({
+      params: { userId: 'owner' },
+      state: { user: { id: 1, documentId: 'owner' } },
+    });
     await sessionController.getUserSessions(ctx);
     const row = ctx.body.data[0];
     assert.equal(row.sessionId, 'sess_synthetic_tracking');
@@ -691,7 +855,10 @@ test('API-11: in refresh mode the opt-in policy matches the verified native sess
     },
     store: () => ({ get: async () => null }),
     documents: () => ({
-      findFirst: async (query) => { filters = query.filters; return { documentId: 's', isActive: true }; },
+      findFirst: async (query) => {
+        filters = query.filters;
+        return { documentId: 's', isActive: true };
+      },
     }),
     log: silentLog,
   };
@@ -706,7 +873,10 @@ test('API-11: in refresh mode the opt-in policy matches the verified native sess
 
     invalidateSettingsCache();
     const unverified = { ...context, state: { user: { documentId: 'owner' } } };
-    await assert.rejects(() => sessionRequiredPolicy(unverified, {}, { strapi }), /No valid session/);
+    await assert.rejects(
+      () => sessionRequiredPolicy(unverified, {}, { strapi }),
+      /No valid session/
+    );
   } finally {
     invalidateSettingsCache();
   }

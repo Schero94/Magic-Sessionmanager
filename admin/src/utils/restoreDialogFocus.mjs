@@ -2,12 +2,13 @@
  * @param {any} element Candidate focus target.
  * @returns {boolean} Whether the element is in the document and not disabled.
  */
-const canTakeFocus = (element) => Boolean(
-  element?.isConnected
-  && typeof element.focus === 'function'
-  && !element.disabled
-  && element.getAttribute?.('aria-disabled') !== 'true'
-);
+const canTakeFocus = (element) =>
+  Boolean(
+    element?.isConnected &&
+    typeof element.focus === 'function' &&
+    !element.disabled &&
+    element.getAttribute?.('aria-disabled') !== 'true'
+  );
 
 /**
  * Picks where focus goes after a dialog closes: the opener when it can still
@@ -42,7 +43,11 @@ export function restoreDialogFocus(event, opener, fallback) {
  * @param {{activeElement: any, body: any}} [doc] Document (injectable for tests).
  * @returns {void}
  */
-export function refocusIfLost(opener, fallback, doc = typeof document === 'undefined' ? undefined : document) {
+export function refocusIfLost(
+  opener,
+  fallback,
+  doc = typeof document === 'undefined' ? undefined : document
+) {
   if (!doc) return;
   const active = doc.activeElement;
   if (active && active !== doc.body) return;

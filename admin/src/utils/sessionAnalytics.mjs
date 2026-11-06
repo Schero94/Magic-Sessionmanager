@@ -14,11 +14,13 @@ function increment(target, key) {
 
 /** Returns a stable, non-secret identity key for user de-duplication. */
 function getUserKey(session) {
-  return session?.user?.documentId ||
+  return (
+    session?.user?.documentId ||
     session?.user?.id ||
     session?.user?.email ||
     session?.user?.username ||
-    null;
+    null
+  );
 }
 
 /** Parses a timestamp to epoch milliseconds, or NaN. */
@@ -109,14 +111,18 @@ export function getSessionDurationMinutes(session, now = Date.now()) {
  * @returns {Array<{key: string, count: number, percent: number}>} Rows for a bar list.
  */
 export function getAnalyticsBarRows(counts) {
-  const entries = Object.entries(counts || {})
-    .filter(([, count]) => Number.isFinite(count) && count > 0);
+  const entries = Object.entries(counts || {}).filter(
+    ([, count]) => Number.isFinite(count) && count > 0
+  );
   if (entries.length === 0) return [];
 
   const max = Math.max(...entries.map(([, count]) => count));
   const unknownLast = (key) => (key === ANALYTICS_UNKNOWN_KEY ? 1 : 0);
   return entries
-    .sort(([keyA, a], [keyB, b]) => unknownLast(keyA) - unknownLast(keyB) || b - a || keyA.localeCompare(keyB))
+    .sort(
+      ([keyA, a], [keyB, b]) =>
+        unknownLast(keyA) - unknownLast(keyB) || b - a || keyA.localeCompare(keyB)
+    )
     .map(([key, count]) => ({
       key,
       count,
@@ -194,8 +200,9 @@ export function computeSessionAnalytics(sessions = [], { now = Date.now() } = {}
     devices,
     browsers,
     uniqueUsers: uniqueUsers.size,
-    avgSessionDuration: durations.length > 0
-      ? Math.floor(durations.reduce((sum, duration) => sum + duration, 0) / durations.length)
-      : 0,
+    avgSessionDuration:
+      durations.length > 0
+        ? Math.floor(durations.reduce((sum, duration) => sum + duration, 0) / durations.length)
+        : 0,
   };
 }

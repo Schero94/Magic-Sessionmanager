@@ -127,9 +127,7 @@ export default {
       pt: () => import('./translations/pt.json'),
     };
 
-    const translatedLanguages = Object.keys(importedTrads).filter((lang) =>
-      locales.includes(lang)
-    );
+    const translatedLanguages = Object.keys(importedTrads).filter((lang) => locales.includes(lang));
 
     const translations = await Promise.all(
       translatedLanguages.map((language) =>

@@ -1,4 +1,11 @@
-import { Alert as DesignSystemAlert, Badge, Flex, SingleSelect, SingleSelectOption, Typography } from '@strapi/design-system';
+import {
+  Alert as DesignSystemAlert,
+  Badge,
+  Flex,
+  SingleSelect,
+  SingleSelectOption,
+  Typography,
+} from '@strapi/design-system';
 import { EqualGrid, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
 import { ReadableParagraphs } from '../../components/ReadableText';
@@ -12,10 +19,22 @@ import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 /** Session end reasons sent in X-Session-Terminated-Reason (IA A.4, F 1.3). */
 const REJECTION_REASONS = [
   ['logout', 'settings.config.rejected.reason.logout', 'The user signed out.'],
-  ['manual', 'settings.config.rejected.reason.manual', 'Ended from the Strapi admin, or by the user from another of their devices.'],
-  ['idle', 'settings.config.rejected.reason.idle', 'Not used for longer than the inactivity timeout.'],
+  [
+    'manual',
+    'settings.config.rejected.reason.manual',
+    'Ended from the Strapi admin, or by the user from another of their devices.',
+  ],
+  [
+    'idle',
+    'settings.config.rejected.reason.idle',
+    'Not used for longer than the inactivity timeout.',
+  ],
   ['expired', 'settings.config.rejected.reason.expired', 'Reached the maximum session age.'],
-  ['blocked', 'settings.config.rejected.reason.blocked', 'Ended because the user account was blocked.'],
+  [
+    'blocked',
+    'settings.config.rejected.reason.blocked',
+    'Ended because the user account was blocked.',
+  ],
 ];
 
 /**
@@ -28,12 +47,13 @@ const REJECTION_REASONS = [
 const formatReasonCodes = (locale) => {
   const codes = REJECTION_REASONS.map(([code]) => code);
   try {
-    return new Intl.ListFormat(locale || 'en', { style: 'long', type: 'disjunction' }).format(codes);
+    return new Intl.ListFormat(locale || 'en', { style: 'long', type: 'disjunction' }).format(
+      codes
+    );
   } catch {
     return codes.join(', ');
   }
 };
-
 
 /**
  * Tab "Sessions" (IA F Tab 1): how long a session stays valid, the token
@@ -48,17 +68,24 @@ const SessionsTab = ({ form }) => {
   const units = useOptionLabels();
   const encryptionKeyDraft = useEncryptionKeyDraft();
   const { settings, handleChange, relaxedWarningDismissed, setRelaxedWarningDismissed } = form;
-  const lastSeenTooSlow = Number(settings.lastSeenRateLimit) * 2 > Number(settings.inactivityTimeout) * 60;
+  const lastSeenTooSlow =
+    Number(settings.lastSeenRateLimit) * 2 > Number(settings.inactivityTimeout) * 60;
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
       <IntroText>
-        {t('settings.config.sessions.intro', "These rules decide when an end user's session ends. They are checked on every request the user makes.")}
+        {t(
+          'settings.config.sessions.intro',
+          "These rules decide when an end user's session ends. They are checked on every request the user makes."
+        )}
       </IntroText>
 
       <SectionCard
         title={t('settings.config.sessions.lifetime.title', 'Session lifetime')}
-        subtitle={t('settings.config.sessions.lifetime.intro', 'A session ends when it is unused for too long or reaches its maximum age.')}
+        subtitle={t(
+          'settings.config.sessions.lifetime.intro',
+          'A session ends when it is unused for too long or reaches its maximum age.'
+        )}
       >
         <EqualGrid columns={2} stackBelow="medium" gap={6}>
           <PresetSelect
@@ -95,7 +122,10 @@ const SessionsTab = ({ form }) => {
               <PresetSelect
                 id="last-seen-rate-limit"
                 name="lastSeenRateLimit"
-                label={t('settings.config.sessions.lastSeen.label', 'Update "Last active" at most every')}
+                label={t(
+                  'settings.config.sessions.lastSeen.label',
+                  'Update "Last active" at most every'
+                )}
                 description={t(
                   'settings.config.sessions.lastSeen.hint',
                   "Lower values make 'Last active' and idle detection more precise but write to the database more often."
@@ -158,7 +188,7 @@ const SessionsTab = ({ form }) => {
           'settings.config.token.intro',
           'Decides what happens to a token that Session Manager has no record for. Ended, expired and revoked sessions and blocked users are always rejected.'
         )}
-        action={(
+        action={
           <Badge
             backgroundColor={settings.strictSessionEnforcement ? 'success100' : 'neutral150'}
             textColor={settings.strictSessionEnforcement ? 'success700' : 'neutral700'}
@@ -167,7 +197,7 @@ const SessionsTab = ({ form }) => {
               ? t('settings.config.token.strict', 'Strict')
               : t('settings.config.token.relaxed', 'Relaxed')}
           </Badge>
-        )}
+        }
       >
         <SettingsToggleRow
           id="strict-session-enforcement"
@@ -210,14 +240,21 @@ const SessionsTab = ({ form }) => {
               format={units.graceMs}
               onChange={(value) => handleChange('sessionCreationGraceMs', value)}
             />
-            <EncryptionKeyCard draft={encryptionKeyDraft} copyValue={form.copyValue} notify={form.notify} />
+            <EncryptionKeyCard
+              draft={encryptionKeyDraft}
+              copyValue={form.copyValue}
+              notify={form.notify}
+            />
           </EqualGrid>
         </AdvancedSection>
       </SectionCard>
 
       <SectionCard
         title={t('settings.config.rejected.title', 'When a session is rejected')}
-        subtitle={t('settings.config.rejected.intro', 'What your app receives when a request uses an ended session.')}
+        subtitle={t(
+          'settings.config.rejected.intro',
+          'What your app receives when a request uses an ended session.'
+        )}
       >
         <ReadableParagraphs
           variant="omega"

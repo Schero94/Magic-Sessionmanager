@@ -22,25 +22,53 @@ test('the shared ui blocks exist and are exported from one barrel', () => {
     assert.ok(existsSync(new URL(`../admin/src/${file}`, import.meta.url)), `${file} exists`);
   }
   const barrel = read('components/ui/index.js');
-  for (const name of ['PageShell', 'SectionCard', 'StatGrid', 'StatCard', 'EqualGrid', 'PropertyList', 'StatusBadge', 'EndReason', 'ConfirmAction', 'MissingValue', 'DeviceIcon']) {
+  for (const name of [
+    'PageShell',
+    'SectionCard',
+    'StatGrid',
+    'StatCard',
+    'EqualGrid',
+    'PropertyList',
+    'StatusBadge',
+    'EndReason',
+    'ConfirmAction',
+    'MissingValue',
+    'DeviceIcon',
+  ]) {
     assert.match(barrel, new RegExp(`\\b${name}\\b`), `${name} is exported`);
   }
 });
 
 test('PageShell is the native Strapi frame without extra content insets (DUX-10, DASH-03, SET-10, F14)', () => {
   const shell = read('components/ui/PageShell.jsx');
-  assert.match(shell, /import \{[^}]*\bLayouts\b[^}]*\bPage\b[^}]*\} from '@strapi\/strapi\/admin'/);
+  assert.match(
+    shell,
+    /import \{[^}]*\bLayouts\b[^}]*\bPage\b[^}]*\} from '@strapi\/strapi\/admin'/
+  );
   assert.match(shell, /<Page\.Main\b[^>]*aria-labelledby=\{titleId\}/);
   assert.match(shell, /<Layouts\.Header\b[\s\S]*?id=\{titleId\}/);
-  for (const prop of ['title', 'subtitle', 'primaryAction', 'secondaryAction', 'navigationAction']) {
+  for (const prop of [
+    'title',
+    'subtitle',
+    'primaryAction',
+    'secondaryAction',
+    'navigationAction',
+  ]) {
     assert.match(shell, new RegExp(`${prop}=\\{${prop}\\}`), `header forwards ${prop}`);
   }
-  assert.match(shell, /hasActionBar \? <Layouts\.Action startActions=\{startActions\} endActions=\{endActions\} \/> : null/);
+  assert.match(
+    shell,
+    /hasActionBar \? <Layouts\.Action startActions=\{startActions\} endActions=\{endActions\} \/> : null/
+  );
   assert.match(shell, /<Layouts\.Content>/);
 
   const content = shell.match(/<PageContent\b([^>]*)>/)?.[1] || '';
   assert.ok(content, 'content wrapper is present');
-  assert.doesNotMatch(content, /\bpadding(?:Left|Right|X)?=/, 'no horizontal padding inside Layouts.Content');
+  assert.doesNotMatch(
+    content,
+    /\bpadding(?:Left|Right|X)?=/,
+    'no horizontal padding inside Layouts.Content'
+  );
   assert.doesNotMatch(content, /\bpadding=/, 'no shorthand padding inside Layouts.Content');
   assert.match(content, /gap=\{6\}/, 'sections are separated by spacing token 6');
   assert.match(shell, /paragraphRhythm/, 'page prose keeps the shared paragraph rhythm');
@@ -70,7 +98,11 @@ test('StatGrid renders compact equal-height cards in 4/2/1 DS columns', () => {
   assert.match(grid, /<Grid\.Root\b/);
   assert.match(grid, /getGridItemSpans\(columns, stackBelow\)/);
   assert.match(grid, /<EqualGrid columns=\{columns\} stackBelow="small" gap=\{4\}/);
-  assert.match(grid, /direction="column"\s+alignItems="stretch"/, 'items stretch to the row height');
+  assert.match(
+    grid,
+    /direction="column"\s+alignItems="stretch"/,
+    'items stretch to the row height'
+  );
   assert.match(grid, /minWidth=\{0\}/);
   assert.match(grid, /variant="beta"/, 'values use beta next to the label, so cards stay compact');
   assert.doesNotMatch(grid, /variant="alpha"/);
@@ -82,17 +114,41 @@ test('StatGrid renders compact equal-height cards in 4/2/1 DS columns', () => {
   assert.match(grid, /<Icon aria-hidden focusable=\{false\} \/>/, 'icons are decorative');
   assert.match(grid, /theme\.colors\[`\$\{\$tone\}600`\]/, 'icon tone comes from the DS theme');
   // A wrapped label must not push its icon or value off the row's line (Analytics desktop acceptance).
-  assert.match(grid, /const IconTile = styled\(Flex\)`\s*align-self: flex-start;/, 'icons stay at the top of every card');
+  assert.match(
+    grid,
+    /const IconTile = styled\(Flex\)`\s*align-self: flex-start;/,
+    'icons stay at the top of every card'
+  );
   // Settings pages lose ~230 px to the sub-navigation; a narrow KPI row folds to 2 x 2.
   assert.match(grid, /container-type: inline-size;/, 'the KPI row is a size container');
-  assert.match(grid, /@container \(min-width: \$\{DS_SMALL_REM\}rem\) and \(max-width: \$\{STAT_GRID_FOLD_REM - 0\.01\}rem\)/, 'phones keep the DS one-column layout');
-  assert.match(grid, /const STAT_GRID_FOLD_REM = \(4 \* 200 \+ 3 \* 16\) \/ 10;/, 'rem in the ten-pixel-root DS convention');
+  assert.match(
+    grid,
+    /@container \(min-width: \$\{DS_SMALL_REM\}rem\) and \(max-width: \$\{STAT_GRID_FOLD_REM - 0\.01\}rem\)/,
+    'phones keep the DS one-column layout'
+  );
+  assert.match(
+    grid,
+    /const STAT_GRID_FOLD_REM = \(4 \* 200 \+ 3 \* 16\) \/ 10;/,
+    'rem in the ten-pixel-root DS convention'
+  );
   assert.match(grid, /const DS_SMALL_REM = 52;/);
   // Values pin to the card bottom only on request: a row that mixes cards with and
   // without a secondary line (dashboard) keeps values directly under the labels.
-  assert.match(grid, /&\[data-align-values\] \[data-stat-body\] \{\s*flex: 1 1 auto;/, 'opt-in: the body stretches to the row height');
-  assert.match(grid, /&\[data-align-values\] \[data-stat-text\] \{\s*justify-content: space-between;/, 'opt-in: values share one line across a row');
-  assert.match(grid, /<Flex gap=\{3\} alignItems="stretch" minWidth=\{0\} data-stat-body="">/, 'by default the body keeps its content height');
+  assert.match(
+    grid,
+    /&\[data-align-values\] \[data-stat-body\] \{\s*flex: 1 1 auto;/,
+    'opt-in: the body stretches to the row height'
+  );
+  assert.match(
+    grid,
+    /&\[data-align-values\] \[data-stat-text\] \{\s*justify-content: space-between;/,
+    'opt-in: values share one line across a row'
+  );
+  assert.match(
+    grid,
+    /<Flex gap=\{3\} alignItems="stretch" minWidth=\{0\} data-stat-body="">/,
+    'by default the body keeps its content height'
+  );
   assert.match(grid, /alignValues = false/);
 });
 
@@ -105,7 +161,11 @@ test('PropertyList is a description list with equal columns and targeted wrappin
   assert.match(list, /<dt>/);
   assert.match(list, /<dd\b/);
   assert.match(list, /dd\[data-wrap='anywhere'\] \{\s*overflow-wrap: anywhere;/);
-  assert.equal((list.match(/overflow-wrap: anywhere/g) || []).length, 1, 'only ids and emails break anywhere');
+  assert.equal(
+    (list.match(/overflow-wrap: anywhere/g) || []).length,
+    1,
+    'only ids and emails break anywhere'
+  );
   assert.match(list, /item\.kind === 'id' \|\| item\.kind === 'email'/);
   assert.match(list, /<MissingValue/);
 });
@@ -115,9 +175,15 @@ test('StatusBadge uses the shared state vocabulary and EndReason the shared reas
   assert.match(badge, /getSessionStatusPresentation/);
   assert.match(badge, /<Badge \{\.\.\.getBadgeColors\(presentation\.tone\)\}/);
   // The DS warning variant fails WCAG AA (3.6:1); Idle keeps the warning background with neutral800 text.
-  assert.match(badge, /tone === 'warning'\s*\? \{ backgroundColor: 'warning200', textColor: 'neutral800' \}\s*: \{ variant: tone \}/);
+  assert.match(
+    badge,
+    /tone === 'warning'\s*\? \{ backgroundColor: 'warning200', textColor: 'neutral800' \}\s*: \{ variant: tone \}/
+  );
   assert.match(badge, /const label = translate\(presentation\)/);
-  assert.match(badge, /formatMessage\(\{ id: getTranslation\(descriptor\.messageId\), defaultMessage: descriptor\.defaultMessage \}\)/);
+  assert.match(
+    badge,
+    /formatMessage\(\{ id: getTranslation\(descriptor\.messageId\), defaultMessage: descriptor\.defaultMessage \}\)/
+  );
   assert.doesNotMatch(badge, /danger/, 'danger is not a session-state colour');
   const reason = read('components/ui/EndReason.jsx');
   assert.match(reason, /getEndReasonPresentation\(key\)/);
@@ -135,9 +201,16 @@ test('ConfirmAction wraps Strapi ConfirmDialog and restores focus', () => {
   assert.match(confirm, /<ConfirmDialog\b[\s\S]*?title=\{title\}/);
   assert.match(confirm, /variant = 'danger'/);
   assert.match(confirm, /\{confirmLabel\}/);
-  assert.match(confirm, /pickFocusTarget\(ownTrigger, fallbackFocusRef\?\.current\)/,
-    'a trigger that became disabled (End all sessions after the last session ended) hands focus to the fallback');
-  assert.match(confirm, /if \(busy\) return;/, 'the dialog cannot be dismissed while the action runs');
+  assert.match(
+    confirm,
+    /pickFocusTarget\(ownTrigger, fallbackFocusRef\?\.current\)/,
+    'a trigger that became disabled (End all sessions after the last session ended) hands focus to the fallback'
+  );
+  assert.match(
+    confirm,
+    /if \(busy\) return;/,
+    'the dialog cannot be dismissed while the action runs'
+  );
   assert.doesNotMatch(confirm, /window\.confirm\s*\(/);
 });
 
@@ -155,7 +228,10 @@ test('device icons are decorative and the unknown device is not a monitor', () =
 
 test('alert bodies align with the alert title (F7)', () => {
   const alert = read('components/PersistentAlert.jsx');
-  assert.match(alert, /const AlertBody = styled\(Typography\)`[\s\S]*?& > \* \{[^}]*display: inline;[^}]*max-width: none;[^}]*font-size: inherit;[^}]*line-height: inherit;/);
+  assert.match(
+    alert,
+    /const AlertBody = styled\(Typography\)`[\s\S]*?& > \* \{[^}]*display: inline;[^}]*max-width: none;[^}]*font-size: inherit;[^}]*line-height: inherit;/
+  );
   assert.match(alert, /<AlertBody tag="div" variant="omega" textColor="neutral800">/);
 });
 
@@ -198,7 +274,11 @@ test('shared blocks use DS tokens only', () => {
 
 const collectDescriptors = () => {
   const descriptors = new Map();
-  for (const file of ['utils/sessionStatus.mjs', 'utils/devicePresentation.mjs', 'utils/missingValue.mjs']) {
+  for (const file of [
+    'utils/sessionStatus.mjs',
+    'utils/devicePresentation.mjs',
+    'utils/missingValue.mjs',
+  ]) {
     const source = read(file);
     for (const match of source.matchAll(/messageId: '([^']+)',\s*defaultMessage: '([^']*)'/g)) {
       descriptors.set(match[1], match[2]);
@@ -214,13 +294,23 @@ const translations = Object.fromEntries(
 const descriptors = collectDescriptors();
 
 test('foundation message ids exist in every locale with matching English defaults', () => {
-  assert.ok(descriptors.size >= 15, 'status, end reason, device and missing-value messages are collected');
+  assert.ok(
+    descriptors.size >= 15,
+    'status, end reason, device and missing-value messages are collected'
+  );
   for (const [key, defaultMessage] of descriptors) {
     for (const locale of LOCALES) {
-      assert.ok(typeof translations[locale][key] === 'string' && translations[locale][key].trim(), `${key} exists in ${locale}`);
+      assert.ok(
+        typeof translations[locale][key] === 'string' && translations[locale][key].trim(),
+        `${key} exists in ${locale}`
+      );
     }
     assert.equal(translations.en[key], defaultMessage, `${key} default matches en`);
   }
-  assert.equal(translations.de['common.status.idle'], 'Im Leerlauf', 'German separates idle from ended (DUX-12, IA A.1)');
+  assert.equal(
+    translations.de['common.status.idle'],
+    'Im Leerlauf',
+    'German separates idle from ended (DUX-12, IA A.1)'
+  );
   assert.equal(translations.de['common.status.ended'], 'Beendet');
 });

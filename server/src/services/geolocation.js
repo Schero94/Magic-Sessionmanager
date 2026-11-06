@@ -65,8 +65,8 @@ function uniqueValues(values) {
 function resolveDatabaseCandidates(settings = {}) {
   const configured = normalizeDatabasePath(
     settings.geoIpDatabasePath ||
-    process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
-    process.env.GEOIP_DATABASE_PATH
+      process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
+      process.env.GEOIP_DATABASE_PATH
   );
 
   if (configured) return [configured];
@@ -262,9 +262,8 @@ function normalizeLocalCountryResult(data, lookupIp, getCountryFlag) {
 function normalizeLocalCityResult(data, lookupIp, getCountryFlag) {
   const country = data.country || data.registeredCountry || data.representedCountry || {};
   const countryCode = country.isoCode || data.registeredCountry?.isoCode || 'XX';
-  const region = Array.isArray(data.subdivisions) && data.subdivisions.length > 0
-    ? data.subdivisions[0]
-    : null;
+  const region =
+    Array.isArray(data.subdivisions) && data.subdivisions.length > 0 ? data.subdivisions[0] : null;
 
   return {
     ip: lookupIp,
@@ -335,8 +334,11 @@ function normalizeLookupIp(ipAddress) {
 function parseIpv4(ip) {
   if (net.isIP(ip) !== 4) return null;
 
-  const parts = ip.split('.').map(part => Number(part));
-  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) {
+  const parts = ip.split('.').map((part) => Number(part));
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
     return null;
   }
 
@@ -389,10 +391,7 @@ function isPrivateIpv6(ip) {
   }
 
   const firstHextet = getFirstHextet(lower);
-  return (
-    (firstHextet & 0xfe00) === 0xfc00 ||
-    (firstHextet & 0xffc0) === 0xfe80
-  );
+  return (firstHextet & 0xfe00) === 0xfc00 || (firstHextet & 0xffc0) === 0xfe80;
 }
 
 module.exports = ({ strapi }) => ({
@@ -459,7 +458,9 @@ module.exports = ({ strapi }) => ({
         if (localResult?._status === 'ok' || settings.geoLookupFailureMode === 'block') {
           return localResult;
         }
-        strapi.log.warn('[magic-sessionmanager/geolocation] Local MMDB lookup failed, falling back to ipapi.co');
+        strapi.log.warn(
+          '[magic-sessionmanager/geolocation] Local MMDB lookup failed, falling back to ipapi.co'
+        );
       }
     }
 
@@ -505,16 +506,22 @@ module.exports = ({ strapi }) => ({
 
     try {
       const reader = await openLocalReader(databasePath);
-      const useCityLookup = isCityDatabase(reader, databasePath) && typeof reader.city === 'function';
+      const useCityLookup =
+        isCityDatabase(reader, databasePath) && typeof reader.city === 'function';
       const data = useCityLookup ? reader.city(lookupIp) : reader.country(lookupIp);
       const result = useCityLookup
         ? normalizeLocalCityResult(data, lookupIp, this.getCountryFlag.bind(this))
         : normalizeLocalCountryResult(data, lookupIp, this.getCountryFlag.bind(this));
 
-      strapi.log.debug(`[magic-sessionmanager/geolocation] Local MMDB lookup completed (${result._databaseType})`);
+      strapi.log.debug(
+        `[magic-sessionmanager/geolocation] Local MMDB lookup completed (${result._databaseType})`
+      );
       return result;
     } catch (error) {
-      strapi.log.warn('[magic-sessionmanager/geolocation] Local MMDB lookup failed:', error?.name || 'Error');
+      strapi.log.warn(
+        '[magic-sessionmanager/geolocation] Local MMDB lookup failed:',
+        error?.name || 'Error'
+      );
       return this.getFallbackData(lookupIp, 'error', 'local-mmdb', error.message);
     }
   },
@@ -539,7 +546,12 @@ module.exports = ({ strapi }) => ({
         strapi,
         `[magic-sessionmanager/geolocation] ipapi.co is rate-limited; skipping remote lookups for ${Math.ceil(rateLimitRemainingMs / 1000)}s`
       );
-      return this.getFallbackData(lookupIp, 'rate_limited', 'ipapi', 'Remote GeoIP provider is backing off after HTTP 429');
+      return this.getFallbackData(
+        lookupIp,
+        'rate_limited',
+        'ipapi',
+        'Remote GeoIP provider is backing off after HTTP 429'
+      );
     }
 
     if (ipapiInFlight.has(lookupIp)) {
@@ -566,7 +578,12 @@ module.exports = ({ strapi }) => ({
           strapi,
           `[magic-sessionmanager/geolocation] ipapi.co is rate-limited; skipping remote lookups for ${Math.ceil(queuedRateLimitRemainingMs / 1000)}s`
         );
-        return this.getFallbackData(lookupIp, 'rate_limited', 'ipapi', 'Remote GeoIP provider is backing off after HTTP 429');
+        return this.getFallbackData(
+          lookupIp,
+          'rate_limited',
+          'ipapi',
+          'Remote GeoIP provider is backing off after HTTP 429'
+        );
       }
 
       const controller = new AbortController();
@@ -588,10 +605,17 @@ module.exports = ({ strapi }) => ({
               `[magic-sessionmanager/geolocation] API returned HTTP 429; backing off ipapi.co lookups for ${Math.ceil(backoffMs / 1000)}s`
             );
           } else {
-            strapi.log.warn(`[magic-sessionmanager/geolocation] API returned HTTP ${response.status}`);
+            strapi.log.warn(
+              `[magic-sessionmanager/geolocation] API returned HTTP ${response.status}`
+            );
           }
 
-          const fallback = this.getFallbackData(lookupIp, reason, 'ipapi', `HTTP ${response.status}`);
+          const fallback = this.getFallbackData(
+            lookupIp,
+            reason,
+            'ipapi',
+            `HTTP ${response.status}`
+          );
           cacheIpapiResult(lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
           return fallback;
         }
@@ -659,7 +683,10 @@ module.exports = ({ strapi }) => ({
         return result;
       } catch (error) {
         const status = error?.name === 'AbortError' ? 'error' : 'error';
-        strapi.log.error('[magic-sessionmanager/geolocation] ipapi lookup failed:', error?.name || 'Error');
+        strapi.log.error(
+          '[magic-sessionmanager/geolocation] ipapi lookup failed:',
+          error?.name || 'Error'
+        );
         const fallback = this.getFallbackData(lookupIp, status, 'ipapi', error.message);
         cacheIpapiResult(lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
         return fallback;
@@ -714,7 +741,7 @@ module.exports = ({ strapi }) => ({
     if (!countryCode || typeof countryCode !== 'string' || countryCode.length !== 2) return '';
     const upper = countryCode.toUpperCase();
     if (!/^[A-Z]{2}$/.test(upper)) return '';
-    const codePoints = upper.split('').map(char => 127397 + char.charCodeAt(0));
+    const codePoints = upper.split('').map((char) => 127397 + char.charCodeAt(0));
     return String.fromCodePoint(...codePoints);
   },
 
@@ -776,7 +803,7 @@ module.exports = ({ strapi }) => ({
    * @returns {Promise<Array<object>>}
    */
   async batchGetIpInfo(ipAddresses) {
-    const results = await Promise.all(ipAddresses.map(ip => this.getIpInfo(ip)));
+    const results = await Promise.all(ipAddresses.map((ip) => this.getIpInfo(ip)));
     return results;
   },
 });

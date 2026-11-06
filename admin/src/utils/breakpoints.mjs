@@ -33,7 +33,8 @@ export function getBreakpointQueries(theme) {
   const source = theme?.breakpoints || {};
   return {
     small: mediaQueryFromBreakpoint(source.small) || mediaQueryFromBreakpoint(DS_BREAKPOINTS.small),
-    medium: mediaQueryFromBreakpoint(source.medium) || mediaQueryFromBreakpoint(DS_BREAKPOINTS.medium),
+    medium:
+      mediaQueryFromBreakpoint(source.medium) || mediaQueryFromBreakpoint(DS_BREAKPOINTS.medium),
     large: mediaQueryFromBreakpoint(source.large) || mediaQueryFromBreakpoint(DS_BREAKPOINTS.large),
   };
 }

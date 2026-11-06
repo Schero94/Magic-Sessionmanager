@@ -50,7 +50,8 @@ const Legend = styled.ul`
  */
 const HowSessionsWork = () => {
   const { formatMessage } = useIntl();
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [open, setOpen] = useState(() => readDisclosureOpen(getBrowserStorage()));
   const contentId = `how-sessions-work-${useId().replace(/:/g, '')}`;
 
@@ -92,17 +93,30 @@ const HowSessionsWork = () => {
               {SESSION_STATES.map((state) => {
                 const { definition } = SESSION_STATUS_PRESENTATION[state];
                 return (
-                  <Flex key={state} tag="li" direction="column" alignItems="flex-start" gap={2} minWidth={0}>
+                  <Flex
+                    key={state}
+                    tag="li"
+                    direction="column"
+                    alignItems="flex-start"
+                    gap={2}
+                    minWidth={0}
+                  >
                     <StatusBadge status={state} size="S" />
                     <Typography variant="omega" textColor="neutral800">
-                      {formatMessage({ id: getTranslation(definition.messageId), defaultMessage: definition.defaultMessage })}
+                      {formatMessage({
+                        id: getTranslation(definition.messageId),
+                        defaultMessage: definition.defaultMessage,
+                      })}
                     </Typography>
                   </Flex>
                 );
               })}
             </Legend>
             <Typography variant="pi" textColor="neutral600">
-              {t('homepage.howItWorks.history', 'Ended sessions stay in the history until they are deleted.')}
+              {t(
+                'homepage.howItWorks.history',
+                'Ended sessions stay in the history until they are deleted.'
+              )}
             </Typography>
           </Flex>
         ) : null}

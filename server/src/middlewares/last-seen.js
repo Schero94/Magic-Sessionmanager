@@ -78,7 +78,10 @@ module.exports = ({ strapi, sessionService }) => {
       try {
         userDocId = await resolveUserDocumentId(strapi, ctx.state.user.id);
       } catch (err) {
-        strapi.log.debug('[magic-sessionmanager] user document lookup failed:', err?.name || 'Error');
+        strapi.log.debug(
+          '[magic-sessionmanager] user document lookup failed:',
+          err?.name || 'Error'
+        );
         return;
       }
     }

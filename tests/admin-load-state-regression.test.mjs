@@ -24,7 +24,10 @@ test('dashboard hides statistics, rows and exports until the first load succeeds
   // Export stays in the header but is disabled without loaded, matching rows.
   assert.match(dashboard, /const canExport = showSessionData && filteredSessions\.length > 0/);
   assert.match(dashboard, /<SimpleMenu\b[\s\S]{0,200}?disabled=\{!canExport\}/);
-  assert.match(dashboard, /\{showSessionData && \(\s*<Flex[^>]*>\s*<VisuallyHidden>[\s\S]*?<StatGrid\b/);
+  assert.match(
+    dashboard,
+    /\{showSessionData && \(\s*<Flex[^>]*>\s*<VisuallyHidden>[\s\S]*?<StatGrid\b/
+  );
   assert.match(dashboard, /\{showSessionData && sessions\.length > 0/);
   assert.match(dashboard, /\{showSessionData && sessions\.length === 0/);
   // The error alert sits above the last data and offers Try again.

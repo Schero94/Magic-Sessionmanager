@@ -12,7 +12,10 @@ export const DEVICE_TYPE_MESSAGES = Object.freeze({
   tablet: Object.freeze({ messageId: 'common.device.type.tablet', defaultMessage: 'Tablet' }),
   api: Object.freeze({ messageId: 'common.device.type.api', defaultMessage: 'API client' }),
   bot: Object.freeze({ messageId: 'common.device.type.bot', defaultMessage: 'Bot' }),
-  unknown: Object.freeze({ messageId: 'common.device.type.unknown', defaultMessage: 'Unknown device' }),
+  unknown: Object.freeze({
+    messageId: 'common.device.type.unknown',
+    defaultMessage: 'Unknown device',
+  }),
 });
 
 /** "Safari · macOS" with both values present (IA D1 Device column, H.9). */
@@ -46,7 +49,10 @@ const DEVICE_TYPE_ALIASES = Object.freeze({
  */
 export function normalizeDeviceType(value) {
   if (typeof value !== 'string') return '';
-  const key = value.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  const key = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, ' ');
   return DEVICE_TYPE_ALIASES[key] || DEVICE_TYPE_ALIASES[key.replace(/ /g, '')] || '';
 }
 
@@ -112,9 +118,10 @@ export function getDevicePresentation(session = {}) {
   const deviceType = parsed ? parsed.deviceType : normalizeDeviceType(row.deviceType);
   const browser = parsed?.browser || storedBrowser.name;
   const os = parsed?.os || storedOs.name;
-  const browserVersion = (userAgent && getBrowserVersionFromUserAgent(userAgent))
-    || presentText(row.browserVersion)
-    || storedBrowser.version;
+  const browserVersion =
+    (userAgent && getBrowserVersionFromUserAgent(userAgent)) ||
+    presentText(row.browserVersion) ||
+    storedBrowser.version;
 
   // Without browser and OS the summary is empty text: the caller shows
   // "Unknown device" instead of a sentence about missing data (IA H.9).

@@ -30,24 +30,31 @@ function createLogger() {
 }
 
 function createServiceHarness({ sessions, failRevocation = false } = {}) {
-  const sessionRows = new Map((sessions || []).map((session) => [session.documentId, { ...session }]));
+  const sessionRows = new Map(
+    (sessions || []).map((session) => [session.documentId, { ...session }])
+  );
   const revocations = new Map();
   const events = [];
 
   const strapi = {
     config: { get: () => ({}) },
     store: () => ({ get: async () => null }),
-    db: { connection: () => { throw new Error('unsafe direct delete must not be used'); } },
+    db: {
+      connection: () => {
+        throw new Error('unsafe direct delete must not be used');
+      },
+    },
     plugin: () => ({ service: () => ({}) }),
     log: createLogger(),
     documents(uid) {
       if (uid === SESSION_UID) {
         return {
           findOne: async ({ documentId }) => sessionRows.get(documentId) || null,
-          findMany: async ({ filters }) => [...sessionRows.values()].filter((session) => {
-            if (filters?.isActive !== undefined) return session.isActive === filters.isActive;
-            return true;
-          }),
+          findMany: async ({ filters }) =>
+            [...sessionRows.values()].filter((session) => {
+              if (filters?.isActive !== undefined) return session.isActive === filters.isActive;
+              return true;
+            }),
           delete: async ({ documentId }) => {
             events.push(`delete:${documentId}`);
             sessionRows.delete(documentId);
@@ -58,9 +65,10 @@ function createServiceHarness({ sessions, failRevocation = false } = {}) {
       if (uid === REVOCATION_UID) {
         return {
           findFirst: async ({ filters }) => revocations.get(filters.tokenHash) || null,
-          findMany: async ({ filters }) => [...revocations.values()].filter((record) =>
-            record.expiresAt && record.expiresAt <= filters.expiresAt.$lte
-          ),
+          findMany: async ({ filters }) =>
+            [...revocations.values()].filter(
+              (record) => record.expiresAt && record.expiresAt <= filters.expiresAt.$lte
+            ),
           create: async ({ data }) => {
             if (failRevocation) throw new Error('revocation store unavailable');
             const record = { documentId: `revocation-${revocations.size + 1}`, ...data };
@@ -69,7 +77,9 @@ function createServiceHarness({ sessions, failRevocation = false } = {}) {
             return record;
           },
           update: async ({ documentId, data }) => {
-            const record = [...revocations.values()].find((entry) => entry.documentId === documentId);
+            const record = [...revocations.values()].find(
+              (entry) => entry.documentId === documentId
+            );
             Object.assign(record, data);
             return record;
           },
@@ -100,7 +110,10 @@ test('revocation content type is registered but hidden from admin content screen
 
 test('access-token expiry parsing returns no expiry for malformed or non-expiring tokens', () => {
   const expirySeconds = Math.floor(Date.now() / 1000) + 60;
-  assert.equal(getAccessTokenExpiry(encryptToken(makeJwt(expirySeconds))).getTime(), expirySeconds * 1000);
+  assert.equal(
+    getAccessTokenExpiry(encryptToken(makeJwt(expirySeconds))).getTime(),
+    expirySeconds * 1000
+  );
   assert.equal(getAccessTokenExpiry(encryptToken('not-a-jwt')), null);
 });
 
@@ -185,7 +198,9 @@ function createJwtHarness({
       throw new Error(`Unexpected content type ${uid}`);
     },
     config: { get: () => ({}) },
-    store: () => ({ get: async () => ({ strictSessionEnforcement: strict, sessionCreationGraceMs: 0 }) }),
+    store: () => ({
+      get: async () => ({ strictSessionEnforcement: strict, sessionCreationGraceMs: 0 }),
+    }),
     log: createLogger(),
   };
 
@@ -244,7 +259,9 @@ test('retention cleanup cannot bypass revocation persistence with direct databas
     logoutTime: new Date(Date.now() - 3 * 86_400_000),
   };
   const harness = createServiceHarness({ sessions: [session] });
-  harness.strapi.store = () => ({ get: async () => ({ retentionDays: 1, cleanupUseDbDirect: true }) });
+  harness.strapi.store = () => ({
+    get: async () => ({ retentionDays: 1, cleanupUseDbDirect: true }),
+  });
   const service = createSessionService({ strapi: harness.strapi });
 
   assert.equal(await service.deleteOldSessions(), 1);
@@ -293,7 +310,10 @@ test('a persisted revocation rejects a JWT after its session row is deleted in r
         revocation: { documentId: 'revoked-token-1', expiresAt: new Date(Date.now() + 3600_000) },
         session: null,
       });
-      await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi, harness.strapi.log);
+      await bootstrap.__private.registerSessionAwareAuthStrategy(
+        harness.strapi,
+        harness.strapi.log
+      );
 
       assert.equal(await harness.jwtService.verify(token), null);
       assert.equal(harness.getUserIdLookups(), 0);
@@ -316,7 +336,10 @@ test('strict JWT enforcement rejects unresolved users but relaxed mode preserves
   for (const strict of [true, false]) {
     await t.test(`strictSessionEnforcement=${strict}`, async () => {
       const harness = createJwtHarness({ strict, resolveUser: null });
-      await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi, harness.strapi.log);
+      await bootstrap.__private.registerSessionAwareAuthStrategy(
+        harness.strapi,
+        harness.strapi.log
+      );
       const result = await harness.jwtService.verify(harness.token);
 
       assert.equal(result === null, strict);
@@ -339,7 +362,10 @@ test('strict JWT enforcement rejects user-record and session lookup failures imm
         failUserLookup: failure === 'user',
         failSessionLookup: failure === 'session',
       });
-      await bootstrap.__private.registerSessionAwareAuthStrategy(harness.strapi, harness.strapi.log);
+      await bootstrap.__private.registerSessionAwareAuthStrategy(
+        harness.strapi,
+        harness.strapi.log
+      );
 
       assert.equal(await harness.jwtService.verify(harness.token), null);
     });

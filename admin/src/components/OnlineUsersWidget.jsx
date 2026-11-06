@@ -160,7 +160,14 @@ const CenteredText = styled(Box)`
  * @returns {import('react').ReactElement} Error state.
  */
 const ErrorState = ({ message, retryLabel, onRetry }) => (
-  <Flex direction="column" alignItems="center" justifyContent="center" gap={4} height="100%" role="alert">
+  <Flex
+    direction="column"
+    alignItems="center"
+    justifyContent="center"
+    gap={4}
+    height="100%"
+    role="alert"
+  >
     {hasNativeState('Error') ? (
       <CenteredText>
         <NativeWidget.Error>{message}</NativeWidget.Error>
@@ -209,7 +216,8 @@ const EmptyState = ({ label }) => {
 const OnlineUsersWidget = () => {
   const { formatMessage, formatNumber } = useIntl();
   const { get } = useFetchClient();
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [stats, setStats] = useState(null);
   const [userCounts, setUserCounts] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -224,35 +232,42 @@ const OnlineUsersWidget = () => {
    * @param {{showLoading?: boolean}} [options] Whether to show the loading state.
    * @returns {Promise<void>}
    */
-  const fetchStats = useCallback(async ({ showLoading = true } = {}) => {
-    if (requestInProgress.current) return;
-    requestInProgress.current = true;
-    if (showLoading) setLoading(true);
+  const fetchStats = useCallback(
+    async ({ showLoading = true } = {}) => {
+      if (requestInProgress.current) return;
+      requestInProgress.current = true;
+      if (showLoading) setLoading(true);
 
-    try {
-      const [sessionResult, countResult] = await Promise.allSettled([
-        get('/magic-sessionmanager/sessions'),
-        get('/magic-sessionmanager/users/stats'),
-      ]);
-      if (sessionResult.status === 'rejected') throw sessionResult.reason;
-      setStats(computeWidgetStats(requireSessionList(sessionResult.value?.data)));
-      setLoadError(false);
+      try {
+        const [sessionResult, countResult] = await Promise.allSettled([
+          get('/magic-sessionmanager/sessions'),
+          get('/magic-sessionmanager/users/stats'),
+        ]);
+        if (sessionResult.status === 'rejected') throw sessionResult.reason;
+        setStats(computeWidgetStats(requireSessionList(sessionResult.value?.data)));
+        setLoadError(false);
 
-      const counts = countResult.status === 'fulfilled' ? normalizeUserCounts(countResult.value?.data) : null;
-      if (counts) {
-        setUserCounts(counts);
-      } else {
-        logSafeAdminError('onlineUsers.loadUserCounts', countResult.status === 'rejected' ? countResult.reason : null);
-        if (showLoading) setUserCounts(null);
+        const counts =
+          countResult.status === 'fulfilled' ? normalizeUserCounts(countResult.value?.data) : null;
+        if (counts) {
+          setUserCounts(counts);
+        } else {
+          logSafeAdminError(
+            'onlineUsers.loadUserCounts',
+            countResult.status === 'rejected' ? countResult.reason : null
+          );
+          if (showLoading) setUserCounts(null);
+        }
+      } catch (error) {
+        logSafeAdminError('onlineUsers.loadSessions', error);
+        if (showLoading) setLoadError(true);
+      } finally {
+        if (showLoading) setLoading(false);
+        requestInProgress.current = false;
       }
-    } catch (error) {
-      logSafeAdminError('onlineUsers.loadSessions', error);
-      if (showLoading) setLoadError(true);
-    } finally {
-      if (showLoading) setLoading(false);
-      requestInProgress.current = false;
-    }
-  }, [get]);
+    },
+    [get]
+  );
 
   useEffect(() => {
     void fetchStats();
@@ -271,7 +286,9 @@ const OnlineUsersWidget = () => {
       <ErrorState
         message={t('widget.error.message', 'Online users could not be loaded.')}
         retryLabel={t('common.tryAgain', 'Try again')}
-        onRetry={() => { void fetchStats(); }}
+        onRetry={() => {
+          void fetchStats();
+        }}
       />
     );
   }
@@ -282,10 +299,10 @@ const OnlineUsersWidget = () => {
 
   const onlineUsersDetail = userCounts
     ? t(
-      'widget.stats.registeredUsers',
-      '{total, plural, one {of # registered user} other {of # registered users}}',
-      { total: userCounts.totalUsers }
-    )
+        'widget.stats.registeredUsers',
+        '{total, plural, one {of # registered user} other {of # registered users}}',
+        { total: userCounts.totalUsers }
+      )
     : t('widget.stats.userTotalsError', 'User totals could not be loaded.');
 
   const tiles = [

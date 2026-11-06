@@ -18,11 +18,15 @@ import { getTranslation } from '../../../utils/getTranslation';
 export function useSettingsTranslate() {
   const { formatMessage, locale } = useIntl();
   const t = useCallback(
-    (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values),
+    (id, defaultMessage, values) =>
+      formatMessage({ id: getTranslation(id), defaultMessage }, values),
     [formatMessage]
   );
   const tError = useCallback(
-    (descriptor) => (descriptor ? t(descriptor.messageId, descriptor.defaultMessage, descriptor.values) : undefined),
+    (descriptor) =>
+      descriptor
+        ? t(descriptor.messageId, descriptor.defaultMessage, descriptor.values)
+        : undefined,
     [t]
   );
   return { t, tError, locale };

@@ -78,7 +78,13 @@ const SettingsToggleRow = ({
       data-settings-toggle-row=""
     >
       <SettingsCopy>
-        <Typography id={titleId} variant="omega" fontWeight="bold" textColor={disabled ? 'neutral600' : 'neutral800'} tag="p">
+        <Typography
+          id={titleId}
+          variant="omega"
+          fontWeight="bold"
+          textColor={disabled ? 'neutral600' : 'neutral800'}
+          tag="p"
+        >
           {title}
         </Typography>
         {description ? (

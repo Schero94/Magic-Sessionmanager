@@ -6,9 +6,10 @@ import test from 'node:test';
 const require = createRequire(import.meta.url);
 const { createIntl, createIntlCache } = require('react-intl');
 import { readSettingsSource } from './helpers/settingsSource.mjs';
-const read = (path) => (path === 'pages/Settings.jsx'
-  ? readSettingsSource()
-  : readFileSync(new URL(`../admin/src/${path}`, import.meta.url), 'utf8'));
+const read = (path) =>
+  path === 'pages/Settings.jsx'
+    ? readSettingsSource()
+    : readFileSync(new URL(`../admin/src/${path}`, import.meta.url), 'utf8');
 
 test('persistent notices use the shared non-dismissible Strapi alert', () => {
   assert.ok(existsSync(new URL('../admin/src/components/PersistentAlert.jsx', import.meta.url)));
@@ -18,27 +19,50 @@ test('persistent notices use the shared non-dismissible Strapi alert', () => {
   assert.doesNotMatch(component, /\bAlert\b[^B]*from '@strapi\/design-system'/);
   assert.doesNotMatch(component, /button:last-child|\[role=/);
   assert.match(component, /role=\{variant === 'danger' \? 'alert' : 'status'\}/);
-  for (const path of ['pages/HomePage.jsx', 'pages/Analytics.jsx', 'pages/License.jsx', 'pages/Settings.jsx', 'components/OnlineUsersWidget.jsx', 'components/SessionInfoPanel.jsx']) {
+  for (const path of [
+    'pages/HomePage.jsx',
+    'pages/Analytics.jsx',
+    'pages/License.jsx',
+    'pages/Settings.jsx',
+    'components/OnlineUsersWidget.jsx',
+    'components/SessionInfoPanel.jsx',
+  ]) {
     const source = read(path);
     // The home widget renders its states through Strapi's Widget helpers (or a
     // local fallback) and has no alerts; any alert it adds must be persistent too.
     if (path === 'components/OnlineUsersWidget.jsx' && !/<Alert\b/.test(source)) continue;
-    assert.match(source, /import Alert from ['"].*PersistentAlert['"]/, `${path} must use persistent notices`);
+    assert.match(
+      source,
+      /import Alert from ['"].*PersistentAlert['"]/,
+      `${path} must use persistent notices`
+    );
     assert.doesNotMatch(source, /closeLabel=""/);
     assert.doesNotMatch(source, /onClose=\{\(\) => \{\}\}/);
   }
   const settings = read('pages/Settings.jsx');
   assert.match(settings, /<DesignSystemAlert\b/);
-  assert.doesNotMatch(settings, /styled\(DesignSystemAlert\)/, 'the dismissible DS alert is used as is (SET-17)');
+  assert.doesNotMatch(
+    settings,
+    /styled\(DesignSystemAlert\)/,
+    'the dismissible DS alert is used as is (SET-17)'
+  );
   assert.match(settings, /onClose=\{\(\) => setRelaxedWarningDismissed\(true\)\}/);
 });
 
 test('user panel formats dates with the admin locale and translated values without English fragments', () => {
   const panel = read('components/SessionInfoPanel.jsx');
-  assert.match(panel, /useSessionFormatters\(\)/, 'dates and relative times follow the admin locale');
+  assert.match(
+    panel,
+    /useSessionFormatters\(\)/,
+    'dates and relative times follow the admin locale'
+  );
   assert.match(panel, /formatRelativeTime\(lastActivity\)/);
   assert.match(panel, /title=\{formatDate\(lastActivity\)\}/);
-  assert.match(panel, /translate\(device\.summary, device\.summary\.values\)/, 'browser and OS use the shared translated summary');
+  assert.match(
+    panel,
+    /translate\(device\.summary, device\.summary\.values\)/,
+    'browser and OS use the shared translated summary'
+  );
   assert.match(panel, /panel\.sessions\.more[\s\S]*?count: hiddenCount/);
   assert.doesNotMatch(panel, /toLocaleString\(/);
   assert.doesNotMatch(panel, /\{deviceInfo\.browser\} on \{deviceInfo\.os\}/);
@@ -53,7 +77,13 @@ test('user panel messages format singular, plural and device values in every loc
       const text = intl.formatMessage({ id: 'panel.summary.openCount' }, { count });
       assert.ok(text.includes(String(count)), `${locale} must interpolate count ${count}`);
       assert.doesNotMatch(text, /\{count/);
-      assert.ok(!text.includes('(s)') && !text.includes('(en)') && !text.includes('(es)') && !text.includes('(ões)'), `${locale} needs real plural forms`);
+      assert.ok(
+        !text.includes('(s)') &&
+          !text.includes('(en)') &&
+          !text.includes('(es)') &&
+          !text.includes('(ões)'),
+        `${locale} needs real plural forms`
+      );
     }
   }
 });

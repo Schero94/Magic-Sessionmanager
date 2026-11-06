@@ -10,8 +10,7 @@ const bootstrap = require('../server/src/bootstrap');
 const { hashToken } = require('../server/src/utils/encryption');
 const { invalidateSettingsCache } = require('../server/src/utils/settings-loader');
 
-const LOGOUT_ACCESS_TOKEN =
-  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEifQ.logout-access-signature';
+const LOGOUT_ACCESS_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEifQ.logout-access-signature';
 const BEARER_ONLY_ACCESS_TOKEN =
   'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLWJlYXJlciJ9.bearer-only-signature';
 const LEGACY_ACCESS_TOKEN =
@@ -67,10 +66,9 @@ function createStrapi({
         return fallback;
       },
     },
-    sessionManager: Object.assign(
-      () => nativeSessionApi,
-      { hasOrigin: () => nativeOriginAvailable }
-    ),
+    sessionManager: Object.assign(() => nativeSessionApi, {
+      hasOrigin: () => nativeOriginAvailable,
+    }),
     entityService: {
       findOne: async () => ({ documentId: 'user-42' }),
     },
@@ -427,11 +425,13 @@ test('authenticated legacy-support logout converts the missing downstream route 
   });
   await strapi.middleware[0](ctx, () => ctx.downstream());
 
-  assert.deepEqual(terminations, [{
-    userDocumentId: 'user-legacy',
-    refreshToken: null,
-    accessToken: LEGACY_ACCESS_TOKEN,
-  }]);
+  assert.deepEqual(terminations, [
+    {
+      userDocumentId: 'user-legacy',
+      refreshToken: null,
+      accessToken: LEGACY_ACCESS_TOKEN,
+    },
+  ]);
   assert.equal(ctx.status, 200);
   assert.deepEqual(ctx.body, { ok: true, message: 'Logged out successfully' });
 });
@@ -583,11 +583,13 @@ test('fallback logout route delegates termination through authenticated ownershi
   });
   await registeredRoute.handler(ctx);
 
-  assert.deepEqual(terminations, [{
-    userDocumentId: 'user-fallback',
-    refreshToken: null,
-    accessToken: LOGOUT_ACCESS_TOKEN,
-  }]);
+  assert.deepEqual(terminations, [
+    {
+      userDocumentId: 'user-fallback',
+      refreshToken: null,
+      accessToken: LOGOUT_ACCESS_TOKEN,
+    },
+  ]);
   assert.equal(sessionLookupCalls, 0);
   assert.equal(rawTerminationCalls, 0);
   assert.equal(ctx.status, 200);
@@ -701,7 +703,11 @@ test('pre-login GeoIP guard fails closed when lookup throws in block mode', asyn
       return {
         service(serviceName) {
           if (serviceName === 'geolocation') {
-            return { getIpInfo: async () => { throw new Error('lookup unavailable'); } };
+            return {
+              getIpInfo: async () => {
+                throw new Error('lookup unavailable');
+              },
+            };
           }
           return originalPlugin(name).service(serviceName);
         },
@@ -1015,7 +1021,8 @@ test('native refresh and password-change fallback fail closed when sidecar creat
       validateRefreshToken: async (token) => ({
         isValid: true,
         userId: '42',
-        sessionId: token === scenario.newRefreshToken ? 'native-child-without-row' : 'native-parent',
+        sessionId:
+          token === scenario.newRefreshToken ? 'native-child-without-row' : 'native-parent',
       }),
       revokeSessionById: async (...args) => {
         revocations.push(args);
@@ -1028,9 +1035,10 @@ test('native refresh and password-change fallback fail closed when sidecar creat
       findSession: () => null,
       jwtManagement: 'refresh',
     });
-    const interceptor = scenario.path === '/api/auth/refresh'
-      ? bootstrap.__private.mountRefreshTokenInterceptor
-      : bootstrap.__private.mountLoginInterceptor;
+    const interceptor =
+      scenario.path === '/api/auth/refresh'
+        ? bootstrap.__private.mountRefreshTokenInterceptor
+        : bootstrap.__private.mountLoginInterceptor;
     interceptor({ strapi, log: strapi.log, sessionService });
 
     const ctx = createContext({ path: scenario.path, ...scenario.context });
@@ -1154,7 +1162,10 @@ test('GA-04: a successful password reset ends every other session of that user',
   assert.equal(ctx.body.jwt, 'reset-access');
   assert.deepEqual(calls, [
     ['createSession', 'user-reset'],
-    ['terminateSession', { userId: 'user-reset', exceptSessionId: 'sidecar-after-reset', reason: 'logout' }],
+    [
+      'terminateSession',
+      { userId: 'user-reset', exceptSessionId: 'sidecar-after-reset', reason: 'logout' },
+    ],
   ]);
 });
 
@@ -1170,7 +1181,11 @@ test('GA-04: password reset fails closed when older sessions cannot be ended', a
 
   const ctx = createContext({
     path: '/api/auth/reset-password',
-    body: { jwt: 'reset-access', refreshToken: 'reset-refresh', user: { documentId: 'user-reset' } },
+    body: {
+      jwt: 'reset-access',
+      refreshToken: 'reset-refresh',
+      user: { documentId: 'user-reset' },
+    },
   });
   await strapi.middleware[0](ctx, () => ctx.downstream());
 

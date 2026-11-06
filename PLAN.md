@@ -1,6 +1,6 @@
 # Plan: Native Users & Permissions sessions
 
-Depth: tree 4   Mode: orchestrated
+Depth: tree 4 Mode: orchestrated
 Budget note: Multi-surface authentication refactor with isolated tests, local Strapi integration, and browser acceptance. Work is split to keep independent auth, service, API, and UI changes reviewable.
 
 ## Contract

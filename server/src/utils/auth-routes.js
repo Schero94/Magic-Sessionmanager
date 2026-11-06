@@ -39,10 +39,7 @@ function classifyJwtIssuingRequest(path, method) {
   if (key === 'POST /api/auth/change-password') return 'rotate-current';
   if (NEW_SESSION_ROUTES.has(key)) return 'new-session';
 
-  if (
-    normalizedMethod === 'GET' &&
-    /^\/api\/auth\/[a-z0-9-]+\/callback$/i.test(path || '')
-  ) {
+  if (normalizedMethod === 'GET' && /^\/api\/auth\/[a-z0-9-]+\/callback$/i.test(path || '')) {
     return 'new-session';
   }
 

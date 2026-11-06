@@ -107,11 +107,12 @@ function buildUpdaterConfig(settings, storedCredentials, force = false) {
       configuredFilename = '';
     }
   }
-  const existingDefaultPath = !configuredFilename && fs.existsSync(DEFAULT_CITY_DATABASE_PATH)
-    ? DEFAULT_CITY_DATABASE_PATH
-    : !configuredFilename && fs.existsSync(DEFAULT_COUNTRY_DATABASE_PATH)
-      ? DEFAULT_COUNTRY_DATABASE_PATH
-      : '';
+  const existingDefaultPath =
+    !configuredFilename && fs.existsSync(DEFAULT_CITY_DATABASE_PATH)
+      ? DEFAULT_CITY_DATABASE_PATH
+      : !configuredFilename && fs.existsSync(DEFAULT_COUNTRY_DATABASE_PATH)
+        ? DEFAULT_COUNTRY_DATABASE_PATH
+        : '';
   const outputPath = resolveDatabaseTarget(
     configuredFilename || (existingDefaultPath ? path.basename(existingDefaultPath) : undefined),
     DEFAULT_GEOIP_DIRECTORY
@@ -180,7 +181,10 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
         },
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/geoip] Error getting status:', error?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/geoip] Error getting status:',
+        error?.name || 'Error'
+      );
       return sendServerError(ctx, 500, 'Error getting GeoIP status');
     }
   },
@@ -216,7 +220,10 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
         accountId,
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/geoip] Error storing credentials:', error?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/geoip] Error storing credentials:',
+        error?.name || 'Error'
+      );
       return sendServerError(ctx, 500, 'Error storing GeoIP credentials');
     }
   },
@@ -246,7 +253,10 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
       } catch (error) {
         // The updater downloads from MaxMind: report its failure as an
         // upstream (502) error, distinct from local store failures (500).
-        strapi.log.error('[magic-sessionmanager/geoip] GeoIP download failed:', error?.name || 'Error');
+        strapi.log.error(
+          '[magic-sessionmanager/geoip] GeoIP download failed:',
+          error?.name || 'Error'
+        );
         return sendServerError(ctx, 502, 'Error updating GeoIP database');
       }
       invalidateSettingsCache();
@@ -256,7 +266,10 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
         result,
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/geoip] Error updating database:', error?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/geoip] Error updating database:',
+        error?.name || 'Error'
+      );
       return sendServerError(ctx, 500, 'Error updating GeoIP database');
     }
   },

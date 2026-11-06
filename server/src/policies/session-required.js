@@ -92,7 +92,9 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
     const nativeSessionId = nativeMode ? getVerifiedNativeSessionId(policyContext) : null;
     if (nativeMode && !nativeSessionId) {
       if (strictMode) {
-        strapi.log.info('[magic-sessionmanager] [POLICY-BLOCKED] No verified native session (strictMode)');
+        strapi.log.info(
+          '[magic-sessionmanager] [POLICY-BLOCKED] No verified native session (strictMode)'
+        );
         throw new errors.UnauthorizedError('No valid session. Please login again.');
       }
       return true;
@@ -112,20 +114,25 @@ module.exports = async (policyContext, _policyConfig, { strapi }) => {
         const reason =
           thisSession.terminationReason ||
           (thisSession.terminatedManually === true ? 'manual' : 'inactive');
-        strapi.log.info(`[magic-sessionmanager] [POLICY-BLOCKED] Session inactive (reason: ${reason})`);
+        strapi.log.info(
+          `[magic-sessionmanager] [POLICY-BLOCKED] Session inactive (reason: ${reason})`
+        );
         throw new errors.UnauthorizedError('Session terminated. Please login again.');
       }
       return true;
     }
 
     if (strictMode) {
-      strapi.log.info('[magic-sessionmanager] [POLICY-BLOCKED] No session matches this token (strictMode)');
+      strapi.log.info(
+        '[magic-sessionmanager] [POLICY-BLOCKED] No session matches this token (strictMode)'
+      );
       throw new errors.UnauthorizedError('No valid session. Please login again.');
     }
 
-    strapi.log.warn('[magic-sessionmanager] [POLICY-WARN] No session for token; allowing in non-strict mode');
+    strapi.log.warn(
+      '[magic-sessionmanager] [POLICY-WARN] No session for token; allowing in non-strict mode'
+    );
     return true;
-
   } catch (err) {
     if (err instanceof errors.UnauthorizedError) {
       throw err;

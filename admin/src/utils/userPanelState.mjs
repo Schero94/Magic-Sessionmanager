@@ -24,7 +24,8 @@ export function isUserModel(model) {
  * @param {object} session Session row.
  * @returns {Date|null} Activity time or null.
  */
-const getActivity = (session) => toValidDate(session?.lastActive) || toValidDate(session?.loginTime);
+const getActivity = (session) =>
+  toValidDate(session?.lastActive) || toValidDate(session?.loginTime);
 
 /**
  * Summarises one user's sessions for the panel header (IA D3):
@@ -37,13 +38,16 @@ const getActivity = (session) => toValidDate(session?.lastActive) || toValidDate
  * @returns {{isOnline: boolean, openCount: number, activeCount: number, lastActive: Date|null}} Summary.
  */
 export function getUserSessionSummary(sessions) {
-  const rows = Array.isArray(sessions) ? sessions.filter((row) => row && typeof row === 'object') : [];
+  const rows = Array.isArray(sessions)
+    ? sessions.filter((row) => row && typeof row === 'object')
+    : [];
   const open = rows.filter((session) => session.isActive === true);
   const activeCount = open.filter((session) => session.isTrulyActive === true).length;
   let lastActive = null;
   for (const session of rows) {
     const activity = getActivity(session);
-    if (activity && (!lastActive || activity.getTime() > lastActive.getTime())) lastActive = activity;
+    if (activity && (!lastActive || activity.getTime() > lastActive.getTime()))
+      lastActive = activity;
   }
   return { isOnline: activeCount > 0, openCount: open.length, activeCount, lastActive };
 }
@@ -58,7 +62,9 @@ export function getUserSessionSummary(sessions) {
  */
 export function getVisiblePanelSessions(sessions, limit = PANEL_SESSION_LIMIT) {
   const rows = Array.isArray(sessions) ? [...sessions] : [];
-  rows.sort((a, b) => (getActivity(b)?.getTime() ?? -Infinity) - (getActivity(a)?.getTime() ?? -Infinity));
+  rows.sort(
+    (a, b) => (getActivity(b)?.getTime() ?? -Infinity) - (getActivity(a)?.getTime() ?? -Infinity)
+  );
   return { visible: rows.slice(0, limit), hiddenCount: Math.max(0, rows.length - limit) };
 }
 
@@ -72,9 +78,11 @@ export function getVisiblePanelSessions(sessions, limit = PANEL_SESSION_LIMIT) {
  */
 export function endOpenSessions(sessions, reason) {
   if (!Array.isArray(sessions)) return [];
-  return sessions.map((session) => (session?.isActive === true
-    ? { ...session, isActive: false, isTrulyActive: false, terminationReason: reason }
-    : session));
+  return sessions.map((session) =>
+    session?.isActive === true
+      ? { ...session, isActive: false, isTrulyActive: false, terminationReason: reason }
+      : session
+  );
 }
 
 /**
@@ -124,9 +132,10 @@ export function buildUserSessionsHref(user) {
  * @returns {{mode: 'reset', initialValues: object}|{mode: 'change', field: 'blocked', value: boolean}|{mode: 'notice'}} Plan.
  */
 export function planBlockedFormSync({ initialValues, modified, blocked }) {
-  const hasBlockedField = Boolean(initialValues)
-    && typeof initialValues === 'object'
-    && Object.prototype.hasOwnProperty.call(initialValues, 'blocked');
+  const hasBlockedField =
+    Boolean(initialValues) &&
+    typeof initialValues === 'object' &&
+    Object.prototype.hasOwnProperty.call(initialValues, 'blocked');
   if (!hasBlockedField || typeof blocked !== 'boolean') return { mode: 'notice' };
   if (!modified) return { mode: 'reset', initialValues: { ...initialValues, blocked } };
   return { mode: 'change', field: 'blocked', value: blocked };

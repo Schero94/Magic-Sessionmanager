@@ -22,7 +22,11 @@ test('IA B.1: open rows are active or idle, every closed row is ended', () => {
   assert.equal(getSessionStatus({ isActive: true, isTrulyActive: true }), 'active');
   assert.equal(getSessionStatus({ isActive: true, isTrulyActive: false }), 'idle');
   for (const terminationReason of ['logout', 'manual', 'idle', 'expired', 'blocked', undefined]) {
-    assert.equal(getSessionStatus({ isActive: false, terminationReason, logoutTime: now }), 'ended', String(terminationReason));
+    assert.equal(
+      getSessionStatus({ isActive: false, terminationReason, logoutTime: now }),
+      'ended',
+      String(terminationReason)
+    );
   }
   assert.equal(getSessionState({ isActive: false }), 'ended');
 });
@@ -38,7 +42,10 @@ test('a session ended by inactivity is Ended · Timed out, never Idle and never 
 test('rows without a reason are "Reason not recorded", even with an end time (decision I.2-1)', () => {
   assert.equal(getSessionEndReason({ isActive: false, logoutTime: '2026-01-01' }), 'unrecorded');
   assert.equal(getSessionEndReason({ isActive: false }), 'unrecorded');
-  assert.equal(getSessionEndReason({ isActive: false, terminationReason: 'something-new' }), 'unrecorded');
+  assert.equal(
+    getSessionEndReason({ isActive: false, terminationReason: 'something-new' }),
+    'unrecorded'
+  );
   assert.equal(getSessionEndReason({ isActive: false, terminationReason: 'Manual' }), 'manual');
 });
 
@@ -50,7 +57,9 @@ test('legacy null rows do not crash', () => {
 test('three states map to success, warning and neutral; danger is never a state colour', () => {
   assert.deepEqual([...SESSION_STATUSES], ['active', 'idle', 'ended']);
   assert.deepEqual(
-    Object.fromEntries(SESSION_STATUSES.map((status) => [status, SESSION_STATUS_PRESENTATION[status].tone])),
+    Object.fromEntries(
+      SESSION_STATUSES.map((status) => [status, SESSION_STATUS_PRESENTATION[status].tone])
+    ),
     { active: 'success', idle: 'warning', ended: 'neutral' }
   );
   for (const status of SESSION_STATUSES) {
@@ -62,7 +71,11 @@ test('three states map to success, warning and neutral; danger is never a state 
     SESSION_STATUSES.map((status) => SESSION_STATUS_PRESENTATION[status].defaultMessage),
     ['Active', 'Idle', 'Ended']
   );
-  assert.equal(getSessionStatusPresentation('bogus').status, 'ended', 'unknown values never render an empty badge');
+  assert.equal(
+    getSessionStatusPresentation('bogus').status,
+    'ended',
+    'unknown values never render an empty badge'
+  );
   assert.equal(getSessionStatusPresentation('bogus').tone, 'neutral');
   assert.equal(isEndedSessionStatus('ended'), true);
   assert.equal(isEndedSessionStatus('idle'), false);
@@ -73,7 +86,10 @@ test('three states map to success, warning and neutral; danger is never a state 
 });
 
 test('EndReason vocabulary follows IA A.4 with a definition per reason (I.1 item 2)', () => {
-  assert.deepEqual([...SESSION_END_REASONS], ['logout', 'idle', 'expired', 'manual', 'blocked', 'unrecorded']);
+  assert.deepEqual(
+    [...SESSION_END_REASONS],
+    ['logout', 'idle', 'expired', 'manual', 'blocked', 'unrecorded']
+  );
   assert.deepEqual(
     SESSION_END_REASONS.map((reason) => SESSION_END_REASON_PRESENTATION[reason].defaultMessage),
     ['Logged out', 'Timed out', 'Expired', 'Ended manually', 'User blocked', 'Reason not recorded']

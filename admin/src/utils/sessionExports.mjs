@@ -62,16 +62,21 @@ export function toIsoTimestamp(value) {
  *   Returns the end reason key, or null for an open session.
  * @returns {string} CSV text with a header and one row per supplied session.
  */
-export function buildSessionCsv(sessions, {
-  unavailableValue,
-  getDeviceInfo,
-  getSessionStatus,
-  getSessionEndReason = defaultGetSessionEndReason,
-}) {
+export function buildSessionCsv(
+  sessions,
+  {
+    unavailableValue,
+    getDeviceInfo,
+    getSessionStatus,
+    getSessionEndReason = defaultGetSessionEndReason,
+  }
+) {
   const rows = Array.isArray(sessions) ? sessions : [];
   const csvRows = rows.map((session) => {
     const deviceInfo = getDeviceInfo(session, unavailableValue);
-    const minutesIdle = Number.isFinite(session.minutesSinceActive) ? session.minutesSinceActive : '';
+    const minutesIdle = Number.isFinite(session.minutesSinceActive)
+      ? session.minutesSinceActive
+      : '';
 
     return [
       session.id,
@@ -115,16 +120,19 @@ export function buildSessionCsv(sessions, {
  * @param {boolean} [options.truncated] The list holds only the latest sessions the API returned.
  * @returns {string} Pretty-printed JSON document.
  */
-export function buildSessionJson(sessions, {
-  filterStatus,
-  totalSessions,
-  exportedAt,
-  unavailableValue,
-  getDeviceInfo,
-  getSessionStatus,
-  getSessionEndReason = defaultGetSessionEndReason,
-  truncated = false,
-}) {
+export function buildSessionJson(
+  sessions,
+  {
+    filterStatus,
+    totalSessions,
+    exportedAt,
+    unavailableValue,
+    getDeviceInfo,
+    getSessionStatus,
+    getSessionEndReason = defaultGetSessionEndReason,
+    truncated = false,
+  }
+) {
   const rows = Array.isArray(sessions) ? sessions : [];
   const exportData = {
     exportedAt,

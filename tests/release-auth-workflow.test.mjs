@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 test('release step provides npm credentials without dropping OIDC', () => {
-  const workflow = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8'
+  );
   const releaseStep = workflow.split('      - name: Run semantic-release')[1];
   assert.ok(releaseStep, 'semantic-release step must exist');
   assert.match(workflow, /\bid-token:\s*write\b/);

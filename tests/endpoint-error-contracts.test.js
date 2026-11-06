@@ -8,24 +8,55 @@ const createLicense = require('../server/src/controllers/license');
 const createGeoip = require('../server/src/controllers/geoip');
 
 const privateDetail = 'synthetic-internal-detail-must-not-escape';
-const fail = () => { throw new Error(privateDetail); };
+const fail = () => {
+  throw new Error(privateDetail);
+};
 
 function context() {
   return {
     state: { user: { id: 23, documentId: 'synthetic-owner' } },
     params: { sessionId: 'synthetic-session', userId: 'synthetic-owner', ipAddress: '192.0.2.1' },
-    request: { headers: { authorization: `Bearer ${'a'.repeat(80)}` }, body: {
-      email: 'owner@example.invalid', firstName: 'Test', lastName: 'Owner',
-      licenseKey: 'synthetic-key', accountId: 'test-account',
-    } },
-    send(body) { this.body = body; },
-    badRequest(message) { this.status = 400; this.body = { message }; },
-    unauthorized(message) { this.status = 401; this.body = { message }; },
-    forbidden(message) { this.status = 403; this.body = { message }; },
-    notFound(message) { this.status = 404; this.body = { message }; },
-    internalServerError(message) { this.status = 500; this.body = { message }; },
-    badGateway(message) { this.status = 502; this.body = { message }; },
-    serviceUnavailable(message) { this.status = 503; this.body = { message }; },
+    request: {
+      headers: { authorization: `Bearer ${'a'.repeat(80)}` },
+      body: {
+        email: 'owner@example.invalid',
+        firstName: 'Test',
+        lastName: 'Owner',
+        licenseKey: 'synthetic-key',
+        accountId: 'test-account',
+      },
+    },
+    send(body) {
+      this.body = body;
+    },
+    badRequest(message) {
+      this.status = 400;
+      this.body = { message };
+    },
+    unauthorized(message) {
+      this.status = 401;
+      this.body = { message };
+    },
+    forbidden(message) {
+      this.status = 403;
+      this.body = { message };
+    },
+    notFound(message) {
+      this.status = 404;
+      this.body = { message };
+    },
+    internalServerError(message) {
+      this.status = 500;
+      this.body = { message };
+    },
+    badGateway(message) {
+      this.status = 502;
+      this.body = { message };
+    },
+    serviceUnavailable(message) {
+      this.status = 503;
+      this.body = { message };
+    },
   };
 }
 
@@ -40,10 +71,20 @@ test('session endpoint dependency failures return sanitized errors', async () =>
   };
   try {
     for (const action of [
-      'getUserStatsAdmin', 'getAllSessionsAdmin', 'getActiveSessions',
-      'getOwnSessions', 'getUserSessions', 'logout', 'logoutAll', 'logoutOthers',
-      'getCurrentSession', 'terminateOwnSession', 'terminateSingleSession',
-      'terminateAllUserSessions', 'deleteSession', 'cleanInactiveSessions',
+      'getUserStatsAdmin',
+      'getAllSessionsAdmin',
+      'getActiveSessions',
+      'getOwnSessions',
+      'getUserSessions',
+      'logout',
+      'logoutAll',
+      'logoutOthers',
+      'getCurrentSession',
+      'terminateOwnSession',
+      'terminateSingleSession',
+      'terminateAllUserSessions',
+      'deleteSession',
+      'cleanInactiveSessions',
       'toggleUserBlock',
     ]) {
       const ctx = context();
@@ -74,14 +115,19 @@ test('settings, license and GeoIP dependency failures return sanitized errors', 
   const previous = global.strapi;
   const fake = {
     config: { get: (_key, fallback) => fallback },
-    plugin: fail, store: fail, documents: fail,
+    plugin: fail,
+    store: fail,
+    documents: fail,
     log: { error() {}, warn() {}, info() {}, debug() {} },
   };
   global.strapi = fake;
   try {
     for (const [controller, actions] of [
       [settings, ['getSettings', 'updateSettings']],
-      [createLicense({ strapi: fake }), ['getStatus', 'autoCreate', 'createAndActivate', 'ping', 'storeKey']],
+      [
+        createLicense({ strapi: fake }),
+        ['getStatus', 'autoCreate', 'createAndActivate', 'ping', 'storeKey'],
+      ],
       [createGeoip({ strapi: fake }), ['getStatus', 'storeCredentials', 'updateDatabase']],
     ]) {
       for (const action of actions) {

@@ -15,8 +15,14 @@ import {
 } from '../admin/src/utils/settingsForm.mjs';
 
 // Single-field checks run through validateSettings, the only entry point the page uses.
-const fieldError = (field, value) => validateSettings({ maxFailedLogins: 5, [field]: value })[field] ?? null;
-const GEOIP_DATABASE_FILENAMES = ['GeoLite2-City.mmdb', 'GeoLite2-Country.mmdb', 'GeoIP2-City.mmdb', 'GeoIP2-Country.mmdb'];
+const fieldError = (field, value) =>
+  validateSettings({ maxFailedLogins: 5, [field]: value })[field] ?? null;
+const GEOIP_DATABASE_FILENAMES = [
+  'GeoLite2-City.mmdb',
+  'GeoLite2-Country.mmdb',
+  'GeoIP2-City.mmdb',
+  'GeoIP2-Country.mmdb',
+];
 import {
   fillMissingTemplates,
   findTemplateVariables,
@@ -43,13 +49,18 @@ test('generated encryption keys are 256-bit hex and survive dotenv unchanged (SE
 });
 
 test('key generation maps bytes to hex without modulo bias and refuses a missing random source', () => {
-  const source = { getRandomValues: (array) => { array.fill(0xab); return array; } };
+  const source = {
+    getRandomValues: (array) => {
+      array.fill(0xab);
+      return array;
+    },
+  };
   assert.equal(generateEncryptionKey(source), 'ab'.repeat(32));
   assert.throws(() => generateEncryptionKey(null), /secure_random_unavailable/);
 });
 
 test('.env lines are quoted so dotenv keeps "#" and other special characters', () => {
-  for (const value of ['abc#def', 'a b c', 'x"y', "x'y\"z", '$HOME#1', 'p@ss=word']) {
+  for (const value of ['abc#def', 'a b c', 'x"y', 'x\'y"z', '$HOME#1', 'p@ss=word']) {
     const line = formatEnvLine(ENCRYPTION_KEY_ENV_NAME, value);
     assert.equal(dotenv.parse(line)[ENCRYPTION_KEY_ENV_NAME], value, line);
   }
@@ -91,7 +102,10 @@ test('webhook URLs follow the server allowlist and report errors inline', () => 
   assert.equal(discordOk('https://evil-discord.com/x'), false);
   assert.equal(discordOk('not-a-url'), false);
   assert.equal(fieldError('slackWebhookUrl', 'https://hooks.slack.com/services/A/B/C'), null);
-  assert.equal(fieldError('slackWebhookUrl', 'https://discord.com/api/webhooks/1/abc')?.messageId, 'settings.validation.webhookSlack');
+  assert.equal(
+    fieldError('slackWebhookUrl', 'https://discord.com/api/webhooks/1/abc')?.messageId,
+    'settings.validation.webhookSlack'
+  );
 
   const errors = validateSettings({
     maxFailedLogins: 5,
@@ -105,17 +119,29 @@ test('webhook URLs follow the server allowlist and report errors inline', () => 
 });
 
 test('GeoIP filename and template lengths are validated instead of silently changed by the server', () => {
-  assert.equal(validateSettings({ maxFailedLogins: 1, geoIpDatabasePath: '' }).geoIpDatabasePath, undefined);
+  assert.equal(
+    validateSettings({ maxFailedLogins: 1, geoIpDatabasePath: '' }).geoIpDatabasePath,
+    undefined
+  );
   for (const name of GEOIP_DATABASE_FILENAMES) {
-    assert.equal(validateSettings({ maxFailedLogins: 1, geoIpDatabasePath: name }).geoIpDatabasePath, undefined);
+    assert.equal(
+      validateSettings({ maxFailedLogins: 1, geoIpDatabasePath: name }).geoIpDatabasePath,
+      undefined
+    );
   }
-  const pathError = validateSettings({ maxFailedLogins: 1, geoIpDatabasePath: '../etc/passwd' }).geoIpDatabasePath;
+  const pathError = validateSettings({
+    maxFailedLogins: 1,
+    geoIpDatabasePath: '../etc/passwd',
+  }).geoIpDatabasePath;
   assert.equal(pathError.messageId, 'settings.validation.geoIpFilename');
 
   const templates = fillMissingTemplates({});
   templates.vpnProxy = { ...templates.vpnProxy, subject: 'x'.repeat(TEMPLATE_LIMITS.subject + 1) };
   const errors = validateSettings({ maxFailedLogins: 1, emailTemplates: templates });
-  assert.equal(errors['emailTemplates.vpnProxy.subject'].messageId, 'settings.validation.maxLength');
+  assert.equal(
+    errors['emailTemplates.vpnProxy.subject'].messageId,
+    'settings.validation.maxLength'
+  );
   assert.equal(errors['emailTemplates.vpnProxy.subject'].values.count, TEMPLATE_LIMITS.subject + 1);
   assert.equal(tabHasFieldErrors(errors, 'alerts'), true);
 });
@@ -124,60 +150,110 @@ test('country codes are validated and duplicates are reported', () => {
   assert.equal(validateCountryCode('', []), null);
   assert.equal(validateCountryCode('jp', []), null);
   assert.equal(validateCountryCode('J1', [])?.messageId, 'settings.validation.countryCode');
-  assert.equal(validateCountryCode('JP', ['JP'])?.messageId, 'settings.validation.countryDuplicate');
+  assert.equal(
+    validateCountryCode('JP', ['JP'])?.messageId,
+    'settings.validation.countryDuplicate'
+  );
 });
 
 test('the saved baseline is what the server stored, not the submitted draft (SET-01 browser)', () => {
-  const previous = normalizeSettings({ discordWebhookUrl: '', enableWebhooks: false, emailTemplates: {} });
+  const previous = normalizeSettings({
+    discordWebhookUrl: '',
+    enableWebhooks: false,
+    emailTemplates: {},
+  });
   const submitted = { ...previous, enableWebhooks: true, discordWebhookUrl: 'not-a-url' };
   const stored = normalizeSettings({ ...submitted, discordWebhookUrl: '' });
 
   assert.equal(stored.discordWebhookUrl, '');
   assert.deepEqual(getAdjustedFields(submitted, stored, previous), ['discordWebhookUrl']);
   // Server-side sanitising of a value the admin did not edit is not reported.
-  const sanitized = { ...stored, discordWebhookUrl: submitted.discordWebhookUrl, emailTemplates: { ...stored.emailTemplates, vpnProxy: { ...stored.emailTemplates.vpnProxy, html: '<p>clean</p>' } } };
+  const sanitized = {
+    ...stored,
+    discordWebhookUrl: submitted.discordWebhookUrl,
+    emailTemplates: {
+      ...stored.emailTemplates,
+      vpnProxy: { ...stored.emailTemplates.vpnProxy, html: '<p>clean</p>' },
+    },
+  };
   assert.deepEqual(getAdjustedFields(submitted, sanitized, previous), []);
 });
 
 test('normalizeSettings keeps unknown server fields, fills defaults and rejects malformed payloads', () => {
-  const settings = normalizeSettings({ rateLimitWriteMax: 10, emailTemplates: { vpnProxy: { subject: 'S', html: '', text: '' } } });
+  const settings = normalizeSettings({
+    rateLimitWriteMax: 10,
+    emailTemplates: { vpnProxy: { subject: 'S', html: '', text: '' } },
+  });
   assert.equal(settings.rateLimitWriteMax, 10);
   assert.equal(settings.maxFailedLogins, 5);
   assert.equal(settings.emailTemplates.vpnProxy.subject, 'S');
   assert.equal(settings.emailTemplates.vpnProxy.html, getDefaultTemplates().vpnProxy.html);
-  for (const value of [null, [], 'x']) assert.throws(() => normalizeSettings(value), /Invalid settings response/);
+  for (const value of [null, [], 'x'])
+    assert.throws(() => normalizeSettings(value), /Invalid settings response/);
 });
 
 test('switching geofencing mode asks before clearing a non-empty list (SET-05)', () => {
-  assert.deepEqual(getModeChangeImpact({ allowedCountries: ['DE', 'AT'], blockedCountries: [] }, 'allowlist', 'blocklist'), {
-    confirm: true,
-    clearField: 'allowedCountries',
-    count: 2,
-  });
-  assert.equal(getModeChangeImpact({ allowedCountries: [], blockedCountries: [] }, 'allowlist', 'blocklist').confirm, false);
-  assert.equal(getModeChangeImpact({ allowedCountries: ['DE'] }, 'allowlist', 'allowlist').confirm, false);
+  assert.deepEqual(
+    getModeChangeImpact(
+      { allowedCountries: ['DE', 'AT'], blockedCountries: [] },
+      'allowlist',
+      'blocklist'
+    ),
+    {
+      confirm: true,
+      clearField: 'allowedCountries',
+      count: 2,
+    }
+  );
+  assert.equal(
+    getModeChangeImpact({ allowedCountries: [], blockedCountries: [] }, 'allowlist', 'blocklist')
+      .confirm,
+    false
+  );
+  assert.equal(
+    getModeChangeImpact({ allowedCountries: ['DE'] }, 'allowlist', 'allowlist').confirm,
+    false
+  );
 });
 
 test('template variables have translated descriptions and previews escape inserted values', () => {
   for (const key of TEMPLATE_KEYS) {
     for (const variable of TEMPLATE_VARIABLES[key]) {
-      assert.ok(TEMPLATE_VARIABLE_DEFINITIONS[variable]?.messageId.startsWith('settings.email.templates.variable.'), variable);
+      assert.ok(
+        TEMPLATE_VARIABLE_DEFINITIONS[variable]?.messageId.startsWith(
+          'settings.email.templates.variable.'
+        ),
+        variable
+      );
     }
   }
   assert.deepEqual(findTemplateVariables('Hi {{user.email}} {{geo.city}}', 'newLocation'), {
     found: ['{{user.email}}', '{{geo.city}}'],
     total: TEMPLATE_VARIABLES.newLocation.length,
   });
-  assert.equal(renderTemplatePreview('Hi {{user.email}} {{unknown.x}}'), 'Hi jane.doe@example.com {{unknown.x}}');
-  assert.doesNotMatch(renderTemplatePreview('<b>{{session.userAgent}}</b>', { html: true }), /<script/);
+  assert.equal(
+    renderTemplatePreview('Hi {{user.email}} {{unknown.x}}'),
+    'Hi jane.doe@example.com {{unknown.x}}'
+  );
+  assert.doesNotMatch(
+    renderTemplatePreview('<b>{{session.userAgent}}</b>', { html: true }),
+    /<script/
+  );
 });
 
 test('the HTML preview drops scripts and inline handlers, so the sandboxed frame logs no blocked-script errors', () => {
-  const preview = renderTemplatePreview('<p onclick="x()" onmouseover=\'y()\'>Hi {{user.email}}</p><script>alert(1)</script><SCRIPT src="a.js"></SCRIPT>', { html: true });
+  const preview = renderTemplatePreview(
+    '<p onclick="x()" onmouseover=\'y()\'>Hi {{user.email}}</p><script>alert(1)</script><SCRIPT src="a.js"></SCRIPT>',
+    { html: true }
+  );
   assert.doesNotMatch(preview, /<script/i);
   assert.doesNotMatch(preview, /\son\w+=/i);
   assert.match(preview, /<p>Hi jane\.doe@example\.com<\/p>/);
-  assert.match(renderTemplatePreview('<p>Someone onboarding = yes</p>', { html: true }), /Someone onboarding = yes/, 'text outside tags stays');
+  assert.match(
+    renderTemplatePreview('<p>Someone onboarding = yes</p>', { html: true }),
+    /Someone onboarding = yes/,
+    'text outside tags stays'
+  );
   // Plain text and subjects are never touched.
   assert.equal(renderTemplatePreview('<script>x</script>'), '<script>x</script>');
 });
@@ -203,6 +279,9 @@ test('the HTML preview follows the browser tokenizer, so half-typed tags never b
   assert.equal(clean("<img src=x onerror=alert(3)><svg/onload='x()'>"), '<img src=x><svg>');
   assert.equal(clean('<iframe srcdoc="<script>x</script>"></iframe>'), '<iframe></iframe>');
   // Text, comments and end tags stay; "on" words in text are untouched.
-  assert.equal(clean('<!-- <p onclick="x"> --><p>Someone onboarding = yes</p>'), '<!-- <p onclick="x"> --><p>Someone onboarding = yes</p>');
+  assert.equal(
+    clean('<!-- <p onclick="x"> --><p>Someone onboarding = yes</p>'),
+    '<!-- <p onclick="x"> --><p>Someone onboarding = yes</p>'
+  );
   assert.equal(clean('<b>{{user.email}}</b> 3 < 4'), '<b>jane.doe@example.com</b> 3 < 4');
 });

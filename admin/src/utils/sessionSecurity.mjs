@@ -18,7 +18,10 @@ export const RISK_LEVEL_MESSAGES = Object.freeze({
   none: Object.freeze({ messageId: 'modal.security.risk.none', defaultMessage: 'None' }),
   low: Object.freeze({ messageId: 'modal.security.risk.low', defaultMessage: 'Low' }),
   medium: Object.freeze({ messageId: 'modal.security.risk.medium', defaultMessage: 'Medium' }),
-  mediumHigh: Object.freeze({ messageId: 'modal.security.risk.mediumHigh', defaultMessage: 'Medium-high' }),
+  mediumHigh: Object.freeze({
+    messageId: 'modal.security.risk.mediumHigh',
+    defaultMessage: 'Medium-high',
+  }),
   high: Object.freeze({ messageId: 'modal.security.risk.high', defaultMessage: 'High' }),
 });
 
@@ -48,7 +51,10 @@ const RISK_ALIASES = Object.freeze({
  */
 export function normalizeRiskLevel(value) {
   if (typeof value !== 'string') return '';
-  const key = value.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  const key = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, ' ');
   return RISK_ALIASES[key] || RISK_ALIASES[key.replace(/ /g, '')] || '';
 }
 
@@ -80,7 +86,8 @@ export function normalizeGeoData(geo, fallback = {}) {
   const timezone = presentText(geo.timezone);
   if (!country && !city && !timezone) return null;
 
-  const rawScore = typeof geo.securityScore === 'number' ? geo.securityScore : fallback?.securityScore;
+  const rawScore =
+    typeof geo.securityScore === 'number' ? geo.securityScore : fallback?.securityScore;
   const securityScore = typeof rawScore === 'number' && Number.isFinite(rawScore) ? rawScore : null;
 
   return {

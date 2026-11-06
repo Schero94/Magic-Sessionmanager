@@ -18,7 +18,11 @@ const BROWSER_VERSION_PATTERNS = [
  * @returns {string} Browser version, or an empty string when it is unavailable.
  */
 export function getBrowserVersionFromUserAgent(userAgent) {
-  if (typeof userAgent !== 'string' || !userAgent.trim() || userAgent.trim().toLowerCase() === 'unknown') {
+  if (
+    typeof userAgent !== 'string' ||
+    !userAgent.trim() ||
+    userAgent.trim().toLowerCase() === 'unknown'
+  ) {
     return '';
   }
 

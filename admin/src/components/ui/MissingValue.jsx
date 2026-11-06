@@ -1,7 +1,11 @@
 import { Typography, VisuallyHidden } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
 import { getTranslation } from '../../utils/getTranslation';
-import { MISSING_VALUE_GLYPH, MISSING_VALUE_MESSAGE, isMissingValue } from '../../utils/missingValue.mjs';
+import {
+  MISSING_VALUE_GLYPH,
+  MISSING_VALUE_MESSAGE,
+  isMissingValue,
+} from '../../utils/missingValue.mjs';
 
 /**
  * Renders the shared "—" for a missing value. Screen readers hear

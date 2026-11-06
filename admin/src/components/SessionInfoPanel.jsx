@@ -43,7 +43,9 @@ const PanelSessionCard = ({ session, t }) => {
   const { formatDate, formatRelativeTime, translate } = useSessionFormatters();
   const device = getDevicePresentation(session);
   const hasSummary = Boolean(device.browserLabel || device.os);
-  const summary = hasSummary ? device.summary.text ?? translate(device.summary, device.summary.values) : '';
+  const summary = hasSummary
+    ? (device.summary.text ?? translate(device.summary, device.summary.values))
+    : '';
   const lastActivity = toValidDate(session.lastActive) || toValidDate(session.loginTime);
   const ipAddress = presentText(session.ipAddress);
 
@@ -89,7 +91,9 @@ const PanelSessionCard = ({ session, t }) => {
           ) : null}
           {lastActivity ? (
             <Typography variant="pi" textColor="neutral600" title={formatDate(lastActivity)}>
-              {t('panel.sessions.lastActive', 'Last active {time}', { time: formatRelativeTime(lastActivity) })}
+              {t('panel.sessions.lastActive', 'Last active {time}', {
+                time: formatRelativeTime(lastActivity),
+              })}
             </Typography>
           ) : null}
         </Flex>
@@ -110,7 +114,10 @@ const PanelSessionCard = ({ session, t }) => {
 const SessionInfoPanel = ({ documentId, model, document }) => {
   const { formatMessage } = useIntl();
   const { formatDate, formatRelativeTime } = useSessionFormatters();
-  const { allowedActions: { canAccess }, isLoading: permissionsLoading } = useRBAC(pluginPermissions.access);
+  const {
+    allowedActions: { canAccess },
+    isLoading: permissionsLoading,
+  } = useRBAC(pluginPermissions.access);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -130,7 +137,8 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   const formModified = useForm(FORM_CONSUMER, (state) => state.modified, false);
   const formOnChange = useForm(FORM_CONSUMER, (state) => state.onChange, false);
   const formResetForm = useForm(FORM_CONSUMER, (state) => state.resetForm, false);
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
   const userId = document?.documentId || documentId;
   const isUserPanel = isUserModel(model);
@@ -213,7 +221,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
       setSessions((rows) => endOpenSessions(rows, 'manual'));
       toggleNotification({
         type: 'success',
-        message: t('panel.notify.endAllSuccess', 'All sessions of {user} ended.', { user: userLabel }),
+        message: t('panel.notify.endAllSuccess', 'All sessions of {user} ended.', {
+          user: userLabel,
+        }),
       });
     } catch (error) {
       toggleNotification({
@@ -238,7 +248,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
    * @returns {Promise<boolean>} The state the server confirmed.
    */
   const changeBlocked = async (blocked) => {
-    const response = await postRequest(`/magic-sessionmanager/user/${userId}/toggle-block`, { blocked });
+    const response = await postRequest(`/magic-sessionmanager/user/${userId}/toggle-block`, {
+      blocked,
+    });
     requireSuccessfulMutation(response.data);
     const newBlockedStatus = response.data.blocked === true;
     focusBlockToggle.current = newBlockedStatus !== isBlocked;
@@ -344,11 +356,11 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
           <Alert
             variant="danger"
             closeLabel={t('common.close', 'Close')}
-            action={(
+            action={
               <Button size="S" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
                 {t('common.tryAgain', 'Try again')}
               </Button>
-            )}
+            }
           >
             {t('panel.error.message', 'Sessions could not be loaded.')}
           </Alert>
@@ -369,7 +381,15 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
   return {
     title,
     content: (
-      <Flex ref={panelRef} direction="column" alignItems="stretch" gap={4} width="100%" minWidth={0} tabIndex={-1}>
+      <Flex
+        ref={panelRef}
+        direction="column"
+        alignItems="stretch"
+        gap={4}
+        width="100%"
+        minWidth={0}
+        tabIndex={-1}
+      >
         {/* Summary */}
         {loading ? (
           <Flex justifyContent="center" padding={2} data-panel-summary="">
@@ -395,8 +415,14 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               {t('panel.summary.openHint', 'Active or idle')}
             </Typography>
             {summary.lastActive ? (
-              <Typography variant="pi" textColor="neutral600" title={formatDate(summary.lastActive)}>
-                {t('panel.sessions.lastActive', 'Last active {time}', { time: formatRelativeTime(summary.lastActive) })}
+              <Typography
+                variant="pi"
+                textColor="neutral600"
+                title={formatDate(summary.lastActive)}
+              >
+                {t('panel.sessions.lastActive', 'Last active {time}', {
+                  time: formatRelativeTime(summary.lastActive),
+                })}
               </Typography>
             ) : (
               <Typography variant="pi" textColor="neutral600">
@@ -414,7 +440,10 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
 
         {formOutOfSync ? (
           <Alert variant="warning" closeLabel={t('common.close', 'Close')}>
-            {t('panel.form.reloadNotice', 'Reload this page before saving, or the Blocked field will be overwritten.')}
+            {t(
+              'panel.form.reloadNotice',
+              'Reload this page before saving, or the Blocked field will be overwritten.'
+            )}
           </Alert>
         ) : null}
 
@@ -422,7 +451,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
         <Flex direction="column" alignItems="stretch" gap={2} data-panel-actions="">
           <ActionStack>
             <ConfirmAction
-              title={t('panel.confirm.endAllTitle', 'End all sessions of {user}?', { user: userLabel })}
+              title={t('panel.confirm.endAllTitle', 'End all sessions of {user}?', {
+                user: userLabel,
+              })}
               body={t(
                 'panel.confirm.endAllBody',
                 '{count, plural, one {# open session ends} other {# open sessions end}} on all devices. {user} can sign in again unless you also block the account.',
@@ -432,7 +463,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               onConfirm={handleEndAll}
               fallbackFocusRef={panelRef}
               disabled={actionsDisabled || !hasOpenSessions}
-              trigger={(
+              trigger={
                 <Button
                   fullWidth
                   size="S"
@@ -445,7 +476,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                 >
                   {endAllLabel}
                 </Button>
-              )}
+              }
             />
             {isBlocked ? (
               <Button
@@ -474,7 +505,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                 onConfirm={handleBlock}
                 fallbackFocusRef={panelRef}
                 disabled={actionsDisabled}
-                trigger={(
+                trigger={
                   <Button
                     ref={blockToggleRef}
                     data-block-toggle="block"
@@ -488,7 +519,7 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
                   >
                     {blockLabel}
                   </Button>
-                )}
+                }
               />
             )}
           </ActionStack>
@@ -512,7 +543,15 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
               {t('panel.sessions.openTitle', 'Open sessions')}
             </Typography>
             {visible.length > 0 ? (
-              <Flex tag="ul" direction="column" alignItems="stretch" gap={2} margin={0} padding={0} style={{ listStyle: 'none' }}>
+              <Flex
+                tag="ul"
+                direction="column"
+                alignItems="stretch"
+                gap={2}
+                margin={0}
+                padding={0}
+                style={{ listStyle: 'none' }}
+              >
                 {visible.map((session) => (
                   <PanelSessionCard key={session.id} session={session} t={t} />
                 ))}
@@ -530,7 +569,9 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
             )}
             {hiddenCount > 0 ? (
               <Typography variant="pi" textColor="neutral600">
-                {t('panel.sessions.more', '{count, plural, other {+# more}}', { count: hiddenCount })}
+                {t('panel.sessions.more', '{count, plural, other {+# more}}', {
+                  count: hiddenCount,
+                })}
               </Typography>
             ) : null}
           </Flex>

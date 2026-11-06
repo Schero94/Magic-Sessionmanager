@@ -18,7 +18,14 @@ export const SESSION_STATUSES = SESSION_STATES;
 export const ENDED_SESSION_STATUSES = Object.freeze(['ended']);
 
 /** End reasons in filter order (IA A.4, D1 End reason select). */
-export const SESSION_END_REASONS = Object.freeze(['logout', 'idle', 'expired', 'manual', 'blocked', 'unrecorded']);
+export const SESSION_END_REASONS = Object.freeze([
+  'logout',
+  'idle',
+  'expired',
+  'manual',
+  'blocked',
+  'unrecorded',
+]);
 
 const RECORDED_END_REASONS = new Set(['logout', 'idle', 'expired', 'manual', 'blocked']);
 
@@ -47,11 +54,13 @@ export const SESSION_STATUS_PRESENTATION = Object.freeze({
     defaultMessage: 'Idle',
     help: Object.freeze({
       messageId: 'common.status.idle.help',
-      defaultMessage: 'Still open. It ends on its next request or at the next idle check. A token refresh makes it active again.',
+      defaultMessage:
+        'Still open. It ends on its next request or at the next idle check. A token refresh makes it active again.',
     }),
     definition: Object.freeze({
       messageId: 'common.status.idle.definition',
-      defaultMessage: 'Open, but not used for longer than the inactivity timeout. It ends on its next request or at the next idle check. A token refresh makes it active again.',
+      defaultMessage:
+        'Open, but not used for longer than the inactivity timeout. It ends on its next request or at the next idle check. A token refresh makes it active again.',
     }),
   }),
   ended: Object.freeze({
@@ -61,7 +70,8 @@ export const SESSION_STATUS_PRESENTATION = Object.freeze({
     help: null,
     definition: Object.freeze({
       messageId: 'common.status.ended.definition',
-      defaultMessage: 'The session can no longer be used. The user has to sign in again on this device.',
+      defaultMessage:
+        'The session can no longer be used. The user has to sign in again on this device.',
     }),
   }),
 });
@@ -75,7 +85,10 @@ export const SESSION_END_REASON_PRESENTATION = Object.freeze({
   logout: Object.freeze({
     messageId: 'common.endReason.logout',
     defaultMessage: 'Logged out',
-    description: Object.freeze({ messageId: 'common.endReason.logout.description', defaultMessage: 'The user signed out.' }),
+    description: Object.freeze({
+      messageId: 'common.endReason.logout.description',
+      defaultMessage: 'The user signed out.',
+    }),
   }),
   idle: Object.freeze({
     messageId: 'common.endReason.idle',
@@ -114,7 +127,8 @@ export const SESSION_END_REASON_PRESENTATION = Object.freeze({
     defaultMessage: 'Reason not recorded',
     description: Object.freeze({
       messageId: 'common.endReason.unrecorded.description',
-      defaultMessage: 'No end reason was stored, for example because the session ended in Strapi’s own session store or was recorded by an older plugin version.',
+      defaultMessage:
+        'No end reason was stored, for example because the session ended in Strapi’s own session store or was recorded by an older plugin version.',
     }),
   }),
 });
@@ -152,7 +166,8 @@ export function getSessionStatus(session = {}) {
 export function getSessionEndReason(session = {}) {
   const row = session || {};
   if (row.isActive === true) return null;
-  const reason = typeof row.terminationReason === 'string' ? row.terminationReason.trim().toLowerCase() : '';
+  const reason =
+    typeof row.terminationReason === 'string' ? row.terminationReason.trim().toLowerCase() : '';
   return RECORDED_END_REASONS.has(reason) ? /** @type {any} */ (reason) : 'unrecorded';
 }
 
@@ -198,9 +213,8 @@ export function isSessionEndReason(reason) {
  * @returns {{status: string, tone: string, messageId: string, defaultMessage: string, help: {messageId: string, defaultMessage: string}|null, definition: {messageId: string, defaultMessage: string}}} Presentation.
  */
 export function getSessionStatusPresentation(statusOrSession) {
-  const status = typeof statusOrSession === 'string'
-    ? statusOrSession
-    : getSessionState(statusOrSession);
+  const status =
+    typeof statusOrSession === 'string' ? statusOrSession : getSessionState(statusOrSession);
   const key = isSessionStatus(status) ? status : 'ended';
   return { status: key, ...SESSION_STATUS_PRESENTATION[key] };
 }

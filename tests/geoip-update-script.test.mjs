@@ -24,7 +24,11 @@ function createTarGz(entries) {
     Buffer.from('0000000\0').copy(header, 108);
     Buffer.from('0000000\0').copy(header, 116);
     Buffer.from(body.length.toString(8).padStart(11, '0') + '\0').copy(header, 124);
-    Buffer.from(Math.floor(Date.now() / 1000).toString(8).padStart(11, '0') + '\0').copy(header, 136);
+    Buffer.from(
+      Math.floor(Date.now() / 1000)
+        .toString(8)
+        .padStart(11, '0') + '\0'
+    ).copy(header, 136);
     Buffer.from('        ').copy(header, 148);
     Buffer.from('0').copy(header, 156);
     Buffer.from('ustar\0').copy(header, 257);
@@ -81,9 +85,13 @@ test('resolveConfig reads credentials and output path from env', () => {
 });
 
 test('resolveConfig rejects download paths outside the dedicated GeoIP directory', () => {
-  assert.throws(() => resolveConfig({
-    MAGIC_SESSIONMANAGER_GEOIP_DATABASE: '/tmp/GeoLite2-Country.mmdb',
-  }), /dedicated GeoIP directory/);
+  assert.throws(
+    () =>
+      resolveConfig({
+        MAGIC_SESSIONMANAGER_GEOIP_DATABASE: '/tmp/GeoLite2-Country.mmdb',
+      }),
+    /dedicated GeoIP directory/
+  );
 });
 
 test('resolveConfig defaults to GeoLite2 City database', () => {

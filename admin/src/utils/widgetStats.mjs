@@ -4,7 +4,12 @@ import { getSessionUserKey } from './onlineStats.mjs';
  * The four home widget tiles, in display order (2 x 2): Online users, Active
  * sessions, Idle sessions, Blocked users (IA D4, decision I.2-2).
  */
-export const WIDGET_STAT_KEYS = Object.freeze(['onlineUsers', 'activeSessions', 'idleSessions', 'blockedUsers']);
+export const WIDGET_STAT_KEYS = Object.freeze([
+  'onlineUsers',
+  'activeSessions',
+  'idleSessions',
+  'blockedUsers',
+]);
 
 /**
  * Derives the session-based widget values. "Online" uses the one rule shared

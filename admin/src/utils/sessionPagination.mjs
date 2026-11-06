@@ -12,9 +12,8 @@
 export function paginateSessions(sessions = [], currentPage = 1, pageSize = 25) {
   const items = Array.isArray(sessions) ? sessions : [];
   const requestedSize = Number(pageSize);
-  const normalizedSize = Number.isFinite(requestedSize) && requestedSize > 0
-    ? Math.floor(requestedSize)
-    : 1;
+  const normalizedSize =
+    Number.isFinite(requestedSize) && requestedSize > 0 ? Math.floor(requestedSize) : 1;
   const total = items.length;
   const pageCount = Math.max(1, Math.ceil(total / normalizedSize));
   const requestedPage = Number(currentPage);

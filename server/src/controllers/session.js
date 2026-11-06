@@ -7,10 +7,7 @@ const {
   shouldResolveGeoData,
 } = require('../utils/enhance-session');
 const { resolveUserDocumentId } = require('../utils/resolve-user');
-const {
-  getPluginSettings,
-  getSessionCreationGraceMs,
-} = require('../utils/settings-loader');
+const { getPluginSettings, getSessionCreationGraceMs } = require('../utils/settings-loader');
 const { extractBearerToken } = require('../utils/extract-token');
 const { parseNativeSessionKey } = require('../utils/native-session-view');
 const { runWithCallerRevocation } = require('../utils/block-revocation-scope');
@@ -107,7 +104,13 @@ function getCurrentNativeSessionId(ctx) {
  * material is stripped by enhanceSession already; this is the boundary check
  * that also covers native-only rows and service results (F12).
  */
-const PRIVATE_SESSION_FIELDS = ['token', 'tokenHash', 'refreshToken', 'refreshTokenHash', 'nativeSessionId'];
+const PRIVATE_SESSION_FIELDS = [
+  'token',
+  'tokenHash',
+  'refreshToken',
+  'refreshTokenHash',
+  'nativeSessionId',
+];
 
 /**
  * Returns a copy of a session row that is safe for the browser. Actions use
@@ -135,7 +138,9 @@ function toPublicSession(session, { admin = false } = {}) {
  * @returns {object[]} Browser-safe rows
  */
 function toPublicSessions(sessions, options) {
-  return Array.isArray(sessions) ? sessions.map((session) => toPublicSession(session, options)) : sessions;
+  return Array.isArray(sessions)
+    ? sessions.map((session) => toPublicSession(session, options))
+    : sessions;
 }
 
 /**
@@ -163,10 +168,11 @@ function findOwnedNativeSession(sessions, publicKey) {
     return undefined;
   }
 
-  return sessions.find((session) =>
-    getSessionViewKey(session) === publicKey &&
-    typeof session?.nativeSessionId === 'string' &&
-    session.nativeSessionId.length > 0
+  return sessions.find(
+    (session) =>
+      getSessionViewKey(session) === publicKey &&
+      typeof session?.nativeSessionId === 'string' &&
+      session.nativeSessionId.length > 0
   );
 }
 
@@ -258,10 +264,7 @@ module.exports = {
         data: { totalUsers, blockedUsers },
       });
     } catch (error) {
-      strapi.log.error(
-        '[magic-sessionmanager] getUserStatsAdmin failed:',
-        error?.name || 'Error'
-      );
+      strapi.log.error('[magic-sessionmanager] getUserStatsAdmin failed:', error?.name || 'Error');
       return ctx.internalServerError('Unable to load end-user counts');
     }
   },
@@ -384,9 +387,10 @@ module.exports = {
       const sessionsWithCurrent = await enhanceSessions(paged, enhanceOpts, 20);
 
       for (const s of sessionsWithCurrent) {
-        s.isCurrentSession = !!(currentTokenHash && paged.find(
-          (raw) => raw.documentId === s.documentId && raw.tokenHash === currentTokenHash
-        ));
+        s.isCurrentSession = !!(
+          currentTokenHash &&
+          paged.find((raw) => raw.documentId === s.documentId && raw.tokenHash === currentTokenHash)
+        );
       }
 
       sessionsWithCurrent.sort((a, b) => {
@@ -423,7 +427,9 @@ module.exports = {
 
       if (!isAdminRequest) {
         if (!requestingUserDocId) {
-          strapi.log.warn('[magic-sessionmanager] Denied a session lookup without a verifiable user identity');
+          strapi.log.warn(
+            '[magic-sessionmanager] Denied a session lookup without a verifiable user identity'
+          );
           return ctx.forbidden('Cannot verify user identity');
         }
 
@@ -692,9 +698,10 @@ module.exports = {
       );
 
       ctx.body = {
-        message: terminatedCount === 0
-          ? 'No other active sessions to terminate'
-          : `${terminatedCount} other session(s) terminated`,
+        message:
+          terminatedCount === 0
+            ? 'No other active sessions to terminate'
+            : `${terminatedCount} other session(s) terminated`,
         terminatedCount,
         currentSessionPreserved: true,
       };
@@ -778,7 +785,10 @@ module.exports = {
         data: { ...enhanced, isCurrentSession: true },
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error getting current session:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager] Error getting current session:',
+        err?.name || 'Error'
+      );
       return ctx.internalServerError('Error fetching current session');
     }
   },
@@ -860,12 +870,15 @@ module.exports = {
       // endpoint cannot be used to probe which session ids exist (API-10).
       const sessionUserId = sessionToTerminate.user?.documentId;
       if (sessionUserId !== userDocId) {
-        strapi.log.warn('[magic-sessionmanager] Denied an attempt to terminate another user session');
+        strapi.log.warn(
+          '[magic-sessionmanager] Denied an attempt to terminate another user session'
+        );
         return ctx.notFound('Session not found');
       }
 
       if (
-        (isNativeSessionMode() && isCurrentNativeSession(sessionToTerminate, getCurrentNativeSessionId(ctx))) ||
+        (isNativeSessionMode() &&
+          isCurrentNativeSession(sessionToTerminate, getCurrentNativeSessionId(ctx))) ||
         (currentTokenHash && sessionToTerminate.tokenHash === currentTokenHash)
       ) {
         return ctx.badRequest('Cannot terminate the current session. Use /logout instead.');
@@ -888,7 +901,10 @@ module.exports = {
         alreadyTerminated,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error terminating own session:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager] Error terminating own session:',
+        err?.name || 'Error'
+      );
       return ctx.internalServerError('Error terminating session');
     }
   },
@@ -953,7 +969,8 @@ module.exports = {
         if (!nativeTargetExists) return ctx.notFound('Session not found');
       }
       const result = await sessionService.terminateSession({ sessionId, reason: 'manual' });
-      if (!nativeTargetExists && result?.terminatedCount === 0) return ctx.notFound('Session not found');
+      if (!nativeTargetExists && result?.terminatedCount === 0)
+        return ctx.notFound('Session not found');
 
       ctx.body = {
         message: `Session ${sessionId} terminated`,
@@ -986,7 +1003,10 @@ module.exports = {
         success: true,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error terminating all user sessions:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager] Error terminating all user sessions:',
+        err?.name || 'Error'
+      );
       return ctx.internalServerError('Error terminating all user sessions');
     }
   },
@@ -1007,10 +1027,12 @@ module.exports = {
 
       const IPV4_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
       const ipv4Match = ipAddress.match(IPV4_REGEX);
-      const isValidIpv4 = ipv4Match && ipv4Match.slice(1).every((octet) => {
-        const n = parseInt(octet, 10);
-        return n >= 0 && n <= 255;
-      });
+      const isValidIpv4 =
+        ipv4Match &&
+        ipv4Match.slice(1).every((octet) => {
+          const n = parseInt(octet, 10);
+          return n >= 0 && n <= 255;
+        });
 
       let isValidIpv6 = false;
       if (!isValidIpv4) {
@@ -1043,7 +1065,10 @@ module.exports = {
         data: ipData,
       };
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] Error getting IP geolocation:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager] Error getting IP geolocation:',
+        err?.name || 'Error'
+      );
       return ctx.internalServerError('Error fetching IP geolocation data');
     }
   },
@@ -1100,7 +1125,10 @@ module.exports = {
           failedCount: Number(err.failedCount) || 0,
         });
       }
-      strapi.log.error('[magic-sessionmanager] Error cleaning inactive sessions:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager] Error cleaning inactive sessions:',
+        err?.name || 'Error'
+      );
       return ctx.internalServerError('Error deleting inactive sessions');
     }
   },

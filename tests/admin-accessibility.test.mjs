@@ -6,27 +6,62 @@ import { readSettingsSource } from './helpers/settingsSource.mjs';
 
 // The settings page is split into pages/Settings/* (tabs, cards, hook).
 const settingsSource = readSettingsSource();
-const settingsToggleSource = readFileSync(new URL('../admin/src/components/SettingsToggleRow.jsx', import.meta.url), 'utf8');
-const homePageSource = readFileSync(new URL('../admin/src/pages/HomePage.jsx', import.meta.url), 'utf8');
+const settingsToggleSource = readFileSync(
+  new URL('../admin/src/components/SettingsToggleRow.jsx', import.meta.url),
+  'utf8'
+);
+const homePageSource = readFileSync(
+  new URL('../admin/src/pages/HomePage.jsx', import.meta.url),
+  'utf8'
+);
 const alertSources = [
   ['HomePage', homePageSource],
   ['Settings', settingsSource],
   ['Analytics', readFileSync(new URL('../admin/src/pages/Analytics.jsx', import.meta.url), 'utf8')],
   ['Activation', readFileSync(new URL('../admin/src/pages/License.jsx', import.meta.url), 'utf8')],
-  ['Session details', readFileSync(new URL('../admin/src/components/SessionDetailModal.jsx', import.meta.url), 'utf8')],
-  ['User session panel', readFileSync(new URL('../admin/src/components/SessionInfoPanel.jsx', import.meta.url), 'utf8')],
+  [
+    'Session details',
+    readFileSync(
+      new URL('../admin/src/components/SessionDetailModal.jsx', import.meta.url),
+      'utf8'
+    ),
+  ],
+  [
+    'User session panel',
+    readFileSync(new URL('../admin/src/components/SessionInfoPanel.jsx', import.meta.url), 'utf8'),
+  ],
 ];
 
 test('Strapi Design System Switch exposes an accessible name, description, and controlled state', () => {
   const switches = settingsToggleSource.match(/<Switch\b[\s\S]*?\/>/g) || [];
 
   assert.equal(switches.length, 1, 'Settings uses one shared switch component');
-  assert.match(settingsToggleSource, /import \{[^}]*\bSwitch\b[^}]*\} from '@strapi\/design-system'/, 'the row uses Strapi Design System Switch');
+  assert.match(
+    settingsToggleSource,
+    /import \{[^}]*\bSwitch\b[^}]*\} from '@strapi\/design-system'/,
+    'the row uses Strapi Design System Switch'
+  );
   assert.match(switches[0], /aria-label=/, 'the switch needs an accessible name');
-  assert.match(switches[0], /aria-describedby=/, 'the switch should be associated with its description');
-  assert.match(switches[0], /checked=\{checked\}/, 'the checked state stays controlled by settings');
-  assert.match(switches[0], /onCheckedChange=\{onChange\}/, 'switch changes return the next boolean state');
-  assert.match(switches[0], /visibleLabels=\{false\}/, 'the control does not render stacked Off/On labels');
+  assert.match(
+    switches[0],
+    /aria-describedby=/,
+    'the switch should be associated with its description'
+  );
+  assert.match(
+    switches[0],
+    /checked=\{checked\}/,
+    'the checked state stays controlled by settings'
+  );
+  assert.match(
+    switches[0],
+    /onCheckedChange=\{onChange\}/,
+    'switch changes return the next boolean state'
+  );
+  assert.match(
+    switches[0],
+    /visibleLabels=\{false\}/,
+    'the control does not render stacked Off/On labels'
+  );
 });
 
 test('Strapi Design System alerts provide close labels and text inputs use Field labels', () => {
@@ -38,12 +73,18 @@ test('Strapi Design System alerts provide close labels and text inputs use Field
     assert.match(alert, /closeLabel=/, `alert ${index + 1} needs a close label`);
   }
   for (const [index, input] of textInputs.entries()) {
-    assert.doesNotMatch(input, /\blabel=/, `text input ${index + 1} must use Field.Label instead of an unsupported label prop`);
+    assert.doesNotMatch(
+      input,
+      /\blabel=/,
+      `text input ${index + 1} must use Field.Label instead of an unsupported label prop`
+    );
   }
 });
 
 test('GeoIP download filename uses a labeled Strapi field', () => {
-  const field = settingsSource.match(/<FormField[^>]*id="geoip-database-filename"([\s\S]*?)<\/FormField>/)?.[1];
+  const field = settingsSource.match(
+    /<FormField[^>]*id="geoip-database-filename"([\s\S]*?)<\/FormField>/
+  )?.[1];
 
   assert.ok(field, 'GeoIP filename field exists');
   assert.match(field, /label=/);
@@ -57,7 +98,10 @@ test('EmptyStateLayout descriptions do not nest paragraph elements', () => {
   for (const messageId of ['homepage.noResults.description', 'homepage.empty.description']) {
     const messagePosition = homePageSource.indexOf(messageId);
     assert.notEqual(messagePosition, -1, `${messageId} is present`);
-    const before = homePageSource.slice(homePageSource.lastIndexOf('<EmptyStateLayout', messagePosition), messagePosition);
+    const before = homePageSource.slice(
+      homePageSource.lastIndexOf('<EmptyStateLayout', messagePosition),
+      messagePosition
+    );
     assert.match(before, /content=\{t\('$/, `${messageId} is passed as a plain string`);
   }
 });

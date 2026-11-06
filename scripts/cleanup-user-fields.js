@@ -33,4 +33,3 @@ console.log('  rm -rf .tmp/data.db');
 console.log('  npm run develop  # Strapi recreates DB automatically');
 console.log('');
 console.log('✅ After cleanup, only "sessions" relation will remain in User!');
-

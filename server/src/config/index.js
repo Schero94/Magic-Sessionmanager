@@ -62,7 +62,10 @@ module.exports = {
     if (config.retentionDays !== undefined && typeof config.retentionDays !== 'number') {
       throw new Error('retentionDays must be a number (days)');
     }
-    if (config.strictSessionEnforcement !== undefined && typeof config.strictSessionEnforcement !== 'boolean') {
+    if (
+      config.strictSessionEnforcement !== undefined &&
+      typeof config.strictSessionEnforcement !== 'boolean'
+    ) {
       throw new Error('strictSessionEnforcement must be a boolean');
     }
     if (

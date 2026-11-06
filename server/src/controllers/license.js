@@ -73,7 +73,10 @@ module.exports = ({ strapi }) => ({
         },
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager] Error getting license status:', error?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager] Error getting license status:',
+        error?.name || 'Error'
+      );
       return sendServerError(ctx, 500, 'Error getting license status');
     }
   },
@@ -104,7 +107,10 @@ module.exports = ({ strapi }) => ({
         data: license,
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager] Error auto-creating license:', error?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager] Error auto-creating license:',
+        error?.name || 'Error'
+      );
       return sendServerError(ctx, 500, 'Error creating license');
     }
   },
@@ -113,7 +119,9 @@ module.exports = ({ strapi }) => ({
     try {
       const { email, firstName, lastName } = ctx.request.body || {};
 
-      if (![email, firstName, lastName].every((value) => typeof value === 'string' && value.trim())) {
+      if (
+        ![email, firstName, lastName].every((value) => typeof value === 'string' && value.trim())
+      ) {
         return ctx.badRequest('Email, firstName, and lastName are required');
       }
 
@@ -177,7 +185,8 @@ module.exports = ({ strapi }) => ({
       }
 
       const trimmedKey = licenseKey.trim();
-      const trimmedEmail = typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null;
+      const trimmedEmail =
+        typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null;
       const licenseGuard = strapi.plugin('magic-sessionmanager').service('license-guard');
 
       const verification = await licenseGuard.verifyLicense(trimmedKey);

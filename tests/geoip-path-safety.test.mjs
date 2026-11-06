@@ -21,14 +21,23 @@ test('database target resolves supported filenames only inside the dedicated dir
   const target = await canonicalizeDatabaseTarget('GeoLite2-City.mmdb', root);
 
   assert.equal(target, path.join(fs.realpathSync(root), 'GeoLite2-City.mmdb'));
-  assert.equal(resolveDatabaseTarget('GeoLite2-Country.mmdb', root), path.join(root, 'GeoLite2-Country.mmdb'));
+  assert.equal(
+    resolveDatabaseTarget('GeoLite2-Country.mmdb', root),
+    path.join(root, 'GeoLite2-Country.mmdb')
+  );
 });
 
 test('database target rejects traversal and absolute paths outside the dedicated directory', (t) => {
   const root = makeTempRoot(t);
 
-  assert.throws(() => resolveDatabaseTarget('../GeoLite2-City.mmdb', root), /dedicated GeoIP directory/);
-  assert.throws(() => resolveDatabaseTarget(path.join(os.tmpdir(), 'GeoLite2-City.mmdb'), root), /dedicated GeoIP directory/);
+  assert.throws(
+    () => resolveDatabaseTarget('../GeoLite2-City.mmdb', root),
+    /dedicated GeoIP directory/
+  );
+  assert.throws(
+    () => resolveDatabaseTarget(path.join(os.tmpdir(), 'GeoLite2-City.mmdb'), root),
+    /dedicated GeoIP directory/
+  );
 });
 
 test('database target rejects unsupported names and file extensions', (t) => {

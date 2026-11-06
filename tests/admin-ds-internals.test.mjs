@@ -13,7 +13,10 @@ const ADMIN = new URL('../admin/src/', import.meta.url);
 const read = (relativePath) => readFileSync(new URL(relativePath, ADMIN), 'utf8');
 
 /** Every styled-components template literal in a source file. */
-const styledBlocks = (source) => [...source.matchAll(/styled(?:\.\w+|\([^)]*\))(?:\.attrs\([^)]*\))?`([\s\S]*?)`;/g)].map((m) => m[1]);
+const styledBlocks = (source) =>
+  [...source.matchAll(/styled(?:\.\w+|\([^)]*\))(?:\.attrs\([^)]*\))?`([\s\S]*?)`;/g)].map(
+    (m) => m[1]
+  );
 
 const FORBIDDEN = [
   [/data-radix/, 'Radix data attribute'],
@@ -22,8 +25,15 @@ const FORBIDDEN = [
   [/>\s*span\b/, 'selector into the DS label span'],
 ];
 
-const settingsFiles = readdirSync(new URL('pages/Settings/', ADMIN)).filter((file) => file.endsWith('.jsx')).map((file) => `pages/Settings/${file}`);
-const SHARED = ['components/PersistentAlert.jsx', 'components/ui/ActionStack.jsx', 'components/FormField.jsx', 'components/SettingsToggleRow.jsx'];
+const settingsFiles = readdirSync(new URL('pages/Settings/', ADMIN))
+  .filter((file) => file.endsWith('.jsx'))
+  .map((file) => `pages/Settings/${file}`);
+const SHARED = [
+  'components/PersistentAlert.jsx',
+  'components/ui/ActionStack.jsx',
+  'components/FormField.jsx',
+  'components/SettingsToggleRow.jsx',
+];
 
 test('Settings and the shared blocks it uses do not style DS internals (SET-17)', () => {
   for (const file of [...settingsFiles, ...SHARED]) {
@@ -55,6 +65,10 @@ test('the legacy static palette module is gone (DUX-11)', () => {
   };
   walk(ADMIN);
   for (const url of files) {
-    assert.doesNotMatch(readFileSync(url, 'utf8'), /from ['"][./]*(?:utils\/)?theme(?:\.js)?['"]/, `${url.pathname} imports the removed static theme`);
+    assert.doesNotMatch(
+      readFileSync(url, 'utf8'),
+      /from ['"][./]*(?:utils\/)?theme(?:\.js)?['"]/,
+      `${url.pathname} imports the removed static theme`
+    );
   }
 });

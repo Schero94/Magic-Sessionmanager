@@ -26,10 +26,7 @@ test('classifies every supported Strapi JWT-issuing route', () => {
     assert.equal(classifyJwtIssuingRequest(path, method), 'new-session', `${method} ${path}`);
   }
 
-  assert.equal(
-    classifyJwtIssuingRequest('/api/auth/change-password', 'POST'),
-    'rotate-current'
-  );
+  assert.equal(classifyJwtIssuingRequest('/api/auth/change-password', 'POST'), 'rotate-current');
   assert.equal(classifyJwtIssuingRequest('/api/auth/refresh', 'POST'), 'refresh');
   assert.equal(classifyJwtIssuingRequest('/api/articles', 'GET'), null);
 });

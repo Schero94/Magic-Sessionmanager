@@ -6,13 +6,34 @@
 
 /** Translation descriptors for the single status sentence (ids relative to the plugin namespace). */
 export const LICENSE_STATE_MESSAGES = Object.freeze({
-  noKey: Object.freeze({ messageId: 'license.state.noKey', defaultMessage: 'No license key stored.' }),
-  valid: Object.freeze({ messageId: 'license.state.valid', defaultMessage: 'License valid until {date}.' }),
-  validNoExpiry: Object.freeze({ messageId: 'license.state.validNoExpiry', defaultMessage: 'License valid. It has no expiry date.' }),
-  expired: Object.freeze({ messageId: 'license.state.expired', defaultMessage: 'License expired on {date}.' }),
-  expiredNoDate: Object.freeze({ messageId: 'license.state.expiredNoDate', defaultMessage: 'License expired.' }),
-  invalid: Object.freeze({ messageId: 'license.state.invalid', defaultMessage: 'This license key is not valid.' }),
-  unchecked: Object.freeze({ messageId: 'license.state.unchecked', defaultMessage: 'The license status could not be checked.' }),
+  noKey: Object.freeze({
+    messageId: 'license.state.noKey',
+    defaultMessage: 'No license key stored.',
+  }),
+  valid: Object.freeze({
+    messageId: 'license.state.valid',
+    defaultMessage: 'License valid until {date}.',
+  }),
+  validNoExpiry: Object.freeze({
+    messageId: 'license.state.validNoExpiry',
+    defaultMessage: 'License valid. It has no expiry date.',
+  }),
+  expired: Object.freeze({
+    messageId: 'license.state.expired',
+    defaultMessage: 'License expired on {date}.',
+  }),
+  expiredNoDate: Object.freeze({
+    messageId: 'license.state.expiredNoDate',
+    defaultMessage: 'License expired.',
+  }),
+  invalid: Object.freeze({
+    messageId: 'license.state.invalid',
+    defaultMessage: 'This license key is not valid.',
+  }),
+  unchecked: Object.freeze({
+    messageId: 'license.state.unchecked',
+    defaultMessage: 'The license status could not be checked.',
+  }),
 });
 
 /** Fixed sentence shown with every state. */
@@ -24,7 +45,8 @@ export const LICENSE_FEATURES_MESSAGE = Object.freeze({
 /** Date format for expiry dates (date only, admin locale). */
 export const LICENSE_EXPIRY_DATE_OPTIONS = Object.freeze({ dateStyle: 'medium' });
 
-const present = (value) => (typeof value === 'string' ? value.trim() !== '' : value !== null && value !== undefined);
+const present = (value) =>
+  typeof value === 'string' ? value.trim() !== '' : value !== null && value !== undefined;
 
 /**
  * Derives the single license state from a GET /license/status body.
@@ -54,12 +76,19 @@ export function getLicenseState(response, now = Date.now()) {
 
   if (!hasKey) return { ...base, state: 'noKey' };
 
-  const described = ['email', 'firstName', 'lastName', 'expiresAt', 'lastPingAt', 'deviceName']
-    .some((field) => present(data[field]));
+  const described = [
+    'email',
+    'firstName',
+    'lastName',
+    'expiresAt',
+    'lastPingAt',
+    'deviceName',
+  ].some((field) => present(data[field]));
   if (!described) return { ...base, state: 'unchecked' };
 
   const expired = data.isExpired === true || (Number.isFinite(expiresAtMs) && expiresAtMs <= now);
-  if (expired) return { ...base, state: Number.isFinite(expiresAtMs) ? 'expired' : 'expiredNoDate' };
+  if (expired)
+    return { ...base, state: Number.isFinite(expiresAtMs) ? 'expired' : 'expiredNoDate' };
   if (data.isActive === false) return { ...base, state: 'invalid' };
   return { ...base, state: Number.isFinite(expiresAtMs) ? 'valid' : 'validNoExpiry' };
 }
@@ -73,9 +102,13 @@ export function getLicenseState(response, now = Date.now()) {
  * @returns {{messageId: string, defaultMessage: string, values?: {date: string}}} Translation descriptor.
  */
 export function describeLicenseState(licenseState, formatDate) {
-  const descriptor = LICENSE_STATE_MESSAGES[licenseState?.state] || LICENSE_STATE_MESSAGES.unchecked;
+  const descriptor =
+    LICENSE_STATE_MESSAGES[licenseState?.state] || LICENSE_STATE_MESSAGES.unchecked;
   if (licenseState?.state === 'valid' || licenseState?.state === 'expired') {
-    return { ...descriptor, values: { date: formatDate(licenseState.expiresAt, LICENSE_EXPIRY_DATE_OPTIONS) } };
+    return {
+      ...descriptor,
+      values: { date: formatDate(licenseState.expiresAt, LICENSE_EXPIRY_DATE_OPTIONS) },
+    };
   }
   return { ...descriptor };
 }

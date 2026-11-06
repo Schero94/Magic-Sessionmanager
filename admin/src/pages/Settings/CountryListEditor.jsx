@@ -1,5 +1,15 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Button, Combobox, ComboboxOption, Dialog, Flex, Radio, Tag, TextInput, Typography } from '@strapi/design-system';
+import {
+  Button,
+  Combobox,
+  ComboboxOption,
+  Dialog,
+  Flex,
+  Radio,
+  Tag,
+  TextInput,
+  Typography,
+} from '@strapi/design-system';
 import { ConfirmDialog } from '@strapi/strapi/admin';
 import { Cross, Plus } from '@strapi/icons';
 import styled from 'styled-components';
@@ -141,7 +151,13 @@ const CountryListEditor = ({ settings, handleChange }) => {
   return (
     <Flex direction="column" alignItems="stretch" gap={4}>
       <Flex direction="column" alignItems="stretch" gap={2}>
-        <Typography id={modeLabelId} variant="pi" fontWeight="bold" tag="div" textColor="neutral800">
+        <Typography
+          id={modeLabelId}
+          variant="pi"
+          fontWeight="bold"
+          tag="div"
+          textColor="neutral800"
+        >
           {t('settings.config.countries.mode.label', 'Mode')}
         </Typography>
         <Radio.Group
@@ -150,20 +166,26 @@ const CountryListEditor = ({ settings, handleChange }) => {
           value={mode}
           onValueChange={requestMode}
         >
-          <Radio.Item value="allowlist">
-            {modeLabels.allowlist}
-          </Radio.Item>
-          <Radio.Item value="blocklist">
-            {modeLabels.blocklist}
-          </Radio.Item>
+          <Radio.Item value="allowlist">{modeLabels.allowlist}</Radio.Item>
+          <Radio.Item value="blocklist">{modeLabels.blocklist}</Radio.Item>
         </Radio.Group>
       </Flex>
 
-      <Dialog.Root open={Boolean(pendingMode)} onOpenChange={(open) => { if (!open) { setPendingMode(null); focusSelectedMode(); } }}>
+      <Dialog.Root
+        open={Boolean(pendingMode)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingMode(null);
+            focusSelectedMode();
+          }
+        }}
+      >
         <ConfirmDialog
-          title={t('settings.config.countries.switch.title', 'Switch to {mode}?', { mode: modeLabels[pendingMode] ?? '' })}
+          title={t('settings.config.countries.switch.title', 'Switch to {mode}?', {
+            mode: modeLabels[pendingMode] ?? '',
+          })}
           variant="danger"
-          endAction={(
+          endAction={
             <Dialog.Action>
               <Button
                 fullWidth
@@ -177,7 +199,7 @@ const CountryListEditor = ({ settings, handleChange }) => {
                 {t('settings.config.countries.switch.action', 'Switch mode')}
               </Button>
             </Dialog.Action>
-          )}
+          }
         >
           {t(
             'settings.config.countries.switch.body',
@@ -189,11 +211,20 @@ const CountryListEditor = ({ settings, handleChange }) => {
 
       <Flex direction="column" alignItems="stretch" gap={3}>
         <Flex direction="column" alignItems="stretch" gap={1}>
-          <Typography id={listLabelId} variant="pi" fontWeight="bold" tag="div" textColor="neutral800">
+          <Typography
+            id={listLabelId}
+            variant="pi"
+            fontWeight="bold"
+            tag="div"
+            textColor="neutral800"
+          >
             {t('settings.config.countries.list.label', 'Countries')}
           </Typography>
           <ReadableText variant="pi" textColor="neutral600" tag="p">
-            {t('settings.config.countries.list.hint', "With 'Allow only listed countries', an empty list allows every country.")}
+            {t(
+              'settings.config.countries.list.hint',
+              "With 'Allow only listed countries', an empty list allows every country."
+            )}
           </ReadableText>
         </Flex>
         {activeList.length === 0 ? (
@@ -201,12 +232,21 @@ const CountryListEditor = ({ settings, handleChange }) => {
             {t('settings.geofencing.empty', 'No countries configured.')}
           </Typography>
         ) : (
-          <ChipList ref={chipListRef} tag="ul" gap={2} wrap="wrap" aria-labelledby={listLabelId} data-country-chips="">
+          <ChipList
+            ref={chipListRef}
+            tag="ul"
+            gap={2}
+            wrap="wrap"
+            aria-labelledby={listLabelId}
+            data-country-chips=""
+          >
             {activeList.map((code) => (
               <li key={code}>
                 <Tag
                   icon={<Cross aria-hidden focusable={false} />}
-                  label={t('settings.geofencing.removeCountry', 'Remove {country}', { country: getCountryName(code, locale) || code })}
+                  label={t('settings.geofencing.removeCountry', 'Remove {country}', {
+                    country: getCountryName(code, locale) || code,
+                  })}
                   onClick={() => removeCode(code)}
                 >
                   {formatCountry(code, locale)}
@@ -222,7 +262,10 @@ const CountryListEditor = ({ settings, handleChange }) => {
           id="country-picker"
           name="countryPicker"
           label={t('settings.geofencing.pick.label', 'Select a country')}
-          description={t('settings.geofencing.pick.hint', 'Choose a country to add it to the active list.')}
+          description={t(
+            'settings.geofencing.pick.hint',
+            'Choose a country to add it to the active list.'
+          )}
         >
           <Combobox
             key={pickerKey}
@@ -251,7 +294,7 @@ const CountryListEditor = ({ settings, handleChange }) => {
           label={t('settings.geofencing.manual.label', 'Country code')}
           description={t('settings.geofencing.manual.hint', 'Enter a two-letter ISO country code.')}
           error={manualError}
-          action={(
+          action={
             <Button
               variant="secondary"
               size="L"
@@ -263,7 +306,7 @@ const CountryListEditor = ({ settings, handleChange }) => {
             >
               {t('settings.geofencing.add', 'Add')}
             </Button>
-          )}
+          }
         >
           <TextInput
             placeholder={t('settings.geofencing.manual', 'For example, JP')}

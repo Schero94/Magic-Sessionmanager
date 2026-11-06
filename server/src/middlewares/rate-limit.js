@@ -44,10 +44,7 @@ const prune = (now) => {
 const callerKey = (ctx) => {
   const userId = ctx.state?.user?.id;
   if (userId) return `u:${userId}`;
-  const tokenId =
-    ctx.state?.auth?.credentials?.id ??
-    ctx.state?.auth?.credentials?.token ??
-    null;
+  const tokenId = ctx.state?.auth?.credentials?.id ?? ctx.state?.auth?.credentials?.token ?? null;
   if (tokenId) return `t:${String(tokenId).slice(-16)}`;
   return `ip:${ctx.request.ip || ctx.ip || 'unknown'}`;
 };

@@ -13,17 +13,27 @@ import {
 const require = createRequire(import.meta.url);
 const { enhanceSession } = require('../server/src/utils/enhance-session.js');
 
-const SAFARI_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
-const SAFARI_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
-const CHROME_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const SAFARI_MAC =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
+const SAFARI_IPHONE =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
+const CHROME_WINDOWS =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0';
-const CHROME_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
-const IPAD = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-const EDGE_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0';
+const CHROME_ANDROID =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
+const IPAD =
+  'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+const EDGE_WINDOWS =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0';
 
 test('parseUserAgent recognises common devices, browsers and systems', () => {
   assert.deepEqual(parseUserAgent(SAFARI_MAC), {
-    deviceType: 'desktop', device: 'Desktop', deviceIcon: 'desktop', browser: 'Safari', os: 'macOS',
+    deviceType: 'desktop',
+    device: 'Desktop',
+    deviceIcon: 'desktop',
+    browser: 'Safari',
+    os: 'macOS',
   });
   assert.equal(parseUserAgent(CHROME_ANDROID).deviceType, 'mobile');
   assert.equal(parseUserAgent(CHROME_ANDROID).browser, 'Chrome');
@@ -34,7 +44,11 @@ test('parseUserAgent recognises common devices, browsers and systems', () => {
   assert.equal(parseUserAgent('curl/8.4.0').deviceType, 'api');
   assert.equal(parseUserAgent('PostmanRuntime/7.36').browser, 'Postman');
   assert.deepEqual(
-    [parseUserAgent('node').browser, parseUserAgent('undici').browser, parseUserAgent('node').deviceType],
+    [
+      parseUserAgent('node').browser,
+      parseUserAgent('undici').browser,
+      parseUserAgent('node').deviceType,
+    ],
     ['Node.js', 'undici', 'api'],
     'script clients are named instead of reported as unknown'
   );
@@ -77,9 +91,15 @@ test('device type labels are translation descriptors, unknown included', () => {
 });
 
 test('stored names lose their trailing version', () => {
-  assert.deepEqual(splitNameAndVersion('Chrome 124.0.0.0'), { name: 'Chrome', version: '124.0.0.0' });
+  assert.deepEqual(splitNameAndVersion('Chrome 124.0.0.0'), {
+    name: 'Chrome',
+    version: '124.0.0.0',
+  });
   assert.deepEqual(splitNameAndVersion('Windows 10/11'), { name: 'Windows', version: '10/11' });
-  assert.deepEqual(splitNameAndVersion('Internet Explorer 11.0'), { name: 'Internet Explorer', version: '11.0' });
+  assert.deepEqual(splitNameAndVersion('Internet Explorer 11.0'), {
+    name: 'Internet Explorer',
+    version: '11.0',
+  });
   assert.deepEqual(splitNameAndVersion('Chrome OS'), { name: 'Chrome OS', version: '' });
   assert.deepEqual(splitNameAndVersion('unknown'), { name: '', version: '' });
 });
@@ -107,7 +127,12 @@ test('rows exactly as GET /sessions returns them never repeat the version (no "S
   };
   for (const [userAgent, [deviceType, browser, os]] of Object.entries(expected)) {
     // The server appends versions to browserName/osName ("Safari 17.4", "macOS 10.15.7").
-    const row = await enhanceSession({ documentId: 'doc', userAgent, isActive: true, loginTime: new Date() });
+    const row = await enhanceSession({
+      documentId: 'doc',
+      userAgent,
+      isActive: true,
+      loginTime: new Date(),
+    });
     const presentation = getDevicePresentation(row);
     assert.equal(presentation.deviceType, deviceType, userAgent);
     assert.deepEqual(presentation.summary.values, { browser, os }, userAgent);
@@ -116,7 +141,11 @@ test('rows exactly as GET /sessions returns them never repeat the version (no "S
 });
 
 test('stored rows without a user agent use the stored names without versions', () => {
-  const presentation = getDevicePresentation({ deviceType: 'mobile', browserName: 'Chrome 131.0.1', osName: 'Android 14' });
+  const presentation = getDevicePresentation({
+    deviceType: 'mobile',
+    browserName: 'Chrome 131.0.1',
+    osName: 'Android 14',
+  });
   assert.equal(presentation.deviceType, 'mobile');
   assert.equal(presentation.icon, 'mobile');
   assert.equal(presentation.deviceTypeMessage.messageId, 'common.device.type.mobile');
@@ -125,7 +154,11 @@ test('stored rows without a user agent use the stored names without versions', (
 });
 
 test('a user agent the server could not parse is an unknown device, not "Desktop"', async () => {
-  const row = await enhanceSession({ documentId: 'doc', userAgent: 'MyCustomApp/1.0', isActive: true });
+  const row = await enhanceSession({
+    documentId: 'doc',
+    userAgent: 'MyCustomApp/1.0',
+    isActive: true,
+  });
   assert.equal(row.deviceType, 'desktop', 'the server parser falls back to desktop');
   const presentation = getDevicePresentation(row);
   assert.equal(presentation.deviceType, '');
@@ -140,7 +173,11 @@ test('missing data never renders a sentence about missing data (DASH-06, F15)', 
   assert.equal(nothing.hasSummary, false);
   assert.deepEqual(nothing.summary, { text: '' });
 
-  const unknownStrings = getDevicePresentation({ userAgent: 'unknown', browserName: 'Unknown', osName: ' ' });
+  const unknownStrings = getDevicePresentation({
+    userAgent: 'unknown',
+    browserName: 'Unknown',
+    osName: ' ',
+  });
   assert.equal(unknownStrings.hasSummary, false);
 
   assert.deepEqual(getDevicePresentation({ browserName: 'Firefox' }).summary, { text: 'Firefox' });

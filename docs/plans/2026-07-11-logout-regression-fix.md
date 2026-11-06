@@ -13,6 +13,7 @@
 ### Task 1: Add ownership-bound session termination
 
 **Files:**
+
 - Modify: `tests/session-service.test.js`
 - Modify: `server/src/services/session.js:149-168`
 
@@ -119,6 +120,7 @@ git commit -m "fix(session): bind logout termination to authenticated user"
 ### Task 2: Reproduce the real logout middleware ordering
 
 **Files:**
+
 - Modify: `tests/auth-interceptors.test.js:13-94`
 - Modify: `tests/auth-interceptors.test.js:189-233`
 
@@ -189,6 +191,7 @@ expected reasons.
 ### Task 3: Refactor logout to post-auth synchronization
 
 **Files:**
+
 - Modify: `server/src/bootstrap.js:833-850`
 - Test: `tests/auth-interceptors.test.js`
 
@@ -199,10 +202,7 @@ At middleware entry, capture:
 ```js
 const refreshToken = getIncomingRefreshToken(ctx, getRefreshCookieName(strapi));
 const accessToken = extractBearerToken(ctx);
-const jwtMode = strapi.config.get(
-  'plugin::users-permissions.jwtManagement',
-  'legacy-support'
-);
+const jwtMode = strapi.config.get('plugin::users-permissions.jwtManagement', 'legacy-support');
 ```
 
 Then call `await next()` before any termination.
@@ -213,8 +213,7 @@ After `next()`:
 
 ```js
 const downstreamSuccess = ctx.status >= 200 && ctx.status < 300;
-const authenticatedLegacyNotFound =
-  jwtMode !== 'refresh' && ctx.status === 404 && !!ctx.state.user;
+const authenticatedLegacyNotFound = jwtMode !== 'refresh' && ctx.status === 404 && !!ctx.state.user;
 
 if (!ctx.state.user || (!downstreamSuccess && !authenticatedLegacyNotFound)) {
   return;
@@ -278,6 +277,7 @@ git commit -m "fix(auth): synchronize logout after authentication"
 ### Task 4: Verify the complete plugin
 
 **Files:**
+
 - Verify: `server/src/bootstrap.js`
 - Verify: `server/src/services/session.js`
 - Verify: `tests/auth-interceptors.test.js`
@@ -337,4 +337,3 @@ git add \
   tests/session-service.test.js
 git commit -m "fix(auth): restore reliable session logout"
 ```
-

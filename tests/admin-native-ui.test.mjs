@@ -6,9 +6,10 @@ import { readSettingsSource } from './helpers/settingsSource.mjs';
 import { LOCALES, readCatalogue } from './helpers/settingsCatalogue.mjs';
 
 // pages/Settings.jsx re-exports the split settings page (pages/Settings/*).
-const readAdminFile = (relativePath) => (relativePath === 'pages/Settings.jsx'
-  ? readSettingsSource()
-  : readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8'));
+const readAdminFile = (relativePath) =>
+  relativePath === 'pages/Settings.jsx'
+    ? readSettingsSource()
+    : readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8');
 
 test('dashboard, settings, analytics and activation use the shared Strapi page layout', () => {
   const pages = [
@@ -19,7 +20,11 @@ test('dashboard, settings, analytics and activation use the shared Strapi page l
   ];
 
   for (const page of pages) {
-    assert.match(readAdminFile(page), /<(?:PageShell|PluginPageLayout)\b/, `${page} should use the shared PageShell layout`);
+    assert.match(
+      readAdminFile(page),
+      /<(?:PageShell|PluginPageLayout)\b/,
+      `${page} should use the shared PageShell layout`
+    );
   }
 });
 
@@ -60,7 +65,10 @@ test('end-user panel includes all current native sessions and uses Strapi action
   assert.match(source, /setSessions\(requireSessionList\(data\)\)/);
   assert.match(source, /const openSessions = getManageableSessions\(sessions\);/);
   assert.match(source, /<Button\b/);
-  assert.doesNotMatch(source, /const activeSessions = \(data\.data \|\| \[\]\)\.filter\(s => s\.isTrulyActive\)/);
+  assert.doesNotMatch(
+    source,
+    /const activeSessions = \(data\.data \|\| \[\]\)\.filter\(s => s\.isTrulyActive\)/
+  );
 });
 
 test('analytics and activation labels are present in every supported locale', () => {
@@ -139,7 +147,11 @@ test('settings grids define a mobile breakpoint for split fields', () => {
   assert.ok(splitGrids.length > 0, 'expected responsive split settings fields');
   for (const [index, grid] of splitGrids.entries()) {
     // EqualGrid maps to Grid.Item xs=12 s=12 below the DS medium breakpoint.
-    assert.match(grid, /stackBelow="medium"/, `split grid ${index + 1} should stack below the Strapi medium breakpoint`);
+    assert.match(
+      grid,
+      /stackBelow="medium"/,
+      `split grid ${index + 1} should stack below the Strapi medium breakpoint`
+    );
   }
 });
 
@@ -152,8 +164,14 @@ test('idle check method options stay compact and the helper names the trade-off 
 
     assert.ok(typeof documentService === 'string', `${locale} has a Document Service label`);
     assert.ok(typeof directSql === 'string', `${locale} has a Direct SQL label`);
-    assert.ok(typeof hint === 'string' && hint.toLowerCase().includes('direct sql'), `${locale} explains the Direct SQL trade-off`);
-    assert.ok(documentService.length <= 24, `${locale} Document Service label fits a mobile select`);
+    assert.ok(
+      typeof hint === 'string' && hint.toLowerCase().includes('direct sql'),
+      `${locale} explains the Direct SQL trade-off`
+    );
+    assert.ok(
+      documentService.length <= 24,
+      `${locale} Document Service label fits a mobile select`
+    );
     assert.ok(directSql.length <= 24, `${locale} Direct SQL label fits a mobile select`);
   }
 });
@@ -163,7 +181,10 @@ test('settings dirty state compares against the persisted baseline without stale
 
   assert.match(source, /const \[savedSettings, setSavedSettings\] = useState\(settings\)/);
   assert.match(source, /const hasChanges = !areSettingsEqual\(settings, savedSettings\)/);
-  assert.match(source, /setSettings\(\(previousSettings\) => \(\{ \.\.\.previousSettings, \[key\]: value \}\)\)/);
+  assert.match(
+    source,
+    /setSettings\(\(previousSettings\) => \(\{ \.\.\.previousSettings, \[key\]: value \}\)\)/
+  );
   // After a save the baseline is what the server stored, not the submitted draft (SET-01 browser).
   assert.match(source, /setSavedSettings\(stored\)/);
   assert.doesNotMatch(source, /setSavedSettings\(settings\)/);
@@ -176,9 +197,21 @@ test('geofencing country controls wrap without fixed-width mobile overflow', () 
   const controls = source.slice(source.lastIndexOf('<EqualGrid', controlsStart), controlsEnd);
 
   assert.ok(controlsStart >= 0 && controlsEnd > controlsStart, 'geofencing country controls exist');
-  assert.match(controls, /<EqualGrid\b[^>]*stackBelow="medium"/, 'picker and code field share a responsive grid');
-  assert.match(source, /<ChipList ref=\{chipListRef\} tag="ul" gap=\{2\} wrap="wrap"/, 'country chips wrap');
-  assert.match(source, /const ChipList = styled\(Flex\)`[\s\S]*?min-height:\s*\$\{\(\{ theme \}\) => theme\.spaces\[7\]\}/, 'chip remove buttons reach 32 px on phones');
+  assert.match(
+    controls,
+    /<EqualGrid\b[^>]*stackBelow="medium"/,
+    'picker and code field share a responsive grid'
+  );
+  assert.match(
+    source,
+    /<ChipList ref=\{chipListRef\} tag="ul" gap=\{2\} wrap="wrap"/,
+    'country chips wrap'
+  );
+  assert.match(
+    source,
+    /const ChipList = styled\(Flex\)`[\s\S]*?min-height:\s*\$\{\(\{ theme \}\) => theme\.spaces\[7\]\}/,
+    'chip remove buttons reach 32 px on phones'
+  );
   assert.doesNotMatch(controls, /12rem|width: '180px'/);
 });
 
@@ -187,9 +220,15 @@ test('dashboard paginates the full filtered result set and keeps both layouts al
   const table = readAdminFile('pages/Dashboard/SessionTable.jsx');
   const cards = readAdminFile('pages/Dashboard/SessionCardList.jsx');
   const tableHeader = table.match(/<Thead>([\s\S]*?)<\/Thead>/)?.[1];
-  const exportHandlers = source.slice(source.indexOf('const handleExportCSV'), source.indexOf('const handleSessionClick'));
+  const exportHandlers = source.slice(
+    source.indexOf('const handleExportCSV'),
+    source.indexOf('const handleSessionClick')
+  );
 
-  assert.match(source, /paginateSessions\(filteredSessions, dashboard\.page, dashboard\.pageSize\)/);
+  assert.match(
+    source,
+    /paginateSessions\(filteredSessions, dashboard\.page, dashboard\.pageSize\)/
+  );
   // Table and cards render the same page of rows.
   assert.match(source, /sessions: pageResult\.items/);
   assert.match(table, /sessions\.map\(\(session\) =>/);
@@ -229,6 +268,10 @@ test('changed non-trivial admin handlers include JSDoc contracts', () => {
     const source = readAdminFile(path);
     const escapedHandler = handler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const declaration = `(?:const|export function) ${escapedHandler}`;
-    assert.match(source, new RegExp(`/\\*\\*[\\s\\S]*?\\*/\\s*${declaration}\\b`), `${path} ${handler} needs JSDoc`);
+    assert.match(
+      source,
+      new RegExp(`/\\*\\*[\\s\\S]*?\\*/\\s*${declaration}\\b`),
+      `${path} ${handler} needs JSDoc`
+    );
   }
 });

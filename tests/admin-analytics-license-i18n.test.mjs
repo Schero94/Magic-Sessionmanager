@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { LICENSE_SUMMARY_MESSAGES } from '../admin/src/utils/activationSummary.mjs';
-import { LICENSE_FEATURES_MESSAGE, LICENSE_STATE_MESSAGES } from '../admin/src/utils/licenseStatus.mjs';
+import {
+  LICENSE_FEATURES_MESSAGE,
+  LICENSE_STATE_MESSAGES,
+} from '../admin/src/utils/licenseStatus.mjs';
 import { DEVICE_TYPE_MESSAGES } from '../admin/src/utils/devicePresentation.mjs';
 
 /**
@@ -33,9 +36,15 @@ const collect = (source) => {
 const messages = new Map([
   ...collect(read('pages/Analytics.jsx')),
   ...collect(read('pages/License.jsx')),
-  ...[...Object.values(LICENSE_SUMMARY_MESSAGES), ...Object.values(LICENSE_STATE_MESSAGES), LICENSE_FEATURES_MESSAGE]
-    .map(({ messageId, defaultMessage }) => [messageId, defaultMessage]),
-  ...Object.values(DEVICE_TYPE_MESSAGES).map(({ messageId, defaultMessage }) => [messageId, defaultMessage]),
+  ...[
+    ...Object.values(LICENSE_SUMMARY_MESSAGES),
+    ...Object.values(LICENSE_STATE_MESSAGES),
+    LICENSE_FEATURES_MESSAGE,
+  ].map(({ messageId, defaultMessage }) => [messageId, defaultMessage]),
+  ...Object.values(DEVICE_TYPE_MESSAGES).map(({ messageId, defaultMessage }) => [
+    messageId,
+    defaultMessage,
+  ]),
 ]);
 
 test('the scan finds the analytics and license messages', () => {

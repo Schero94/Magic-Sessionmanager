@@ -65,7 +65,10 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     expected.push(['POST', '/sessions/:sessionId/simulate-timeout', 'session.simulateTimeout']);
   }
 
-  assert.deepEqual(adminRoutes.map(({ method, path, handler }) => [method, path, handler]), expected);
+  assert.deepEqual(
+    adminRoutes.map(({ method, path, handler }) => [method, path, handler]),
+    expected
+  );
 });
 
 test('every content API route has a real controller action and JWT protection', () => {

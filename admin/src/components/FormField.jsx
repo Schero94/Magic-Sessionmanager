@@ -100,21 +100,48 @@ const FieldHint = styled.div`
  *   (for example "Add") and control.
  * @returns {import('react').ReactElement} A responsive, accessible form field.
  */
-const FormField = ({ id, name = id, label, description, error, required = false, suffix, action, children }) => {
+const FormField = ({
+  id,
+  name = id,
+  label,
+  description,
+  error,
+  required = false,
+  suffix,
+  action,
+  children,
+}) => {
   const control = <FieldControl>{children}</FieldControl>;
   return (
     <FieldFrame>
-      <Field.Root id={id} name={name} hint={description} error={error || undefined} required={required}>
+      <Field.Root
+        id={id}
+        name={name}
+        hint={description}
+        error={error || undefined}
+        required={required}
+      >
         <Field.Label>{label}</Field.Label>
         {suffix || action ? (
           <SuffixRow>
             {control}
             {suffix ? (
-              <Typography variant="omega" textColor="neutral600" id={`${id}-suffix`}>{suffix}</Typography>
-            ) : action}
+              <Typography variant="omega" textColor="neutral600" id={`${id}-suffix`}>
+                {suffix}
+              </Typography>
+            ) : (
+              action
+            )}
           </SuffixRow>
-        ) : control}
-        {description || error ? <FieldHint><Field.Hint /><Field.Error /></FieldHint> : null}
+        ) : (
+          control
+        )}
+        {description || error ? (
+          <FieldHint>
+            <Field.Hint />
+            <Field.Error />
+          </FieldHint>
+        ) : null}
       </Field.Root>
     </FieldFrame>
   );

@@ -197,7 +197,7 @@ function normalizeStoredSettings(stored) {
  */
 async function getPluginSettings(strapi) {
   const now = Date.now();
-  if (cached && (now - cachedAt) < CACHE_TTL_MS) {
+  if (cached && now - cachedAt < CACHE_TTL_MS) {
     return cached;
   }
 
@@ -213,7 +213,9 @@ async function getPluginSettings(strapi) {
     // relaxed static default. Keep the rest of static config available while
     // requiring a matching session until the settings store recovers. A saved
     // geolocation opt-out must also not be bypassed by the static defaults.
-    strapi.log.error(`[${PLUGIN_ID}] settings-loader: store read failed; strict session enforcement is enabled and geolocation is disabled`);
+    strapi.log.error(
+      `[${PLUGIN_ID}] settings-loader: store read failed; strict session enforcement is enabled and geolocation is disabled`
+    );
     storedSettings = { strictSessionEnforcement: true, enableGeolocation: false };
   }
 

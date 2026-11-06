@@ -33,8 +33,8 @@ function sanitizeWebhookUrl(url, type) {
     if (parsed.protocol !== 'https:') return '';
 
     const allowedDomains = ALLOWED_WEBHOOK_DOMAINS[type] || [];
-    const isAllowed = allowedDomains.some(domain =>
-      parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
+    const isAllowed = allowedDomains.some(
+      (domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
     );
     if (!isAllowed) return '';
 
@@ -101,14 +101,41 @@ function sanitizeEmailTemplates(templates) {
     if (sanitizeHtml) {
       cleanedHtml = sanitizeHtml(rawHtml, {
         allowedTags: [
-          'html', 'body', 'head', 'title', 'meta',
-          'div', 'span', 'p', 'br', 'hr',
-          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-          'strong', 'em', 'b', 'i', 'u',
-          'ul', 'ol', 'li',
-          'a', 'img',
-          'table', 'thead', 'tbody', 'tr', 'td', 'th',
-          'blockquote', 'code', 'pre',
+          'html',
+          'body',
+          'head',
+          'title',
+          'meta',
+          'div',
+          'span',
+          'p',
+          'br',
+          'hr',
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'h5',
+          'h6',
+          'strong',
+          'em',
+          'b',
+          'i',
+          'u',
+          'ul',
+          'ol',
+          'li',
+          'a',
+          'img',
+          'table',
+          'thead',
+          'tbody',
+          'tr',
+          'td',
+          'th',
+          'blockquote',
+          'code',
+          'pre',
         ],
         allowedAttributes: {
           '*': ['style', 'class', 'id'],
@@ -141,7 +168,8 @@ function sanitizeEmailTemplates(templates) {
         },
       });
     } else {
-      const dangerousTags = /<\s*\/?\s*(script|iframe|object|embed|form|input|button|link|meta|base|svg|math|style)\b[^>]*>/gi;
+      const dangerousTags =
+        /<\s*\/?\s*(script|iframe|object|embed|form|input|button|link|meta|base|svg|math|style)\b[^>]*>/gi;
       const dangerousAttrs = /\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
       const javascriptScheme = /(?:href|src)\s*=\s*["']?\s*javascript\s*:[^"'>\s]*["']?/gi;
       const dataScheme = /(?:href|src)\s*=\s*["']?\s*data\s*:[^"'>\s]*["']?/gi;
@@ -209,9 +237,10 @@ const DEFAULT_SETTINGS = {
  */
 function mergeSettingsWithDefaults(stored) {
   const safeStored = stored && typeof stored === 'object' ? stored : {};
-  const storedTemplates = safeStored.emailTemplates && typeof safeStored.emailTemplates === 'object'
-    ? safeStored.emailTemplates
-    : {};
+  const storedTemplates =
+    safeStored.emailTemplates && typeof safeStored.emailTemplates === 'object'
+      ? safeStored.emailTemplates
+      : {};
 
   return {
     ...DEFAULT_SETTINGS,
@@ -281,16 +310,30 @@ function parseInteger(value) {
  */
 function mergeEmailTemplate(key, update, current, errors) {
   if (!update || typeof update !== 'object' || Array.isArray(update)) {
-    errors.push({ path: ['emailTemplates', key], message: `emailTemplates.${key} must be an object` });
+    errors.push({
+      path: ['emailTemplates', key],
+      message: `emailTemplates.${key} must be an object`,
+    });
     return undefined;
   }
-  const merged = { subject: '', html: '', text: '', ...(current && typeof current === 'object' ? current : {}) };
+  const merged = {
+    subject: '',
+    html: '',
+    text: '',
+    ...(current && typeof current === 'object' ? current : {}),
+  };
   for (const [field, limit] of Object.entries(EMAIL_TEMPLATE_LIMITS)) {
     if (update[field] === undefined) continue;
     if (typeof update[field] !== 'string') {
-      errors.push({ path: ['emailTemplates', key, field], message: `emailTemplates.${key}.${field} must be a string` });
+      errors.push({
+        path: ['emailTemplates', key, field],
+        message: `emailTemplates.${key}.${field} must be a string`,
+      });
     } else if (update[field].length > limit) {
-      errors.push({ path: ['emailTemplates', key, field], message: `emailTemplates.${key}.${field} must be at most ${limit} characters` });
+      errors.push({
+        path: ['emailTemplates', key, field],
+        message: `emailTemplates.${key}.${field} must be at most ${limit} characters`,
+      });
     } else {
       merged[field] = update[field];
     }
@@ -326,7 +369,10 @@ function validateSettingsUpdate(body, current) {
   if (has('retentionDays')) {
     const value = parseInteger(body.retentionDays);
     if (value === null || (value !== -1 && (value < 1 || value > 365))) {
-      errors.push({ path: ['retentionDays'], message: 'retentionDays must be -1 (forever) or an integer between 1 and 365' });
+      errors.push({
+        path: ['retentionDays'],
+        message: 'retentionDays must be -1 (forever) or an integer between 1 and 365',
+      });
     } else {
       next.retentionDays = value;
     }
@@ -345,12 +391,20 @@ function validateSettingsUpdate(body, current) {
     if (!has(key)) continue;
     const list = body[key];
     if (!Array.isArray(list)) {
-      errors.push({ path: [key], message: `${key} must be a list of ISO 3166-1 alpha-2 country codes` });
+      errors.push({
+        path: [key],
+        message: `${key} must be a list of ISO 3166-1 alpha-2 country codes`,
+      });
       continue;
     }
-    const normalized = list.map((code) => (typeof code === 'string' ? code.trim().toUpperCase() : ''));
+    const normalized = list.map((code) =>
+      typeof code === 'string' ? code.trim().toUpperCase() : ''
+    );
     if (normalized.some((code) => !/^[A-Z]{2}$/.test(code))) {
-      errors.push({ path: [key], message: `${key} must contain only ISO 3166-1 alpha-2 country codes` });
+      errors.push({
+        path: [key],
+        message: `${key} must contain only ISO 3166-1 alpha-2 country codes`,
+      });
     } else {
       next[key] = [...new Set(normalized)];
     }
@@ -358,7 +412,10 @@ function validateSettingsUpdate(body, current) {
 
   if (has('geoIpProvider')) {
     if (!GEO_IP_PROVIDER_VALUES.includes(body.geoIpProvider)) {
-      errors.push({ path: ['geoIpProvider'], message: `geoIpProvider must be one of: ${GEO_IP_PROVIDER_VALUES.join(', ')}` });
+      errors.push({
+        path: ['geoIpProvider'],
+        message: `geoIpProvider must be one of: ${GEO_IP_PROVIDER_VALUES.join(', ')}`,
+      });
     } else {
       next.geoIpProvider = normalizeGeoIpProvider(body.geoIpProvider);
     }
@@ -366,7 +423,10 @@ function validateSettingsUpdate(body, current) {
 
   if (has('geoLookupFailureMode')) {
     if (!GEO_LOOKUP_FAILURE_MODE_VALUES.includes(body.geoLookupFailureMode)) {
-      errors.push({ path: ['geoLookupFailureMode'], message: `geoLookupFailureMode must be one of: ${GEO_LOOKUP_FAILURE_MODE_VALUES.join(', ')}` });
+      errors.push({
+        path: ['geoLookupFailureMode'],
+        message: `geoLookupFailureMode must be one of: ${GEO_LOOKUP_FAILURE_MODE_VALUES.join(', ')}`,
+      });
     } else {
       next.geoLookupFailureMode = normalizeGeoLookupFailureMode(body.geoLookupFailureMode);
     }
@@ -381,13 +441,17 @@ function validateSettingsUpdate(body, current) {
       } catch {
         errors.push({
           path: ['geoIpDatabasePath'],
-          message: 'GeoIP database path must be a supported MMDB filename in the dedicated GeoIP directory',
+          message:
+            'GeoIP database path must be a supported MMDB filename in the dedicated GeoIP directory',
         });
       }
     }
   }
 
-  for (const [key, type] of [['discordWebhookUrl', 'discord'], ['slackWebhookUrl', 'slack']]) {
+  for (const [key, type] of [
+    ['discordWebhookUrl', 'discord'],
+    ['slackWebhookUrl', 'slack'],
+  ]) {
     if (!has(key)) continue;
     const value = body[key];
     if (typeof value !== 'string') {
@@ -397,7 +461,10 @@ function validateSettingsUpdate(body, current) {
     } else {
       const sanitized = sanitizeWebhookUrl(value, type);
       if (!sanitized) {
-        errors.push({ path: [key], message: `${key} must be an https URL on ${ALLOWED_WEBHOOK_DOMAINS[type].join(' or ')}` });
+        errors.push({
+          path: [key],
+          message: `${key} must be an https URL on ${ALLOWED_WEBHOOK_DOMAINS[type].join(' or ')}`,
+        });
       } else {
         next[key] = sanitized;
       }
@@ -457,7 +524,10 @@ module.exports = {
         success: true,
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/settings] Error getting settings:', error?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/settings] Error getting settings:',
+        error?.name || 'Error'
+      );
       return sendServerError(ctx, 500, 'Error loading settings');
     }
   },
@@ -496,9 +566,8 @@ module.exports = {
       const storedObject = stored && typeof stored === 'object' ? stored : {};
       current = {
         ...mergeSettingsWithDefaults(storedObject),
-        geoIpDatabasePath: typeof storedObject.geoIpDatabasePath === 'string'
-          ? storedObject.geoIpDatabasePath
-          : '',
+        geoIpDatabasePath:
+          typeof storedObject.geoIpDatabasePath === 'string' ? storedObject.geoIpDatabasePath : '',
       };
 
       const { settings: sanitizedSettings, errors } = validateSettingsUpdate(body, current);
@@ -521,10 +590,13 @@ module.exports = {
           geoIpDatabasePath: getSafeGeoIpFilename(sanitizedSettings.geoIpDatabasePath),
         },
         success: true,
-        message: 'Settings saved successfully!'
+        message: 'Settings saved successfully!',
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager/settings] Error updating settings:', error?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/settings] Error updating settings:',
+        error?.name || 'Error'
+      );
       return sendServerError(ctx, 500, 'Error saving settings');
     }
   },

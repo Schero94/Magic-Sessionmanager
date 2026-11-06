@@ -32,7 +32,9 @@ const collectMessages = () => {
 };
 
 const LOCALES = ['en', 'de', 'fr', 'es', 'pt'];
-const translations = Object.fromEntries(LOCALES.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))]));
+const translations = Object.fromEntries(
+  LOCALES.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))])
+);
 const messages = collectMessages();
 
 test('dashboard and session detail texts all go through translation ids', () => {
@@ -41,9 +43,17 @@ test('dashboard and session detail texts all go through translation ids', () => 
     const source = read(file);
     // No English sentence fragments in JSX text (I18N-4, DUX-04).
     assert.doesNotMatch(source, /\}\s+on\s+\{/, `${file} has no hard-coded " on "`);
-    assert.doesNotMatch(source, /\[WARNING\]|'High' : 'Low'/, `${file} has no raw English status words`);
+    assert.doesNotMatch(
+      source,
+      /\[WARNING\]|'High' : 'Low'/,
+      `${file} has no raw English status words`
+    );
     if (file.endsWith('.jsx')) {
-      assert.doesNotMatch(source, /'Unknown'|'Unavailable'|'N\/A'/, `${file} has no English missing-value words`);
+      assert.doesNotMatch(
+        source,
+        /'Unknown'|'Unavailable'|'N\/A'/,
+        `${file} has no English missing-value words`
+      );
     }
   }
 });
@@ -51,14 +61,25 @@ test('dashboard and session detail texts all go through translation ids', () => 
 test('dashboard message ids exist in every locale with matching English defaults', () => {
   for (const [key, defaultMessage] of messages) {
     for (const locale of LOCALES) {
-      assert.ok(typeof translations[locale][key] === 'string' && translations[locale][key].trim(), `${key} exists in ${locale}`);
+      assert.ok(
+        typeof translations[locale][key] === 'string' && translations[locale][key].trim(),
+        `${key} exists in ${locale}`
+      );
     }
     assert.equal(translations.en[key], defaultMessage, `${key} default matches en`);
   }
   // German uses the IA wording and no developer jargon in confirmations (DUX-03, I18N-8).
   for (const locale of LOCALES) {
-    assert.doesNotMatch(translations[locale]['homepage.confirm.end.body'], /isActive|\bfalse\b/, locale);
-    assert.equal(translations[locale]['homepage.confirm.terminate'], undefined, `${locale} drops the developer-facing copy`);
+    assert.doesNotMatch(
+      translations[locale]['homepage.confirm.end.body'],
+      /isActive|\bfalse\b/,
+      locale
+    );
+    assert.equal(
+      translations[locale]['homepage.confirm.terminate'],
+      undefined,
+      `${locale} drops the developer-facing copy`
+    );
   }
   assert.equal(
     translations.de['homepage.confirm.end.body'],
@@ -72,6 +93,10 @@ test('dashboard message ids exist in every locale with matching English defaults
 
 test('no retired session words remain in dashboard defaults (IA A.1)', () => {
   for (const [key, defaultMessage] of messages) {
-    assert.doesNotMatch(defaultMessage, /\bTerminat|\bLog out\b|Logout|Remove session|\bOnline now\b/, key);
+    assert.doesNotMatch(
+      defaultMessage,
+      /\bTerminat|\bLog out\b|Logout|Remove session|\bOnline now\b/,
+      key
+    );
   }
 });

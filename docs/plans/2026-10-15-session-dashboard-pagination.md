@@ -24,6 +24,7 @@
 ## Task 1: Pure pagination contract
 
 **Files:**
+
 - Create: `admin/src/utils/sessionPagination.mjs`
 - Create: `admin/src/utils/sessionExports.mjs`
 - Create: `tests/session-pagination.test.mjs`
@@ -38,6 +39,7 @@
 ## Task 2: Dashboard integration and accessibility
 
 **Files:**
+
 - Modify: `admin/src/pages/HomePage.jsx`
 - Modify: `admin/src/translations/en.json`
 - Modify: `admin/src/translations/de.json`

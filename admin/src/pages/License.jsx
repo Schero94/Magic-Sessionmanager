@@ -10,13 +10,7 @@ import {
   Typography,
 } from '@strapi/design-system';
 import { Page, useClipboard, useFetchClient, useNotification } from '@strapi/strapi/admin';
-import {
-  ArrowClockwise,
-  Duplicate,
-  Download,
-  Eye,
-  EyeStriked,
-} from '@strapi/icons';
+import { ArrowClockwise, Duplicate, Download, Eye, EyeStriked } from '@strapi/icons';
 import pluginId from '../pluginId';
 import { PageShell, SectionCard, PropertyList } from '../components/ui';
 import Alert from '../components/PersistentAlert';
@@ -51,7 +45,10 @@ const LicensePage = () => {
   const t = (id, defaultMessage, values) =>
     formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const translate = (descriptor, values) =>
-    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage }, values);
+    formatMessage(
+      { id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage },
+      values
+    );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [licenseData, setLicenseData] = useState(null);
@@ -176,8 +173,17 @@ const LicensePage = () => {
   const yesNo = (value) => (value ? t('common.yes', 'Yes') : t('common.no', 'No'));
 
   const detailItems = [
-    { id: 'holder', label: t('license.details.holder', 'Holder'), value: getLicenseHolderName(data) },
-    { id: 'email', kind: 'email', label: t('license.account.email', 'Email address'), value: data.email },
+    {
+      id: 'holder',
+      label: t('license.details.holder', 'Holder'),
+      value: getLicenseHolderName(data),
+    },
+    {
+      id: 'email',
+      kind: 'email',
+      label: t('license.account.email', 'Email address'),
+      value: data.email,
+    },
     {
       id: 'expires',
       label: t('license.details.expires', 'Expires'),
@@ -185,8 +191,17 @@ const LicensePage = () => {
         ? formatDate(licenseState.expiresAt, LICENSE_EXPIRY_DATE_OPTIONS)
         : t('license.details.noExpiry', 'No expiry date'),
     },
-    { id: 'device-name', label: t('license.details.deviceName', 'Device name'), value: data.deviceName },
-    { id: 'ip', kind: 'id', label: t('license.details.ipAddress', 'IP address'), value: data.ipAddress },
+    {
+      id: 'device-name',
+      label: t('license.details.deviceName', 'Device name'),
+      value: data.deviceName,
+    },
+    {
+      id: 'ip',
+      kind: 'id',
+      label: t('license.details.ipAddress', 'IP address'),
+      value: data.ipAddress,
+    },
     {
       id: 'last-check',
       label: t('license.details.lastCheck', 'Last check'),
@@ -212,10 +227,14 @@ const LicensePage = () => {
       headingId="magic-sessionmanager-license-title"
       title={t('license.title', 'License')}
       subtitle={t('license.subtitle', 'Optional license key for this installation.')}
-      primaryAction={(
+      primaryAction={
         <Flex gap={2} wrap="wrap" justifyContent="flex-end">
           {hasKey ? (
-            <Button variant="secondary" startIcon={<Download aria-hidden />} onClick={handleDownloadLicenseKey}>
+            <Button
+              variant="secondary"
+              startIcon={<Download aria-hidden />}
+              onClick={handleDownloadLicenseKey}
+            >
               {t('license.key.download', 'Download as text')}
             </Button>
           ) : null}
@@ -228,18 +247,22 @@ const LicensePage = () => {
             {t('license.refresh', 'Check again')}
           </Button>
         </Flex>
-      )}
+      }
     >
       <SectionCard title={t('license.status.title', 'License status')}>
         {error ? (
           <Alert
             variant="danger"
             closeLabel={t('common.close', 'Close')}
-            action={(
-              <Button variant="secondary" onClick={() => fetchLicenseStatus()} aria-busy={refreshing}>
+            action={
+              <Button
+                variant="secondary"
+                onClick={() => fetchLicenseStatus()}
+                aria-busy={refreshing}
+              >
                 {t('license.error.retry', 'Try again')}
               </Button>
-            )}
+            }
           >
             <ReadableText variant="omega" textColor="neutral800" tag="span">
               {t('license.error.load', 'The license status could not be checked.')}
@@ -248,7 +271,13 @@ const LicensePage = () => {
         ) : null}
         <Flex direction="column" alignItems="stretch" gap={1} aria-live="polite">
           {statusMessage ? (
-            <Typography variant="omega" tag="p" textColor="neutral800" fontWeight="semiBold" data-license-state="">
+            <Typography
+              variant="omega"
+              tag="p"
+              textColor="neutral800"
+              fontWeight="semiBold"
+              data-license-state=""
+            >
               {translate(statusMessage, statusMessage.values)}
             </Typography>
           ) : null}
@@ -277,11 +306,14 @@ const LicensePage = () => {
               autoComplete="off"
               spellCheck={false}
               value={showLicenseKey ? data.licenseKey : maskSensitiveValue(data.licenseKey)}
-              endAction={(
+              endAction={
                 <Flex gap={1}>
                   <IconButton
                     variant="ghost"
-                    label={t(showLicenseKey ? 'license.key.hide' : 'license.key.show', showLicenseKey ? 'Hide key' : 'Show key')}
+                    label={t(
+                      showLicenseKey ? 'license.key.hide' : 'license.key.show',
+                      showLicenseKey ? 'Hide key' : 'Show key'
+                    )}
                     onClick={() => setShowLicenseKey((visible) => !visible)}
                   >
                     {showLicenseKey ? <EyeStriked aria-hidden /> : <Eye aria-hidden />}
@@ -294,7 +326,7 @@ const LicensePage = () => {
                     <Duplicate aria-hidden />
                   </IconButton>
                 </Flex>
-              )}
+              }
             />
             <Field.Hint />
           </Field.Root>

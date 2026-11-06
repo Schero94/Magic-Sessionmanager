@@ -103,7 +103,6 @@ module.exports = async ({ strapi }) => {
     });
 
     log.info('[SUCCESS] Plugin registered successfully');
-
   } catch (err) {
     log.error('[ERROR] Registration error:', err?.name || 'Error');
   }

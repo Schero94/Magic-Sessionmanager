@@ -69,11 +69,12 @@ const PersistentAlert = forwardRef(function PersistentAlert(
   ref
 ) {
   const tone = TONES[variant] || TONES.default;
-  const Icon = variant === 'success'
-    ? CheckCircle
-    : variant === 'danger' || variant === 'warning'
-      ? WarningCircle
-      : Information;
+  const Icon =
+    variant === 'success'
+      ? CheckCircle
+      : variant === 'danger' || variant === 'warning'
+        ? WarningCircle
+        : Information;
 
   return (
     <Flex

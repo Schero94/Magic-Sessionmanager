@@ -1,14 +1,17 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
-    <meta name="description" content="Magic Session Manager for Strapi 5: see, end and analyse the sessions of your app's users, with login protection, location data, alerts and retention controls.">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Magic Session Manager for Strapi 5: see, end and analyse the sessions of your app's users, with login protection, location data, alerts and retention controls."
+    />
     <title>Magic Session Manager for Strapi 5</title>
-    <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="./site.css">
-    <link rel="stylesheet" href="./site-extra.css">
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./site.css" />
+    <link rel="stylesheet" href="./site-extra.css" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -31,11 +34,17 @@
         <div class="hero-copy">
           <span class="eyebrow">Strapi 5 plugin</span>
           <h1 id="page-title">See who is signed in. End access in one click.</h1>
-          <p>Magic Session Manager records every sign-in of your app's users (Users &amp; Permissions) as a session. Admins see which sessions are Active, Idle or Ended, end them, block users, and decide how long the history is kept.</p>
+          <p>
+            Magic Session Manager records every sign-in of your app's users (Users &amp;
+            Permissions) as a session. Admins see which sessions are Active, Idle or Ended, end
+            them, block users, and decide how long the history is kept.
+          </p>
           <div class="hero-actions">
             <a class="button primary" href="#install">Install the plugin</a>
             <a class="button" href="#screenshots">See the screens</a>
-            <a class="button" href="https://github.com/Schero94/Magic-Sessionmanager">View source</a>
+            <a class="button" href="https://github.com/Schero94/Magic-Sessionmanager"
+              >View source</a
+            >
           </div>
           <ul class="badges" aria-label="Package details">
             <li class="badge">Strapi 5, tested on 5.61</li>
@@ -61,44 +70,106 @@
 
       <main class="content" id="main-content" tabindex="-1">
         <div class="callout warning status-callout">
-          <strong>Maintenance status:</strong> the screens on this page are the redesigned admin UI that carries the fixes for the next release. Version 4.8.0 on npm was published before its acceptance gates closed and is not accepted. Details under <a href="#releases">Releases</a>.
+          <strong>Maintenance status:</strong> the screens on this page are the redesigned admin UI
+          that carries the fixes for the next release. Version 4.8.0 on npm was published before its
+          acceptance gates closed and is not accepted. Details under
+          <a href="#releases">Releases</a>.
         </div>
 
         <section class="section" id="screenshots" aria-labelledby="screenshots-title">
           <h2 id="screenshots-title">Screenshots</h2>
-          <p class="section-lead">All screenshots show synthetic data on an isolated Strapi 5.61 host: users at <code>example.test</code>, IP addresses from the documentation range <code>203.0.113.0/24</code>. Select an image to open it at full size.</p>
+          <p class="section-lead">
+            All screenshots show synthetic data on an isolated Strapi 5.61 host: users at
+            <code>example.test</code>, IP addresses from the documentation range
+            <code>203.0.113.0/24</code>. Select an image to open it at full size.
+          </p>
 
           <div class="gallery">
             <figure class="shot shot-wide">
-              <a href="./img/dashboard.webp"><img src="./img/dashboard.webp" width="1440" height="900" alt="Sessions dashboard: header links Analytics and Settings, an Export menu, four stat cards (Active sessions 5 with 5 users online, Idle 2, Ended 19, All 26), a search field, a status filter and a table of sessions with Active, Idle and Ended badges."></a>
+              <a href="./img/dashboard.webp"
+                ><img
+                  src="./img/dashboard.webp"
+                  width="1440"
+                  height="900"
+                  alt="Sessions dashboard: header links Analytics and Settings, an Export menu, four stat cards (Active sessions 5 with 5 users online, Idle 2, Ended 19, All 26), a search field, a status filter and a table of sessions with Active, Idle and Ended badges."
+              /></a>
               <figcaption>Sessions dashboard</figcaption>
             </figure>
             <figure class="shot shot-wide">
-              <a href="./img/dashboard-dark.webp"><img src="./img/dashboard-dark.webp" width="1440" height="900" loading="lazy" alt="The same Sessions dashboard in the Strapi dark theme."></a>
+              <a href="./img/dashboard-dark.webp"
+                ><img
+                  src="./img/dashboard-dark.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="The same Sessions dashboard in the Strapi dark theme."
+              /></a>
               <figcaption>Dashboard in dark mode</figcaption>
             </figure>
             <figure class="shot">
-              <a href="./img/dashboardsessionmodal.webp"><img src="./img/dashboardsessionmodal.webp" width="1440" height="900" loading="lazy" alt="Session details dialog with the state sentence, User, Session, Device and Location and security sections, a Look up location button, collapsed Technical details and an End session button."></a>
+              <a href="./img/dashboardsessionmodal.webp"
+                ><img
+                  src="./img/dashboardsessionmodal.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="Session details dialog with the state sentence, User, Session, Device and Location and security sections, a Look up location button, collapsed Technical details and an End session button."
+              /></a>
               <figcaption>Session details dialog</figcaption>
             </figure>
             <figure class="shot">
-              <a href="./img/analytics.webp"><img src="./img/analytics.webp" width="1440" height="900" loading="lazy" alt="Analytics page with the KPIs All sessions, Active sessions, Sign-ins in the last 24 hours and in the last 7 days, Devices and Browsers bar charts and the average session length."></a>
+              <a href="./img/analytics.webp"
+                ><img
+                  src="./img/analytics.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="Analytics page with the KPIs All sessions, Active sessions, Sign-ins in the last 24 hours and in the last 7 days, Devices and Browsers bar charts and the average session length."
+              /></a>
               <figcaption>Settings › Analytics</figcaption>
             </figure>
             <figure class="shot">
-              <a href="./img/settings1.webp"><img src="./img/settings1.webp" width="1440" height="900" loading="lazy" alt="Session Manager configuration, Sessions tab: Session lifetime card with Inactivity timeout and Maximum session age, and the Token check card in Relaxed mode."></a>
+              <a href="./img/settings1.webp"
+                ><img
+                  src="./img/settings1.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="Session Manager configuration, Sessions tab: Session lifetime card with Inactivity timeout and Maximum session age, and the Token check card in Relaxed mode."
+              /></a>
               <figcaption>Configuration › Sessions</figcaption>
             </figure>
             <figure class="shot">
-              <a href="./img/settings2.webp"><img src="./img/settings2.webp" width="1440" height="900" loading="lazy" alt="Session Manager configuration, Login protection tab: Failed sign-ins card with the temporary IP lockout and the Client IP address card with Trust proxy headers."></a>
+              <a href="./img/settings2.webp"
+                ><img
+                  src="./img/settings2.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="Session Manager configuration, Login protection tab: Failed sign-ins card with the temporary IP lockout and the Client IP address card with Trust proxy headers."
+              /></a>
               <figcaption>Configuration › Login protection</figcaption>
             </figure>
             <figure class="shot">
-              <a href="./img/sessioninfopanel.webp"><img src="./img/sessioninfopanel.webp" width="1070" height="890" loading="lazy" alt="Content Manager edit view of a user with the Sessions panel: Online badge, 2 open sessions, End all sessions and Block user buttons and two open session cards."></a>
+              <a href="./img/sessioninfopanel.webp"
+                ><img
+                  src="./img/sessioninfopanel.webp"
+                  width="1070"
+                  height="890"
+                  loading="lazy"
+                  alt="Content Manager edit view of a user with the Sessions panel: Online badge, 2 open sessions, End all sessions and Block user buttons and two open session cards."
+              /></a>
               <figcaption>Sessions panel in the Content Manager</figcaption>
             </figure>
             <figure class="shot">
-              <a href="./img/widget.webp"><img src="./img/widget.webp" width="650" height="373" loading="lazy" alt="Online users widget on the Strapi homepage with the tiles Online users 5 of 6 registered users, Active sessions 5, Idle sessions 2 and Blocked users 0."></a>
+              <a href="./img/widget.webp"
+                ><img
+                  src="./img/widget.webp"
+                  width="650"
+                  height="373"
+                  loading="lazy"
+                  alt="Online users widget on the Strapi homepage with the tiles Online users 5 of 6 registered users, Active sessions 5, Idle sessions 2 and Blocked users 0."
+              /></a>
               <figcaption>Online users widget</figcaption>
             </figure>
           </div>
@@ -106,11 +177,25 @@
           <h3 class="sub-title">Mobile, 390 px</h3>
           <div class="gallery gallery-mobile">
             <figure class="shot">
-              <a href="./img/mobile-dashboard.webp"><img src="./img/mobile-dashboard.webp" width="390" height="844" loading="lazy" alt="Sessions dashboard at 390 px wide: the table becomes a card list, each card with badge, user, device and IP address and the buttons Details, End session and More."></a>
+              <a href="./img/mobile-dashboard.webp"
+                ><img
+                  src="./img/mobile-dashboard.webp"
+                  width="390"
+                  height="844"
+                  loading="lazy"
+                  alt="Sessions dashboard at 390 px wide: the table becomes a card list, each card with badge, user, device and IP address and the buttons Details, End session and More."
+              /></a>
               <figcaption>Dashboard card list</figcaption>
             </figure>
             <figure class="shot">
-              <a href="./img/mobile-session.webp"><img src="./img/mobile-session.webp" width="390" height="844" loading="lazy" alt="Session details dialog at 390 px wide in one column, with Close and End session in the footer."></a>
+              <a href="./img/mobile-session.webp"
+                ><img
+                  src="./img/mobile-session.webp"
+                  width="390"
+                  height="844"
+                  loading="lazy"
+                  alt="Session details dialog at 390 px wide in one column, with Close and End session in the footer."
+              /></a>
               <figcaption>Session details on a phone</figcaption>
             </figure>
           </div>
@@ -118,39 +203,89 @@
 
         <section class="section" id="features" aria-labelledby="features-title">
           <h2 id="features-title">Features</h2>
-          <p class="section-lead">One vocabulary on every screen. A session is <strong>Active</strong> (open, used within the inactivity timeout), <strong>Idle</strong> (open, unused for longer) or <strong>Ended</strong>. An ended session shows its end reason: Logged out, Timed out, Expired, Ended manually, User blocked or Reason not recorded.</p>
+          <p class="section-lead">
+            One vocabulary on every screen. A session is <strong>Active</strong> (open, used within
+            the inactivity timeout), <strong>Idle</strong> (open, unused for longer) or
+            <strong>Ended</strong>. An ended session shows its end reason: Logged out, Timed out,
+            Expired, Ended manually, User blocked or Reason not recorded.
+          </p>
 
           <div class="verb-grid">
-            <div class="verb"><span class="verb-name">End</span><p>The session stops working. The record stays in the history.</p></div>
-            <div class="verb"><span class="verb-name">Delete record</span><p>The record leaves history, statistics and exports. An open session also ends, and its token stays revoked.</p></div>
-            <div class="verb"><span class="verb-name">Block</span><p>The user cannot sign in, and all open sessions end. Unblock allows sign-in again.</p></div>
+            <div class="verb">
+              <span class="verb-name">End</span>
+              <p>The session stops working. The record stays in the history.</p>
+            </div>
+            <div class="verb">
+              <span class="verb-name">Delete record</span>
+              <p>
+                The record leaves history, statistics and exports. An open session also ends, and
+                its token stays revoked.
+              </p>
+            </div>
+            <div class="verb">
+              <span class="verb-name">Block</span>
+              <p>
+                The user cannot sign in, and all open sessions end. Unblock allows sign-in again.
+              </p>
+            </div>
           </div>
-          <p>A user is <strong>Online</strong> when at least one of their sessions is Active. The dashboard, the widget and the user panel use this one rule.</p>
+          <p>
+            A user is <strong>Online</strong> when at least one of their sessions is Active. The
+            dashboard, the widget and the user panel use this one rule.
+          </p>
 
           <div class="card-grid">
             <article class="card">
               <h3>Sessions dashboard</h3>
-              <p>Main menu › Session Manager. Header links Analytics and Settings, and an Export menu (CSV or JSON, with an End reason column and no tokens). Four stat cards that filter the list, search by user, email, IP or device, Status and End reason filters, and the row actions View details, End session and More actions › Delete record. Filters and search live in the URL. Below 768 px the table becomes a card list.</p>
+              <p>
+                Main menu › Session Manager. Header links Analytics and Settings, and an Export menu
+                (CSV or JSON, with an End reason column and no tokens). Four stat cards that filter
+                the list, search by user, email, IP or device, Status and End reason filters, and
+                the row actions View details, End session and More actions › Delete record. Filters
+                and search live in the URL. Below 768 px the table becomes a card list.
+              </p>
             </article>
             <article class="card">
               <h3>Session details</h3>
-              <p>A sentence that says why the session is in its state, then user, session times, device, location and security score. Look up location runs only when you click it. Technical details hold the record ID and the raw user agent. End session asks for confirmation.</p>
+              <p>
+                A sentence that says why the session is in its state, then user, session times,
+                device, location and security score. Look up location runs only when you click it.
+                Technical details hold the record ID and the raw user agent. End session asks for
+                confirmation.
+              </p>
             </article>
             <article class="card">
               <h3>Sessions panel on a user</h3>
-              <p>In the Content Manager edit view of a Users &amp; Permissions user: Online or Not online, the number of open sessions and the last activity, End all sessions and Block user with confirmation, the open sessions, and Show all sessions, which opens the dashboard filtered by the user's email.</p>
+              <p>
+                In the Content Manager edit view of a Users &amp; Permissions user: Online or Not
+                online, the number of open sessions and the last activity, End all sessions and
+                Block user with confirmation, the open sessions, and Show all sessions, which opens
+                the dashboard filtered by the user's email.
+              </p>
             </article>
             <article class="card">
               <h3>Online users widget</h3>
-              <p>On the Strapi homepage (Strapi 5.13 and later): Online users out of all registered users, Active sessions, Idle sessions and Blocked users, refreshed every 30 seconds.</p>
+              <p>
+                On the Strapi homepage (Strapi 5.13 and later): Online users out of all registered
+                users, Active sessions, Idle sessions and Blocked users, refreshed every 30 seconds.
+              </p>
             </article>
             <article class="card">
               <h3>Configuration</h3>
-              <p>Settings › Session Manager › Configuration with five tabs: Sessions, Login protection, Location data, Alerts, and Data and retention. Each tab is a deep link (<code>?tab=</code>). Save and Discard changes sit in the header, and leaving with unsaved changes asks first.</p>
+              <p>
+                Settings › Session Manager › Configuration with five tabs: Sessions, Login
+                protection, Location data, Alerts, and Data and retention. Each tab is a deep link
+                (<code>?tab=</code>). Save and Discard changes sit in the header, and leaving with
+                unsaved changes asks first.
+              </p>
             </article>
             <article class="card">
               <h3>Analytics and License</h3>
-              <p>Analytics shows all and active sessions, sign-ins in the last 24 hours and 7 days, sessions by device and browser, and the average session length. License shows whether an optional key is stored and valid; every feature works without one.</p>
+              <p>
+                Analytics shows all and active sessions, sign-ins in the last 24 hours and 7 days,
+                sessions by device and browser, and the average session length. License shows
+                whether an optional key is stored and valid; every feature works without one.
+              </p>
             </article>
           </div>
         </section>
@@ -160,34 +295,62 @@
           <ol class="steps">
             <li>
               <p>Install the package.</p>
-              <div class="code-card"><div class="code-label"><span>Terminal</span></div><pre><code>npm install strapi-plugin-magic-sessionmanager</code></pre></div>
+              <div class="code-card">
+                <div class="code-label"><span>Terminal</span></div>
+                <pre><code>npm install strapi-plugin-magic-sessionmanager</code></pre>
+              </div>
             </li>
             <li>
               <p>Enable the plugin.</p>
-              <div class="code-card"><div class="code-label"><span>config/plugins.ts</span></div><pre><code>export default () =&gt; ({
+              <div class="code-card">
+                <div class="code-label"><span>config/plugins.ts</span></div>
+                <pre><code>export default () =&gt; ({
   'magic-sessionmanager': {
     enabled: true,
   },
-});</code></pre></div>
+});</code></pre>
+              </div>
             </li>
             <li>
               <p>Set the token encryption key. Production startup fails without it.</p>
-              <div class="code-card"><div class="code-label"><span>Terminal</span></div><pre><code>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-# add the output to .env as SESSION_ENCRYPTION_KEY="..."</code></pre></div>
+              <div class="code-card">
+                <div class="code-label"><span>Terminal</span></div>
+                <pre><code>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# add the output to .env as SESSION_ENCRYPTION_KEY="..."</code></pre>
+              </div>
             </li>
             <li>
               <p>Rebuild the admin and start Strapi.</p>
-              <div class="code-card"><div class="code-label"><span>Terminal</span></div><pre><code>npm run build
-npm run develop</code></pre></div>
+              <div class="code-card">
+                <div class="code-label"><span>Terminal</span></div>
+                <pre><code>npm run build
+npm run develop</code></pre>
+              </div>
             </li>
           </ol>
-          <p>Open <strong>Session Manager</strong> in the main menu. Super Admins have access automatically. For other admin roles, grant <em>Plugins › Session Manager › Access the Session Manager plugin</em> under Settings › Administration Panel › Roles.</p>
-          <p>Both Users &amp; Permissions modes work: with <code>jwtManagement: 'refresh'</code> Strapi issues and revokes native sessions and the plugin adds device, IP and location history; with <code>'legacy-support'</code> the plugin keeps its own session records. The plugin never changes the host's authentication configuration.</p>
+          <p>
+            Open <strong>Session Manager</strong> in the main menu. Super Admins have access
+            automatically. For other admin roles, grant
+            <em>Plugins › Session Manager › Access the Session Manager plugin</em> under Settings ›
+            Administration Panel › Roles.
+          </p>
+          <p>
+            Both Users &amp; Permissions modes work: with
+            <code>jwtManagement: 'refresh'</code> Strapi issues and revokes native sessions and the
+            plugin adds device, IP and location history; with <code>'legacy-support'</code> the
+            plugin keeps its own session records. The plugin never changes the host's authentication
+            configuration.
+          </p>
         </section>
 
         <section class="section" id="configuration" aria-labelledby="configuration-title">
           <h2 id="configuration-title">Configuration</h2>
-          <p class="section-lead">Static defaults go in <code>config/plugins.ts</code> with time values in milliseconds. Values saved on the Configuration page are stored in the database in minutes, seconds or days and override the static config. Other server processes apply saved changes within 30 seconds.</p>
+          <p class="section-lead">
+            Static defaults go in <code>config/plugins.ts</code> with time values in milliseconds.
+            Values saved on the Configuration page are stored in the database in minutes, seconds or
+            days and override the static config. Other server processes apply saved changes within
+            30 seconds.
+          </p>
           <div class="code-card">
             <div class="code-label"><span>config/plugins.ts</span></div>
             <pre><code>export default () =&gt; ({
@@ -208,121 +371,381 @@ npm run develop</code></pre></div>
 
           <div class="table-wrap">
             <table>
-              <caption>Settings by Configuration tab, with defaults and the ranges accepted on Save</caption>
+              <caption>
+                Settings by Configuration tab, with defaults and the ranges accepted on Save
+              </caption>
               <thead>
-                <tr><th scope="col">Tab</th><th scope="col">Setting (key)</th><th scope="col">Default</th><th scope="col">Range</th></tr>
+                <tr>
+                  <th scope="col">Tab</th>
+                  <th scope="col">Setting (key)</th>
+                  <th scope="col">Default</th>
+                  <th scope="col">Range</th>
+                </tr>
               </thead>
               <tbody>
-                <tr><td rowspan="6">Sessions</td><td>Inactivity timeout (<code>inactivityTimeout</code>)</td><td>15 min</td><td>1–1440 min</td></tr>
-                <tr><td>Maximum session age (<code>maxSessionAgeDays</code>)</td><td>30 days</td><td>1–365 days</td></tr>
-                <tr><td>Update "Last active" at most every (<code>lastSeenRateLimit</code>)</td><td>30 s</td><td>5–300 s</td></tr>
-                <tr><td>Run idle check every (<code>cleanupInterval</code>)</td><td>30 min</td><td>5–1440 min</td></tr>
-                <tr><td>Token check (<code>strictSessionEnforcement</code>)</td><td>Relaxed</td><td>Strict or Relaxed</td></tr>
-                <tr><td>Grace period after sign-in (<code>sessionCreationGraceMs</code>)</td><td>5 s</td><td>0–30 s</td></tr>
-                <tr><td rowspan="4">Login protection</td><td>Temporary IP lockout after (<code>maxFailedLogins</code>)</td><td>5</td><td>0–100, 0 = off</td></tr>
-                <tr><td>Trust proxy headers (<code>trustedProxies</code>)</td><td>Off</td><td>On or off</td></tr>
-                <tr><td>Reject suspicious sign-ins (<code>blockSuspiciousSessions</code>)</td><td>Off</td><td>On or off</td></tr>
-                <tr><td>Country rules (<code>enableGeofencing</code>, <code>allowedCountries</code>, <code>blockedCountries</code>)</td><td>Off</td><td>ISO 3166-1 alpha-2 codes</td></tr>
-                <tr><td rowspan="3">Location data</td><td>IP location lookup (<code>enableGeolocation</code>)</td><td>On</td><td>On or off</td></tr>
-                <tr><td>Security scoring (<code>enableSecurityScoring</code>)</td><td>On</td><td>On or off</td></tr>
-                <tr><td>Provider (<code>geoIpProvider</code>)</td><td>Automatic</td><td>auto, local-mmdb, ipapi, disabled</td></tr>
-                <tr><td rowspan="2">Alerts</td><td>Security emails to users (<code>enableEmailAlerts</code>)</td><td>Off</td><td>Needs IP location lookup and Strapi's Email plugin</td></tr>
-                <tr><td>Team notifications (<code>enableWebhooks</code>, <code>discordWebhookUrl</code>, <code>slackWebhookUrl</code>)</td><td>Off</td><td>Discord or Slack URLs only</td></tr>
-                <tr><td>Data and retention</td><td>Keep ended sessions for (<code>retentionDays</code>)</td><td>90 days</td><td>1–365 days or Forever (-1)</td></tr>
+                <tr>
+                  <td rowspan="6">Sessions</td>
+                  <td>Inactivity timeout (<code>inactivityTimeout</code>)</td>
+                  <td>15 min</td>
+                  <td>1–1440 min</td>
+                </tr>
+                <tr>
+                  <td>Maximum session age (<code>maxSessionAgeDays</code>)</td>
+                  <td>30 days</td>
+                  <td>1–365 days</td>
+                </tr>
+                <tr>
+                  <td>Update "Last active" at most every (<code>lastSeenRateLimit</code>)</td>
+                  <td>30 s</td>
+                  <td>5–300 s</td>
+                </tr>
+                <tr>
+                  <td>Run idle check every (<code>cleanupInterval</code>)</td>
+                  <td>30 min</td>
+                  <td>5–1440 min</td>
+                </tr>
+                <tr>
+                  <td>Token check (<code>strictSessionEnforcement</code>)</td>
+                  <td>Relaxed</td>
+                  <td>Strict or Relaxed</td>
+                </tr>
+                <tr>
+                  <td>Grace period after sign-in (<code>sessionCreationGraceMs</code>)</td>
+                  <td>5 s</td>
+                  <td>0–30 s</td>
+                </tr>
+                <tr>
+                  <td rowspan="4">Login protection</td>
+                  <td>Temporary IP lockout after (<code>maxFailedLogins</code>)</td>
+                  <td>5</td>
+                  <td>0–100, 0 = off</td>
+                </tr>
+                <tr>
+                  <td>Trust proxy headers (<code>trustedProxies</code>)</td>
+                  <td>Off</td>
+                  <td>On or off</td>
+                </tr>
+                <tr>
+                  <td>Reject suspicious sign-ins (<code>blockSuspiciousSessions</code>)</td>
+                  <td>Off</td>
+                  <td>On or off</td>
+                </tr>
+                <tr>
+                  <td>
+                    Country rules (<code>enableGeofencing</code>, <code>allowedCountries</code>,
+                    <code>blockedCountries</code>)
+                  </td>
+                  <td>Off</td>
+                  <td>ISO 3166-1 alpha-2 codes</td>
+                </tr>
+                <tr>
+                  <td rowspan="3">Location data</td>
+                  <td>IP location lookup (<code>enableGeolocation</code>)</td>
+                  <td>On</td>
+                  <td>On or off</td>
+                </tr>
+                <tr>
+                  <td>Security scoring (<code>enableSecurityScoring</code>)</td>
+                  <td>On</td>
+                  <td>On or off</td>
+                </tr>
+                <tr>
+                  <td>Provider (<code>geoIpProvider</code>)</td>
+                  <td>Automatic</td>
+                  <td>auto, local-mmdb, ipapi, disabled</td>
+                </tr>
+                <tr>
+                  <td rowspan="2">Alerts</td>
+                  <td>Security emails to users (<code>enableEmailAlerts</code>)</td>
+                  <td>Off</td>
+                  <td>Needs IP location lookup and Strapi's Email plugin</td>
+                </tr>
+                <tr>
+                  <td>
+                    Team notifications (<code>enableWebhooks</code>, <code>discordWebhookUrl</code>,
+                    <code>slackWebhookUrl</code>)
+                  </td>
+                  <td>Off</td>
+                  <td>Discord or Slack URLs only</td>
+                </tr>
+                <tr>
+                  <td>Data and retention</td>
+                  <td>Keep ended sessions for (<code>retentionDays</code>)</td>
+                  <td>90 days</td>
+                  <td>1–365 days or Forever (-1)</td>
+                </tr>
               </tbody>
             </table>
           </div>
-          <p>Retention is checked once a day, the first time about 24 hours after the server starts. It deletes records of ended sessions only; open sessions are never deleted by retention. <strong>Delete ended sessions</strong> on the same tab removes the records of all ended sessions of all users at once. The idle check ends idle sessions as Timed out and deletes nothing.</p>
-          <p>Environment variables: <code>SESSION_ENCRYPTION_KEY</code>, <code>MAGIC_SESSIONMANAGER_GEOIP_DATABASE</code> (local MaxMind database), <code>MAXMIND_ACCOUNT_ID</code> and <code>MAXMIND_LICENSE_KEY</code> (database updates; they take precedence over stored credentials). The full reference, including Advanced settings and email templates, is in the <a href="https://github.com/Schero94/Magic-Sessionmanager#configuration">README</a>.</p>
+          <p>
+            Retention is checked once a day, the first time about 24 hours after the server starts.
+            It deletes records of ended sessions only; open sessions are never deleted by retention.
+            <strong>Delete ended sessions</strong> on the same tab removes the records of all ended
+            sessions of all users at once. The idle check ends idle sessions as Timed out and
+            deletes nothing.
+          </p>
+          <p>
+            Environment variables: <code>SESSION_ENCRYPTION_KEY</code>,
+            <code>MAGIC_SESSIONMANAGER_GEOIP_DATABASE</code> (local MaxMind database),
+            <code>MAXMIND_ACCOUNT_ID</code> and <code>MAXMIND_LICENSE_KEY</code> (database updates;
+            they take precedence over stored credentials). The full reference, including Advanced
+            settings and email templates, is in the
+            <a href="https://github.com/Schero94/Magic-Sessionmanager#configuration">README</a>.
+          </p>
         </section>
 
         <section class="section" id="api" aria-labelledby="api-title">
           <h2 id="api-title">API and permissions</h2>
-          <p class="section-lead">Content API routes live under <code>/api/magic-sessionmanager</code>, require a Users &amp; Permissions JWT, act on the caller's own sessions only and are rate-limited (10 writes and 120 reads per minute by default, then 429 with <code>Retry-After</code>).</p>
+          <p class="section-lead">
+            Content API routes live under <code>/api/magic-sessionmanager</code>, require a Users
+            &amp; Permissions JWT, act on the caller's own sessions only and are rate-limited (10
+            writes and 120 reads per minute by default, then 429 with <code>Retry-After</code>).
+          </p>
           <div class="table-wrap">
             <table>
-              <caption>Content API</caption>
-              <thead><tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Purpose</th></tr></thead>
+              <caption>
+                Content API
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Method</th>
+                  <th scope="col">Path</th>
+                  <th scope="col">Purpose</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td>GET</td><td><code>/my-sessions</code></td><td>Own sessions, current one first (up to 200)</td></tr>
-                <tr><td>GET</td><td><code>/current-session</code></td><td>The session of the current token</td></tr>
-                <tr><td>GET</td><td><code>/user/:userId/sessions</code></td><td>Own sessions by user ID; 403 for another user</td></tr>
-                <tr><td>POST</td><td><code>/logout</code></td><td>End the current session (Logged out)</td></tr>
-                <tr><td>POST</td><td><code>/logout-all</code></td><td>End all own sessions</td></tr>
-                <tr><td>POST</td><td><code>/logout-others</code></td><td>End all own sessions except the current one</td></tr>
-                <tr><td>DELETE</td><td><code>/my-sessions/:sessionId</code></td><td>End one other own session (Ended manually)</td></tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/my-sessions</code></td>
+                  <td>Own sessions, current one first (up to 200)</td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/current-session</code></td>
+                  <td>The session of the current token</td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/user/:userId/sessions</code></td>
+                  <td>Own sessions by user ID; 403 for another user</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code>/logout</code></td>
+                  <td>End the current session (Logged out)</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code>/logout-all</code></td>
+                  <td>End all own sessions</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code>/logout-others</code></td>
+                  <td>End all own sessions except the current one</td>
+                </tr>
+                <tr>
+                  <td>DELETE</td>
+                  <td><code>/my-sessions/:sessionId</code></td>
+                  <td>End one other own session (Ended manually)</td>
+                </tr>
               </tbody>
             </table>
           </div>
 
-          <p>Admin routes live under <code>/magic-sessionmanager</code> in the Strapi admin API. Each one requires an authenticated admin and the permission <code>plugin::magic-sessionmanager.access</code>, which also controls the menu link, settings links, widget and user panel.</p>
+          <p>
+            Admin routes live under <code>/magic-sessionmanager</code> in the Strapi admin API. Each
+            one requires an authenticated admin and the permission
+            <code>plugin::magic-sessionmanager.access</code>, which also controls the menu link,
+            settings links, widget and user panel.
+          </p>
           <div class="table-wrap">
             <table>
-              <caption>Admin API</caption>
-              <thead><tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Admin action</th></tr></thead>
+              <caption>
+                Admin API
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Method</th>
+                  <th scope="col">Path</th>
+                  <th scope="col">Admin action</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td>GET</td><td><code>/sessions</code>, <code>/sessions/active</code></td><td>Dashboard, widget, Analytics (latest 1,000 sessions)</td></tr>
-                <tr><td>GET</td><td><code>/user/:userId/sessions</code></td><td>Sessions panel</td></tr>
-                <tr><td>POST</td><td><code>/sessions/:sessionId/terminate</code></td><td>End session</td></tr>
-                <tr><td>DELETE</td><td><code>/sessions/:sessionId</code></td><td>Delete record</td></tr>
-                <tr><td>POST</td><td><code>/sessions/clean-inactive</code></td><td>Delete ended sessions</td></tr>
-                <tr><td>POST</td><td><code>/user/:userId/terminate-all</code></td><td>End all sessions</td></tr>
-                <tr><td>POST</td><td><code>/user/:userId/toggle-block</code></td><td>Block user / Unblock user; send <code>{ "blocked": true | false }</code></td></tr>
-                <tr><td>GET</td><td><code>/users/stats</code></td><td>Widget totals</td></tr>
-                <tr><td>GET</td><td><code>/geolocation/:ipAddress</code></td><td>Look up location</td></tr>
-                <tr><td>GET, PUT, POST</td><td><code>/geoip/status</code>, <code>/geoip/credentials</code>, <code>/geoip/update</code></td><td>GeoIP database status, MaxMind credentials, database update</td></tr>
-                <tr><td>GET, PUT</td><td><code>/settings</code></td><td>Configuration</td></tr>
-                <tr><td>GET</td><td><code>/license/status</code></td><td>License page</td></tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/sessions</code>, <code>/sessions/active</code></td>
+                  <td>Dashboard, widget, Analytics (latest 1,000 sessions)</td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/user/:userId/sessions</code></td>
+                  <td>Sessions panel</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code>/sessions/:sessionId/terminate</code></td>
+                  <td>End session</td>
+                </tr>
+                <tr>
+                  <td>DELETE</td>
+                  <td><code>/sessions/:sessionId</code></td>
+                  <td>Delete record</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code>/sessions/clean-inactive</code></td>
+                  <td>Delete ended sessions</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code>/user/:userId/terminate-all</code></td>
+                  <td>End all sessions</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code>/user/:userId/toggle-block</code></td>
+                  <td>Block user / Unblock user; send <code>{ "blocked": true | false }</code></td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/users/stats</code></td>
+                  <td>Widget totals</td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/geolocation/:ipAddress</code></td>
+                  <td>Look up location</td>
+                </tr>
+                <tr>
+                  <td>GET, PUT, POST</td>
+                  <td>
+                    <code>/geoip/status</code>, <code>/geoip/credentials</code>,
+                    <code>/geoip/update</code>
+                  </td>
+                  <td>GeoIP database status, MaxMind credentials, database update</td>
+                </tr>
+                <tr>
+                  <td>GET, PUT</td>
+                  <td><code>/settings</code></td>
+                  <td>Configuration</td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/license/status</code></td>
+                  <td>License page</td>
+                </tr>
               </tbody>
             </table>
           </div>
-          <p>Requests with an ended session receive 401 and the header <code>X-Session-Terminated-Reason</code> (<code>logout</code>, <code>manual</code>, <code>idle</code>, <code>expired</code> or <code>blocked</code>). The optional route policy <code>plugin::magic-sessionmanager.session-required</code> adds an explicit check to your own routes. Response shapes and error codes are in the <a href="https://github.com/Schero94/Magic-Sessionmanager#content-api">README</a>.</p>
+          <p>
+            Requests with an ended session receive 401 and the header
+            <code>X-Session-Terminated-Reason</code> (<code>logout</code>, <code>manual</code>,
+            <code>idle</code>, <code>expired</code> or <code>blocked</code>). The optional route
+            policy <code>plugin::magic-sessionmanager.session-required</code> adds an explicit check
+            to your own routes. Response shapes and error codes are in the
+            <a href="https://github.com/Schero94/Magic-Sessionmanager#content-api">README</a>.
+          </p>
         </section>
 
         <section class="section" id="security" aria-labelledby="security-title">
           <h2 id="security-title">Security and privacy</h2>
-          <div class="callout warning"><strong>Production requirement:</strong> set <code>SESSION_ENCRYPTION_KEY</code> before starting Strapi with <code>NODE_ENV=production</code>; startup fails without it. Keep the key stable, because changing it makes stored tokens unreadable.</div>
+          <div class="callout warning">
+            <strong>Production requirement:</strong> set <code>SESSION_ENCRYPTION_KEY</code> before
+            starting Strapi with <code>NODE_ENV=production</code>; startup fails without it. Keep
+            the key stable, because changing it makes stored tokens unreadable.
+          </div>
           <div class="card-grid">
             <article class="card">
               <h3>Session security</h3>
-              <p>Stored tokens are encrypted with AES-256-GCM and never returned by any route or export. Ended, expired and revoked sessions and blocked users are rejected on every Content API request. A password reset ends all older sessions of the user.</p>
+              <p>
+                Stored tokens are encrypted with AES-256-GCM and never returned by any route or
+                export. Ended, expired and revoked sessions and blocked users are rejected on every
+                Content API request. A password reset ends all older sessions of the user.
+              </p>
             </article>
             <article class="card">
               <h3>Ownership</h3>
-              <p>Content API routes only return or end the caller's own sessions. A foreign session ID answers exactly like a missing one, so IDs cannot be probed.</p>
+              <p>
+                Content API routes only return or end the caller's own sessions. A foreign session
+                ID answers exactly like a missing one, so IDs cannot be probed.
+              </p>
             </article>
             <article class="card">
               <h3>Login protection</h3>
-              <p>Applies to new sign-ins only: a temporary 15-minute IP lockout after failed sign-ins (429), rejection of VPN, proxy, threat or low-score sign-ins (403), and country rules (403). Refused sign-ins are not recorded, and user accounts are never blocked by the lockout.</p>
+              <p>
+                Applies to new sign-ins only: a temporary 15-minute IP lockout after failed sign-ins
+                (429), rejection of VPN, proxy, threat or low-score sign-ins (403), and country
+                rules (403). Refused sign-ins are not recorded, and user accounts are never blocked
+                by the lockout.
+              </p>
             </article>
             <article class="card">
               <h3>Location data and privacy</h3>
-              <p>IP location lookup is on by default with the Automatic provider, which can send IP addresses to ipapi.co. Choose the local MaxMind database or turn the lookup off to keep IP addresses on your server. The details dialog looks up a location only when you click the button.</p>
+              <p>
+                IP location lookup is on by default with the Automatic provider, which can send IP
+                addresses to ipapi.co. Choose the local MaxMind database or turn the lookup off to
+                keep IP addresses on your server. The details dialog looks up a location only when
+                you click the button.
+              </p>
             </article>
             <article class="card">
               <h3>Retention</h3>
-              <p>Session records hold IP addresses, user agents and location. Set Keep ended sessions for to match your retention policy; Delete record and Delete ended sessions remove history on demand.</p>
+              <p>
+                Session records hold IP addresses, user agents and location. Set Keep ended sessions
+                for to match your retention policy; Delete record and Delete ended sessions remove
+                history on demand.
+              </p>
             </article>
             <article class="card">
               <h3>Secrets</h3>
-              <p>The MaxMind license key is stored in the plugin store and never sent back to the browser. Webhook URLs accept Discord and Slack hosts only; treat them as secrets.</p>
+              <p>
+                The MaxMind license key is stored in the plugin store and never sent back to the
+                browser. Webhook URLs accept Discord and Slack hosts only; treat them as secrets.
+              </p>
             </article>
           </div>
-          <p>Strapi administrator sessions are out of scope. Report security issues through <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">GitHub issues</a> without including credentials or personal data.</p>
+          <p>
+            Strapi administrator sessions are out of scope. Report security issues through
+            <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">GitHub issues</a>
+            without including credentials or personal data.
+          </p>
         </section>
 
         <section class="section" id="compatibility" aria-labelledby="compatibility-title">
           <h2 id="compatibility-title">Compatibility</h2>
           <div class="table-wrap">
             <table>
-              <caption>Supported versions</caption>
+              <caption>
+                Supported versions
+              </caption>
               <tbody>
-                <tr><th scope="row">Strapi</th><td>5 (<code>@strapi/strapi ^5.0.0</code>); acceptance host Strapi 5.61.0</td></tr>
-                <tr><th scope="row">Node.js</th><td><code>^22.22.2 || &gt;=24.15.0</code></td></tr>
-                <tr><th scope="row">Users &amp; Permissions</th><td><code>jwtManagement: 'refresh'</code> and <code>'legacy-support'</code></td></tr>
-                <tr><th scope="row">Homepage widget</th><td>Strapi 5.13 and later</td></tr>
-                <tr><th scope="row">Admin languages</th><td>English, German, French, Spanish, Portuguese</td></tr>
-                <tr><th scope="row">Database</th><td>Tables <code>magic_sessions</code> and <code>magic_session_revocations</code></td></tr>
+                <tr>
+                  <th scope="row">Strapi</th>
+                  <td>5 (<code>@strapi/strapi ^5.0.0</code>); acceptance host Strapi 5.61.0</td>
+                </tr>
+                <tr>
+                  <th scope="row">Node.js</th>
+                  <td><code>^22.22.2 || &gt;=24.15.0</code></td>
+                </tr>
+                <tr>
+                  <th scope="row">Users &amp; Permissions</th>
+                  <td><code>jwtManagement: 'refresh'</code> and <code>'legacy-support'</code></td>
+                </tr>
+                <tr>
+                  <th scope="row">Homepage widget</th>
+                  <td>Strapi 5.13 and later</td>
+                </tr>
+                <tr>
+                  <th scope="row">Admin languages</th>
+                  <td>English, German, French, Spanish, Portuguese</td>
+                </tr>
+                <tr>
+                  <th scope="row">Database</th>
+                  <td>
+                    Tables <code>magic_sessions</code> and <code>magic_session_revocations</code>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -330,28 +753,55 @@ npm run develop</code></pre></div>
 
         <section class="section" id="releases" aria-labelledby="releases-title">
           <h2 id="releases-title">Releases and maintenance</h2>
-          <p class="section-lead">Status as of 6 November 2026. Releases use Conventional Commits and semantic-release on Node.js 22 with npm Trusted Publishing. The next release (4.9.0 or 5.0.0) is blocked until every acceptance gate is signed off.</p>
+          <p class="section-lead">
+            Status as of 6 November 2026. Releases use Conventional Commits and semantic-release on
+            Node.js 22 with npm Trusted Publishing. The next release (4.9.0 or 5.0.0) is blocked
+            until every acceptance gate is signed off.
+          </p>
 
           <div class="status-grid">
             <article class="card status-card status-bad">
               <h3>4.8.0: not accepted</h3>
-              <p>Published before its acceptance gates closed. Known defects, all fixed on the redesign branch:</p>
+              <p>
+                Published before its acceptance gates closed. Known defects, all fixed on the
+                redesign branch:
+              </p>
               <ul>
                 <li>The Session details dialog has no accessible name.</li>
                 <li>Settings field hints, including the GeoIP privacy note, never render.</li>
-                <li>Three Settings alerts have unnamed close buttons; country chips cannot be removed with the keyboard.</li>
-                <li>In <code>legacy-support</code> mode a password reset leaves older sessions usable.</li>
-                <li>A failed block followed by a retry of the bodyless toggle unblocks the user.</li>
+                <li>
+                  Three Settings alerts have unnamed close buttons; country chips cannot be removed
+                  with the keyboard.
+                </li>
+                <li>
+                  In <code>legacy-support</code> mode a password reset leaves older sessions usable.
+                </li>
+                <li>
+                  A failed block followed by a retry of the bodyless toggle unblocks the user.
+                </li>
                 <li>The Content API rate limiter can be bypassed by varying the request path.</li>
               </ul>
             </article>
             <article class="card status-card status-good">
               <h3>Accepted on the redesign branch</h3>
               <ul>
-                <li>Clean install: 749 of 749 tests pass, both type checks, build, <code>verify</code>, <code>verify:runtime</code> and <code>npm pack --dry-run</code>.</li>
-                <li>Desktop and mobile browser passes for every screen on an isolated Strapi 5.61.0 host with synthetic data and outbound network blocked.</li>
-                <li>Strict source symmetry contract: 7 of 7 (no <code>window.confirm</code>, emoji, colour literals, px font sizes or custom media queries).</li>
-                <li>Measured: widget at 320 px with 0 px document overflow; user panel link 32 px high; document titles set by the shared page shell.</li>
+                <li>
+                  Clean install: 749 of 749 tests pass, both type checks, build,
+                  <code>verify</code>, <code>verify:runtime</code> and
+                  <code>npm pack --dry-run</code>.
+                </li>
+                <li>
+                  Desktop and mobile browser passes for every screen on an isolated Strapi 5.61.0
+                  host with synthetic data and outbound network blocked.
+                </li>
+                <li>
+                  Strict source symmetry contract: 7 of 7 (no <code>window.confirm</code>, emoji,
+                  colour literals, px font sizes or custom media queries).
+                </li>
+                <li>
+                  Measured: widget at 320 px with 0 px document overflow; user panel link 32 px
+                  high; document titles set by the shared page shell.
+                </li>
               </ul>
             </article>
             <article class="card status-card status-open">
@@ -367,8 +817,15 @@ npm run develop</code></pre></div>
             <article class="card status-card status-open">
               <h3>Known issues outside the plugin</h3>
               <ul>
-                <li>The recorded high-severity advisories come through the Strapi 5 core dependency chain: <code>braces</code> (GHSA-vfj7-8cjw-p6xm) and Zod via <code>@strapi/utils</code> 5.61.0 (GHSA-mrhx-c7xc-m3w5).</li>
-                <li>No compatible fix exists; the forced npm fix downgrades to Strapi 4, so none was applied.</li>
+                <li>
+                  The recorded high-severity advisories come through the Strapi 5 core dependency
+                  chain: <code>braces</code> (GHSA-vfj7-8cjw-p6xm) and Zod via
+                  <code>@strapi/utils</code> 5.61.0 (GHSA-mrhx-c7xc-m3w5).
+                </li>
+                <li>
+                  No compatible fix exists; the forced npm fix downgrades to Strapi 4, so none was
+                  applied.
+                </li>
               </ul>
             </article>
           </div>
@@ -381,19 +838,30 @@ npm run test:ts:front &amp;&amp; npm run test:ts:back
 npm run build &amp;&amp; npm run verify &amp;&amp; npm run verify:runtime</code></pre>
           </div>
           <div class="link-list">
-            <a href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md">Changelog</a>
+            <a href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md"
+              >Changelog</a
+            >
             <a href="https://github.com/Schero94/Magic-Sessionmanager/releases">Release history</a>
             <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">Report an issue</a>
             <a href="https://github.com/Schero94/Magic-Sessionmanager">Source repository</a>
-            <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm package</a>
+            <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager"
+              >npm package</a
+            >
           </div>
         </section>
       </main>
     </div>
 
     <footer class="footer">
-      <p>Magic Session Manager is released under the MIT License. All features are available without a license key.</p>
-      <p><a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub repository</a> · <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm package</a> · <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">Issues</a></p>
+      <p>
+        Magic Session Manager is released under the MIT License. All features are available without
+        a license key.
+      </p>
+      <p>
+        <a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub repository</a> ·
+        <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm package</a> ·
+        <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">Issues</a>
+      </p>
     </footer>
   </body>
 </html>

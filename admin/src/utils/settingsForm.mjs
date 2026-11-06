@@ -105,7 +105,10 @@ function validateMaxFailedLogins(value) {
   }
   const number = Number(value);
   if (!Number.isInteger(number) || number < min || number > max) {
-    return message('settings.validation.range', 'Enter a whole number from {min} to {max}.', { min, max });
+    return message('settings.validation.range', 'Enter a whole number from {min} to {max}.', {
+      min,
+      max,
+    });
   }
   return null;
 }
@@ -121,10 +124,15 @@ export function validateCountryCode(code, list = []) {
   const value = typeof code === 'string' ? code.trim().toUpperCase() : '';
   if (!value) return null;
   if (!/^[A-Z]{2}$/.test(value)) {
-    return message('settings.validation.countryCode', 'Enter a two-letter ISO code, for example JP.');
+    return message(
+      'settings.validation.countryCode',
+      'Enter a two-letter ISO code, for example JP.'
+    );
   }
   if (list.includes(value)) {
-    return message('settings.validation.countryDuplicate', '{country} is already in the list.', { country: value });
+    return message('settings.validation.countryDuplicate', '{country} is already in the list.', {
+      country: value,
+    });
   }
   return null;
 }
@@ -151,14 +159,22 @@ export function validateSettings(settings) {
     );
   }
   if (!isAllowedWebhookUrl(source.slackWebhookUrl, WEBHOOK_HOSTS.slackWebhookUrl)) {
-    errors.slackWebhookUrl = message('settings.validation.webhookSlack', 'Enter an https address on hooks.slack.com.');
+    errors.slackWebhookUrl = message(
+      'settings.validation.webhookSlack',
+      'Enter an https address on hooks.slack.com.'
+    );
   }
 
-  const filename = typeof source.geoIpDatabasePath === 'string' ? source.geoIpDatabasePath.trim() : '';
+  const filename =
+    typeof source.geoIpDatabasePath === 'string' ? source.geoIpDatabasePath.trim() : '';
   if (filename && !GEOIP_DATABASE_FILENAMES.includes(filename)) {
-    errors.geoIpDatabasePath = message('settings.validation.geoIpFilename', 'Use one of these filenames: {names}.', {
-      names: GEOIP_DATABASE_FILENAMES.join(', '),
-    });
+    errors.geoIpDatabasePath = message(
+      'settings.validation.geoIpFilename',
+      'Use one of these filenames: {names}.',
+      {
+        names: GEOIP_DATABASE_FILENAMES.join(', '),
+      }
+    );
   }
 
   const templates = source.emailTemplates || {};
@@ -191,7 +207,9 @@ export function validateSettings(settings) {
  */
 export function getAdjustedFields(submitted, stored, previous) {
   const source = submitted || {};
-  return Object.keys(source).filter((key) =>
-    !areSettingsEqual(source[key], stored?.[key])
-    && (previous === undefined || !areSettingsEqual(source[key], previous?.[key])));
+  return Object.keys(source).filter(
+    (key) =>
+      !areSettingsEqual(source[key], stored?.[key]) &&
+      (previous === undefined || !areSettingsEqual(source[key], previous?.[key]))
+  );
 }

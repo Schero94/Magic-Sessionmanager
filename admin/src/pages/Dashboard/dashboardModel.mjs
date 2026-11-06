@@ -62,11 +62,16 @@ const readQueryText = (value) => {
 export function parseDashboardQuery(query = {}) {
   const source = query || {};
   const page = Number.parseInt(String(source.page ?? '1'), 10);
-  const pageSize = PAGE_SIZE_OPTIONS.includes(String(source.pageSize)) ? String(source.pageSize) : DEFAULT_PAGE_SIZE;
-  const status = isSessionFilter(source.status) ? /** @type {string} */ (source.status) : DEFAULT_SESSION_FILTER;
-  const reason = status === 'ended' && isEndReasonFilter(source.reason)
-    ? /** @type {string} */ (source.reason)
-    : DEFAULT_END_REASON_FILTER;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(String(source.pageSize))
+    ? String(source.pageSize)
+    : DEFAULT_PAGE_SIZE;
+  const status = isSessionFilter(source.status)
+    ? /** @type {string} */ (source.status)
+    : DEFAULT_SESSION_FILTER;
+  const reason =
+    status === 'ended' && isEndReasonFilter(source.reason)
+      ? /** @type {string} */ (source.reason)
+      : DEFAULT_END_REASON_FILTER;
   const search = readQueryText(source.search) || readQueryText(source._q);
 
   return { page: Number.isFinite(page) && page >= 1 ? page : 1, pageSize, status, reason, search };
@@ -90,9 +95,11 @@ export function encodeSearchQuery(value) {
  */
 export function hasActiveFilters(state) {
   if (!state) return false;
-  return state.status !== DEFAULT_SESSION_FILTER
-    || (Boolean(state.reason) && state.reason !== DEFAULT_END_REASON_FILTER)
-    || Boolean(state.search);
+  return (
+    state.status !== DEFAULT_SESSION_FILTER ||
+    (Boolean(state.reason) && state.reason !== DEFAULT_END_REASON_FILTER) ||
+    Boolean(state.search)
+  );
 }
 
 /**
@@ -120,7 +127,16 @@ const getUserKey = (session) => {
  */
 export function getSessionStats(sessions) {
   const rows = Array.isArray(sessions) ? sessions : [];
-  const stats = { active: 0, idle: 0, ended: 0, total: rows.length, usersOnline: 0, loggedOut: 0, timedOut: 0, otherReasons: 0 };
+  const stats = {
+    active: 0,
+    idle: 0,
+    ended: 0,
+    total: rows.length,
+    usersOnline: 0,
+    loggedOut: 0,
+    timedOut: 0,
+    otherReasons: 0,
+  };
   const onlineUsers = new Set();
   for (const session of rows) {
     const state = getSessionState(session);

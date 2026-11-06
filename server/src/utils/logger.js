@@ -22,7 +22,7 @@ const PREFIX = '[magic-sessionmanager]';
  */
 function formatMessage(prefix, args) {
   if (args.length === 0) return prefix;
-  const parts = args.map(arg => {
+  const parts = args.map((arg) => {
     if (typeof arg === 'string') return arg;
     if (arg instanceof Error) return '[Error]';
     if (arg === null || ['number', 'boolean'].includes(typeof arg)) return String(arg);

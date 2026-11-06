@@ -5,7 +5,10 @@ import {
   LICENSE_SUMMARY_MESSAGES,
   buildLicenseSummary,
 } from '../admin/src/utils/activationSummary.mjs';
-import { LICENSE_FEATURES_MESSAGE, LICENSE_STATE_MESSAGES } from '../admin/src/utils/licenseStatus.mjs';
+import {
+  LICENSE_FEATURES_MESSAGE,
+  LICENSE_STATE_MESSAGES,
+} from '../admin/src/utils/licenseStatus.mjs';
 import { formatSessionDate } from '../admin/src/utils/sessionDates.mjs';
 
 const NOW = Date.parse('2026-11-06T09:30:00.000Z');
@@ -81,8 +84,22 @@ test('license download uses translated labels and admin-locale dates (F18, I18N-
   assert.match(summary, /Gerätelimit: 1 von 3/);
   assert.match(summary, /Lizenzserver erreichbar: Ja/);
   assert.match(summary, /Erstellt: 06\.11\.2026/);
-  for (const english of ['ACTIVE', 'Active', 'Inactive', 'Never', 'N/A', 'Expires', 'Generated', 'Online', 'Offline']) {
-    assert.doesNotMatch(summary, new RegExp(`\\b${english}\\b`), `no English or retired literal "${english}"`);
+  for (const english of [
+    'ACTIVE',
+    'Active',
+    'Inactive',
+    'Never',
+    'N/A',
+    'Expires',
+    'Generated',
+    'Online',
+    'Offline',
+  ]) {
+    assert.doesNotMatch(
+      summary,
+      new RegExp(`\\b${english}\\b`),
+      `no English or retired literal "${english}"`
+    );
   }
 });
 
@@ -115,7 +132,11 @@ test('English defaults are complete and use the license vocabulary', () => {
   assert.match(summary, /Status: License valid until Mar 1, 2027\./);
   assert.match(summary, /License server reachable: Yes/);
   assert.doesNotMatch(summary, /activation/i);
-  for (const descriptor of [...Object.values(LICENSE_SUMMARY_MESSAGES), ...Object.values(LICENSE_STATE_MESSAGES), LICENSE_FEATURES_MESSAGE]) {
+  for (const descriptor of [
+    ...Object.values(LICENSE_SUMMARY_MESSAGES),
+    ...Object.values(LICENSE_STATE_MESSAGES),
+    LICENSE_FEATURES_MESSAGE,
+  ]) {
     assert.match(descriptor.messageId, /^(?:license|common)\./);
     assert.ok(descriptor.defaultMessage.length > 0);
   }

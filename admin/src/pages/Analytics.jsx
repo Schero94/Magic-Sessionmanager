@@ -128,7 +128,13 @@ const AnalyticsBars = ({ rows, label, getLabel, countLabel, formatCount }) => (
         <BarTrack aria-hidden="true">
           <BarFill style={{ width: `${row.percent}%` }} />
         </BarTrack>
-        <Typography data-bar-count="" variant="omega" fontWeight="semiBold" textColor="neutral800" tag="span">
+        <Typography
+          data-bar-count=""
+          variant="omega"
+          fontWeight="semiBold"
+          textColor="neutral800"
+          tag="span"
+        >
           <span aria-hidden="true">{formatCount(row.count)}</span>
           <VisuallyHidden>{countLabel(row.count)}</VisuallyHidden>
         </Typography>
@@ -144,7 +150,10 @@ const AnalyticsPage = () => {
   const t = (id, defaultMessage, values) =>
     formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const translate = (descriptor) =>
-    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage });
+    formatMessage({
+      id: getTranslation(descriptor.messageId),
+      defaultMessage: descriptor.defaultMessage,
+    });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analytics, setAnalytics] = useState(null);
@@ -242,11 +251,11 @@ const AnalyticsPage = () => {
     <Alert
       variant="danger"
       closeLabel={t('common.close', 'Close')}
-      action={(
+      action={
         <Button variant="secondary" onClick={fetchAnalytics} aria-busy={refreshing}>
           {t('analytics.error.retry', 'Try again')}
         </Button>
-      )}
+      }
     >
       <ReadableText variant="omega" textColor="neutral800" tag="span">
         {t('analytics.error.title', 'Analytics could not be loaded.')}
@@ -275,7 +284,7 @@ const AnalyticsPage = () => {
   const countLabel = (count) =>
     t('analytics.bar.sessions', '{count, plural, one {# session} other {# sessions}}', { count });
   const deviceLabel = (key) =>
-    (key === ANALYTICS_UNKNOWN_KEY ? unknownLabel : translate(getDeviceTypeMessage(key)));
+    key === ANALYTICS_UNKNOWN_KEY ? unknownLabel : translate(getDeviceTypeMessage(key));
   const browserLabel = (key) => (key === ANALYTICS_UNKNOWN_KEY ? unknownLabel : key);
 
   return (
@@ -288,10 +297,7 @@ const AnalyticsPage = () => {
       {errorAlert}
 
       {truncated ? (
-        <Alert
-          variant="default"
-          closeLabel={t('common.close', 'Close')}
-        >
+        <Alert variant="default" closeLabel={t('common.close', 'Close')}>
           <ReadableText variant="omega" textColor="neutral800" tag="span">
             {t(
               'analytics.truncated',
@@ -376,14 +382,19 @@ const AnalyticsPage = () => {
             )}
           >
             <Typography variant="alpha" textColor="neutral800" tag="p">
-              {t('analytics.duration.minutes', '{count} min', { count: formatNumber(analytics.avgSessionDuration) })}
+              {t('analytics.duration.minutes', '{count} min', {
+                count: formatNumber(analytics.avgSessionDuration),
+              })}
             </Typography>
           </SectionCard>
         </>
       ) : (
         <EmptyStateLayout
           icon={<EmptyDocuments width="16rem" height="8.8rem" aria-hidden="true" />}
-          content={t('analytics.empty', 'No sessions to analyse yet. Analytics appear after the first sign-ins.')}
+          content={t(
+            'analytics.empty',
+            'No sessions to analyse yet. Analytics appear after the first sign-ins.'
+          )}
         />
       )}
     </PageShell>

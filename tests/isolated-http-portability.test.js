@@ -11,19 +11,27 @@ const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 const HOST_SUITES = ['isolated-fallback-logout-http.test.js', 'isolated-http-access.test.js'];
-const missingModules = path.join(os.tmpdir(), `sessionmanager-no-host-${process.pid}`, 'node_modules');
+const missingModules = path.join(
+  os.tmpdir(),
+  `sessionmanager-no-host-${process.pid}`,
+  'node_modules'
+);
 
 function runSuite(file, extraEnv) {
   const env = { ...process.env, SESSION_HTTP_STRAPI_NODE_MODULES: missingModules, ...extraEnv };
   if (!extraEnv.SESSION_HTTP_REQUIRED) delete env.SESSION_HTTP_REQUIRED;
   // Run as an independent test process with plain TAP output.
   delete env.NODE_TEST_CONTEXT;
-  return spawnSync(process.execPath, ['--test', '--test-reporter=tap', path.join(__dirname, file)], {
-    cwd: path.resolve(__dirname, '..'),
-    env,
-    encoding: 'utf8',
-    timeout: 60_000,
-  });
+  return spawnSync(
+    process.execPath,
+    ['--test', '--test-reporter=tap', path.join(__dirname, file)],
+    {
+      cwd: path.resolve(__dirname, '..'),
+      env,
+      encoding: 'utf8',
+      timeout: 60_000,
+    }
+  );
 }
 
 for (const file of HOST_SUITES) {

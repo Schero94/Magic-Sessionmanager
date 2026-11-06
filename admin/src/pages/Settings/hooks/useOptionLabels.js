@@ -20,13 +20,16 @@ export function useOptionLabels() {
   return useMemo(() => {
     const minutes = (count) => t('settings.config.unit.minutes', '{count} min', { count });
     const seconds = (count) => t('settings.config.unit.seconds', '{count} s', { count });
-    const days = (count) => t('settings.config.unit.days', '{count, plural, one {# day} other {# days}}', { count });
+    const days = (count) =>
+      t('settings.config.unit.days', '{count, plural, one {# day} other {# days}}', { count });
     return {
       minutes,
       seconds,
       days,
-      graceMs: (ms) => (ms === 0 ? t('settings.config.option.off', 'Off') : seconds(Math.round(ms / 100) / 10)),
-      retentionDays: (value) => (value === -1 ? t('settings.config.option.forever', 'Forever') : days(value)),
+      graceMs: (ms) =>
+        ms === 0 ? t('settings.config.option.off', 'Off') : seconds(Math.round(ms / 100) / 10),
+      retentionDays: (value) =>
+        value === -1 ? t('settings.config.option.forever', 'Forever') : days(value),
       custom: (value) => t('settings.config.option.custom', '{value} (custom)', { value }),
     };
   }, [t]);

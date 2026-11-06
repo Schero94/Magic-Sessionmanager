@@ -12,11 +12,11 @@ jobs:
   test:
     name: Test & Verify Build
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [20.x, 22.x]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -46,17 +46,17 @@ jobs:
           echo "Checking admin build..."
           test -f "dist/admin/index.js" && echo "✓ Admin JS built" || exit 1
           test -f "dist/admin/index.mjs" && echo "✓ Admin MJS built" || exit 1
-          
+
           echo "Checking server build..."
           test -f "dist/server/index.js" && echo "✓ Server JS built" || exit 1
           test -f "dist/server/index.mjs" && echo "✓ Server MJS built" || exit 1
-          
+
           echo "✓ All build artifacts present"
 
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

@@ -14,14 +14,8 @@ test('browser versions are extracted from common user-agent formats', () => {
     getBrowserVersionFromUserAgent('Mozilla/5.0 Chrome/131.0.0.0 Edg/131.0.0.0'),
     '131.0.0.0'
   );
-  assert.equal(
-    getBrowserVersionFromUserAgent('Mozilla/5.0 Firefox/132.0'),
-    '132.0'
-  );
-  assert.equal(
-    getBrowserVersionFromUserAgent('Mozilla/5.0 Version/18.1 Safari/605.1.15'),
-    '18.1'
-  );
+  assert.equal(getBrowserVersionFromUserAgent('Mozilla/5.0 Firefox/132.0'), '132.0');
+  assert.equal(getBrowserVersionFromUserAgent('Mozilla/5.0 Version/18.1 Safari/605.1.15'), '18.1');
   assert.equal(getBrowserVersionFromUserAgent('unknown'), '');
 });
 

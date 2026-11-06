@@ -1,20 +1,21 @@
-<!-- 
+<!--
 Thank you for contributing to Magic Sessionmanager! 🎉
 Please fill out this template to help us review your PR.
 -->
 
 ## 📝 Description
+
 <!-- Provide a clear and concise description of your changes -->
 
-
-
 ## 🔗 Related Issue(s)
+
 <!-- Link to related issues. Use "Closes #123" or "Fixes #123" to auto-close issues -->
 
 - Closes #
 - Related to #
 
 ## 🎯 Type of Change
+
 <!-- Put an `x` in all boxes that apply -->
 
 - [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
@@ -28,6 +29,7 @@ Please fill out this template to help us review your PR.
 - [ ] 🔒 Security improvement
 
 ## 👤 Feature Area
+
 <!-- Which part of the plugin does this affect? -->
 
 - [ ] Session Tracking
@@ -45,6 +47,7 @@ Please fill out this template to help us review your PR.
 - [ ] Documentation
 
 ## 🧪 Testing
+
 <!-- Describe the tests you ran to verify your changes -->
 
 - [ ] I have tested these changes locally
@@ -55,14 +58,15 @@ Please fill out this template to help us review your PR.
 
 ### Test Environment
 
-- **Plugin Version**: 
-- **Strapi Version**: 
-- **Node Version**: 
-- **Database**: 
-- **User Provider**: 
-- **OS**: 
+- **Plugin Version**:
+- **Strapi Version**:
+- **Node Version**:
+- **Database**:
+- **User Provider**:
+- **OS**:
 
 ### Session Testing
+
 <!-- If applicable, describe session scenarios you tested -->
 
 - [ ] Tested user login/logout tracking
@@ -73,11 +77,11 @@ Please fill out this template to help us review your PR.
 - [ ] Tested geolocation data
 
 ## 📸 Screenshots/Videos
+
 <!-- If applicable, add screenshots of dashboard, analytics, or session data -->
 
-
-
 ## 📋 Checklist
+
 <!-- Put an `x` in all boxes that apply -->
 
 - [ ] My code follows the project's code style
@@ -90,22 +94,21 @@ Please fill out this template to help us review your PR.
 - [ ] I have not introduced any security vulnerabilities
 
 ## 🔄 Breaking Changes
+
 <!-- If this introduces breaking changes, describe the impact and migration path -->
 
-
-
 ## 🔒 Security Considerations
+
 <!-- If applicable, describe security implications of your changes -->
 
-
-
 ## 📚 Additional Context
+
 <!-- Add any other context about the PR here -->
 
-
-
 ---
+
 **PR Title Format**: Please use conventional commits format:
+
 - `feat: add session export functionality`
 - `fix: resolve session tracking middleware issue`
 - `docs: update analytics configuration guide`

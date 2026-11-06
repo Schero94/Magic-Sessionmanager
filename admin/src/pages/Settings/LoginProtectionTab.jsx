@@ -35,14 +35,20 @@ const LoginProtectionTab = ({ form }) => {
 
       <SectionCard
         title={t('settings.config.failed.title', 'Failed sign-ins')}
-        subtitle={t('settings.config.failed.intro', 'Slows down password guessing from one IP address.')}
+        subtitle={t(
+          'settings.config.failed.intro',
+          'Slows down password guessing from one IP address.'
+        )}
       >
         <EqualGrid columns={2} stackBelow="medium" gap={6}>
           <FormField
             id="max-failed-logins"
             name="maxFailedLogins"
             label={t('settings.config.failed.lockout.label', 'Temporary IP lockout after')}
-            description={t('settings.config.failed.lockout.hint', 'A whole number from 0 to 100. 0 turns the lockout off.')}
+            description={t(
+              'settings.config.failed.lockout.hint',
+              'A whole number from 0 to 100. 0 turns the lockout off.'
+            )}
             suffix={t('settings.config.failed.lockout.suffix', 'failed sign-ins')}
             error={maxFailedError}
             required
@@ -58,18 +64,28 @@ const LoginProtectionTab = ({ form }) => {
           </FormField>
         </EqualGrid>
         {!maxFailedError ? (
-          <Box padding={3} background={maxFailedValue === 0 ? 'warning100' : 'neutral100'} hasRadius aria-live="polite">
+          <Box
+            padding={3}
+            background={maxFailedValue === 0 ? 'warning100' : 'neutral100'}
+            hasRadius
+            aria-live="polite"
+          >
             <ReadableParagraphs
               variant="pi"
               textColor={maxFailedValue === 0 ? 'warning700' : 'neutral700'}
               tag="p"
-              text={maxFailedValue === 0
-                ? t('settings.config.failed.lockout.off', 'The temporary IP lockout is off. Failed sign-ins are not limited.')
-                : t(
-                  'settings.config.failed.lockout.preview',
-                  'After {count, plural, one {# failed sign-in} other {# failed sign-ins}} from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Counted per server process.',
-                  { count: maxFailedValue }
-                )}
+              text={
+                maxFailedValue === 0
+                  ? t(
+                      'settings.config.failed.lockout.off',
+                      'The temporary IP lockout is off. Failed sign-ins are not limited.'
+                    )
+                  : t(
+                      'settings.config.failed.lockout.preview',
+                      'After {count, plural, one {# failed sign-in} other {# failed sign-ins}} from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Counted per server process.',
+                      { count: maxFailedValue }
+                    )
+              }
             />
           </Box>
         ) : null}
@@ -78,7 +94,10 @@ const LoginProtectionTab = ({ form }) => {
       <SectionCard
         id="client-ip-address"
         title={t('settings.config.clientIp.title', 'Client IP address')}
-        subtitle={t('settings.config.clientIp.intro', 'All IP-based rules depend on reading the real client address.')}
+        subtitle={t(
+          'settings.config.clientIp.intro',
+          'All IP-based rules depend on reading the real client address.'
+        )}
       >
         <SettingsToggleRow
           id="trusted-proxies"
@@ -123,7 +142,10 @@ const LoginProtectionTab = ({ form }) => {
             <FormField
               id="geoip-lookup-failure-mode"
               name="geoLookupFailureMode"
-              label={t('settings.config.suspicious.failureMode.label', 'If the location cannot be determined')}
+              label={t(
+                'settings.config.suspicious.failureMode.label',
+                'If the location cannot be determined'
+              )}
               description={t(
                 'settings.config.suspicious.failureMode.hint',
                 "Automatic rejects only when 'Reject suspicious sign-ins' is on. A rejected sign-in gets 'Login temporarily unavailable'. With 'Reject sign-in', the Automatic provider no longer falls back to ipapi.co."
@@ -134,9 +156,15 @@ const LoginProtectionTab = ({ form }) => {
                 disabled={lookupOff}
                 onChange={(value) => handleChange('geoLookupFailureMode', value)}
               >
-                <SingleSelectOption value="auto">{t('settings.config.suspicious.failureMode.auto', 'Automatic')}</SingleSelectOption>
-                <SingleSelectOption value="allow">{t('settings.config.suspicious.failureMode.allow', 'Allow sign-in')}</SingleSelectOption>
-                <SingleSelectOption value="block">{t('settings.config.suspicious.failureMode.block', 'Reject sign-in')}</SingleSelectOption>
+                <SingleSelectOption value="auto">
+                  {t('settings.config.suspicious.failureMode.auto', 'Automatic')}
+                </SingleSelectOption>
+                <SingleSelectOption value="allow">
+                  {t('settings.config.suspicious.failureMode.allow', 'Allow sign-in')}
+                </SingleSelectOption>
+                <SingleSelectOption value="block">
+                  {t('settings.config.suspicious.failureMode.block', 'Reject sign-in')}
+                </SingleSelectOption>
               </SingleSelect>
             </FormField>
           </EqualGrid>
@@ -145,7 +173,10 @@ const LoginProtectionTab = ({ form }) => {
 
       <SectionCard
         title={t('settings.config.countries.title', 'Country rules')}
-        subtitle={t('settings.config.countries.intro', 'Allow or reject new sign-ins by the country of the IP address.')}
+        subtitle={t(
+          'settings.config.countries.intro',
+          'Allow or reject new sign-ins by the country of the IP address.'
+        )}
       >
         {lookupOff ? <RequiresGeolocation /> : null}
         <SettingsToggleRow
@@ -170,12 +201,21 @@ const LoginProtectionTab = ({ form }) => {
             {
               id: 'rule',
               term: t('settings.config.refused.rule.response', '403'),
-              description: t('settings.config.refused.rule.cause', 'Country rule, or suspicious address / low score'),
+              description: t(
+                'settings.config.refused.rule.cause',
+                'Country rule, or suspicious address / low score'
+              ),
             },
             {
               id: 'unavailable',
-              term: t('settings.config.refused.unavailable.response', '403 "Login temporarily unavailable"'),
-              description: t('settings.config.refused.unavailable.cause', 'Location could not be determined and the rule says reject'),
+              term: t(
+                'settings.config.refused.unavailable.response',
+                '403 "Login temporarily unavailable"'
+              ),
+              description: t(
+                'settings.config.refused.unavailable.cause',
+                'Location could not be determined and the rule says reject'
+              ),
             },
           ]}
         />

@@ -24,7 +24,7 @@ function evict() {
   }
   if (cache.size >= CACHE_MAX_SIZE) {
     const keysToDelete = [...cache.keys()].slice(0, Math.floor(CACHE_MAX_SIZE / 4));
-    keysToDelete.forEach(k => cache.delete(k));
+    keysToDelete.forEach((k) => cache.delete(k));
   }
 }
 

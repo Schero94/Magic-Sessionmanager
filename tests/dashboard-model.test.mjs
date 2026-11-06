@@ -27,22 +27,34 @@ const MAC_SAFARI =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
 
 test('URL query maps to dashboard state with safe defaults', () => {
-  assert.deepEqual(parseDashboardQuery({}), { page: 1, pageSize: DEFAULT_PAGE_SIZE, status: 'all', reason: 'all', search: '' });
-  assert.deepEqual(parseDashboardQuery({ page: '3', pageSize: '50', status: 'idle', search: '  anna ' }), {
-    page: 3,
-    pageSize: '50',
-    status: 'idle',
-    reason: 'all',
-    search: 'anna',
-  });
-  // Invalid values never broaden or empty the list silently.
-  assert.deepEqual(parseDashboardQuery({ page: '-2', pageSize: '7', status: 'online', search: ['x'] }), {
+  assert.deepEqual(parseDashboardQuery({}), {
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
     status: 'all',
     reason: 'all',
     search: '',
   });
+  assert.deepEqual(
+    parseDashboardQuery({ page: '3', pageSize: '50', status: 'idle', search: '  anna ' }),
+    {
+      page: 3,
+      pageSize: '50',
+      status: 'idle',
+      reason: 'all',
+      search: 'anna',
+    }
+  );
+  // Invalid values never broaden or empty the list silently.
+  assert.deepEqual(
+    parseDashboardQuery({ page: '-2', pageSize: '7', status: 'online', search: ['x'] }),
+    {
+      page: 1,
+      pageSize: DEFAULT_PAGE_SIZE,
+      status: 'all',
+      reason: 'all',
+      search: '',
+    }
+  );
   assert.deepEqual(parseDashboardQuery(null).page, 1);
   assert.ok(PAGE_SIZE_OPTIONS.includes(DEFAULT_PAGE_SIZE));
   assert.equal(DEFAULT_PAGE_SIZE, '25');
@@ -55,10 +67,17 @@ test('the end reason applies only to the Ended status', () => {
 });
 
 test('?search=<email> from the user panel prefills the search; _q still works (IA C)', () => {
-  assert.equal(parseDashboardQuery({ search: 'anna%2Btest%40example.test' }).search, 'anna+test@example.test');
+  assert.equal(
+    parseDashboardQuery({ search: 'anna%2Btest%40example.test' }).search,
+    'anna+test@example.test'
+  );
   assert.equal(parseDashboardQuery({ search: 'anna@example.test' }).search, 'anna@example.test');
   assert.equal(parseDashboardQuery({ _q: 'legacy' }).search, 'legacy');
-  assert.equal(parseDashboardQuery({ search: '%E0%A4%A' }).search, '%E0%A4%A', 'broken encodings do not throw');
+  assert.equal(
+    parseDashboardQuery({ search: '%E0%A4%A' }).search,
+    '%E0%A4%A',
+    'broken encodings do not throw'
+  );
   assert.equal(encodeSearchQuery(' anna+test@example.test '), 'anna%2Btest%40example.test');
   assert.equal(encodeSearchQuery('  '), undefined);
 });
@@ -95,11 +114,14 @@ test('KPI counts: Active with users online, Idle (open only), Ended by reason, A
 });
 
 test('one user identifier is used for display and per-row accessible names', () => {
-  assert.deepEqual(getSessionUserLabels({ id: 's1', user: { username: 'anna', email: 'anna@example.test' } }), {
-    primary: 'anna',
-    secondary: 'anna@example.test',
-    accessible: 'anna',
-  });
+  assert.deepEqual(
+    getSessionUserLabels({ id: 's1', user: { username: 'anna', email: 'anna@example.test' } }),
+    {
+      primary: 'anna',
+      secondary: 'anna@example.test',
+      accessible: 'anna',
+    }
+  );
   assert.deepEqual(getSessionUserLabels({ id: 's2', user: { email: 'ben@example.test' } }), {
     primary: 'ben@example.test',
     secondary: '',
@@ -135,12 +157,18 @@ test('exports use neutral device keys and never infer Desktop for unknown agents
     browserVersion: '',
     os: '',
   });
-  assert.equal(getExportDeviceInfo({ deviceType: 'mobile', browserName: 'unknown' }, 'n/a').browser, 'n/a');
+  assert.equal(
+    getExportDeviceInfo({ deviceType: 'mobile', browserName: 'unknown' }, 'n/a').browser,
+    'n/a'
+  );
 });
 
 test('"How sessions work" remembers its state and survives broken storage', () => {
   const store = new Map();
-  const storage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
+  const storage = {
+    getItem: (key) => store.get(key) ?? null,
+    setItem: (key, value) => store.set(key, value),
+  };
   assert.equal(readDisclosureOpen(storage), false, 'collapsed by default');
   writeDisclosureOpen(storage, true);
   assert.equal(store.get(HOW_IT_WORKS_STORAGE_KEY), 'open');
@@ -148,7 +176,14 @@ test('"How sessions work" remembers its state and survives broken storage', () =
   writeDisclosureOpen(storage, false);
   assert.equal(readDisclosureOpen(storage), false);
 
-  const throwing = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+  const throwing = {
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {
+      throw new Error('blocked');
+    },
+  };
   assert.equal(readDisclosureOpen(throwing), false);
   assert.doesNotThrow(() => writeDisclosureOpen(throwing, true));
   assert.equal(readDisclosureOpen(null), false);

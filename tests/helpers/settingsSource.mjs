@@ -42,5 +42,7 @@ export function readSettingsFile(name) {
  * @returns {string} Source text.
  */
 export function readSettingsSource() {
-  return readSettingsFiles().map(({ file, source }) => `// ---- ${file}\n${source}`).join('\n');
+  return readSettingsFiles()
+    .map(({ file, source }) => `// ---- ${file}\n${source}`)
+    .join('\n');
 }

@@ -20,7 +20,12 @@ export const EqualGrid = ({ columns = 2, stackBelow = 'medium', gap = 6, label, 
   const items = Children.toArray(children).filter(Boolean);
 
   return (
-    <Grid.Root gap={gap} role={label ? 'group' : undefined} aria-label={label} data-equal-grid={columns}>
+    <Grid.Root
+      gap={gap}
+      role={label ? 'group' : undefined}
+      aria-label={label}
+      data-equal-grid={columns}
+    >
       {items.map((child, index) => (
         <Grid.Item
           key={child.key ?? index}
@@ -111,7 +116,15 @@ const IconTile = styled(Flex)`
   }
 `;
 
-const STAT_TONES = new Set(['primary', 'success', 'warning', 'danger', 'neutral', 'secondary', 'alternative']);
+const STAT_TONES = new Set([
+  'primary',
+  'success',
+  'warning',
+  'danger',
+  'neutral',
+  'secondary',
+  'alternative',
+]);
 
 /**
  * Button reset for clickable cards. The browser focus ring stays; the
@@ -149,11 +162,26 @@ const CardButton = styled(Box)`
  * @param {string} [props.actionLabel] Accessible name of a clickable card (defaults to its text).
  * @returns {import('react').ReactElement} Stat card filling its grid cell.
  */
-export const StatCard = ({ label, value, icon: Icon, tone = 'neutral', description, onClick, pressed, actionLabel }) => {
+export const StatCard = ({
+  label,
+  value,
+  icon: Icon,
+  tone = 'neutral',
+  description,
+  onClick,
+  pressed,
+  actionLabel,
+}) => {
   const safeTone = STAT_TONES.has(tone) ? tone : 'neutral';
   const clickable = typeof onClick === 'function';
   const buttonProps = clickable
-    ? { tag: 'button', type: 'button', onClick, 'aria-pressed': Boolean(pressed), 'aria-label': actionLabel }
+    ? {
+        tag: 'button',
+        type: 'button',
+        onClick,
+        'aria-pressed': Boolean(pressed),
+        'aria-label': actionLabel,
+      }
     : {};
   const Card = clickable ? CardButton : Box;
 
@@ -185,7 +213,14 @@ export const StatCard = ({ label, value, icon: Icon, tone = 'neutral', descripti
               <Icon aria-hidden focusable={false} />
             </IconTile>
           ) : null}
-          <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0} flex="1 1 auto" data-stat-text="">
+          <Flex
+            direction="column"
+            alignItems="flex-start"
+            gap={1}
+            minWidth={0}
+            flex="1 1 auto"
+            data-stat-text=""
+          >
             <Typography variant="sigma" textColor="neutral600" tag="span">
               {label}
             </Typography>

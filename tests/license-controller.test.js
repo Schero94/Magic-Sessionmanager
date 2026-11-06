@@ -72,16 +72,30 @@ function createEndpointHarness({
     plugin: () => ({ service: () => licenseGuard }),
     store: () => ({
       get: async ({ key }) => stored[key] || null,
-      set: async ({ key, value }) => { stored[key] = value; },
+      set: async ({ key, value }) => {
+        stored[key] = value;
+      },
     }),
     log: { warn() {}, error() {}, info() {}, debug() {} },
   };
   const ctx = {
     state: { user: adminUser },
     request: { body: {} },
-    send(body) { this.status = 200; this.body = body; return body; },
-    badRequest(message) { this.status = 400; this.message = message; return message; },
-    unauthorized(message) { this.status = 401; this.message = message; return message; },
+    send(body) {
+      this.status = 200;
+      this.body = body;
+      return body;
+    },
+    badRequest(message) {
+      this.status = 400;
+      this.message = message;
+      return message;
+    },
+    unauthorized(message) {
+      this.status = 401;
+      this.message = message;
+      return message;
+    },
   };
 
   return {
@@ -132,7 +146,12 @@ test('license status succeeds without a key and does not contact the provider', 
 test('license status returns verified metadata for a stored synthetic key', async () => {
   const { controller, ctx, calls } = createEndpointHarness({
     initialLicenseKey: 'synthetic-license-key',
-    license: { email: 'admin@example.invalid', isActive: true, firstName: 'Local', lastName: 'Tester' },
+    license: {
+      email: 'admin@example.invalid',
+      isActive: true,
+      firstName: 'Local',
+      lastName: 'Tester',
+    },
   });
 
   await controller.getStatus(ctx);
@@ -209,9 +228,8 @@ test('license ping and store-key endpoints use the fake provider and preserve th
   await controller.storeKey(ctx);
   assert.equal(ctx.status, 200);
   assert.equal(stored.licenseKey, 'new-synthetic-key');
-  assert.deepEqual(calls.slice(-3).map(([method]) => method), [
-    'verifyLicense',
-    'getLicenseByKey',
-    'storeLicenseKey',
-  ]);
+  assert.deepEqual(
+    calls.slice(-3).map(([method]) => method),
+    ['verifyLicense', 'getLicenseByKey', 'storeLicenseKey']
+  );
 });

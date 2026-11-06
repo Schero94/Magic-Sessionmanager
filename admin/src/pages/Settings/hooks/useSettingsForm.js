@@ -39,7 +39,9 @@ const getServerMessage = (error) => {
  */
 const formatList = (names, locale) => {
   try {
-    return new Intl.ListFormat(locale || 'en', { style: 'long', type: 'conjunction' }).format(names);
+    return new Intl.ListFormat(locale || 'en', { style: 'long', type: 'conjunction' }).format(
+      names
+    );
   } catch {
     return names.join(', ');
   }
@@ -92,18 +94,21 @@ export function useSettingsForm() {
    * @param {string} scope Log scope for failures.
    * @returns {Promise<void>}
    */
-  const copyValue = useCallback(async (value, successMessage, scope) => {
-    try {
-      await copyText(value);
-      toggleNotification({ type: 'success', message: successMessage });
-    } catch (error) {
-      logSafeAdminError(scope, error);
-      toggleNotification({
-        type: 'danger',
-        message: t('notifications.error.clipboard', 'Could not copy to clipboard.'),
-      });
-    }
-  }, [t, toggleNotification]);
+  const copyValue = useCallback(
+    async (value, successMessage, scope) => {
+      try {
+        await copyText(value);
+        toggleNotification({ type: 'success', message: successMessage });
+      } catch (error) {
+        logSafeAdminError(scope, error);
+        toggleNotification({
+          type: 'danger',
+          message: t('notifications.error.clipboard', 'Could not copy to clipboard.'),
+        });
+      }
+    },
+    [t, toggleNotification]
+  );
 
   /**
    * Loads local GeoIP availability without exposing the stored license key.
@@ -147,7 +152,11 @@ export function useSettingsForm() {
     setLoadError(false);
     try {
       const response = await get(`/${pluginId}/settings`);
-      if (!response?.data?.settings || typeof response.data.settings !== 'object' || Array.isArray(response.data.settings)) {
+      if (
+        !response?.data?.settings ||
+        typeof response.data.settings !== 'object' ||
+        Array.isArray(response.data.settings)
+      ) {
         throw new Error('Invalid settings response');
       }
       const nextSettings = normalizeSettings(response.data.settings);
@@ -208,27 +217,31 @@ export function useSettingsForm() {
       }
       // Prefer the stored settings from the PUT response; re-read them when
       // the response does not include them.
-      const storedPayload = response.data.settings ?? (await get(`/${pluginId}/settings`))?.data?.settings;
+      const storedPayload =
+        response.data.settings ?? (await get(`/${pluginId}/settings`))?.data?.settings;
       const stored = normalizeSettings(storedPayload);
       setSettings(stored);
       setSavedSettings(stored);
       setDraftVersion((version) => version + 1);
 
-      const adjustedNames = [...new Set(
-        getAdjustedFields(submitted, stored, previous)
-          .map((key) => SETTINGS_FIELD_LABELS[key])
-          .filter(Boolean)
-          .map(([id, defaultMessage]) => t(id, defaultMessage))
-      )];
+      const adjustedNames = [
+        ...new Set(
+          getAdjustedFields(submitted, stored, previous)
+            .map((key) => SETTINGS_FIELD_LABELS[key])
+            .filter(Boolean)
+            .map(([id, defaultMessage]) => t(id, defaultMessage))
+        ),
+      ];
       toggleNotification({
         type: adjustedNames.length > 0 ? 'warning' : 'success',
-        message: adjustedNames.length > 0
-          ? t(
-            'settings.config.feedback.adjusted',
-            'Settings saved. Some values were adjusted to the allowed limits: {fields}.',
-            { fields: formatList(adjustedNames, locale) }
-          )
-          : t('notifications.success.saved', 'Settings saved.'),
+        message:
+          adjustedNames.length > 0
+            ? t(
+                'settings.config.feedback.adjusted',
+                'Settings saved. Some values were adjusted to the allowed limits: {fields}.',
+                { fields: formatList(adjustedNames, locale) }
+              )
+            : t('notifications.success.saved', 'Settings saved.'),
       });
       await fetchGeoIpStatus();
       return true;
@@ -236,7 +249,10 @@ export function useSettingsForm() {
       logSafeAdminError('settings.save', err);
       toggleNotification({
         type: 'danger',
-        message: t('settings.config.feedback.saveError', 'Settings could not be saved. Your changes are still in the form.'),
+        message: t(
+          'settings.config.feedback.saveError',
+          'Settings could not be saved. Your changes are still in the form.'
+        ),
       });
       return false;
     } finally {
@@ -271,13 +287,14 @@ export function useSettingsForm() {
       const count = Number(data?.deletedCount) || 0;
       toggleNotification({
         type: 'success',
-        message: count > 0
-          ? t(
-            'settings.config.feedback.deletedEnded',
-            '{count, plural, one {# ended session deleted.} other {# ended sessions deleted.}}',
-            { count }
-          )
-          : t('settings.config.feedback.deletedNone', 'There were no ended sessions to delete.'),
+        message:
+          count > 0
+            ? t(
+                'settings.config.feedback.deletedEnded',
+                '{count, plural, one {# ended session deleted.} other {# ended sessions deleted.}}',
+                { count }
+              )
+            : t('settings.config.feedback.deletedNone', 'There were no ended sessions to delete.'),
       });
     } catch (err) {
       logSafeAdminError('settings.cleanInactive', err);
@@ -313,7 +330,10 @@ export function useSettingsForm() {
       logSafeAdminError('settings.saveGeoIpCredentials', err);
       toggleNotification({
         type: 'danger',
-        message: t('settings.config.feedback.credentialsSaveError', 'The credentials could not be saved. Please try again.'),
+        message: t(
+          'settings.config.feedback.credentialsSaveError',
+          'The credentials could not be saved. Please try again.'
+        ),
       });
     } finally {
       setGeoIpSavingCredentials(false);
@@ -341,7 +361,10 @@ export function useSettingsForm() {
       logSafeAdminError('settings.removeGeoIpCredentials', err);
       toggleNotification({
         type: 'danger',
-        message: t('settings.config.feedback.credentialsRemoveError', 'The credentials could not be removed. Please try again.'),
+        message: t(
+          'settings.config.feedback.credentialsRemoveError',
+          'The credentials could not be removed. Please try again.'
+        ),
       });
       throw err;
     }
@@ -355,34 +378,55 @@ export function useSettingsForm() {
    * @param {boolean} force Bypass the freshness check and download again.
    * @returns {Promise<void>}
    */
-  const handleUpdateGeoIpDatabase = useCallback(async (force = false) => {
-    setGeoIpUpdating(true);
-    try {
-      const response = await post(`/${pluginId}/geoip/update`, { force });
-      requireSuccessfulMutation(response.data);
-      const status = await fetchGeoIpStatus();
-      const result = response.data.result || {};
-      const values = {
-        edition: status?.editionId || '—',
-        date: formatSessionDate(result.lastModified || status?.metadata?.lastModified, locale, '—', BUILD_DATE_OPTIONS),
-      };
-      toggleNotification({
-        type: 'success',
-        message: result.changed === false
-          ? t('settings.config.feedback.geoipCurrent', 'The GeoIP database is already up to date: {edition}, built {date}.', values)
-          : t('settings.config.feedback.geoipUpdated', 'GeoIP database updated: {edition}, built {date}.', values),
-      });
-    } catch (err) {
-      logSafeAdminError('settings.updateGeoIpDatabase', err);
-      toggleNotification({
-        type: 'danger',
-        message: getServerMessage(err)
-          || t('settings.config.feedback.geoipUpdateError', 'The GeoIP database could not be updated.'),
-      });
-    } finally {
-      setGeoIpUpdating(false);
-    }
-  }, [post, t, locale, toggleNotification, fetchGeoIpStatus]);
+  const handleUpdateGeoIpDatabase = useCallback(
+    async (force = false) => {
+      setGeoIpUpdating(true);
+      try {
+        const response = await post(`/${pluginId}/geoip/update`, { force });
+        requireSuccessfulMutation(response.data);
+        const status = await fetchGeoIpStatus();
+        const result = response.data.result || {};
+        const values = {
+          edition: status?.editionId || '—',
+          date: formatSessionDate(
+            result.lastModified || status?.metadata?.lastModified,
+            locale,
+            '—',
+            BUILD_DATE_OPTIONS
+          ),
+        };
+        toggleNotification({
+          type: 'success',
+          message:
+            result.changed === false
+              ? t(
+                  'settings.config.feedback.geoipCurrent',
+                  'The GeoIP database is already up to date: {edition}, built {date}.',
+                  values
+                )
+              : t(
+                  'settings.config.feedback.geoipUpdated',
+                  'GeoIP database updated: {edition}, built {date}.',
+                  values
+                ),
+        });
+      } catch (err) {
+        logSafeAdminError('settings.updateGeoIpDatabase', err);
+        toggleNotification({
+          type: 'danger',
+          message:
+            getServerMessage(err) ||
+            t(
+              'settings.config.feedback.geoipUpdateError',
+              'The GeoIP database could not be updated.'
+            ),
+        });
+      } finally {
+        setGeoIpUpdating(false);
+      }
+    },
+    [post, t, locale, toggleNotification, fetchGeoIpStatus]
+  );
 
   return {
     loading,

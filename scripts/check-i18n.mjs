@@ -31,7 +31,18 @@ export const TRANSLATIONS_DIR = join(ADMIN_SRC, 'translations');
 
 const STRING = String.raw`'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|\`(?:[^\`\\$]|\\.)*\``;
 /** Top-level namespaces of the plugin catalogue; other dotted strings (file names, hosts) are not ids. */
-export const NAMESPACES = ['plugin', 'common', 'homepage', 'modal', 'panel', 'widget', 'analytics', 'license', 'settings', 'notifications'];
+export const NAMESPACES = [
+  'plugin',
+  'common',
+  'homepage',
+  'modal',
+  'panel',
+  'widget',
+  'analytics',
+  'license',
+  'settings',
+  'notifications',
+];
 const ID = String.raw`(?:${NAMESPACES.join('|')})(?:\.[A-Za-z0-9_-]+)+`;
 
 /**
@@ -58,7 +69,8 @@ export const listSourceFiles = (dir = ADMIN_SRC) =>
   });
 
 /** Reads one locale catalogue. */
-export const readLocale = (locale) => JSON.parse(readFileSync(join(TRANSLATIONS_DIR, `${locale}.json`), 'utf8'));
+export const readLocale = (locale) =>
+  JSON.parse(readFileSync(join(TRANSLATIONS_DIR, `${locale}.json`), 'utf8'));
 
 /**
  * Extracts translation usages from one source text.
@@ -72,18 +84,29 @@ export const extractFromSource = (text, file = '<source>') => {
   const dynamic = [];
   const lineAt = (index) => text.slice(0, index).split('\n').length;
   const push = (id, literal, index) =>
-    usages.push({ id, defaultMessage: literal == null ? null : decodeLiteral(literal), file, line: lineAt(index) });
+    usages.push({
+      id,
+      defaultMessage: literal == null ? null : decodeLiteral(literal),
+      file,
+      line: lineAt(index),
+    });
 
   // 1. 'id', 'default'   (calls with the id as any argument, and tuples)
   const pair = new RegExp(String.raw`(['"])(${ID})\1\s*,\s*(${STRING})`, 'g');
   for (const match of text.matchAll(pair)) push(match[2], match[3], match.index);
 
   // 1b. t('id') / header('id') without a default (still a used id).
-  const bare = new RegExp(String.raw`\b(?:t|header|formatTranslation)\(\s*(['"])(${ID})\1\s*\)`, 'g');
+  const bare = new RegExp(
+    String.raw`\b(?:t|header|formatTranslation)\(\s*(['"])(${ID})\1\s*\)`,
+    'g'
+  );
   for (const match of text.matchAll(bare)) push(match[2], null, match.index);
 
   // 2. messageId: 'id', defaultMessage: 'default'
-  const descriptor = new RegExp(String.raw`messageId:\s*(['"])(${ID})\1\s*,\s*defaultMessage:\s*(${STRING})`, 'g');
+  const descriptor = new RegExp(
+    String.raw`messageId:\s*(['"])(${ID})\1\s*,\s*defaultMessage:\s*(${STRING})`,
+    'g'
+  );
   for (const match of text.matchAll(descriptor)) push(match[2], match[3], match.index);
 
   // 3. getTranslation('id') or `${pluginId}.id`, followed by defaultMessage
@@ -91,7 +114,8 @@ export const extractFromSource = (text, file = '<source>') => {
     String.raw`(?:getTranslation\(\s*(['"])(${ID})\1\s*\)|\`\$\{(?:pluginId|PLUGIN_ID)\}\.(${ID})\`)\s*,?\s*(?:defaultMessage:\s*(${STRING}))?`,
     'g'
   );
-  for (const match of text.matchAll(prefixed)) push(match[2] || match[3], match[4] ?? null, match.index);
+  for (const match of text.matchAll(prefixed))
+    push(match[2] || match[3], match[4] ?? null, match.index);
 
   // 4. t(cond ? 'a' : 'b', cond ? 'A' : 'B')
   const ternary = new RegExp(
@@ -105,7 +129,12 @@ export const extractFromSource = (text, file = '<source>') => {
 
   // 5. Template-literal ids: keep their static prefix.
   const templated = /(?:\b(?:t|header|message|getTranslation)\(\s*|messageId:\s*)`([^`$]*)\$\{/g;
-  for (const match of text.matchAll(templated)) dynamic.push({ prefix: match[1].replace(/^\$\{(?:pluginId|PLUGIN_ID)\}\./, ''), file, line: lineAt(match.index) });
+  for (const match of text.matchAll(templated))
+    dynamic.push({
+      prefix: match[1].replace(/^\$\{(?:pluginId|PLUGIN_ID)\}\./, ''),
+      file,
+      line: lineAt(match.index),
+    });
 
   return { usages, dynamic };
 };
@@ -136,7 +165,8 @@ export const placeholdersOf = (message) => {
   const names = new Set();
   // Skip quoted literal sections ('{...}') per ICU apostrophe rules.
   const unquoted = message.replace(/'[{}][^']*'/g, '');
-  for (const match of unquoted.matchAll(/\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:,|\})/g)) names.add(match[1]);
+  for (const match of unquoted.matchAll(/\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:,|\})/g))
+    names.add(match[1]);
   return [...names].sort();
 };
 
@@ -160,13 +190,22 @@ export const buildReport = () => {
   }
 
   const used = new Set(ids);
-  const orphans = Object.keys(en).filter((key) => !used.has(key) && !isDynamic(key)).sort();
+  const orphans = Object.keys(en)
+    .filter((key) => !used.has(key) && !isDynamic(key))
+    .sort();
   const extra = LOCALES.filter((locale) => locale !== 'en').flatMap((locale) =>
-    Object.keys(catalogues[locale]).filter((key) => !(key in en)).map((id) => ({ locale, id }))
+    Object.keys(catalogues[locale])
+      .filter((key) => !(key in en))
+      .map((id) => ({ locale, id }))
   );
 
   const defaultDrift = usages
-    .filter((usage) => usage.defaultMessage != null && typeof en[usage.id] === 'string' && usage.defaultMessage !== en[usage.id])
+    .filter(
+      (usage) =>
+        usage.defaultMessage != null &&
+        typeof en[usage.id] === 'string' &&
+        usage.defaultMessage !== en[usage.id]
+    )
     .map((usage) => ({ ...usage, en: en[usage.id] }));
 
   const placeholderMismatch = [];
@@ -183,13 +222,26 @@ export const buildReport = () => {
   const untranslated = [];
   for (const key of Object.keys(en)) {
     for (const locale of LOCALES.slice(1)) {
-      if (catalogues[locale][key] === en[key] && /[a-z]{4,}/.test(en[key].replace(/\{[^}]*\}/g, ''))) {
+      if (
+        catalogues[locale][key] === en[key] &&
+        /[a-z]{4,}/.test(en[key].replace(/\{[^}]*\}/g, ''))
+      ) {
         untranslated.push({ locale, id: key, value: en[key] });
       }
     }
   }
 
-  return { ids, usages, dynamic, missing, orphans, extra, defaultDrift, placeholderMismatch, untranslated };
+  return {
+    ids,
+    usages,
+    dynamic,
+    missing,
+    orphans,
+    extra,
+    defaultDrift,
+    placeholderMismatch,
+    untranslated,
+  };
 };
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
@@ -198,13 +250,25 @@ if (isMain) {
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ ...report, usages: undefined }, null, 2));
   } else {
-    const sections = ['missing', 'orphans', 'extra', 'defaultDrift', 'placeholderMismatch', 'untranslated'];
-    console.log(`Used ids: ${report.ids.length}; dynamic prefixes: ${report.dynamic.map((d) => d.prefix).join(', ') || 'none'}`);
+    const sections = [
+      'missing',
+      'orphans',
+      'extra',
+      'defaultDrift',
+      'placeholderMismatch',
+      'untranslated',
+    ];
+    console.log(
+      `Used ids: ${report.ids.length}; dynamic prefixes: ${report.dynamic.map((d) => d.prefix).join(', ') || 'none'}`
+    );
     for (const name of sections) {
       console.log(`\n${name}: ${report[name].length}`);
-      for (const entry of report[name]) console.log('  ', typeof entry === 'string' ? entry : JSON.stringify(entry));
+      for (const entry of report[name])
+        console.log('  ', typeof entry === 'string' ? entry : JSON.stringify(entry));
     }
-    const failing = ['missing', 'orphans', 'extra', 'defaultDrift', 'placeholderMismatch'].some((name) => report[name].length > 0);
+    const failing = ['missing', 'orphans', 'extra', 'defaultDrift', 'placeholderMismatch'].some(
+      (name) => report[name].length > 0
+    );
     process.exitCode = failing ? 1 : 0;
   }
 }

@@ -21,7 +21,9 @@ const DEFAULT_HOST_MODULES = path.join(workbench, 'test-app', 'node_modules');
  */
 function resolveHostDependencies(requiredPackages) {
   const modules = process.env.SESSION_HTTP_STRAPI_NODE_MODULES || DEFAULT_HOST_MODULES;
-  const missing = requiredPackages.filter((name) => !fs.existsSync(path.join(modules, name, 'package.json')));
+  const missing = requiredPackages.filter(
+    (name) => !fs.existsSync(path.join(modules, name, 'package.json'))
+  );
   const available = missing.length === 0;
   const required = process.env.SESSION_HTTP_REQUIRED === '1';
   const reason =

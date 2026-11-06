@@ -18,7 +18,17 @@ import { getGridItemSpans } from '../admin/src/utils/gridSpans.mjs';
 test('missing values use one glyph with an accessible label', () => {
   assert.equal(MISSING_VALUE_GLYPH, '—');
   assert.equal(MISSING_VALUE_MESSAGE.messageId, 'common.value.missing');
-  for (const value of [null, undefined, '', '   ', 'unknown', 'Unknown', Number.NaN, Infinity, new Date('x')]) {
+  for (const value of [
+    null,
+    undefined,
+    '',
+    '   ',
+    'unknown',
+    'Unknown',
+    Number.NaN,
+    Infinity,
+    new Date('x'),
+  ]) {
     assert.equal(isMissingValue(value), true, `${String(value)} is missing`);
   }
   for (const value of [0, 'Safari', false, new Date(0)]) {
@@ -40,7 +50,8 @@ test('DS theme breakpoints become matchMedia queries (DUX-19)', () => {
     large: '(min-width: 1080px)',
   });
   assert.equal(
-    getBreakpointQueries({ breakpoints: { ...DS_BREAKPOINTS, medium: '@media(min-width: 800px)' } }).medium,
+    getBreakpointQueries({ breakpoints: { ...DS_BREAKPOINTS, medium: '@media(min-width: 800px)' } })
+      .medium,
     '(min-width: 800px)',
     'the live theme wins over the fallback'
   );
@@ -62,7 +73,11 @@ test('equal grids use 4/2/1 columns for KPIs and 2/1 for section cards', () => {
   assert.deepEqual(getGridItemSpans(4, 'small'), { xs: 12, s: 6, m: 6, col: 3 });
   assert.deepEqual(getGridItemSpans(2, 'medium'), { xs: 12, s: 12, m: 6, col: 6 });
   assert.deepEqual(getGridItemSpans(1, 'medium'), { xs: 12, s: 12, m: 12, col: 12 });
-  assert.deepEqual(getGridItemSpans(5, 'small'), { xs: 12, s: 6, m: 6, col: 6 }, 'unsupported counts fall back to 2');
+  assert.deepEqual(
+    getGridItemSpans(5, 'small'),
+    { xs: 12, s: 6, m: 6, col: 6 },
+    'unsupported counts fall back to 2'
+  );
   for (const columns of [1, 2, 3, 4, 6]) {
     const spans = getGridItemSpans(columns, 'small');
     assert.equal(12 % spans.col, 0, `${columns} columns divide the 12-column grid evenly`);

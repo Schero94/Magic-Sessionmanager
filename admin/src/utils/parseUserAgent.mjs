@@ -34,7 +34,8 @@ const RUNTIME_AGENTS = Object.freeze({ node: 'Node.js', deno: 'Deno', bun: 'Bun'
 
 const BOT_PATTERN = /bot\b|crawler|spider|slurp|headlesschrome/i;
 const TABLET_PATTERN = /(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i;
-const MOBILE_PATTERN = /Mobile|Android|iP(?:hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(?:hpw|web)OS|Opera M(?:obi|ini)/;
+const MOBILE_PATTERN =
+  /Mobile|Android|iP(?:hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(?:hpw|web)OS|Opera M(?:obi|ini)/;
 
 /** Legacy capitalised labels for the normalised device types. */
 export const LEGACY_DEVICE_LABELS = Object.freeze({
@@ -81,11 +82,23 @@ export function parseUserAgent(userAgent) {
   const ua = raw.toLowerCase();
   const runtime = RUNTIME_AGENTS[ua.split('/')[0]];
   if (runtime && !ua.includes(' ')) {
-    return { deviceType: 'api', device: LEGACY_DEVICE_LABELS.api, deviceIcon: 'api', browser: runtime, os: '' };
+    return {
+      deviceType: 'api',
+      device: LEGACY_DEVICE_LABELS.api,
+      deviceIcon: 'api',
+      browser: runtime,
+      os: '',
+    };
   }
   const apiClient = API_CLIENTS.find(([needle]) => ua.includes(needle));
   if (apiClient) {
-    return { deviceType: 'api', device: LEGACY_DEVICE_LABELS.api, deviceIcon: 'api', browser: apiClient[1], os: detectOs(ua) };
+    return {
+      deviceType: 'api',
+      device: LEGACY_DEVICE_LABELS.api,
+      deviceIcon: 'api',
+      browser: apiClient[1],
+      os: detectOs(ua),
+    };
   }
 
   const browser = detectBrowser(ua);

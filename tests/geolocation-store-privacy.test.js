@@ -3,7 +3,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const createGeolocationService = require('../server/src/services/geolocation');
-const { getPluginSettings, invalidateSettingsCache } = require('../server/src/utils/settings-loader');
+const {
+  getPluginSettings,
+  invalidateSettingsCache,
+} = require('../server/src/utils/settings-loader');
 
 test('unavailable settings store cannot override a saved geolocation opt-out', async (t) => {
   let available = false;
@@ -20,10 +23,12 @@ test('unavailable settings store cannot override a saved geolocation opt-out', a
 
   const strapi = {
     config: { get: () => ({ enableGeolocation: true, geoIpProvider: 'ipapi' }) },
-    store: () => ({ get: async () => {
-      if (!available) throw new Error('store unavailable');
-      return { enableGeolocation: false, geoIpProvider: 'ipapi' };
-    } }),
+    store: () => ({
+      get: async () => {
+        if (!available) throw new Error('store unavailable');
+        return { enableGeolocation: false, geoIpProvider: 'ipapi' };
+      },
+    }),
     log: { debug() {}, error() {}, info() {}, warn() {} },
   };
   invalidateSettingsCache();
@@ -45,7 +50,10 @@ test('geolocation resumes an explicitly enabled provider after store recovery', 
   let fetchCalls = 0;
   global.fetch = async () => {
     fetchCalls++;
-    return { ok: true, json: async () => ({ ip: '1.1.1.1', country_name: 'Example', country_code: 'EX' }) };
+    return {
+      ok: true,
+      json: async () => ({ ip: '1.1.1.1', country_name: 'Example', country_code: 'EX' }),
+    };
   };
   t.after(() => {
     global.fetch = originalFetch;
@@ -54,10 +62,12 @@ test('geolocation resumes an explicitly enabled provider after store recovery', 
 
   const strapi = {
     config: { get: () => ({ enableGeolocation: true, geoIpProvider: 'ipapi' }) },
-    store: () => ({ get: async () => {
-      if (!available) throw new Error('store unavailable');
-      return { enableGeolocation: true, geoIpProvider: 'ipapi' };
-    } }),
+    store: () => ({
+      get: async () => {
+        if (!available) throw new Error('store unavailable');
+        return { enableGeolocation: true, geoIpProvider: 'ipapi' };
+      },
+    }),
     log: { debug() {}, error() {}, info() {}, warn() {} },
   };
   invalidateSettingsCache();
@@ -90,8 +100,12 @@ test('equivalent private IP literals never reach the provider', async (t) => {
   invalidateSettingsCache();
   const service = createGeolocationService({ strapi });
   for (const address of [
-    '::ffff:7f00:1', '0:0:0:0:0:ffff:0a00:0001', '::ffff:c0a8:101',
-    '::0001', '0:0:0:0:0:0:0:0001', '0:0:0:0:0:0:0:0000',
+    '::ffff:7f00:1',
+    '0:0:0:0:0:ffff:0a00:0001',
+    '::ffff:c0a8:101',
+    '::0001',
+    '0:0:0:0:0:0:0:0001',
+    '0:0:0:0:0:0:0:0000',
   ]) {
     assert.equal((await service.getIpInfo(address))._status, 'private', address);
   }
@@ -105,11 +119,16 @@ test('automatic fallback does not log local reader error details', async (t) => 
   const originalExists = fs.existsSync;
   const warnings = [];
   fs.existsSync = () => true;
-  t.after(() => { fs.existsSync = originalExists; });
+  t.after(() => {
+    fs.existsSync = originalExists;
+  });
   const strapi = { log: { warn: (...args) => warnings.push(args.join(' ')) } };
   const service = createGeolocationService({ strapi });
   service.getGeoSettings = async () => ({ enableGeolocation: true, geoIpProvider: 'auto' });
-  service.getLocalMmdbIpInfo = async () => ({ _status: 'error', _reason: 'private-path-and-ip-marker' });
+  service.getLocalMmdbIpInfo = async () => ({
+    _status: 'error',
+    _reason: 'private-path-and-ip-marker',
+  });
   service.getIpapiIpInfo = async () => ({ _status: 'ok', _source: 'fake' });
   assert.equal((await service.getIpInfo('8.8.4.4'))._source, 'fake');
   assert.equal(warnings.length, 1);

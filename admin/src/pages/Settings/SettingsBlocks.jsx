@@ -1,5 +1,12 @@
 import { Fragment, useEffect, useId, useState } from 'react';
-import { Accordion, Box, Flex, SingleSelect, SingleSelectOption, Typography } from '@strapi/design-system';
+import {
+  Accordion,
+  Box,
+  Flex,
+  SingleSelect,
+  SingleSelectOption,
+  Typography,
+} from '@strapi/design-system';
 import styled from 'styled-components';
 import FormField from '../../components/FormField';
 import ReadableText from '../../components/ReadableText';
@@ -117,7 +124,18 @@ export const AdvancedSection = ({ label, hasError = false, disabled = false, chi
  * }} props Field copy, value, presets and formatter.
  * @returns {import('react').ReactElement} Select field.
  */
-export const PresetSelect = ({ id, name, label, description, error, value, presets, format, onChange, disabled = false }) => {
+export const PresetSelect = ({
+  id,
+  name,
+  label,
+  description,
+  error,
+  value,
+  presets,
+  format,
+  onChange,
+  disabled = false,
+}) => {
   const { custom } = useOptionLabels();
   const options = buildSelectOptions(presets, value);
   return (
@@ -192,7 +210,11 @@ export const TermList = ({ items, label, code = false }) => (
     {items.map((item) => (
       <Fragment key={item.id}>
         <dt>
-          <Typography variant="omega" fontWeight={code ? undefined : 'semiBold'} textColor="neutral800">
+          <Typography
+            variant="omega"
+            fontWeight={code ? undefined : 'semiBold'}
+            textColor="neutral800"
+          >
             {code ? <code>{item.term}</code> : item.term}
           </Typography>
         </dt>

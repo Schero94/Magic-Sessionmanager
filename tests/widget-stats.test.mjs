@@ -4,7 +4,10 @@ import test from 'node:test';
 import { WIDGET_STAT_KEYS, computeWidgetStats } from '../admin/src/utils/widgetStats.mjs';
 
 test('the widget shows exactly four tiles in a 2 x 2 order (IA D4, I.2-2)', () => {
-  assert.deepEqual([...WIDGET_STAT_KEYS], ['onlineUsers', 'activeSessions', 'idleSessions', 'blockedUsers']);
+  assert.deepEqual(
+    [...WIDGET_STAT_KEYS],
+    ['onlineUsers', 'activeSessions', 'idleSessions', 'blockedUsers']
+  );
 });
 
 test('online users are distinct users with at least one active session (isTrulyActive)', () => {
@@ -36,7 +39,12 @@ test('active and idle tiles count open sessions only, using the same rule as the
 test('no hard-coded activity windows: an old lastActive does not decide who is online', () => {
   const longAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
   const stats = computeWidgetStats([
-    { isActive: true, isTrulyActive: true, lastActive: longAgo, user: { documentId: 'long-timeout' } },
+    {
+      isActive: true,
+      isTrulyActive: true,
+      lastActive: longAgo,
+      user: { documentId: 'long-timeout' },
+    },
   ]);
   assert.equal(stats.onlineUsers, 1, 'the configured inactivity timeout (isTrulyActive) decides');
 });

@@ -94,7 +94,13 @@ const ConfirmAction = ({
         title={title}
         variant={variant}
         endAction={
-          <Button fullWidth variant={variant} onClick={handleConfirm} loading={busy} disabled={busy}>
+          <Button
+            fullWidth
+            variant={variant}
+            onClick={handleConfirm}
+            loading={busy}
+            disabled={busy}
+          >
             {confirmLabel}
           </Button>
         }

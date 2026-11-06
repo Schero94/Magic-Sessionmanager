@@ -85,7 +85,10 @@ const AlertsTab = ({ form }) => {
       field: 'alertOnSuspiciousLogin',
       hintId: hintIds.suspicious,
       label: t('settings.config.email.suspicious.label', 'Suspicious sign-in'),
-      hint: t('settings.config.email.suspicious.hint', 'VPN, proxy or threat address, or a score below 70 with scoring on.'),
+      hint: t(
+        'settings.config.email.suspicious.hint',
+        'VPN, proxy or threat address, or a score below 70 with scoring on.'
+      ),
     },
     {
       field: 'alertOnNewLocation',
@@ -100,20 +103,28 @@ const AlertsTab = ({ form }) => {
       field: 'alertOnVpnProxy',
       hintId: hintIds.vpnProxy,
       label: t('settings.config.email.vpnProxy.label', 'VPN or proxy'),
-      hint: t('settings.config.email.vpnProxy.hint', 'Needs ipapi.co data; the local database does not detect VPNs or proxies.'),
+      hint: t(
+        'settings.config.email.vpnProxy.hint',
+        'Needs ipapi.co data; the local database does not detect VPNs or proxies.'
+      ),
     },
   ];
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
       <IntroText>
-        {t('settings.config.alerts.intro', 'Alerts are sent only when location data is available for the sign-in.')}
+        {t(
+          'settings.config.alerts.intro',
+          'Alerts are sent only when location data is available for the sign-in.'
+        )}
       </IntroText>
 
       {lookupOff ? (
         <Alert variant="warning" closeLabel={t('common.close', 'Close')} title="">
-          {t('settings.config.alerts.lookupOff', 'IP location lookup is off, so no alerts are sent.')}
-          {' '}
+          {t(
+            'settings.config.alerts.lookupOff',
+            'IP location lookup is off, so no alerts are sent.'
+          )}{' '}
           <SettingsTabLink tab="location-data">
             {t('settings.config.requires.geolocation', 'Requires IP location lookup')}
           </SettingsTabLink>
@@ -122,7 +133,10 @@ const AlertsTab = ({ form }) => {
 
       <SectionCard
         title={t('settings.config.email.title', 'Security emails to users')}
-        subtitle={t('settings.config.email.intro', "Sent to the end user's own email address, not to administrators.")}
+        subtitle={t(
+          'settings.config.email.intro',
+          "Sent to the end user's own email address, not to administrators."
+        )}
       >
         <SettingsToggleRow
           id="enable-email-alerts"
@@ -179,7 +193,10 @@ const AlertsTab = ({ form }) => {
 
       <SectionCard
         title={t('settings.config.webhooks.title', 'Team notifications (webhooks)')}
-        subtitle={t('settings.config.webhooks.intro', "Posts every sign-in to Discord or Slack as 'suspicious', 'new country' or 'success'.")}
+        subtitle={t(
+          'settings.config.webhooks.intro',
+          "Posts every sign-in to Discord or Slack as 'suspicious', 'new country' or 'success'."
+        )}
       >
         <SettingsToggleRow
           id="enable-webhooks"
@@ -216,7 +233,10 @@ const AlertsTab = ({ form }) => {
               value={settings.discordWebhookUrl || ''}
               disabled={webhookFieldsDisabled && !errors.discordWebhookUrl}
               onChange={(value) => handleChange('discordWebhookUrl', value)}
-              placeholder={t('settings.webhooks.discord.placeholder', 'https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz...')}
+              placeholder={t(
+                'settings.webhooks.discord.placeholder',
+                'https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz...'
+              )}
               showLabel={t('settings.webhooks.show', 'Show URL')}
               hideLabel={t('settings.webhooks.hide', 'Hide URL')}
             />
@@ -238,7 +258,10 @@ const AlertsTab = ({ form }) => {
               value={settings.slackWebhookUrl || ''}
               disabled={webhookFieldsDisabled && !errors.slackWebhookUrl}
               onChange={(value) => handleChange('slackWebhookUrl', value)}
-              placeholder={t('settings.webhooks.slack.placeholder', 'https://hooks.slack.com/services/XXXX/XXXX/XXXX')}
+              placeholder={t(
+                'settings.webhooks.slack.placeholder',
+                'https://hooks.slack.com/services/XXXX/XXXX/XXXX'
+              )}
               showLabel={t('settings.webhooks.show', 'Show URL')}
               hideLabel={t('settings.webhooks.hide', 'Hide URL')}
             />

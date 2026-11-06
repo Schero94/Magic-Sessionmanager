@@ -1,11 +1,22 @@
 import { useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
-import { Button, Grid, IconButton, IconButtonGroup, MenuItem, SimpleMenu } from '@strapi/design-system';
+import {
+  Button,
+  Grid,
+  IconButton,
+  IconButtonGroup,
+  MenuItem,
+  SimpleMenu,
+} from '@strapi/design-system';
 import { Cross, Eye, More, Trash } from '@strapi/icons';
 import { getTranslation } from '../../utils/getTranslation';
 import { useSessionFormatters } from '../../utils/useSessionFormatters';
 import { ConfirmAction } from '../../components/ui';
-import { getSessionUserLabels, shouldIsolateActionKey, shouldRedispatchEscape } from './dashboardModel.mjs';
+import {
+  getSessionUserLabels,
+  shouldIsolateActionKey,
+  shouldRedispatchEscape,
+} from './dashboardModel.mjs';
 
 /**
  * Stops keys that the Design System grid cell would swallow (Enter/Space on
@@ -23,7 +34,9 @@ const isolateActionKeys = (event) => {
     // Hand Escape back to Radix's document listener so the open confirmation
     // or More menu closes (see shouldRedispatchEscape).
     const { ownerDocument } = event.currentTarget;
-    ownerDocument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    ownerDocument.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    );
   }
 };
 
@@ -48,22 +61,22 @@ export const getConfirmationCopy = (t, { user, device, isOpen }) => ({
   },
   remove: isOpen
     ? {
-      title: t('homepage.confirm.deleteOpen.title', 'Delete record and end session?'),
-      body: t(
-        'homepage.confirm.deleteOpen.body',
-        'This session is still open. {user} will be signed out on {device}, and the record is removed from history, statistics and exports. This cannot be undone.',
-        { user, device }
-      ),
-      confirmLabel: t('homepage.actions.deleteAndEnd', 'Delete and end'),
-    }
+        title: t('homepage.confirm.deleteOpen.title', 'Delete record and end session?'),
+        body: t(
+          'homepage.confirm.deleteOpen.body',
+          'This session is still open. {user} will be signed out on {device}, and the record is removed from history, statistics and exports. This cannot be undone.',
+          { user, device }
+        ),
+        confirmLabel: t('homepage.actions.deleteAndEnd', 'Delete and end'),
+      }
     : {
-      title: t('homepage.confirm.deleteEnded.title', 'Delete this session record?'),
-      body: t(
-        'homepage.confirm.deleteEnded.body',
-        'The record is removed permanently from history, statistics and exports. This cannot be undone.'
-      ),
-      confirmLabel: t('homepage.actions.deleteRecord', 'Delete record'),
-    },
+        title: t('homepage.confirm.deleteEnded.title', 'Delete this session record?'),
+        body: t(
+          'homepage.confirm.deleteEnded.body',
+          'The record is removed permanently from history, statistics and exports. This cannot be undone.'
+        ),
+        confirmLabel: t('homepage.actions.deleteRecord', 'Delete record'),
+      },
 });
 
 /**
@@ -83,10 +96,19 @@ export const getConfirmationCopy = (t, { user, device, isOpen }) => ({
  * @param {{current: HTMLElement|null}} props.focusFallback Focus target when a trigger disappears after a refresh.
  * @returns {import('react').ReactElement} Action controls.
  */
-const SessionActions = ({ session, layout, onView, onEnd, onDelete, mutationPending, focusFallback }) => {
+const SessionActions = ({
+  session,
+  layout,
+  onView,
+  onEnd,
+  onDelete,
+  mutationPending,
+  focusFallback,
+}) => {
   const { formatMessage } = useIntl();
   const { deviceSummary, deviceTypeLabel } = useSessionFormatters();
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const moreRef = useRef(null);
   const user = getSessionUserLabels(session).accessible;
@@ -96,7 +118,11 @@ const SessionActions = ({ session, layout, onView, onEnd, onDelete, mutationPend
 
   const viewLabel = t('homepage.actions.viewFor', 'View details for {user}', { user });
   const endLabel = t('homepage.actions.endFor', 'End session of {user}', { user });
-  const endedLabel = t('homepage.actions.alreadyEndedFor', 'The session of {user} has already ended', { user });
+  const endedLabel = t(
+    'homepage.actions.alreadyEndedFor',
+    'The session of {user} has already ended',
+    { user }
+  );
   const moreLabel = t('homepage.actions.moreFor', 'More actions for {user}', { user });
   const deleteLabel = t('homepage.actions.deleteRecord', 'Delete record');
 
@@ -131,7 +157,7 @@ const SessionActions = ({ session, layout, onView, onEnd, onDelete, mutationPend
           {...endConfirm}
           disabled={!canEnd || mutationPending}
           fallbackFocusRef={focusFallback}
-          trigger={(
+          trigger={
             <IconButton
               label={canEnd ? endLabel : endedLabel}
               variant="danger-light"
@@ -139,7 +165,7 @@ const SessionActions = ({ session, layout, onView, onEnd, onDelete, mutationPend
             >
               <Cross />
             </IconButton>
-          )}
+          }
         />
         <SimpleMenu
           ref={moreRef}
@@ -181,7 +207,7 @@ const SessionActions = ({ session, layout, onView, onEnd, onDelete, mutationPend
             {...endConfirm}
             disabled={!canEnd || mutationPending}
             fallbackFocusRef={focusFallback}
-            trigger={(
+            trigger={
               <Button
                 fullWidth
                 variant="danger-light"
@@ -191,7 +217,7 @@ const SessionActions = ({ session, layout, onView, onEnd, onDelete, mutationPend
               >
                 {t('homepage.actions.end', 'End session')}
               </Button>
-            )}
+            }
           />
         </Grid.Item>
       ) : null}

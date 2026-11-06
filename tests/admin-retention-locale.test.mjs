@@ -4,7 +4,13 @@ import { IntlMessageFormat } from 'intl-messageformat';
 import { readSettingsFile } from './helpers/settingsSource.mjs';
 import { readCatalogue } from './helpers/settingsCatalogue.mjs';
 
-const UNIT_KEYS = ['settings.config.unit.days', 'settings.config.unit.minutes', 'settings.config.unit.seconds', 'settings.config.option.forever', 'settings.config.option.custom'];
+const UNIT_KEYS = [
+  'settings.config.unit.days',
+  'settings.config.unit.minutes',
+  'settings.config.unit.seconds',
+  'settings.config.option.forever',
+  'settings.config.option.custom',
+];
 
 test('retention is a preset select with "Forever" for -1 and a numeric value (IA F Tab 5)', () => {
   const tab = readSettingsFile('DataRetentionTab.jsx');
@@ -13,7 +19,11 @@ test('retention is a preset select with "Forever" for -1 and a numeric value (IA
   assert.match(field, /presets=\{SELECT_PRESETS\.retentionDays\}/);
   assert.match(field, /format=\{units\.retentionDays\}/);
   assert.match(field, /onChange=\{\(value\) => handleChange\('retentionDays', value\)\}/);
-  assert.match(readSettingsFile('SettingsBlocks.jsx'), /onChange=\{\(next\) => onChange\(Number\.parseInt\(next, 10\)\)\}/, 'the draft stores numbers');
+  assert.match(
+    readSettingsFile('SettingsBlocks.jsx'),
+    /onChange=\{\(next\) => onChange\(Number\.parseInt\(next, 10\)\)\}/,
+    'the draft stores numbers'
+  );
   assert.doesNotMatch(tab, /\$\{settings\.retentionDays\} days/);
 });
 
@@ -30,9 +40,23 @@ test('unit labels format singular and plural durations in each locale (IA H.7)',
     const days = new IntlMessageFormat(messages['settings.config.unit.days'], locale);
     assert.equal(days.format({ count: 1 }), values.day, locale);
     assert.equal(days.format({ count: 90 }), values.days, locale);
-    assert.equal(new IntlMessageFormat(messages['settings.config.unit.minutes'], locale).format({ count: 15 }), values.min, locale);
-    assert.equal(new IntlMessageFormat(messages['settings.config.unit.seconds'], locale).format({ count: 30 }), values.s, locale);
+    assert.equal(
+      new IntlMessageFormat(messages['settings.config.unit.minutes'], locale).format({ count: 15 }),
+      values.min,
+      locale
+    );
+    assert.equal(
+      new IntlMessageFormat(messages['settings.config.unit.seconds'], locale).format({ count: 30 }),
+      values.s,
+      locale
+    );
     assert.ok(messages['settings.config.option.forever'], locale);
-    assert.match(new IntlMessageFormat(messages['settings.config.option.custom'], locale).format({ value: '45 min' }), /^45 min \(.+\)$/, locale);
+    assert.match(
+      new IntlMessageFormat(messages['settings.config.option.custom'], locale).format({
+        value: '45 min',
+      }),
+      /^45 min \(.+\)$/,
+      locale
+    );
   }
 });

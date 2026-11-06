@@ -1,5 +1,17 @@
 import { useIntl } from 'react-intl';
-import { Box, Flex, Table, Tbody, Td, Th, Thead, Tooltip, Tr, Typography, VisuallyHidden } from '@strapi/design-system';
+import {
+  Box,
+  Flex,
+  Table,
+  Tbody,
+  Td,
+  Th,
+  Thead,
+  Tooltip,
+  Tr,
+  Typography,
+  VisuallyHidden,
+} from '@strapi/design-system';
 import { getTranslation } from '../../utils/getTranslation';
 import { getDevicePresentation } from '../../utils/devicePresentation.mjs';
 import { toValidDate } from '../../utils/sessionDates.mjs';
@@ -7,7 +19,11 @@ import { isNativeOnlySession } from '../../utils/sessionStatus.mjs';
 import { useSessionFormatters } from '../../utils/useSessionFormatters';
 import { DeviceIcon, MissingValue, StatusBadge, ValueOrMissing } from '../../components/ui';
 import SessionActions from './SessionActions';
-import { DASHBOARD_COMPACT_TABLE_COLUMNS, DASHBOARD_TABLE_COLUMNS, getSessionUserLabels } from './dashboardModel.mjs';
+import {
+  DASHBOARD_COMPACT_TABLE_COLUMNS,
+  DASHBOARD_TABLE_COLUMNS,
+  getSessionUserLabels,
+} from './dashboardModel.mjs';
 
 /**
  * Cells that share the remaining width and cut long values with an ellipsis
@@ -136,7 +152,8 @@ const SessionTable = ({
   getFocusFallback,
 }) => {
   const { formatMessage } = useIntl();
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
   const header = (id, defaultMessage) => (
     <Typography variant="sigma" textColor="neutral600">
@@ -153,7 +170,9 @@ const SessionTable = ({
     >
       <Thead>
         <Tr>
-          <Th style={compact ? COMPACT_STATUS_CELL : undefined}>{header('homepage.table.status', 'Status')}</Th>
+          <Th style={compact ? COMPACT_STATUS_CELL : undefined}>
+            {header('homepage.table.status', 'Status')}
+          </Th>
           <Th>{header('homepage.table.user', 'User')}</Th>
           <Th>{header('homepage.table.device', 'Device')}</Th>
           {compact ? null : <Th>{header('homepage.table.ipAddress', 'IP address')}</Th>}
@@ -182,7 +201,12 @@ const SessionTable = ({
               <Td style={SHRINKING_USER_CELL}>
                 <Flex direction="column" alignItems="stretch" minWidth={0}>
                   {user.primary ? (
-                    <Typography fontWeight="semiBold" textColor="neutral800" ellipsis title={user.primary}>
+                    <Typography
+                      fontWeight="semiBold"
+                      textColor="neutral800"
+                      ellipsis
+                      title={user.primary}
+                    >
                       {user.primary}
                     </Typography>
                   ) : (

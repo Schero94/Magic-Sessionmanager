@@ -41,7 +41,7 @@ function getEncryptionKey() {
   if (isProduction()) {
     throw new Error(
       '[magic-sessionmanager] FATAL: SESSION_ENCRYPTION_KEY is required in production. ' +
-      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
     );
   }
 
@@ -50,7 +50,7 @@ function getEncryptionKey() {
     // eslint-disable-next-line no-console
     console.warn(
       '[magic-sessionmanager] SESSION_ENCRYPTION_KEY not set — using dev fallback derived from ' +
-      'APP_KEYS/API_TOKEN_SALT. Set this env var before deploying (it is NOT rotatable).'
+        'APP_KEYS/API_TOKEN_SALT. Set this env var before deploying (it is NOT rotatable).'
     );
   }
 
@@ -68,23 +68,26 @@ function getEncryptionKey() {
  */
 function encryptToken(token) {
   if (!token) return null;
-  
+
   try {
     const key = getEncryptionKey();
     const iv = crypto.randomBytes(IV_LENGTH);
-    
+
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    
+
     let encrypted = cipher.update(token, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     const authTag = cipher.getAuthTag();
-    
+
     // Format: iv:authTag:encryptedData
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
   } catch (err) {
     if (typeof strapi !== 'undefined' && strapi?.log) {
-      strapi.log.error('[magic-sessionmanager/encryption] Encryption failed:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/encryption] Encryption failed:',
+        err?.name || 'Error'
+      );
     }
     throw new Error('Failed to encrypt token');
   }
@@ -97,31 +100,34 @@ function encryptToken(token) {
  */
 function decryptToken(encryptedToken) {
   if (!encryptedToken) return null;
-  
+
   try {
     const key = getEncryptionKey();
-    
+
     // Parse: iv:authTag:encryptedData
     const parts = encryptedToken.split(':');
-    
+
     if (parts.length !== 3) {
       throw new Error('Invalid encrypted token format');
     }
-    
+
     const iv = Buffer.from(parts[0], 'hex');
     const authTag = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];
-    
+
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
-    
+
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return decrypted;
   } catch (err) {
     if (typeof strapi !== 'undefined' && strapi?.log) {
-      strapi.log.error('[magic-sessionmanager/encryption] Decryption failed:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/encryption] Decryption failed:',
+        err?.name || 'Error'
+      );
     }
     return null;
   }
@@ -136,8 +142,12 @@ function decryptToken(encryptedToken) {
 function generateSessionId(userId) {
   const timestamp = Date.now().toString(36);
   const randomBytes = crypto.randomBytes(8).toString('hex');
-  const userHash = crypto.createHash('sha256').update(userId.toString()).digest('hex').substring(0, 8);
-  
+  const userHash = crypto
+    .createHash('sha256')
+    .update(userId.toString())
+    .digest('hex')
+    .substring(0, 8);
+
   return `sess_${timestamp}_${userHash}_${randomBytes}`;
 }
 
@@ -158,4 +168,3 @@ module.exports = {
   generateSessionId,
   hashToken,
 };
-

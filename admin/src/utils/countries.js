@@ -136,8 +136,7 @@ export const getCountryOptions = (locale = 'en', exclude = []) => {
   } catch {
     collator = new Intl.Collator('en');
   }
-  return COUNTRIES
-    .filter((country) => !exclude.includes(country.code))
+  return COUNTRIES.filter((country) => !exclude.includes(country.code))
     .map((country) => ({ code: country.code, label: formatCountry(country.code, locale) }))
     .sort((left, right) => collator.compare(left.label, right.label));
 };

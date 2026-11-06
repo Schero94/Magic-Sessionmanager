@@ -29,7 +29,9 @@ function parseUserAgent(userAgent) {
   let deviceType = 'desktop';
   if (/ipad|tablet|kindle|silk/i.test(userAgent)) {
     deviceType = 'tablet';
-  } else if (/mobile|android.*mobile|iphone|ipod|blackberry|iemobile|opera mini|opera mobi/i.test(userAgent)) {
+  } else if (
+    /mobile|android.*mobile|iphone|ipod|blackberry|iemobile|opera mini|opera mobi/i.test(userAgent)
+  ) {
     deviceType = 'mobile';
   } else if (/android(?!.*mobile)/i.test(userAgent)) {
     deviceType = 'tablet';
@@ -71,11 +73,11 @@ function parseUserAgent(userAgent) {
     // Map Windows NT versions to marketing names
     const winVersionMap = {
       '10.0': '10/11',
-      '6.3': '8.1',
-      '6.2': '8',
-      '6.1': '7',
+      6.3: '8.1',
+      6.2: '8',
+      6.1: '7',
       '6.0': 'Vista',
-      '5.1': 'XP',
+      5.1: 'XP',
     };
     osVersion = winVersionMap[winVersion] || winVersion;
   } else if (/iphone|ipad|ipod/i.test(userAgent)) {
@@ -120,13 +122,11 @@ function extractVersion(userAgent, regex) {
  * @returns {string} Human-readable description
  */
 function getDeviceDescription(parsed) {
-  const browser = parsed.browserVersion 
-    ? `${parsed.browserName} ${parsed.browserVersion}` 
+  const browser = parsed.browserVersion
+    ? `${parsed.browserName} ${parsed.browserVersion}`
     : parsed.browserName;
-  
-  const os = parsed.osVersion 
-    ? `${parsed.osName} ${parsed.osVersion}` 
-    : parsed.osName;
+
+  const os = parsed.osVersion ? `${parsed.osName} ${parsed.osVersion}` : parsed.osName;
 
   return `${browser} on ${os}`;
 }

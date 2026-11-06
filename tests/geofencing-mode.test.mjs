@@ -29,6 +29,12 @@ test('geofencing mode switches remain selected before the first country is added
 });
 
 test('saved non-empty country lists still infer their established mode', () => {
-  assert.equal(inferGeofencingMode({ allowedCountries: ['JP'], blockedCountries: [] }), 'allowlist');
-  assert.equal(inferGeofencingMode({ allowedCountries: [], blockedCountries: ['DE'] }), 'blocklist');
+  assert.equal(
+    inferGeofencingMode({ allowedCountries: ['JP'], blockedCountries: [] }),
+    'allowlist'
+  );
+  assert.equal(
+    inferGeofencingMode({ allowedCountries: [], blockedCountries: ['DE'] }),
+    'blocklist'
+  );
 });

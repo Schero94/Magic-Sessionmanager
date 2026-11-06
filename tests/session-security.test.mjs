@@ -70,7 +70,13 @@ test('geo data keeps missing facts missing and never invents security values', (
 test('stored location trusts only the session score and has no VPN, proxy or risk data', () => {
   const stored = getStoredGeoData({
     securityScore: 30,
-    geoLocation: JSON.stringify({ country: 'Germany', securityScore: 100, riskLevel: 'None', isVpn: true, isProxy: false }),
+    geoLocation: JSON.stringify({
+      country: 'Germany',
+      securityScore: 100,
+      riskLevel: 'None',
+      isVpn: true,
+      isProxy: false,
+    }),
   });
   assert.equal(stored.securityScore, 30);
   assert.equal(stored.riskLevel, '', 'risk level only from a live lookup');
@@ -83,7 +89,16 @@ test('stored location trusts only the session score and has no VPN, proxy or ris
 test('on-demand lookup results: ok, lookup off, or could not be determined (decision I.2-7)', () => {
   const ok = interpretLookupResult({
     success: true,
-    data: { _status: 'ok', country: 'Germany', city: 'Berlin', timezone: 'Europe/Berlin', securityScore: 85, riskLevel: 'Low', isVpn: true, isProxy: false },
+    data: {
+      _status: 'ok',
+      country: 'Germany',
+      city: 'Berlin',
+      timezone: 'Europe/Berlin',
+      securityScore: 85,
+      riskLevel: 'Low',
+      isVpn: true,
+      isProxy: false,
+    },
   });
   assert.equal(ok.status, 'ok');
   assert.equal(ok.geo.riskLevel, 'low');
@@ -92,11 +107,23 @@ test('on-demand lookup results: ok, lookup off, or could not be determined (deci
   // The server answers a disabled lookup with placeholder values; they are not shown as data.
   const disabled = interpretLookupResult({
     success: true,
-    data: { _status: 'disabled', country: 'Unknown', city: 'Unknown', securityScore: 50, isVpn: false },
+    data: {
+      _status: 'disabled',
+      country: 'Unknown',
+      city: 'Unknown',
+      securityScore: 50,
+      isVpn: false,
+    },
   });
   assert.deepEqual(disabled, { status: 'disabled', geo: null });
 
-  assert.deepEqual(interpretLookupResult({ data: { _status: 'private', country: 'Local' } }), { status: 'failed', geo: null });
-  assert.deepEqual(interpretLookupResult({ data: { _status: 'ok', country: 'Unknown' } }), { status: 'failed', geo: null });
+  assert.deepEqual(interpretLookupResult({ data: { _status: 'private', country: 'Local' } }), {
+    status: 'failed',
+    geo: null,
+  });
+  assert.deepEqual(interpretLookupResult({ data: { _status: 'ok', country: 'Unknown' } }), {
+    status: 'failed',
+    geo: null,
+  });
   assert.deepEqual(interpretLookupResult(null), { status: 'failed', geo: null });
 });

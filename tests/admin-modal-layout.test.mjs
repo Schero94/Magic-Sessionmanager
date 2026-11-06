@@ -4,9 +4,10 @@ import test from 'node:test';
 
 import { readSettingsSource } from './helpers/settingsSource.mjs';
 
-const readAdminFile = (relativePath) => (relativePath === 'pages/Settings.jsx'
-  ? readSettingsSource()
-  : readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8'));
+const readAdminFile = (relativePath) =>
+  relativePath === 'pages/Settings.jsx'
+    ? readSettingsSource()
+    : readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8');
 
 test('relaxed-mode warning is the unmodified DS Alert (SET-17)', () => {
   const settings = readAdminFile('pages/Settings.jsx');
@@ -22,7 +23,10 @@ test('relaxed-mode warning close button dismisses the alert and strict-setting c
   const settings = readAdminFile('pages/Settings.jsx');
   const alertStart = settings.indexOf('<DesignSystemAlert');
   const alertEnd = settings.indexOf('</DesignSystemAlert>', alertStart);
-  const alertUsage = settings.slice(settings.lastIndexOf('{!settings.strictSessionEnforcement', alertStart), alertEnd);
+  const alertUsage = settings.slice(
+    settings.lastIndexOf('{!settings.strictSessionEnforcement', alertStart),
+    alertEnd
+  );
   const handlerStart = settings.indexOf('const handleChange = useCallback((key, value) => {');
   const handlerEnd = settings.indexOf('\n  }, []);', handlerStart);
   const handler = settings.slice(handlerStart, handlerEnd);
@@ -31,7 +35,10 @@ test('relaxed-mode warning close button dismisses the alert and strict-setting c
   assert.match(alertUsage, /!relaxedWarningDismissed/);
   assert.match(alertUsage, /onClose=\{\(\) => setRelaxedWarningDismissed\(true\)\}/);
   assert.ok(handlerStart >= 0 && handlerEnd > handlerStart, 'the shared setting handler exists');
-  assert.match(handler, /key === 'strictSessionEnforcement'[\s\S]*setRelaxedWarningDismissed\(false\)/);
+  assert.match(
+    handler,
+    /key === 'strictSessionEnforcement'[\s\S]*setRelaxedWarningDismissed\(false\)/
+  );
 });
 
 test('session detail values use semantic labels and wrap long content safely', () => {
@@ -43,7 +50,10 @@ test('session detail values use semantic labels and wrap long content safely', (
   assert.match(propertyList, /<dt>/);
   assert.match(propertyList, /<dd\b/);
   assert.match(propertyList, /dd\[data-wrap='anywhere'\][\s\S]*?overflow-wrap:\s*anywhere/);
-  assert.ok((modal.match(/<PropertyList\b/g) || []).length >= 5, 'every section is one PropertyList, no nested grids');
+  assert.ok(
+    (modal.match(/<PropertyList\b/g) || []).length >= 5,
+    'every section is one PropertyList, no nested grids'
+  );
   assert.match(modal, /kind: 'email'/);
   assert.ok((modal.match(/kind: 'id'/g) || []).length >= 2);
   assert.doesNotMatch(modal, /TwoColumnGrid|DetailsList|repeat\(2/);
@@ -68,7 +78,10 @@ test('End session is offered for open rows only and keeps the existing API path 
   assert.match(modal, /\{canEnd \? \(\s*<ConfirmAction\b[\s\S]*?onConfirm=\{handleTerminate\}/);
   assert.doesNotMatch(modal, /\bconfirm\(/);
   // Ended rows say so instead of showing a disabled button.
-  assert.match(modal, /\) : \(\s*<Typography id=\{endedReasonId\}[\s\S]*?modal\.actions\.alreadyEnded', 'This session has already ended\.'/);
+  assert.match(
+    modal,
+    /\) : \(\s*<Typography id=\{endedReasonId\}[\s\S]*?modal\.actions\.alreadyEnded', 'This session has already ended\.'/
+  );
   assert.match(modal, /await onEndSession\(session\);\s*onClose\(\);/);
   // At most one destructive action: Delete record is not offered in the dialog.
   assert.doesNotMatch(modal, /deleteRecord|del\(/);
@@ -77,13 +90,27 @@ test('End session is offered for open rows only and keeps the existing API path 
 test('session detail dialog: state sentence, header status, copyable record ID, Yes/No badges, translated live risk (IA D2)', () => {
   const modal = readAdminFile('components/SessionDetailModal.jsx');
 
-  assert.match(modal, /<Modal\.Content[^>]*aria-describedby=\{undefined\}/, 'no dangling Radix description reference');
+  assert.match(
+    modal,
+    /<Modal\.Content[^>]*aria-describedby=\{undefined\}/,
+    'no dangling Radix description reference'
+  );
   assert.match(modal, /<Modal\.Title>[\s\S]*?<\/Modal\.Title>\s*<StatusBadge\b/);
   assert.match(modal, /'modal\.state\.active', 'Active\. Last request \{time\}\.'/);
-  assert.match(modal, /<Alert variant="warning"[\s\S]*?'modal\.state\.idle', 'Not used for \{minutes\} min\. It ends on its next request or at the next idle check\.'/);
+  assert.match(
+    modal,
+    /<Alert variant="warning"[\s\S]*?'modal\.state\.idle', 'Not used for \{minutes\} min\. It ends on its next request or at the next idle check\.'/
+  );
   assert.match(modal, /'modal\.state\.ended', 'Ended \{endedAt\} · \{reason\}\.'/);
-  assert.match(modal, /translate\(reason\.description\)/, 'the reason definition follows the sentence');
-  assert.match(modal, /'modal\.state\.maxAgeNote', 'Sessions older than the maximum session age end on their next request\.'/);
+  assert.match(
+    modal,
+    /translate\(reason\.description\)/,
+    'the reason definition follows the sentence'
+  );
+  assert.match(
+    modal,
+    /'modal\.state\.maxAgeNote', 'Sessions older than the maximum session age end on their next request\.'/
+  );
   assert.match(modal, /const \{ copy \} = useClipboard\(\)/);
   assert.match(modal, /<IconButton label=\{t\('modal\.actions\.copyId'/);
   assert.match(modal, /modal\.copy\.success/);
@@ -91,11 +118,22 @@ test('session detail dialog: state sentence, header status, copyable record ID, 
   assert.doesNotMatch(modal, /vpnWarning|\[WARNING\]/);
   assert.match(modal, /yesNoText\(liveGeo\.isVpn\)/);
   assert.match(modal, /yesNoText\(liveGeo\.isProxy\)/);
-  assert.doesNotMatch(modal, /variant=\{value \? 'danger'/, 'Yes/No is plain text, not a danger badge (IA B.3)');
-  assert.match(modal, /\{hasLocationData \? <PropertyList items=\{locationItems\} \/> : null\}/, 'no wall of dashes before a lookup');
+  assert.doesNotMatch(
+    modal,
+    /variant=\{value \? 'danger'/,
+    'Yes/No is plain text, not a danger badge (IA B.3)'
+  );
+  assert.match(
+    modal,
+    /\{hasLocationData \? <PropertyList items=\{locationItems\} \/> : null\}/,
+    'no wall of dashes before a lookup'
+  );
   assert.doesNotMatch(modal, /modal\.timeline\.notUsedFor/, 'Session section per IA D2.4');
   assert.match(modal, /t\('common\.yes', 'Yes'\)/);
-  assert.match(modal, /'modal\.security\.scoreNote',\s*'Higher is safer\. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on\. Local database results are always 100\.'/);
+  assert.match(
+    modal,
+    /'modal\.security\.scoreNote',\s*'Higher is safer\. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on\. Local database results are always 100\.'/
+  );
   assert.doesNotMatch(modal, /'High' : 'Low'/);
   assert.match(modal, /<Modal\.Close>\s*<Button variant="tertiary">/);
   // Technical details are collapsed in a DS Accordion.
@@ -108,8 +146,16 @@ test('"Open user" links to the Content Manager only when the row has the user do
   assert.match(modal, /const userEditPath = getUserEditPath\(session\)/);
   assert.match(modal, /presentText\(session\.user\?\.username\) && userEditPath \?/);
   assert.match(modal, /<TargetLink\s+tag=\{NavLink\}\s+to=\{userEditPath\}/);
-  assert.match(modal, /const TargetLink = styled\(Link\)`\s*min-height: 3\.2rem;/, 'the inline link has a 32 px touch target below medium');
-  assert.match(modal, /theme\.breakpoints\.medium\} \{\s*min-height: 2\.4rem;/, 'and the 24 px desktop target from medium');
+  assert.match(
+    modal,
+    /const TargetLink = styled\(Link\)`\s*min-height: 3\.2rem;/,
+    'the inline link has a 32 px touch target below medium'
+  );
+  assert.match(
+    modal,
+    /theme\.breakpoints\.medium\} \{\s*min-height: 2\.4rem;/,
+    'and the 24 px desktop target from medium'
+  );
   assert.match(modal, /'modal\.user\.openFor', 'Open user \{user\}'/);
 });
 

@@ -88,22 +88,22 @@ Dark mode:
 
 **A session is in one of three states:**
 
-| State | Meaning |
-|---|---|
-| **Active** | Open and used within the inactivity timeout. |
-| **Idle** | Open, but not used for longer than the inactivity timeout. It ends on its next request or at the next idle check. A token refresh makes it active again. |
-| **Ended** | The session can no longer be used. The user has to sign in again on this device. |
+| State      | Meaning                                                                                                                                                  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Active** | Open and used within the inactivity timeout.                                                                                                             |
+| **Idle**   | Open, but not used for longer than the inactivity timeout. It ends on its next request or at the next idle check. A token refresh makes it active again. |
+| **Ended**  | The session can no longer be used. The user has to sign in again on this device.                                                                         |
 
 **An ended session always shows its end reason:**
 
-| End reason | Stored value | Meaning |
-|---|---|---|
-| Logged out | `logout` | The user signed out. |
-| Timed out | `idle` | Not used for longer than the inactivity timeout. |
-| Expired | `expired` | Reached the maximum session age. |
-| Ended manually | `manual` | Ended from the Strapi admin, or by the user from another of their devices. |
-| User blocked | `blocked` | Ended because the user account was blocked. |
-| Reason not recorded | (none) | No end reason was stored, for example because the session ended in Strapi's own session store or was recorded by an older plugin version. |
+| End reason          | Stored value | Meaning                                                                                                                                   |
+| ------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Logged out          | `logout`     | The user signed out.                                                                                                                      |
+| Timed out           | `idle`       | Not used for longer than the inactivity timeout.                                                                                          |
+| Expired             | `expired`    | Reached the maximum session age.                                                                                                          |
+| Ended manually      | `manual`     | Ended from the Strapi admin, or by the user from another of their devices.                                                                |
+| User blocked        | `blocked`    | Ended because the user account was blocked.                                                                                               |
+| Reason not recorded | (none)       | No end reason was stored, for example because the session ended in Strapi's own session store or was recorded by an older plugin version. |
 
 **Three verbs, three meanings:**
 
@@ -117,15 +117,15 @@ Dark mode:
 
 ## Screens
 
-| Where | Name | Answers |
-|---|---|---|
-| Main menu | **Session Manager** (page title "Sessions") | Which sessions exist, and which need action? |
-| Dialog on the dashboard | **Session details** | What is this session, and why is it in this state? |
-| Content Manager, User edit view | **Sessions** panel | What access does this user have, and how do I cut it off? |
-| Strapi homepage | **Online users** widget | Who is online right now? |
-| Settings › Session Manager | **Configuration** | How should sessions and sign-ins behave? |
-| Settings › Session Manager | **Analytics** | How are sessions used over time and by device? |
-| Settings › Session Manager | **License** | Is a license key stored, and is it valid? |
+| Where                           | Name                                        | Answers                                                   |
+| ------------------------------- | ------------------------------------------- | --------------------------------------------------------- |
+| Main menu                       | **Session Manager** (page title "Sessions") | Which sessions exist, and which need action?              |
+| Dialog on the dashboard         | **Session details**                         | What is this session, and why is it in this state?        |
+| Content Manager, User edit view | **Sessions** panel                          | What access does this user have, and how do I cut it off? |
+| Strapi homepage                 | **Online users** widget                     | Who is online right now?                                  |
+| Settings › Session Manager      | **Configuration**                           | How should sessions and sign-ins behave?                  |
+| Settings › Session Manager      | **Analytics**                               | How are sessions used over time and by device?            |
+| Settings › Session Manager      | **License**                                 | Is a license key stored, and is it valid?                 |
 
 ### Sessions dashboard
 
@@ -166,13 +166,13 @@ Three links: **Configuration**, **Analytics** and **License**.
 
 **Configuration** has five tabs, deep-linkable with `?tab=sessions|login-protection|location-data|alerts|data-retention`:
 
-| Tab | Question | Contents |
-|---|---|---|
-| **Sessions** | How long does a session stay valid? | Inactivity timeout, maximum session age; Advanced: "Last active" update interval, idle check interval and method. Token check (Strict / Relaxed); Advanced: grace period after sign-in, token encryption key generator. A read-only card on what your app receives when a session is rejected. |
-| **Login protection** | Which sign-ins are refused, and why? | Temporary IP lockout, Trust proxy headers, Reject suspicious sign-ins, If the location cannot be determined, Country rules (Allow only listed countries / Reject listed countries), a read-only card on why sign-ins are refused. |
-| **Location data** | Where do IP location and risk data come from? | IP location lookup, Security scoring, Provider, GeoIP database status, MaxMind credentials, Update database / Force download. |
-| **Alerts** | Who is told about sign-ins? | Security emails to users (with email templates) and Team notifications to Discord or Slack. |
-| **Data and retention** | How long is session history kept? | Keep ended sessions for, and **Delete ended sessions**. |
+| Tab                    | Question                                      | Contents                                                                                                                                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sessions**           | How long does a session stay valid?           | Inactivity timeout, maximum session age; Advanced: "Last active" update interval, idle check interval and method. Token check (Strict / Relaxed); Advanced: grace period after sign-in, token encryption key generator. A read-only card on what your app receives when a session is rejected. |
+| **Login protection**   | Which sign-ins are refused, and why?          | Temporary IP lockout, Trust proxy headers, Reject suspicious sign-ins, If the location cannot be determined, Country rules (Allow only listed countries / Reject listed countries), a read-only card on why sign-ins are refused.                                                              |
+| **Location data**      | Where do IP location and risk data come from? | IP location lookup, Security scoring, Provider, GeoIP database status, MaxMind credentials, Update database / Force download.                                                                                                                                                                  |
+| **Alerts**             | Who is told about sign-ins?                   | Security emails to users (with email templates) and Team notifications to Discord or Slack.                                                                                                                                                                                                    |
+| **Data and retention** | How long is session history kept?             | Keep ended sessions for, and **Delete ended sessions**.                                                                                                                                                                                                                                        |
 
 **Save** applies the whole form; **Discard changes** re-loads the stored values (it does not restore defaults). Leaving with unsaved changes asks first. Settings are saved in the database; other server processes apply them within 30 seconds.
 
@@ -184,12 +184,12 @@ Three links: **Configuration**, **Analytics** and **License**.
 
 ## Compatibility
 
-| Item | Supported |
-|---|---|
-| Strapi | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.61.0. |
-| Node.js | `^22.22.2 \|\| >=24.15.0` (`engines.node`) |
-| Users & Permissions | `jwtManagement: 'refresh'` and `'legacy-support'` |
-| Homepage widget | Strapi 5.13 and later (older versions have no widgets API; the rest works) |
+| Item                    | Supported                                                                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strapi                  | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.61.0.                                                                                                     |
+| Node.js                 | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                    |
+| Users & Permissions     | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                             |
+| Homepage widget         | Strapi 5.13 and later (older versions have no widgets API; the rest works)                                                                                                    |
 | Admin peer dependencies | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react` / `react-dom` `^18.3.1`, `react-intl` `^6.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0` |
 
 ---
@@ -259,13 +259,13 @@ export default () => ({
     enabled: true,
     config: {
       inactivityTimeout: 15 * 60 * 1000, // ms
-      lastSeenRateLimit: 30 * 1000,      // ms
-      cleanupInterval: 30 * 60 * 1000,   // ms
+      lastSeenRateLimit: 30 * 1000, // ms
+      cleanupInterval: 30 * 60 * 1000, // ms
       maxSessionAgeDays: 30,
-      retentionDays: 90,                 // -1 keeps ended sessions forever
+      retentionDays: 90, // -1 keeps ended sessions forever
       strictSessionEnforcement: false,
-      geoIpProvider: 'auto',             // 'auto' | 'local-mmdb' | 'ipapi' | 'disabled'
-      geoLookupFailureMode: 'auto',      // 'auto' | 'allow' | 'block'
+      geoIpProvider: 'auto', // 'auto' | 'local-mmdb' | 'ipapi' | 'disabled'
+      geoLookupFailureMode: 'auto', // 'auto' | 'allow' | 'block'
     },
   },
 });
@@ -275,41 +275,41 @@ export default () => ({
 
 Static defaults from `server/src/config/index.js`; admin units and ranges from the settings validation in `server/src/controllers/settings.js`. Out-of-range admin values are rejected with a field error, not clamped silently.
 
-| Key | Default | Admin unit and range | Configuration tab | Meaning |
-|---|---|---|---|---|
-| `inactivityTimeout` | 15 min (`900000` ms) | min, 1–1440 | Sessions | Unused this long, a session becomes idle and then ends as "Timed out". Also decides who counts as online. |
-| `maxSessionAgeDays` | 30 | days, 1–365 | Sessions | Maximum age from sign-in, regardless of activity. Applied on the session's next request. |
-| `lastSeenRateLimit` | 30 s (`30000` ms) | s, 5–300 | Sessions › Advanced | Minimum interval between "Last active" updates. |
-| `cleanupInterval` | 30 min (`1800000` ms) | min, 5–1440 | Sessions › Advanced | How often the idle check runs. It ends idle sessions and deletes nothing. It also runs once at server start. |
-| `cleanupUseDbDirect` | `false` | boolean | Sessions › Advanced | Idle check with one SQL update instead of the Document Service (skips lifecycle hooks). |
-| `strictSessionEnforcement` | `false` (Relaxed) | boolean | Sessions | Strict rejects tokens without a session record and requests where the check itself fails. Ended, expired and revoked sessions and blocked users are rejected in both modes. |
-| `sessionCreationGraceMs` | `5000` | ms, 0–30000 (shown in seconds) | Sessions › Advanced | Window after sign-in in which a token is accepted while its record is being created. |
-| `maxFailedLogins` | 5 | 0–100, 0 = off | Login protection | Temporary IP lockout threshold (failed sign-ins from one IP within 15 minutes). |
-| `trustedProxies` | off | boolean | Login protection | Read the client IP from proxy headers. Only behind a proxy you control. |
-| `blockSuspiciousSessions` | `false` | boolean | Login protection | Reject suspicious sign-ins. |
-| `geoLookupFailureMode` | `'auto'` | auto, allow, block | Login protection | What happens when the location cannot be determined. |
-| `enableGeofencing` | `false` | boolean | Login protection | Use country rules. |
-| `allowedCountries` / `blockedCountries` | `[]` | ISO 3166-1 alpha-2 codes | Login protection | Allow only listed countries / Reject listed countries. |
-| `enableGeolocation` | `true` | boolean | Location data | IP location lookup at sign-in. Required by country rules, suspicious-sign-in checks and alerts. |
-| `enableSecurityScoring` | `true` | boolean | Location data | Apply the security score thresholds (below 70: suspicious-sign-in email, below 50: rejection if enabled). |
-| `geoIpProvider` | `'auto'` | auto, local-mmdb, ipapi, disabled | Location data | Where location data comes from. |
-| `geoIpDatabasePath` | `MAGIC_SESSIONMANAGER_GEOIP_DATABASE` or `''` | file name | Location data › Advanced | Local MaxMind-compatible database. |
-| `enableEmailAlerts` | `false` | boolean | Alerts | Security emails to users. |
-| `alertOnSuspiciousLogin` / `alertOnNewLocation` / `alertOnVpnProxy` | `true` | boolean | Alerts | Which events send an email. |
-| `enableWebhooks` | `false` | boolean | Alerts | Team notifications. |
-| `discordWebhookUrl` / `slackWebhookUrl` | `''` | https URL on discord.com / discordapp.com, or hooks.slack.com | Alerts | Any other host is rejected. |
-| `retentionDays` | 90 | days, 1–365 or -1 (forever) | Data and retention | How long records of ended sessions are kept. Checked once a day, the first time about 24 hours after the server starts. Open sessions are never deleted by retention. |
-| `rateLimitWriteMax` / `rateLimitReadMax` / `rateLimitWindowSeconds` | 10 / 120 / 60 | 1–1000 / 1–10000 / 10–3600 | not shown | Content API rate limits. Not editable in the UI; Save keeps the stored values. The write limit can only be made stricter than the route floor. |
-| `emailTemplates` | empty | subject ≤ 200, HTML ≤ 10,000 (sanitised), text ≤ 5,000 characters | Alerts › Edit email templates | As soon as any template has content, only stored templates are used. Fill in all three, or none. |
+| Key                                                                 | Default                                       | Admin unit and range                                              | Configuration tab             | Meaning                                                                                                                                                                     |
+| ------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inactivityTimeout`                                                 | 15 min (`900000` ms)                          | min, 1–1440                                                       | Sessions                      | Unused this long, a session becomes idle and then ends as "Timed out". Also decides who counts as online.                                                                   |
+| `maxSessionAgeDays`                                                 | 30                                            | days, 1–365                                                       | Sessions                      | Maximum age from sign-in, regardless of activity. Applied on the session's next request.                                                                                    |
+| `lastSeenRateLimit`                                                 | 30 s (`30000` ms)                             | s, 5–300                                                          | Sessions › Advanced           | Minimum interval between "Last active" updates.                                                                                                                             |
+| `cleanupInterval`                                                   | 30 min (`1800000` ms)                         | min, 5–1440                                                       | Sessions › Advanced           | How often the idle check runs. It ends idle sessions and deletes nothing. It also runs once at server start.                                                                |
+| `cleanupUseDbDirect`                                                | `false`                                       | boolean                                                           | Sessions › Advanced           | Idle check with one SQL update instead of the Document Service (skips lifecycle hooks).                                                                                     |
+| `strictSessionEnforcement`                                          | `false` (Relaxed)                             | boolean                                                           | Sessions                      | Strict rejects tokens without a session record and requests where the check itself fails. Ended, expired and revoked sessions and blocked users are rejected in both modes. |
+| `sessionCreationGraceMs`                                            | `5000`                                        | ms, 0–30000 (shown in seconds)                                    | Sessions › Advanced           | Window after sign-in in which a token is accepted while its record is being created.                                                                                        |
+| `maxFailedLogins`                                                   | 5                                             | 0–100, 0 = off                                                    | Login protection              | Temporary IP lockout threshold (failed sign-ins from one IP within 15 minutes).                                                                                             |
+| `trustedProxies`                                                    | off                                           | boolean                                                           | Login protection              | Read the client IP from proxy headers. Only behind a proxy you control.                                                                                                     |
+| `blockSuspiciousSessions`                                           | `false`                                       | boolean                                                           | Login protection              | Reject suspicious sign-ins.                                                                                                                                                 |
+| `geoLookupFailureMode`                                              | `'auto'`                                      | auto, allow, block                                                | Login protection              | What happens when the location cannot be determined.                                                                                                                        |
+| `enableGeofencing`                                                  | `false`                                       | boolean                                                           | Login protection              | Use country rules.                                                                                                                                                          |
+| `allowedCountries` / `blockedCountries`                             | `[]`                                          | ISO 3166-1 alpha-2 codes                                          | Login protection              | Allow only listed countries / Reject listed countries.                                                                                                                      |
+| `enableGeolocation`                                                 | `true`                                        | boolean                                                           | Location data                 | IP location lookup at sign-in. Required by country rules, suspicious-sign-in checks and alerts.                                                                             |
+| `enableSecurityScoring`                                             | `true`                                        | boolean                                                           | Location data                 | Apply the security score thresholds (below 70: suspicious-sign-in email, below 50: rejection if enabled).                                                                   |
+| `geoIpProvider`                                                     | `'auto'`                                      | auto, local-mmdb, ipapi, disabled                                 | Location data                 | Where location data comes from.                                                                                                                                             |
+| `geoIpDatabasePath`                                                 | `MAGIC_SESSIONMANAGER_GEOIP_DATABASE` or `''` | file name                                                         | Location data › Advanced      | Local MaxMind-compatible database.                                                                                                                                          |
+| `enableEmailAlerts`                                                 | `false`                                       | boolean                                                           | Alerts                        | Security emails to users.                                                                                                                                                   |
+| `alertOnSuspiciousLogin` / `alertOnNewLocation` / `alertOnVpnProxy` | `true`                                        | boolean                                                           | Alerts                        | Which events send an email.                                                                                                                                                 |
+| `enableWebhooks`                                                    | `false`                                       | boolean                                                           | Alerts                        | Team notifications.                                                                                                                                                         |
+| `discordWebhookUrl` / `slackWebhookUrl`                             | `''`                                          | https URL on discord.com / discordapp.com, or hooks.slack.com     | Alerts                        | Any other host is rejected.                                                                                                                                                 |
+| `retentionDays`                                                     | 90                                            | days, 1–365 or -1 (forever)                                       | Data and retention            | How long records of ended sessions are kept. Checked once a day, the first time about 24 hours after the server starts. Open sessions are never deleted by retention.       |
+| `rateLimitWriteMax` / `rateLimitReadMax` / `rateLimitWindowSeconds` | 10 / 120 / 60                                 | 1–1000 / 1–10000 / 10–3600                                        | not shown                     | Content API rate limits. Not editable in the UI; Save keeps the stored values. The write limit can only be made stricter than the route floor.                              |
+| `emailTemplates`                                                    | empty                                         | subject ≤ 200, HTML ≤ 10,000 (sanitised), text ≤ 5,000 characters | Alerts › Edit email templates | As soon as any template has content, only stored templates are used. Fill in all three, or none.                                                                            |
 
 ### Environment variables
 
-| Variable | Purpose |
-|---|---|
-| `SESSION_ENCRYPTION_KEY` | Key for AES-256-GCM encryption of stored tokens. Required when `NODE_ENV=production` (startup fails without it). Keep it stable. |
-| `MAGIC_SESSIONMANAGER_GEOIP_DATABASE` | Path of a local MaxMind-compatible database (also `GEOIP_DATABASE_PATH`, `GEOLITE2_CITY_MMDB`, `GEOIP_CITY_DATABASE_PATH`, `GEOLITE2_COUNTRY_MMDB`, `GEOIP_COUNTRY_DATABASE_PATH`). |
-| `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY` | MaxMind credentials for database updates. They take precedence over credentials stored in the admin. |
-| `MAXMIND_EDITION_ID` | Edition for the CLI updater, for example `GeoLite2-City`. |
+| Variable                                    | Purpose                                                                                                                                                                             |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SESSION_ENCRYPTION_KEY`                    | Key for AES-256-GCM encryption of stored tokens. Required when `NODE_ENV=production` (startup fails without it). Keep it stable.                                                    |
+| `MAGIC_SESSIONMANAGER_GEOIP_DATABASE`       | Path of a local MaxMind-compatible database (also `GEOIP_DATABASE_PATH`, `GEOLITE2_CITY_MMDB`, `GEOIP_CITY_DATABASE_PATH`, `GEOLITE2_COUNTRY_MMDB`, `GEOIP_COUNTRY_DATABASE_PATH`). |
+| `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY` | MaxMind credentials for database updates. They take precedence over credentials stored in the admin.                                                                                |
+| `MAXMIND_EDITION_ID`                        | Edition for the CLI updater, for example `GeoLite2-City`.                                                                                                                           |
 
 ---
 
@@ -319,12 +319,12 @@ Static defaults from `server/src/config/index.js`; admin units and ranges from t
 
 IP geolocation is enabled by default and the default provider is `auto`. When no local database is available, `auto` sends the session IP address to ipapi.co for a lookup. If a local lookup fails, `auto` can also send the IP address to ipapi.co. With `geoLookupFailureMode: 'block'`, a failed local lookup does not fall back to ipapi.co. This setting does not prevent the remote lookup when no local database is available.
 
-| Provider | Behavior |
-|---|---|
-| `auto` | Local database when available, with the remote fallback described above. |
-| `local-mmdb` | Local MaxMind-compatible database only. |
-| `ipapi` | Always sends the IP address to ipapi.co. |
-| `disabled` | No lookup. |
+| Provider     | Behavior                                                                 |
+| ------------ | ------------------------------------------------------------------------ |
+| `auto`       | Local database when available, with the remote fallback described above. |
+| `local-mmdb` | Local MaxMind-compatible database only.                                  |
+| `ipapi`      | Always sends the IP address to ipapi.co.                                 |
+| `disabled`   | No lookup.                                                               |
 
 To avoid remote IP lookups, choose `local-mmdb`, which uses a local database and does not fall back to ipapi.co. Choose `disabled` for no GeoIP lookup, or set `enableGeolocation: false` for no GeoIP lookup. Country rules, suspicious-sign-in checks and alerts need location data, so these choices also affect them.
 
@@ -355,12 +355,12 @@ The updater checks MaxMind's `Last-Modified` header and skips the download when 
 
 Configuration › Login protection checks **new sign-ins only**. Existing sessions are not affected, and refused sign-ins are not recorded.
 
-| Rule | Response | Notes |
-|---|---|---|
-| Temporary IP lockout | 429 with `Retry-After` | After `maxFailedLogins` failed sign-ins from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Counted per server process. |
-| Reject suspicious sign-ins | 403 | VPN, proxy or known threat address, or, with security scoring on, a score below 50. |
-| Country rules | 403 | Allow only listed countries, or reject listed countries. With "Allow only listed countries", an empty list allows every country. |
-| Location cannot be determined | 403 "Login temporarily unavailable" | When `geoLookupFailureMode` says reject (`auto` rejects only when "Reject suspicious sign-ins" is on). |
+| Rule                          | Response                            | Notes                                                                                                                                                                             |
+| ----------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Temporary IP lockout          | 429 with `Retry-After`              | After `maxFailedLogins` failed sign-ins from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Counted per server process. |
+| Reject suspicious sign-ins    | 403                                 | VPN, proxy or known threat address, or, with security scoring on, a score below 50.                                                                                               |
+| Country rules                 | 403                                 | Allow only listed countries, or reject listed countries. With "Allow only listed countries", an empty list allows every country.                                                  |
+| Location cannot be determined | 403 "Login temporarily unavailable" | When `geoLookupFailureMode` says reject (`auto` rejects only when "Reject suspicious sign-ins" is on).                                                                            |
 
 Requests with an ended session get **401** with the header `X-Session-Terminated-Reason` (`logout`, `manual`, `idle`, `expired` or `blocked`).
 
@@ -402,14 +402,14 @@ export default ({ env }) => ({
 
 Prefix `/api/magic-sessionmanager`. Every route requires a Users & Permissions JWT (`Authorization: Bearer <JWT>`), works on the caller's **own** sessions only and is rate-limited (writes 10, reads 120 requests per minute by default; 429 with `Retry-After`).
 
-| Method | Path | Purpose | Response |
-|---|---|---|---|
-| GET | `/my-sessions` | Own sessions (up to 200), current session first | `{ data: [...], meta: { count, active, hasMore, limit } }` |
-| GET | `/current-session` | The session of the current token | `{ data: {..., isCurrentSession: true } }`; 404 when none |
-| GET | `/user/:userId/sessions` | Sessions of a user; only your own `userId` | 403 for another user |
-| POST | `/logout` | End the current session (reason `logout`) | `{ message, terminated }` |
-| POST | `/logout-all` | End all own sessions (reason `logout`) | `{ message, terminatedCount }` |
-| POST | `/logout-others` | End all own sessions except the current one | `{ message, terminatedCount, currentSessionPreserved }` |
+| Method | Path                      | Purpose                                                           | Response                                                                                               |
+| ------ | ------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET    | `/my-sessions`            | Own sessions (up to 200), current session first                   | `{ data: [...], meta: { count, active, hasMore, limit } }`                                             |
+| GET    | `/current-session`        | The session of the current token                                  | `{ data: {..., isCurrentSession: true } }`; 404 when none                                              |
+| GET    | `/user/:userId/sessions`  | Sessions of a user; only your own `userId`                        | 403 for another user                                                                                   |
+| POST   | `/logout`                 | End the current session (reason `logout`)                         | `{ message, terminated }`                                                                              |
+| POST   | `/logout-all`             | End all own sessions (reason `logout`)                            | `{ message, terminatedCount }`                                                                         |
+| POST   | `/logout-others`          | End all own sessions except the current one                       | `{ message, terminatedCount, currentSessionPreserved }`                                                |
 | DELETE | `/my-sessions/:sessionId` | End one own session that is not the current one (reason `manual`) | `{ message, success, alreadyTerminated }`; 400 for the current session, 404 for unknown or foreign IDs |
 
 `POST /api/auth/logout` also ends the current session; the plugin mounts it when Users & Permissions does not provide it.
@@ -462,16 +462,16 @@ module.exports = factories.createCoreRouter('api::order.order', {
 });
 ```
 
-| Case | Strict token check | Relaxed token check |
-|---|---|---|
-| No authenticated user on the request (public route, API token) | allowed; the route's own auth decides | allowed |
-| User cannot be resolved to a `documentId` | 401 | allowed |
-| No `Authorization: Bearer` token | 401 | allowed |
-| `jwtManagement: 'refresh'` and Strapi verified no native session id | 401 | allowed |
-| A matching session row is open | allowed | allowed |
-| The matching session row is ended | 401 "Session terminated" | 401 "Session terminated" |
-| No session row matches | 401 | allowed, with a warning in the log |
-| Settings or the session lookup fail | 401 | allowed |
+| Case                                                                | Strict token check                    | Relaxed token check                |
+| ------------------------------------------------------------------- | ------------------------------------- | ---------------------------------- |
+| No authenticated user on the request (public route, API token)      | allowed; the route's own auth decides | allowed                            |
+| User cannot be resolved to a `documentId`                           | 401                                   | allowed                            |
+| No `Authorization: Bearer` token                                    | 401                                   | allowed                            |
+| `jwtManagement: 'refresh'` and Strapi verified no native session id | 401                                   | allowed                            |
+| A matching session row is open                                      | allowed                               | allowed                            |
+| The matching session row is ended                                   | 401 "Session terminated"              | 401 "Session terminated"           |
+| No session row matches                                              | 401                                   | allowed, with a warning in the log |
+| Settings or the session lookup fail                                 | 401                                   | allowed                            |
 
 ---
 
@@ -479,25 +479,25 @@ module.exports = factories.createCoreRouter('api::order.order', {
 
 Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authenticated Strapi admin **and** the permission `plugin::magic-sessionmanager.access` ("Access the Session Manager plugin"). The same permission controls the menu link, the settings links, the widget and the user panel. Admin responses never contain tokens or the internal `sessionId`.
 
-| Method | Path | Admin UI action |
-|---|---|---|
-| GET | `/sessions` | Sessions dashboard, widget, Analytics (latest 1,000; `meta.truncated` when more exist) |
-| GET | `/sessions/active` | Open sessions only |
-| GET | `/user/:userId/sessions` | Sessions panel |
-| POST | `/sessions/:sessionId/terminate` | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays) |
-| DELETE | `/sessions/:sessionId` | **Delete record** (record removed, token stays revoked; an open session also ends) |
-| POST | `/sessions/clean-inactive` | **Delete ended sessions** (all users; open and idle sessions are not affected; does not run the idle check) |
-| POST | `/user/:userId/terminate-all` | **End all sessions** (reason `manual`) |
-| POST | `/user/:userId/toggle-block` | **Block user** / **Unblock user** |
-| GET | `/users/stats` | Widget totals (`totalUsers`, `blockedUsers`) |
-| GET | `/geolocation/:ipAddress` | **Look up location** |
-| GET | `/geoip/status` | GeoIP database status |
-| PUT | `/geoip/credentials` | Save or remove (`{ "clear": true }`) MaxMind credentials |
-| POST | `/geoip/update` | Update database / Force download |
-| GET, PUT | `/settings` | Configuration (PUT validates every field and returns `error.details.errors` on invalid input) |
-| GET | `/license/status` | License page |
-| POST | `/license/auto-create`, `/license/create`, `/license/ping`, `/license/store-key` | License service routes (no admin UI) |
-| POST | `/sessions/:sessionId/simulate-timeout` | Development only; removed when `NODE_ENV` is `production` or `staging` |
+| Method   | Path                                                                             | Admin UI action                                                                                             |
+| -------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| GET      | `/sessions`                                                                      | Sessions dashboard, widget, Analytics (latest 1,000; `meta.truncated` when more exist)                      |
+| GET      | `/sessions/active`                                                               | Open sessions only                                                                                          |
+| GET      | `/user/:userId/sessions`                                                         | Sessions panel                                                                                              |
+| POST     | `/sessions/:sessionId/terminate`                                                 | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays)    |
+| DELETE   | `/sessions/:sessionId`                                                           | **Delete record** (record removed, token stays revoked; an open session also ends)                          |
+| POST     | `/sessions/clean-inactive`                                                       | **Delete ended sessions** (all users; open and idle sessions are not affected; does not run the idle check) |
+| POST     | `/user/:userId/terminate-all`                                                    | **End all sessions** (reason `manual`)                                                                      |
+| POST     | `/user/:userId/toggle-block`                                                     | **Block user** / **Unblock user**                                                                           |
+| GET      | `/users/stats`                                                                   | Widget totals (`totalUsers`, `blockedUsers`)                                                                |
+| GET      | `/geolocation/:ipAddress`                                                        | **Look up location**                                                                                        |
+| GET      | `/geoip/status`                                                                  | GeoIP database status                                                                                       |
+| PUT      | `/geoip/credentials`                                                             | Save or remove (`{ "clear": true }`) MaxMind credentials                                                    |
+| POST     | `/geoip/update`                                                                  | Update database / Force download                                                                            |
+| GET, PUT | `/settings`                                                                      | Configuration (PUT validates every field and returns `error.details.errors` on invalid input)               |
+| GET      | `/license/status`                                                                | License page                                                                                                |
+| POST     | `/license/auto-create`, `/license/create`, `/license/ping`, `/license/store-key` | License service routes (no admin UI)                                                                        |
+| POST     | `/sessions/:sessionId/simulate-timeout`                                          | Development only; removed when `NODE_ENV` is `production` or `staging`                                      |
 
 **Block / unblock** (`toggle-block`): send `{ "blocked": true }` or `{ "blocked": false }`. This sets the state, is safe to retry and is what the admin UI sends. A request without a body still toggles, but is deprecated, because a retry after a lost response can reverse the intended state. A non-boolean `blocked` returns 400. The response contains `blocked` and `mode` (`explicit` or `toggle`). Blocking ends all open sessions with the reason `blocked`; if that fails, the response is 500 and the request can be retried.
 
@@ -524,15 +524,15 @@ Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---|---|
-| No Session Manager menu item | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin". |
-| No sessions appear | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log. |
-| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart. |
-| 401 on every request after a sign-in | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected. |
-| 429 on sign-in | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client. |
-| Location is always "—" | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data. |
-| Numbers differ from 4.x | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions". |
+| Problem                                                               | Fix                                                                                                                                                      |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin". |
+| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                        |
+| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                            |
+| 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                   |
+| 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client.    |
+| Location is always "—"                                                | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data.                               |
+| Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                          |
 
 The plugin stores sessions in the `magic_sessions` table and revocations in its own revoked-token table.
 

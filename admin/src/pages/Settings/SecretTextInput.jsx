@@ -86,7 +86,11 @@ const SecretTextInput = ({
           aria-pressed={revealed}
           onClick={toggle}
         >
-          {revealed ? <EyeStriked aria-hidden focusable={false} /> : <Eye aria-hidden focusable={false} />}
+          {revealed ? (
+            <EyeStriked aria-hidden focusable={false} />
+          ) : (
+            <Eye aria-hidden focusable={false} />
+          )}
         </RevealToggle>
       }
     />

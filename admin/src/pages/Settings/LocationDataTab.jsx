@@ -28,7 +28,10 @@ const LocationDataTab = ({ form }) => {
           )}
         </IntroText>
         <RequiresNotice tab="login-protection">
-          {t('settings.config.locationData.clientIpLink', 'The client IP address source is set under Login protection › Client IP address.')}
+          {t(
+            'settings.config.locationData.clientIpLink',
+            'The client IP address source is set under Login protection › Client IP address.'
+          )}
         </RequiresNotice>
       </Flex>
 

@@ -26,8 +26,10 @@ export function normalizeUserCounts(response) {
 
   if (
     response?.success !== true ||
-    !Number.isSafeInteger(totalUsers) || totalUsers < 0 ||
-    !Number.isSafeInteger(blockedUsers) || blockedUsers < 0 ||
+    !Number.isSafeInteger(totalUsers) ||
+    totalUsers < 0 ||
+    !Number.isSafeInteger(blockedUsers) ||
+    blockedUsers < 0 ||
     blockedUsers > totalUsers
   ) {
     return null;

@@ -27,7 +27,8 @@ const NoWrap = styled.span`
 const StatusDetail = ({ session, status }) => {
   const { formatMessage } = useIntl();
   const { formatDate, formatRelativeTime, endReasonLabel } = useSessionFormatters();
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
   let text;
 
   if (status === 'ended') {
@@ -36,18 +37,24 @@ const StatusDetail = ({ session, status }) => {
     // (compact table), it wraps at the separator, never inside the date.
     text = t('common.status.ended.detail', '{reason} · {endedAt}', {
       reason: <NoWrap key="reason">{endReasonLabel(session)}</NoWrap>,
-      endedAt: endedAt
-        ? <NoWrap key="ended-at">{formatDate(endedAt)}</NoWrap>
-        : <MissingValue variant="pi" key="ended-at" />,
+      endedAt: endedAt ? (
+        <NoWrap key="ended-at">{formatDate(endedAt)}</NoWrap>
+      ) : (
+        <MissingValue variant="pi" key="ended-at" />
+      ),
     });
   } else {
     const minutes = Number(session.minutesSinceActive);
-    const hasMinutes = session.minutesSinceActive !== null && session.minutesSinceActive !== undefined && Number.isFinite(minutes);
-    text = status === 'idle' && hasMinutes
-      ? t('common.status.idle.detail', 'Not used for {minutes} min', { minutes })
-      : t('common.status.active.detail', 'Last active {time}', {
-        time: formatRelativeTime(session.lastActive || session.loginTime),
-      });
+    const hasMinutes =
+      session.minutesSinceActive !== null &&
+      session.minutesSinceActive !== undefined &&
+      Number.isFinite(minutes);
+    text =
+      status === 'idle' && hasMinutes
+        ? t('common.status.idle.detail', 'Not used for {minutes} min', { minutes })
+        : t('common.status.active.detail', 'Last active {time}', {
+            time: formatRelativeTime(session.lastActive || session.loginTime),
+          });
   }
 
   return (
@@ -66,9 +73,10 @@ const StatusDetail = ({ session, status }) => {
  * @param {string} tone DS Badge variant.
  * @returns {object} Badge colour props.
  */
-export const getBadgeColors = (tone) => (tone === 'warning'
-  ? { backgroundColor: 'warning200', textColor: 'neutral800' }
-  : { variant: tone });
+export const getBadgeColors = (tone) =>
+  tone === 'warning'
+    ? { backgroundColor: 'warning200', textColor: 'neutral800' }
+    : { variant: tone };
 
 /**
  * The one session state badge for every screen (IA B.3): Active (success),
@@ -89,10 +97,17 @@ const StatusBadge = ({ status, session, detail = false, showEndReason = false, s
   const { formatMessage } = useIntl();
   const presentation = getSessionStatusPresentation(status || session || {});
   const translate = (descriptor) =>
-    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage });
+    formatMessage({
+      id: getTranslation(descriptor.messageId),
+      defaultMessage: descriptor.defaultMessage,
+    });
   const label = translate(presentation);
   const badge = (
-    <Badge {...getBadgeColors(presentation.tone)} size={size} data-session-status={presentation.status}>
+    <Badge
+      {...getBadgeColors(presentation.tone)}
+      size={size}
+      data-session-status={presentation.status}
+    >
       {label}
     </Badge>
   );
@@ -110,17 +125,23 @@ const StatusBadge = ({ status, session, detail = false, showEndReason = false, s
           <Tooltip label={translate(help)}>
             <span>{badge}</span>
           </Tooltip>
-        ) : badge}
+        ) : (
+          badge
+        )}
         {native ? (
           <Tooltip
             label={formatMessage({
               id: getTranslation('common.status.nativeSession.help'),
-              defaultMessage: 'Created by Strapi’s own session store. No device or location details were recorded.',
+              defaultMessage:
+                'Created by Strapi’s own session store. No device or location details were recorded.',
             })}
           >
             <span>
               <Badge variant="neutral" size={size} data-native-session="">
-                {formatMessage({ id: getTranslation('common.status.nativeSession'), defaultMessage: 'Strapi session' })}
+                {formatMessage({
+                  id: getTranslation('common.status.nativeSession'),
+                  defaultMessage: 'Strapi session',
+                })}
               </Badge>
             </span>
           </Tooltip>

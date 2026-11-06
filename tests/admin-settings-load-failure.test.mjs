@@ -8,7 +8,10 @@ const page = readSettingsFile('index.jsx');
 const LOAD_KEYS = ['settings.config.load.error', 'settings.config.load.retry'];
 
 test('settings load failures cannot expose an editable default draft (IA G)', () => {
-  const fetch = hook.slice(hook.indexOf('const fetchSettings ='), hook.indexOf('useEffect(', hook.indexOf('const fetchSettings =')));
+  const fetch = hook.slice(
+    hook.indexOf('const fetchSettings ='),
+    hook.indexOf('useEffect(', hook.indexOf('const fetchSettings ='))
+  );
   const errorStart = page.indexOf('if (form.loadError)');
   const errorView = page.slice(errorStart, page.indexOf('\n  }', errorStart));
   assert.ok(fetch.length > 0 && errorStart >= 0);
@@ -19,7 +22,10 @@ test('settings load failures cannot expose an editable default draft (IA G)', ()
   assert.match(page, /import Alert from ['"].*PersistentAlert['"]/);
   assert.match(errorView, /onClick=\{form\.fetchSettings\}/);
   assert.match(errorView, /return \(/);
-  assert.ok(page.indexOf('if (form.loadError)') < page.indexOf('<Tabs.Root'), 'the form is not rendered after a failed load');
+  assert.ok(
+    page.indexOf('if (form.loadError)') < page.indexOf('<Tabs.Root'),
+    'the form is not rendered after a failed load'
+  );
   for (const key of LOAD_KEYS) assert.match(errorView, new RegExp(key.replace(/\./g, '\\.')), key);
 });
 

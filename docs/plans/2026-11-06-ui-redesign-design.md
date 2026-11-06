@@ -13,7 +13,7 @@ The Session Manager admin should look and behave like a first-party Strapi featu
 - Admin-only. Strapi Admin sessions stay out of scope; the plugin manages Users & Permissions end-user sessions only.
 - Peer range is `@strapi/strapi ^5.0.0`. Use only admin exports that exist in 5.0: `Layouts`, `Page`, `Pagination`, `SearchInput`, `ConfirmDialog`, `Form`/`Blocker`, `useNotification`, `useFetchClient`, `useQueryParams`, `useAPIErrorHandler`, `useRBAC`. Feature-detect newer exports such as `Widget` helpers and `useIsMobile` and fall back when they are missing.
 - Design System 2: components, theme tokens, spacing scale and breakpoints only. No hand-made replacements for DS pieces, no hard-coded colours and no px font sizes.
-- Every visible string goes through `formatMessage`, with keys present in en, de, fr, es and pt. German uses the formal *Sie* consistently.
+- Every visible string goes through `formatMessage`, with keys present in en, de, fr, es and pt. German uses the formal _Sie_ consistently.
 
 ## Current state (summary of the review)
 
@@ -28,14 +28,14 @@ The Session Manager admin should look and behave like a first-party Strapi featu
 
 One small set of shared building blocks in `admin/src/components/ui/`, used by every screen:
 
-| Block | Purpose | Rules |
-|---|---|---|
-| `PageShell` | `Page.Main` + `Layouts.Header` + optional `Layouts.Action` + `Layouts.Content` | No extra padding inside Content. Primary action sits in the header. |
-| `SectionCard` | White content section | `background="neutral0" hasRadius shadow="tableShadow"`, padding 6 (24 px) desktop and 4 (16 px) below the medium breakpoint; heading `Typography variant="delta" tag="h2"`, optional subtitle `variant="pi" textColor="neutral600"`. |
-| `StatGrid` / `StatCard` | KPI rows | `Grid.Root gap={4}`, equal columns (4 per row desktop, 2 tablet, 1 mobile), stretch to equal height; value `variant="alpha"`, label `variant="sigma"`. |
-| `PropertyList` | Label/value pairs (modal, panel, license) | `dl` with a two-column grid of equal width; labels `sigma`, values `omega`; long values wrap with `overflow-wrap: anywhere` only for IDs and emails. |
-| `StatusBadge` | All session states | One mapping for every screen: Active (success), Idle (warning), Logged out (neutral), Terminated (danger). |
-| `ConfirmAction` | All destructive actions | Strapi `ConfirmDialog`; never `window.confirm`. |
+| Block                   | Purpose                                                                        | Rules                                                                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PageShell`             | `Page.Main` + `Layouts.Header` + optional `Layouts.Action` + `Layouts.Content` | No extra padding inside Content. Primary action sits in the header.                                                                                                                                                                  |
+| `SectionCard`           | White content section                                                          | `background="neutral0" hasRadius shadow="tableShadow"`, padding 6 (24 px) desktop and 4 (16 px) below the medium breakpoint; heading `Typography variant="delta" tag="h2"`, optional subtitle `variant="pi" textColor="neutral600"`. |
+| `StatGrid` / `StatCard` | KPI rows                                                                       | `Grid.Root gap={4}`, equal columns (4 per row desktop, 2 tablet, 1 mobile), stretch to equal height; value `variant="alpha"`, label `variant="sigma"`.                                                                               |
+| `PropertyList`          | Label/value pairs (modal, panel, license)                                      | `dl` with a two-column grid of equal width; labels `sigma`, values `omega`; long values wrap with `overflow-wrap: anywhere` only for IDs and emails.                                                                                 |
+| `StatusBadge`           | All session states                                                             | One mapping for every screen: Active (success), Idle (warning), Logged out (neutral), Terminated (danger).                                                                                                                           |
+| `ConfirmAction`         | All destructive actions                                                        | Strapi `ConfirmDialog`; never `window.confirm`.                                                                                                                                                                                      |
 
 Spacing scale (DS tokens only): 1 = 4 px, 2 = 8 px, 3 = 12 px, 4 = 16 px, 6 = 24 px, 8 = 32 px. Use gap 2 inside a control group, 4 inside a card, 6 between cards and sections. Controls in one row use the same size (`M`, 40 px). Breakpoints: DS `small` 520, `medium` 768, `large` 1080.
 
@@ -46,6 +46,7 @@ Formatting: one `formatSessionDate` helper using the admin locale (`useIntl`) ev
 ### 1. Dashboard (`/plugins/magic-sessionmanager`)
 
 Native list-view pattern, as in the Content Manager:
+
 - Header: title, subtitle, primary action "Export" (`SimpleMenu`: CSV, JSON).
 - `StatGrid` with 4 equal cards: Active, Idle, Ended (secondary line: "x logged out · y terminated"), Total.
 - Action bar: `SearchInput` on the left; status filter (`SingleSelect`, size M) and Refresh `IconButton` on the right.

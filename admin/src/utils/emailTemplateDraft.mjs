@@ -12,34 +12,92 @@ export const TEMPLATE_LIMITS = Object.freeze({ subject: 200, html: 10000, text: 
  * Descriptions are rendered through formatMessage (I18N-5, SET-11).
  */
 export const TEMPLATE_VARIABLE_DEFINITIONS = Object.freeze({
-  '{{user.email}}': { messageId: 'settings.email.templates.variable.userEmail', defaultMessage: 'User email address' },
-  '{{user.username}}': { messageId: 'settings.email.templates.variable.username', defaultMessage: 'Username' },
-  '{{session.loginTime}}': { messageId: 'settings.email.templates.variable.loginTime', defaultMessage: 'Login time' },
-  '{{session.ipAddress}}': { messageId: 'settings.email.templates.variable.ipAddress', defaultMessage: 'IP address' },
-  '{{geo.city}}': { messageId: 'settings.email.templates.variable.city', defaultMessage: 'City (if available)' },
-  '{{geo.country}}': { messageId: 'settings.email.templates.variable.country', defaultMessage: 'Country (if available)' },
-  '{{geo.timezone}}': { messageId: 'settings.email.templates.variable.timezone', defaultMessage: 'Time zone (if available)' },
-  '{{session.userAgent}}': { messageId: 'settings.email.templates.variable.userAgent', defaultMessage: 'Browser and device' },
-  '{{reason.isVpn}}': { messageId: 'settings.email.templates.variable.isVpn', defaultMessage: 'VPN detected (true or false)' },
-  '{{reason.isProxy}}': { messageId: 'settings.email.templates.variable.isProxy', defaultMessage: 'Proxy detected (true or false)' },
-  '{{reason.isThreat}}': { messageId: 'settings.email.templates.variable.isThreat', defaultMessage: 'Threat detected (true or false)' },
-  '{{reason.securityScore}}': { messageId: 'settings.email.templates.variable.securityScore', defaultMessage: 'Security score (0 to 100)' },
+  '{{user.email}}': {
+    messageId: 'settings.email.templates.variable.userEmail',
+    defaultMessage: 'User email address',
+  },
+  '{{user.username}}': {
+    messageId: 'settings.email.templates.variable.username',
+    defaultMessage: 'Username',
+  },
+  '{{session.loginTime}}': {
+    messageId: 'settings.email.templates.variable.loginTime',
+    defaultMessage: 'Login time',
+  },
+  '{{session.ipAddress}}': {
+    messageId: 'settings.email.templates.variable.ipAddress',
+    defaultMessage: 'IP address',
+  },
+  '{{geo.city}}': {
+    messageId: 'settings.email.templates.variable.city',
+    defaultMessage: 'City (if available)',
+  },
+  '{{geo.country}}': {
+    messageId: 'settings.email.templates.variable.country',
+    defaultMessage: 'Country (if available)',
+  },
+  '{{geo.timezone}}': {
+    messageId: 'settings.email.templates.variable.timezone',
+    defaultMessage: 'Time zone (if available)',
+  },
+  '{{session.userAgent}}': {
+    messageId: 'settings.email.templates.variable.userAgent',
+    defaultMessage: 'Browser and device',
+  },
+  '{{reason.isVpn}}': {
+    messageId: 'settings.email.templates.variable.isVpn',
+    defaultMessage: 'VPN detected (true or false)',
+  },
+  '{{reason.isProxy}}': {
+    messageId: 'settings.email.templates.variable.isProxy',
+    defaultMessage: 'Proxy detected (true or false)',
+  },
+  '{{reason.isThreat}}': {
+    messageId: 'settings.email.templates.variable.isThreat',
+    defaultMessage: 'Threat detected (true or false)',
+  },
+  '{{reason.securityScore}}': {
+    messageId: 'settings.email.templates.variable.securityScore',
+    defaultMessage: 'Security score (0 to 100)',
+  },
 });
 
 /** Variables available per alert type. */
 export const TEMPLATE_VARIABLES = Object.freeze({
   suspiciousLogin: [
-    '{{user.email}}', '{{user.username}}', '{{session.loginTime}}', '{{session.ipAddress}}',
-    '{{geo.city}}', '{{geo.country}}', '{{geo.timezone}}', '{{session.userAgent}}',
-    '{{reason.isVpn}}', '{{reason.isProxy}}', '{{reason.isThreat}}', '{{reason.securityScore}}',
+    '{{user.email}}',
+    '{{user.username}}',
+    '{{session.loginTime}}',
+    '{{session.ipAddress}}',
+    '{{geo.city}}',
+    '{{geo.country}}',
+    '{{geo.timezone}}',
+    '{{session.userAgent}}',
+    '{{reason.isVpn}}',
+    '{{reason.isProxy}}',
+    '{{reason.isThreat}}',
+    '{{reason.securityScore}}',
   ],
   newLocation: [
-    '{{user.email}}', '{{user.username}}', '{{session.loginTime}}', '{{session.ipAddress}}',
-    '{{geo.city}}', '{{geo.country}}', '{{geo.timezone}}', '{{session.userAgent}}',
+    '{{user.email}}',
+    '{{user.username}}',
+    '{{session.loginTime}}',
+    '{{session.ipAddress}}',
+    '{{geo.city}}',
+    '{{geo.country}}',
+    '{{geo.timezone}}',
+    '{{session.userAgent}}',
   ],
   vpnProxy: [
-    '{{user.email}}', '{{user.username}}', '{{session.loginTime}}', '{{session.ipAddress}}',
-    '{{geo.city}}', '{{geo.country}}', '{{session.userAgent}}', '{{reason.isVpn}}', '{{reason.isProxy}}',
+    '{{user.email}}',
+    '{{user.username}}',
+    '{{session.loginTime}}',
+    '{{session.ipAddress}}',
+    '{{geo.city}}',
+    '{{geo.country}}',
+    '{{session.userAgent}}',
+    '{{reason.isVpn}}',
+    '{{reason.isProxy}}',
   ],
 });
 
@@ -74,7 +132,10 @@ export function updateEmailTemplate(templates, templateKey, field, value) {
 export function findTemplateVariables(template, templateKey) {
   const available = TEMPLATE_VARIABLES[templateKey] || [];
   const source = typeof template === 'string' ? template : '';
-  return { found: available.filter((variable) => source.includes(variable)), total: available.length };
+  return {
+    found: available.filter((variable) => source.includes(variable)),
+    total: available.length,
+  };
 }
 
 const escapeHtml = (value) =>
@@ -176,7 +237,9 @@ const stripActiveHtml = (raw) => {
         i += shortEnd;
         continue;
       }
-      const ends = [raw.indexOf('-->', i + 4), raw.indexOf('--!>', i + 4)].filter((index) => index !== -1);
+      const ends = [raw.indexOf('-->', i + 4), raw.indexOf('--!>', i + 4)].filter(
+        (index) => index !== -1
+      );
       if (!ends.length) return out;
       const end = Math.min(...ends);
       const close = raw.indexOf('>', end) + 1;
@@ -398,12 +461,17 @@ Login Details:
 export function fillMissingTemplates(templates) {
   const defaults = getDefaultTemplates();
   const source = templates && typeof templates === 'object' ? templates : {};
-  return Object.fromEntries(TEMPLATE_KEYS.map((key) => {
-    const stored = source[key] && typeof source[key] === 'object' ? source[key] : {};
-    return [key, {
-      subject: stored.subject || defaults[key].subject,
-      html: stored.html || defaults[key].html,
-      text: stored.text || defaults[key].text,
-    }];
-  }));
+  return Object.fromEntries(
+    TEMPLATE_KEYS.map((key) => {
+      const stored = source[key] && typeof source[key] === 'object' ? source[key] : {};
+      return [
+        key,
+        {
+          subject: stored.subject || defaults[key].subject,
+          html: stored.html || defaults[key].html,
+          text: stored.text || defaults[key].text,
+        },
+      ];
+    })
+  );
 }

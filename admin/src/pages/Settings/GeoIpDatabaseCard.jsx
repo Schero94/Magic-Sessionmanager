@@ -1,5 +1,14 @@
 import { Fragment, useRef } from 'react';
-import { Badge, Button, Divider, Flex, SingleSelect, SingleSelectOption, TextInput, Typography } from '@strapi/design-system';
+import {
+  Badge,
+  Button,
+  Divider,
+  Flex,
+  SingleSelect,
+  SingleSelectOption,
+  TextInput,
+  Typography,
+} from '@strapi/design-system';
 import { Trash } from '@strapi/icons';
 import { ConfirmAction, EqualGrid, PropertyList, SectionCard } from '../../components/ui';
 import FormField from '../../components/FormField';
@@ -29,7 +38,11 @@ const PathValue = ({ path }) => {
         // eslint-disable-next-line react/no-array-index-key -- segments are positional
         <Fragment key={index}>
           {part}
-          {index < parts.length - 1 ? <>/<wbr /></> : null}
+          {index < parts.length - 1 ? (
+            <>
+              /<wbr />
+            </>
+          ) : null}
         </Fragment>
       ))}
     </Typography>
@@ -59,9 +72,11 @@ const GeoIpDatabaseCard = ({ form }) => {
   // focus on <body>; afterwards it returns to the button (or the account ID).
   const keepFocus = (action, buttonRef) => async () => {
     await action();
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      refocusIfLost(buttonRef.current, accountIdRef.current);
-    }));
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        refocusIfLost(buttonRef.current, accountIdRef.current);
+      })
+    );
   };
   const lookupOff = !settings.enableGeolocation;
   const localDatabase = usesLocalDatabase(settings.geoIpProvider);
@@ -77,16 +92,18 @@ const GeoIpDatabaseCard = ({ form }) => {
   return (
     <SectionCard
       title={t('settings.config.provider.title', 'Provider and database')}
-      action={geoIpStatus ? (
-        <Badge
-          backgroundColor={geoIpStatus.exists ? 'success100' : 'neutral150'}
-          textColor={geoIpStatus.exists ? 'success700' : 'neutral700'}
-        >
-          {geoIpStatus.exists
-            ? t('settings.config.database.downloaded', 'Downloaded')
-            : t('settings.config.database.notDownloaded', 'Not downloaded')}
-        </Badge>
-      ) : null}
+      action={
+        geoIpStatus ? (
+          <Badge
+            backgroundColor={geoIpStatus.exists ? 'success100' : 'neutral150'}
+            textColor={geoIpStatus.exists ? 'success700' : 'neutral700'}
+          >
+            {geoIpStatus.exists
+              ? t('settings.config.database.downloaded', 'Downloaded')
+              : t('settings.config.database.notDownloaded', 'Not downloaded')}
+          </Badge>
+        ) : null
+      }
     >
       {lookupOff ? (
         <RequiresNotice>
@@ -109,17 +126,28 @@ const GeoIpDatabaseCard = ({ form }) => {
             disabled={lookupOff}
             onChange={(value) => handleChange('geoIpProvider', value)}
           >
-            <SingleSelectOption value="auto">{t('settings.config.provider.auto', 'Automatic')}</SingleSelectOption>
-            <SingleSelectOption value="local-mmdb">{t('settings.config.provider.local', 'Local database')}</SingleSelectOption>
-            <SingleSelectOption value="ipapi">{t('settings.config.provider.ipapi', 'ipapi.co')}</SingleSelectOption>
-            <SingleSelectOption value="disabled">{t('settings.config.provider.off', 'Off')}</SingleSelectOption>
+            <SingleSelectOption value="auto">
+              {t('settings.config.provider.auto', 'Automatic')}
+            </SingleSelectOption>
+            <SingleSelectOption value="local-mmdb">
+              {t('settings.config.provider.local', 'Local database')}
+            </SingleSelectOption>
+            <SingleSelectOption value="ipapi">
+              {t('settings.config.provider.ipapi', 'ipapi.co')}
+            </SingleSelectOption>
+            <SingleSelectOption value="disabled">
+              {t('settings.config.provider.off', 'Off')}
+            </SingleSelectOption>
           </SingleSelect>
         </FormField>
       </EqualGrid>
 
       {!lookupOff && !localDatabase ? (
         <RequiresNotice>
-          {t('settings.config.requires.localDatabase', 'The database settings below require the Automatic or Local database provider.')}
+          {t(
+            'settings.config.requires.localDatabase',
+            'The database settings below require the Automatic or Local database provider.'
+          )}
         </RequiresNotice>
       ) : null}
 
@@ -130,7 +158,11 @@ const GeoIpDatabaseCard = ({ form }) => {
           variant="danger"
           closeLabel={t('common.close', 'Close')}
           title=""
-          action={<Button size="S" variant="secondary" onClick={geoIp.fetchStatus}>{t('settings.config.load.retry', 'Try again')}</Button>}
+          action={
+            <Button size="S" variant="secondary" onClick={geoIp.fetchStatus}>
+              {t('settings.config.load.retry', 'Try again')}
+            </Button>
+          }
         >
           {t('settings.config.database.statusError', 'The database status could not be loaded.')}
         </Alert>
@@ -154,13 +186,20 @@ const GeoIpDatabaseCard = ({ form }) => {
               {
                 id: 'built',
                 label: t('settings.config.database.built', 'Build date'),
-                value: formatSessionDate(geoIpStatus.metadata?.lastModified, locale, '', BUILD_DATE_OPTIONS),
+                value: formatSessionDate(
+                  geoIpStatus.metadata?.lastModified,
+                  locale,
+                  '',
+                  BUILD_DATE_OPTIONS
+                ),
               },
               {
                 id: 'file',
                 label: t('settings.config.database.file', 'File'),
                 value: geoIpStatus.databasePath,
-                render: geoIpStatus.databasePath ? <PathValue path={geoIpStatus.databasePath} /> : undefined,
+                render: geoIpStatus.databasePath ? (
+                  <PathValue path={geoIpStatus.databasePath} />
+                ) : undefined,
                 kind: 'id',
               },
               {
@@ -175,7 +214,10 @@ const GeoIpDatabaseCard = ({ form }) => {
 
       {fromEnvironment ? (
         <Alert variant="default" closeLabel={t('common.close', 'Close')} title="">
-          {t('settings.config.database.credentials.envNote', 'Environment variables are set and take precedence; stored values are ignored.')}
+          {t(
+            'settings.config.database.credentials.envNote',
+            'Environment variables are set and take precedence; stored values are ignored.'
+          )}
         </Alert>
       ) : null}
 
@@ -184,7 +226,10 @@ const GeoIpDatabaseCard = ({ form }) => {
           id="maxmind-account-id"
           name="maxmindAccountId"
           label={t('settings.config.database.accountId', 'MaxMind account ID')}
-          description={t('settings.config.database.accountId.hint', 'Up to 64 characters. Environment variables take precedence.')}
+          description={t(
+            'settings.config.database.accountId.hint',
+            'Up to 64 characters. Environment variables take precedence.'
+          )}
         >
           <TextInput
             ref={accountIdRef}
@@ -194,14 +239,19 @@ const GeoIpDatabaseCard = ({ form }) => {
             maxLength={64}
             disabled={databaseDisabled}
             readOnly={fromEnvironment}
-            onChange={(event) => geoIp.setCredentials((prev) => ({ ...prev, accountId: event.target.value }))}
+            onChange={(event) =>
+              geoIp.setCredentials((prev) => ({ ...prev, accountId: event.target.value }))
+            }
           />
         </FormField>
         <FormField
           id="maxmind-license-key"
           name="maxmindLicenseKey"
           label={t('settings.config.database.licenseKey', 'MaxMind license key')}
-          description={t('settings.config.database.licenseKey.hint', 'Up to 256 characters. The key is masked and never shown again after saving.')}
+          description={t(
+            'settings.config.database.licenseKey.hint',
+            'Up to 256 characters. The key is masked and never shown again after saving.'
+          )}
         >
           <TextInput
             name="maxmindLicenseKey"
@@ -211,10 +261,14 @@ const GeoIpDatabaseCard = ({ form }) => {
             disabled={databaseDisabled}
             readOnly={fromEnvironment}
             value={geoIp.credentials.licenseKey || ''}
-            onChange={(event) => geoIp.setCredentials((prev) => ({ ...prev, licenseKey: event.target.value }))}
-            placeholder={credentialSource === 'store'
-              ? t('settings.config.database.licenseKey.stored', 'A license key is stored')
-              : undefined}
+            onChange={(event) =>
+              geoIp.setCredentials((prev) => ({ ...prev, licenseKey: event.target.value }))
+            }
+            placeholder={
+              credentialSource === 'store'
+                ? t('settings.config.database.licenseKey.stored', 'A license key is stored')
+                : undefined
+            }
           />
         </FormField>
       </EqualGrid>
@@ -225,18 +279,24 @@ const GeoIpDatabaseCard = ({ form }) => {
           variant="secondary"
           onClick={keepFocus(geoIp.saveCredentials, saveCredentialsRef)}
           loading={geoIp.savingCredentials}
-          disabled={databaseDisabled || fromEnvironment || geoIp.savingCredentials || !geoIp.credentials.accountId || !geoIp.credentials.licenseKey}
+          disabled={
+            databaseDisabled ||
+            fromEnvironment ||
+            geoIp.savingCredentials ||
+            !geoIp.credentials.accountId ||
+            !geoIp.credentials.licenseKey
+          }
         >
           {t('settings.config.database.saveCredentials', 'Save credentials')}
         </Button>
         {credentialSource === 'store' ? (
           <ConfirmAction
             variant="danger"
-            trigger={(
+            trigger={
               <Button variant="danger-light" startIcon={<Trash aria-hidden focusable={false} />}>
                 {t('settings.config.database.removeCredentials', 'Remove credentials')}
               </Button>
-            )}
+            }
             title={t('settings.config.database.remove.title', 'Remove stored MaxMind credentials?')}
             body={t(
               'settings.config.database.remove.body',
@@ -257,7 +317,9 @@ const GeoIpDatabaseCard = ({ form }) => {
             ref={updateRef}
             onClick={keepFocus(() => geoIp.updateDatabase(false), updateRef)}
             loading={geoIp.updating}
-            disabled={databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
+            disabled={
+              databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges
+            }
           >
             {t('settings.config.database.update', 'Update database')}
           </Button>
@@ -265,7 +327,9 @@ const GeoIpDatabaseCard = ({ form }) => {
             ref={forceRef}
             variant="tertiary"
             onClick={keepFocus(() => geoIp.updateDatabase(true), forceRef)}
-            disabled={databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges}
+            disabled={
+              databaseDisabled || geoIp.updating || !geoIpStatus?.hasCredentials || hasChanges
+            }
           >
             {t('settings.config.database.force', 'Force download')}
           </Button>
@@ -277,7 +341,10 @@ const GeoIpDatabaseCard = ({ form }) => {
         ) : null}
         {hasChanges ? (
           <RequiresNotice>
-            {t('settings.config.database.saveFirst', 'Save your changes first, so the download uses the current settings.')}
+            {t(
+              'settings.config.database.saveFirst',
+              'Save your changes first, so the download uses the current settings.'
+            )}
           </RequiresNotice>
         ) : null}
       </Flex>

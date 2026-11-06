@@ -9,7 +9,9 @@ import test from 'node:test';
  */
 const read = (path) => readFileSync(new URL(`../admin/src/${path}`, import.meta.url), 'utf8');
 const locales = ['en', 'de', 'es', 'fr', 'pt'];
-const catalogues = Object.fromEntries(locales.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))]));
+const catalogues = Object.fromEntries(
+  locales.map((locale) => [locale, JSON.parse(read(`translations/${locale}.json`))])
+);
 
 /**
  * @param {string} source JSX source.
@@ -24,8 +26,11 @@ const literalMessages = (source) =>
 const messages = [
   ...literalMessages(read('components/SessionInfoPanel.jsx')),
   ...literalMessages(read('components/OnlineUsersWidget.jsx')),
-  ...[...read('index.js').matchAll(/id: `\$\{pluginId\}\.(widget\.[^`]+)`,\s*defaultMessage: '([^']+)'/g)]
-    .map((match) => ({ id: match[1], defaultMessage: match[2] })),
+  ...[
+    ...read('index.js').matchAll(
+      /id: `\$\{pluginId\}\.(widget\.[^`]+)`,\s*defaultMessage: '([^']+)'/g
+    ),
+  ].map((match) => ({ id: match[1], defaultMessage: match[2] })),
 ];
 
 test('the scan finds the panel, widget and registration messages', () => {
@@ -55,18 +60,33 @@ test('panel and widget messages exist in every locale', () => {
 
 test('panel and widget defaultMessages equal the English catalogue', () => {
   const drift = messages
-    .filter(({ id, defaultMessage }) => catalogues.en[id] !== undefined && catalogues.en[id] !== defaultMessage)
+    .filter(
+      ({ id, defaultMessage }) =>
+        catalogues.en[id] !== undefined && catalogues.en[id] !== defaultMessage
+    )
     .map(({ id }) => id);
   assert.deepEqual(drift, []);
 });
 
 test('German panel and widget copy uses the IA glossary: "sperren", "Sitzung", formal "Sie"', () => {
   const de = catalogues.de;
-  const ids = [...new Set(messages.map(({ id }) => id))].filter((id) => /^(panel|widget)\./.test(id));
+  const ids = [...new Set(messages.map(({ id }) => id))].filter((id) =>
+    /^(panel|widget)\./.test(id)
+  );
   for (const id of ids) {
-    assert.doesNotMatch(de[id], /blockier|\bSession(s)?\b(?! Manager)|\bInaktiv\b|\b(du|dein|deine|dich|dir)\b/i, id);
+    assert.doesNotMatch(
+      de[id],
+      /blockier|\bSession(s)?\b(?! Manager)|\bInaktiv\b|\b(du|dein|deine|dich|dir)\b/i,
+      id
+    );
   }
-  for (const id of ['panel.actions.blockUser', 'panel.confirm.blockTitle', 'panel.blocked.message', 'panel.notify.blockSuccess', 'widget.stats.blockedUsers']) {
+  for (const id of [
+    'panel.actions.blockUser',
+    'panel.confirm.blockTitle',
+    'panel.blocked.message',
+    'panel.notify.blockSuccess',
+    'widget.stats.blockedUsers',
+  ]) {
     assert.match(de[id], /sperr/i, id);
   }
   assert.equal(de['panel.actions.unblock'], 'Sperre aufheben');

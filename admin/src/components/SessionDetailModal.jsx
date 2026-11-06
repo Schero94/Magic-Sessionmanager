@@ -17,7 +17,11 @@ import styled from 'styled-components';
 import { useClipboard, useFetchClient, useNotification } from '@strapi/strapi/admin';
 import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
-import { getSessionEndReasonPresentation, getSessionStatus, isNativeOnlySession } from '../utils/sessionStatus.mjs';
+import {
+  getSessionEndReasonPresentation,
+  getSessionStatus,
+  isNativeOnlySession,
+} from '../utils/sessionStatus.mjs';
 import { getDevicePresentation } from '../utils/devicePresentation.mjs';
 import { presentText } from '../utils/missingValue.mjs';
 import { toValidDate } from '../utils/sessionDates.mjs';
@@ -76,7 +80,11 @@ const DetailSection = ({ title, children }) => (
  */
 const getMinutesSinceActive = (session, now) => {
   const fromServer = Number(session.minutesSinceActive);
-  if (session.minutesSinceActive !== null && session.minutesSinceActive !== undefined && Number.isFinite(fromServer)) {
+  if (
+    session.minutesSinceActive !== null &&
+    session.minutesSinceActive !== undefined &&
+    Number.isFinite(fromServer)
+  ) {
     return fromServer;
   }
   const last = toValidDate(session.lastActive || session.loginTime);
@@ -107,7 +115,8 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
   const [lookup, setLookup] = useState({ status: 'idle', geo: null });
   const lookupRequest = useRef(0);
   const endedReasonId = `session-ended-reason-${useId().replace(/:/g, '')}`;
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
   // A different row starts without a previous lookup result.
   useEffect(() => {
@@ -133,7 +142,10 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
   const minutes = getMinutesSinceActive(session, now);
   const reason = getSessionEndReasonPresentation(session);
   const translate = (descriptor, values) =>
-    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage }, values);
+    formatMessage(
+      { id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage },
+      values
+    );
   const formatTimestamp = (value) => (toValidDate(value) ? formatDate(value) : null);
 
   /**
@@ -197,9 +209,13 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
       return (
         <Alert variant="warning" closeLabel={t('common.close', 'Close')}>
           <ReadableText variant="omega" tag="span">
-            {t('modal.state.idle', 'Not used for {minutes} min. It ends on its next request or at the next idle check.', {
-              minutes: minutes ?? 0,
-            })}
+            {t(
+              'modal.state.idle',
+              'Not used for {minutes} min. It ends on its next request or at the next idle check.',
+              {
+                minutes: minutes ?? 0,
+              }
+            )}
           </ReadableText>
         </Alert>
       );
@@ -209,7 +225,10 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
       <Flex direction="column" alignItems="stretch" gap={1}>
         <Typography variant="omega" textColor="neutral800">
           {endedAt
-            ? t('modal.state.ended', 'Ended {endedAt} · {reason}.', { endedAt, reason: translate(reason) })
+            ? t('modal.state.ended', 'Ended {endedAt} · {reason}.', {
+                endedAt,
+                reason: translate(reason),
+              })
             : t('modal.state.endedNoTime', 'Ended · {reason}.', { reason: translate(reason) })}
         </Typography>
         <Typography variant="pi" textColor="neutral600">
@@ -221,11 +240,12 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
 
   // Plain text: danger colour is reserved for destructive actions and the
   // blocked-user alert (IA B.3), and the DS danger badge fails AA (3.9:1).
-  const yesNoText = (value) => (typeof value === 'boolean' ? (
-    <Typography variant="omega" textColor="neutral800">
-      {value ? t('common.yes', 'Yes') : t('common.no', 'No')}
-    </Typography>
-  ) : undefined);
+  const yesNoText = (value) =>
+    typeof value === 'boolean' ? (
+      <Typography variant="omega" textColor="neutral800">
+        {value ? t('common.yes', 'Yes') : t('common.no', 'No')}
+      </Typography>
+    ) : undefined;
 
   const notStoredForPast = (
     <Typography variant="omega" textColor="neutral600">
@@ -233,9 +253,12 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
     </Typography>
   );
 
-  const score = typeof geo?.securityScore === 'number'
-    ? geo.securityScore
-    : (typeof session.securityScore === 'number' && Number.isFinite(session.securityScore) ? session.securityScore : null);
+  const score =
+    typeof geo?.securityScore === 'number'
+      ? geo.securityScore
+      : typeof session.securityScore === 'number' && Number.isFinite(session.securityScore)
+        ? session.securityScore
+        : null;
   const riskMessage = liveGeo ? RISK_LEVEL_MESSAGES[liveGeo.riskLevel] : null;
 
   const locationItems = [
@@ -250,15 +273,20 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
     {
       id: 'vpn',
       label: t('modal.security.vpn', 'VPN'),
-      render: liveGeo ? yesNoText(liveGeo.isVpn) : (storedGeo ? notStoredForPast : undefined),
+      render: liveGeo ? yesNoText(liveGeo.isVpn) : storedGeo ? notStoredForPast : undefined,
     },
     {
       id: 'proxy',
       label: t('modal.security.proxy', 'Proxy'),
-      render: liveGeo ? yesNoText(liveGeo.isProxy) : (storedGeo ? notStoredForPast : undefined),
+      render: liveGeo ? yesNoText(liveGeo.isProxy) : storedGeo ? notStoredForPast : undefined,
     },
     riskMessage
-      ? { id: 'risk', label: t('modal.security.riskLevel', 'Risk level'), value: translate(riskMessage), fullWidth: true }
+      ? {
+          id: 'risk',
+          label: t('modal.security.riskLevel', 'Risk level'),
+          value: translate(riskMessage),
+          fullWidth: true,
+        }
       : null,
   ];
 
@@ -279,7 +307,10 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
         </Button>
       )}
       <Typography variant="pi" textColor="neutral600">
-        {t('modal.security.lookupHint', 'Sends the IP address to the configured lookup service, which can be ipapi.co.')}
+        {t(
+          'modal.security.lookupHint',
+          'Sends the IP address to the configured lookup service, which can be ipapi.co.'
+        )}
       </Typography>
       {lookup.status === 'disabled' ? (
         <Typography variant="pi" textColor="neutral800" role="status">
@@ -313,7 +344,10 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
               {stateSentence()}
               {canEnd ? (
                 <Typography variant="pi" textColor="neutral600">
-                  {t('modal.state.maxAgeNote', 'Sessions older than the maximum session age end on their next request.')}
+                  {t(
+                    'modal.state.maxAgeNote',
+                    'Sessions older than the maximum session age end on their next request.'
+                  )}
                 </Typography>
               ) : null}
             </Flex>
@@ -325,20 +359,30 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
                     id: 'username',
                     label: t('modal.user.username', 'Username'),
                     value: session.user?.username,
-                    render: presentText(session.user?.username) && userEditPath ? (
-                      <Flex gap={2} alignItems="baseline" wrap="wrap">
-                        <Typography variant="omega" textColor="neutral800">{session.user.username}</Typography>
-                        <TargetLink
-                          tag={NavLink}
-                          to={userEditPath}
-                          aria-label={t('modal.user.openFor', 'Open user {user}', { user: user.accessible })}
-                        >
-                          {t('modal.user.open', 'Open user')}
-                        </TargetLink>
-                      </Flex>
-                    ) : undefined,
+                    render:
+                      presentText(session.user?.username) && userEditPath ? (
+                        <Flex gap={2} alignItems="baseline" wrap="wrap">
+                          <Typography variant="omega" textColor="neutral800">
+                            {session.user.username}
+                          </Typography>
+                          <TargetLink
+                            tag={NavLink}
+                            to={userEditPath}
+                            aria-label={t('modal.user.openFor', 'Open user {user}', {
+                              user: user.accessible,
+                            })}
+                          >
+                            {t('modal.user.open', 'Open user')}
+                          </TargetLink>
+                        </Flex>
+                      ) : undefined,
                   },
-                  { id: 'email', label: t('modal.user.email', 'Email'), value: session.user?.email, kind: 'email' },
+                  {
+                    id: 'email',
+                    label: t('modal.user.email', 'Email'),
+                    value: session.user?.email,
+                    kind: 'email',
+                  },
                 ]}
               />
             </DetailSection>
@@ -346,17 +390,29 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
             <DetailSection title={t('modal.section.session', 'Session')}>
               <PropertyList
                 items={[
-                  { id: 'login', label: t('modal.timeline.signedIn', 'Signed in'), value: formatTimestamp(session.loginTime) },
+                  {
+                    id: 'login',
+                    label: t('modal.timeline.signedIn', 'Signed in'),
+                    value: formatTimestamp(session.loginTime),
+                  },
                   {
                     id: 'lastActive',
                     label: t('modal.timeline.lastActive', 'Last active'),
                     value: formatTimestamp(session.lastActive || session.loginTime),
                   },
                   !canEnd
-                    ? { id: 'endedAt', label: t('modal.timeline.endedAt', 'Ended at'), value: formatTimestamp(session.logoutTime) }
+                    ? {
+                        id: 'endedAt',
+                        label: t('modal.timeline.endedAt', 'Ended at'),
+                        value: formatTimestamp(session.logoutTime),
+                      }
                     : null,
                   !canEnd
-                    ? { id: 'endReason', label: t('modal.timeline.endReason', 'End reason'), render: <EndReason session={session} /> }
+                    ? {
+                        id: 'endReason',
+                        label: t('modal.timeline.endReason', 'End reason'),
+                        render: <EndReason session={session} />,
+                      }
                     : null,
                 ]}
               />
@@ -370,14 +426,22 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
                     label: t('modal.device.device', 'Device type'),
                     value: native ? null : deviceTypeLabel(session),
                   },
-                  { id: 'browser', label: t('modal.device.browser', 'Browser'), value: device.browser },
+                  {
+                    id: 'browser',
+                    label: t('modal.device.browser', 'Browser'),
+                    value: device.browser,
+                  },
                   { id: 'os', label: t('modal.device.os', 'Operating system'), value: device.os },
                   {
                     id: 'ip',
                     label: t('modal.device.ip', 'IP address'),
                     value: session.ipAddress,
                     kind: 'id',
-                    render: ipAddress ? <Typography variant="omega" textColor="neutral800" style={MONOSPACE}>{ipAddress}</Typography> : undefined,
+                    render: ipAddress ? (
+                      <Typography variant="omega" textColor="neutral800" style={MONOSPACE}>
+                        {ipAddress}
+                      </Typography>
+                    ) : undefined,
                   },
                 ]}
               />
@@ -399,14 +463,19 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
             <Accordion.Root collapsible size="S">
               <Accordion.Item value="technical">
                 <Accordion.Header>
-                  <Accordion.Trigger>{t('modal.section.technical', 'Technical details')}</Accordion.Trigger>
+                  <Accordion.Trigger>
+                    {t('modal.section.technical', 'Technical details')}
+                  </Accordion.Trigger>
                 </Accordion.Header>
                 <Accordion.Content>
                   <Box padding={4}>
                     <Flex direction="column" alignItems="stretch" gap={4}>
                       {native ? (
                         <Typography variant="pi" textColor="neutral600">
-                          {t('common.status.nativeSession.help', 'Created by Strapi’s own session store. No device or location details were recorded.')}
+                          {t(
+                            'common.status.nativeSession.help',
+                            'Created by Strapi’s own session store. No device or location details were recorded.'
+                          )}
                         </Typography>
                       ) : null}
                       <PropertyList
@@ -419,10 +488,17 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
                             kind: 'id',
                             render: sessionId ? (
                               <Flex gap={2} alignItems="center" minWidth={0}>
-                                <Typography variant="omega" textColor="neutral800" style={MONOSPACE}>
+                                <Typography
+                                  variant="omega"
+                                  textColor="neutral800"
+                                  style={MONOSPACE}
+                                >
                                   {sessionId}
                                 </Typography>
-                                <IconButton label={t('modal.actions.copyId', 'Copy record ID')} onClick={handleCopyId}>
+                                <IconButton
+                                  label={t('modal.actions.copyId', 'Copy record ID')}
+                                  onClick={handleCopyId}
+                                >
                                   <Duplicate />
                                 </IconButton>
                               </Flex>
@@ -451,7 +527,13 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
         </Modal.Body>
 
         <Modal.Footer>
-          <Flex justifyContent="space-between" alignItems="center" gap={3} wrap="wrap-reverse" width="100%">
+          <Flex
+            justifyContent="space-between"
+            alignItems="center"
+            gap={3}
+            wrap="wrap-reverse"
+            width="100%"
+          >
             <Modal.Close>
               <Button variant="tertiary">{t('modal.actions.close', 'Close')}</Button>
             </Modal.Close>
@@ -461,16 +543,19 @@ const SessionDetailModal = ({ session, onClose, onCloseAutoFocus, onEndSession }
                 body={t(
                   'homepage.confirm.end.body',
                   '{user} will be signed out on {device}. Their other sessions stay open. The record stays in the history. This cannot be undone.',
-                  { user: user.accessible, device: deviceSummary(session) || deviceTypeLabel(session) }
+                  {
+                    user: user.accessible,
+                    device: deviceSummary(session) || deviceTypeLabel(session),
+                  }
                 )}
                 confirmLabel={t('homepage.actions.end', 'End session')}
                 onConfirm={handleTerminate}
                 disabled={!canEnd}
-                trigger={(
+                trigger={
                   <Button variant="danger-light" startIcon={<Cross />} disabled={!canEnd}>
                     {t('homepage.actions.end', 'End session')}
                   </Button>
-                )}
+                }
               />
             ) : (
               <Typography id={endedReasonId} variant="pi" textColor="neutral600">

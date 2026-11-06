@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-const geoSection = readme.slice(readme.indexOf('### IP geolocation'), readme.indexOf('### Local MaxMind database'));
+const geoSection = readme.slice(
+  readme.indexOf('### IP geolocation'),
+  readme.indexOf('### Local MaxMind database')
+);
 const text = geoSection.replace(/\s+/g, ' ');
 
 test('README explains the GeoIP default, remote fallback and local-only alternatives', () => {

@@ -31,7 +31,10 @@ export function useSessionFormatters() {
 
   const translate = useCallback(
     (descriptor, values) =>
-      formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage }, values),
+      formatMessage(
+        { id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage },
+        values
+      ),
     [formatMessage]
   );
 
@@ -40,14 +43,17 @@ export function useSessionFormatters() {
       formatSessionDate(value, locale, MISSING_VALUE_GLYPH, options);
     const formatRelativeTime = (value, now) =>
       formatRelative(value, locale, { now: now ?? Date.now(), fallback: MISSING_VALUE_GLYPH });
-    const statusLabel = (statusOrSession) => translate(getSessionStatusPresentation(statusOrSession));
+    const statusLabel = (statusOrSession) =>
+      translate(getSessionStatusPresentation(statusOrSession));
     const endReasonLabel = (sessionOrReason) => {
-      const reason = typeof sessionOrReason === 'string'
-        ? getEndReasonPresentation(sessionOrReason)
-        : getSessionEndReasonPresentation(sessionOrReason);
+      const reason =
+        typeof sessionOrReason === 'string'
+          ? getEndReasonPresentation(sessionOrReason)
+          : getSessionEndReasonPresentation(sessionOrReason);
       return reason ? translate(reason) : '';
     };
-    const deviceTypeLabel = (session) => translate(getDevicePresentation(session).deviceTypeMessage);
+    const deviceTypeLabel = (session) =>
+      translate(getDevicePresentation(session).deviceTypeMessage);
     const deviceSummary = (session) => {
       const { summary } = getDevicePresentation(session);
       return summary.text ?? translate(summary, summary.values);

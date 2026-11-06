@@ -947,9 +947,7 @@ module.exports = ({ strapi }) => {
           }
 
           const label = exceptSessionId ? 'OTHER sessions' : 'ALL sessions';
-          log.info(
-            `${label} terminated (reason: ${finalReason}, count: ${terminatedCount})`
-          );
+          log.info(`${label} terminated (reason: ${finalReason}, count: ${terminatedCount})`);
           return { terminatedCount: nativeManager ? terminatedKeys.size : terminatedCount };
         }
 

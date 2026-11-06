@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Link } from 'react-router-dom';
-import {
-  Pagination,
-  useFetchClient,
-  useNotification,
-  useQueryParams,
-} from '@strapi/strapi/admin';
+import { Pagination, useFetchClient, useNotification, useQueryParams } from '@strapi/strapi/admin';
 import {
   Box,
   Button,
@@ -23,7 +18,16 @@ import {
   Typography,
   VisuallyHidden,
 } from '@strapi/design-system';
-import { ArrowClockwise, ChartBubble, Check, Clock, Cog, Cross, Download, User } from '@strapi/icons';
+import {
+  ArrowClockwise,
+  ChartBubble,
+  Check,
+  Clock,
+  Cog,
+  Cross,
+  Download,
+  User,
+} from '@strapi/icons';
 import { EmptyDocuments } from '@strapi/icons/symbols';
 import styled from 'styled-components';
 import pluginId from '../pluginId';
@@ -133,7 +137,8 @@ const HomePage = () => {
   const { isBelowSmall, isBelowMedium, isBelowLarge } = useBreakpoint();
   const [listWidthRef, listWidth] = useElementWidth();
   const [{ query }, setQuery] = useQueryParams();
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
   const dashboard = parseDashboardQuery(query);
 
   const [sessions, setSessions] = useState([]);
@@ -243,13 +248,19 @@ const HomePage = () => {
         await fetchSessions();
         toggleNotification({
           type: 'warning',
-          message: t('notifications.error.sessionGone', 'This session no longer exists. The list was refreshed.'),
+          message: t(
+            'notifications.error.sessionGone',
+            'This session no longer exists. The list was refreshed.'
+          ),
         });
         return;
       }
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.endSession', 'The session could not be ended. Please try again.'),
+        message: t(
+          'notifications.error.endSession',
+          'The session could not be ended. Please try again.'
+        ),
       });
       throw err;
     } finally {
@@ -275,7 +286,10 @@ const HomePage = () => {
       await fetchSessions();
       toggleNotification({
         type: 'success',
-        message: t('notifications.success.recordDeleted', 'Session record deleted. Its token stays revoked.'),
+        message: t(
+          'notifications.success.recordDeleted',
+          'Session record deleted. Its token stays revoked.'
+        ),
       });
     } catch (err) {
       logSafeAdminError('dashboard.deleteSession', err);
@@ -283,13 +297,19 @@ const HomePage = () => {
         await fetchSessions();
         toggleNotification({
           type: 'warning',
-          message: t('notifications.error.sessionGone', 'This session no longer exists. The list was refreshed.'),
+          message: t(
+            'notifications.error.sessionGone',
+            'This session no longer exists. The list was refreshed.'
+          ),
         });
         return;
       }
       toggleNotification({
         type: 'danger',
-        message: t('notifications.error.deleteRecord', 'The record could not be deleted. Please try again.'),
+        message: t(
+          'notifications.error.deleteRecord',
+          'The record could not be deleted. Please try again.'
+        ),
       });
       throw err;
     } finally {
@@ -387,18 +407,26 @@ const HomePage = () => {
    * @param {string} sessionId Row whose action ran.
    * @returns {{readonly current: HTMLElement|null}} Ref-like getter.
    */
-  const getFocusFallback = useCallback((sessionId) => ({
-    get current() {
-      const targetId = pickFocusSessionId(mutationSnapshotRef.current, visibleIdsRef.current, sessionId);
-      const root = dashboardRef.current;
-      if (targetId && root) {
-        const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(targetId) : targetId;
-        const button = root.querySelector(`[data-session-view="${escaped}"]`);
-        if (button) return button;
-      }
-      return listHeadingRef.current;
-    },
-  }), []);
+  const getFocusFallback = useCallback(
+    (sessionId) => ({
+      get current() {
+        const targetId = pickFocusSessionId(
+          mutationSnapshotRef.current,
+          visibleIdsRef.current,
+          sessionId
+        );
+        const root = dashboardRef.current;
+        if (targetId && root) {
+          const escaped =
+            typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(targetId) : targetId;
+          const button = root.querySelector(`[data-session-view="${escaped}"]`);
+          if (button) return button;
+        }
+        return listHeadingRef.current;
+      },
+    }),
+    []
+  );
 
   // Keep the URL page inside the result range after filtering or removals.
   useEffect(() => {
@@ -417,9 +445,12 @@ const HomePage = () => {
     setQuery({ reason: reason === 'all' ? undefined : reason, page: '1' });
   };
 
-  const handleSearch = useCallback((value) => {
-    setQuery({ search: encodeSearchQuery(value), _q: undefined, page: '1' }, 'push', true);
-  }, [setQuery]);
+  const handleSearch = useCallback(
+    (value) => {
+      setQuery({ search: encodeSearchQuery(value), _q: undefined, page: '1' }, 'push', true);
+    },
+    [setQuery]
+  );
 
   const handleClearFilters = () => {
     setQuery({ search: undefined, _q: undefined, status: undefined, reason: undefined, page: '1' });
@@ -442,22 +473,41 @@ const HomePage = () => {
     >
       <MenuItem onSelect={handleExportCSV}>
         {truncated
-          ? t('homepage.export.csvTruncated', '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}} (latest {limit, number} sessions only)', exportValues)
-          : t('homepage.export.csv', '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}}', exportValues)}
+          ? t(
+              'homepage.export.csvTruncated',
+              '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}} (latest {limit, number} sessions only)',
+              exportValues
+            )
+          : t(
+              'homepage.export.csv',
+              '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}}',
+              exportValues
+            )}
       </MenuItem>
       <MenuItem onSelect={handleExportJSON}>
         {truncated
-          ? t('homepage.export.jsonTruncated', '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}} (latest {limit, number} sessions only)', exportValues)
-          : t('homepage.export.json', '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}}', exportValues)}
+          ? t(
+              'homepage.export.jsonTruncated',
+              '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}} (latest {limit, number} sessions only)',
+              exportValues
+            )
+          : t(
+              'homepage.export.json',
+              '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}}',
+              exportValues
+            )}
       </MenuItem>
     </SimpleMenu>
   );
 
-  const exportAction = canExport || !showSessionData ? exportMenu : (
-    <Tooltip label={t('homepage.export.disabledHint', 'No sessions match the current filter.')}>
-      <span>{exportMenu}</span>
-    </Tooltip>
-  );
+  const exportAction =
+    canExport || !showSessionData ? (
+      exportMenu
+    ) : (
+      <Tooltip label={t('homepage.export.disabledHint', 'No sessions match the current filter.')}>
+        <span>{exportMenu}</span>
+      </Tooltip>
+    );
 
   // Header actions sit together on the right, as in native Strapi list views
   // (Media Library: secondary actions left of the primary one). The links are
@@ -474,7 +524,13 @@ const HomePage = () => {
           <ChartBubble />
         </IconButton>
       ) : (
-        <LinkButton tag={Link} to={ANALYTICS_PATH} variant="tertiary" size="S" startIcon={<ChartBubble />}>
+        <LinkButton
+          tag={Link}
+          to={ANALYTICS_PATH}
+          variant="tertiary"
+          size="S"
+          startIcon={<ChartBubble />}
+        >
           {analyticsLabel}
         </LinkButton>
       )}
@@ -483,7 +539,13 @@ const HomePage = () => {
           <Cog />
         </IconButton>
       ) : (
-        <LinkButton tag={Link} to={CONFIGURATION_PATH} variant="tertiary" size="S" startIcon={<Cog />}>
+        <LinkButton
+          tag={Link}
+          to={CONFIGURATION_PATH}
+          variant="tertiary"
+          size="S"
+          startIcon={<Cog />}
+        >
           {settingsLabel}
         </LinkButton>
       )}
@@ -526,13 +588,18 @@ const HomePage = () => {
           >
             {END_REASON_FILTER_OPTIONS.map((option) => (
               <SingleSelectOption key={option} value={option}>
-                {option === 'all' ? t('homepage.filter.allReasons', 'All reasons') : formatters.endReasonLabel(option)}
+                {option === 'all'
+                  ? t('homepage.filter.allReasons', 'All reasons')
+                  : formatters.endReasonLabel(option)}
               </SingleSelectOption>
             ))}
           </SingleSelect>
         </Box>
       ) : null}
-      <IconButton label={t('homepage.actions.refresh', 'Refresh sessions')} onClick={() => fetchSessions()}>
+      <IconButton
+        label={t('homepage.actions.refresh', 'Refresh sessions')}
+        onClick={() => fetchSessions()}
+      >
         <ArrowClockwise />
       </IconButton>
     </Flex>
@@ -607,11 +674,11 @@ const HomePage = () => {
           <Alert
             variant="danger"
             closeLabel={t('common.close', 'Close')}
-            action={(
+            action={
               <Button size="S" variant="secondary" onClick={fetchSessions}>
                 {t('common.tryAgain', 'Try again')}
               </Button>
-            )}
+            }
           >
             <ReadableText variant="omega" textColor="neutral800" tag="span">
               {t('homepage.error.load', 'Sessions could not be loaded.')}
@@ -650,9 +717,13 @@ const HomePage = () => {
                 tone="success"
                 label={t('homepage.stats.active', 'Active sessions')}
                 value={stats.active}
-                description={t('homepage.stats.usersOnline', '{count, plural, one {# user online} other {# users online}}', {
-                  count: stats.usersOnline,
-                })}
+                description={t(
+                  'homepage.stats.usersOnline',
+                  '{count, plural, one {# user online} other {# users online}}',
+                  {
+                    count: stats.usersOnline,
+                  }
+                )}
                 {...statusCard('active')}
               />
               <StatCard
@@ -670,7 +741,11 @@ const HomePage = () => {
                 description={t(
                   'homepage.stats.endedBreakdown',
                   '{loggedOut, number} logged out · {timedOut, number} timed out · {other, number} other reasons',
-                  { loggedOut: stats.loggedOut, timedOut: stats.timedOut, other: stats.otherReasons }
+                  {
+                    loggedOut: stats.loggedOut,
+                    timedOut: stats.timedOut,
+                    other: stats.otherReasons,
+                  }
                 )}
                 {...statusCard('ended')}
               />
@@ -704,11 +779,15 @@ const HomePage = () => {
                 data-session-caption=""
               >
                 {pageResult.total > 0
-                  ? t('homepage.caption', '{from, number}–{to, number} of {total, plural, one {# session} other {# sessions}}', {
-                    from: pageResult.startIndex,
-                    to: pageResult.endIndex,
-                    total: pageResult.total,
-                  })
+                  ? t(
+                      'homepage.caption',
+                      '{from, number}–{to, number} of {total, plural, one {# session} other {# sessions}}',
+                      {
+                        from: pageResult.startIndex,
+                        to: pageResult.endIndex,
+                        total: pageResult.total,
+                      }
+                    )
                   : t('homepage.captionNone', '0 sessions')}
               </Typography>
               {lastUpdatedLine}
@@ -716,9 +795,14 @@ const HomePage = () => {
 
             {filteredSessions.length > 0 ? (
               <>
-                {isBelowMedium
-                  ? <SessionCardList {...listProps} />
-                  : <SessionTable {...listProps} compact={shouldUseCompactTable(listWidth, isBelowLarge)} />}
+                {isBelowMedium ? (
+                  <SessionCardList {...listProps} />
+                ) : (
+                  <SessionTable
+                    {...listProps}
+                    compact={shouldUseCompactTable(listWidth, isBelowLarge)}
+                  />
+                )}
                 <PaginationTargets>
                   <Pagination.Root
                     pageCount={pageResult.pageCount}
@@ -733,12 +817,17 @@ const HomePage = () => {
             ) : (
               <EmptyStateLayout
                 icon={<EmptyDocuments width="16rem" height="8.8rem" aria-hidden="true" />}
-                content={t('homepage.noResults.description', 'No sessions match your search or filter.')}
-                action={filtersActive ? (
-                  <Button variant="secondary" onClick={handleClearFilters}>
-                    {t('homepage.noResults.reset', 'Clear filters')}
-                  </Button>
-                ) : null}
+                content={t(
+                  'homepage.noResults.description',
+                  'No sessions match your search or filter.'
+                )}
+                action={
+                  filtersActive ? (
+                    <Button variant="secondary" onClick={handleClearFilters}>
+                      {t('homepage.noResults.reset', 'Clear filters')}
+                    </Button>
+                  ) : null
+                }
               />
             )}
           </Flex>
@@ -747,7 +836,10 @@ const HomePage = () => {
         {showSessionData && sessions.length === 0 && (
           <EmptyStateLayout
             icon={<EmptyDocuments width="16rem" height="8.8rem" aria-hidden="true" />}
-            content={t('homepage.empty.description', 'No sessions yet. Sessions appear here when users of your app sign in.')}
+            content={t(
+              'homepage.empty.description',
+              'No sessions yet. Sessions appear here when users of your app sign in.'
+            )}
           />
         )}
 

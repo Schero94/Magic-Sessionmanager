@@ -22,7 +22,10 @@ const EndReason = ({ session, reason, variant = 'omega', textColor = 'neutral800
   if (!key) return null;
   const presentation = getEndReasonPresentation(key);
   const translate = (descriptor) =>
-    formatMessage({ id: getTranslation(descriptor.messageId), defaultMessage: descriptor.defaultMessage });
+    formatMessage({
+      id: getTranslation(descriptor.messageId),
+      defaultMessage: descriptor.defaultMessage,
+    });
 
   return (
     <Typography variant={variant} textColor={textColor} data-end-reason={presentation.reason}>
