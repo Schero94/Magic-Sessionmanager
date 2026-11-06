@@ -24,7 +24,10 @@ test('Online Users distinguishes load errors and empty data from real zeroes (IA
   assert.match(widgetSource, /if \(showLoading\) setUserCounts\(null\)/, 'a failed background totals refresh keeps the last totals');
   // Widget.Error fills the widget height; inside an auto-height box it keeps its
   // natural height, so "Try again" sits under the message instead of at the bottom edge.
-  assert.match(widgetSource, /<Box>\s*<NativeWidget\.Error>\{message\}<\/NativeWidget\.Error>\s*<\/Box>/);
+  // The box centres the text, so a message that wraps on a 320px screen stays
+  // centred under the icon and title (Widget.Error itself aligns text to the start).
+  assert.match(widgetSource, /<CenteredText>\s*<NativeWidget\.Error>\{message\}<\/NativeWidget\.Error>\s*<\/CenteredText>/);
+  assert.match(widgetSource, /const CenteredText = styled\(Box\)`\s*text-align: center;\s*`;/);
 });
 
 test('when only the user totals fail, the tiles say so and Blocked users shows the missing marker', () => {
@@ -57,8 +60,14 @@ test('Online Users shows the IA D4 tiles in a 2 x 2 grid without overflow (I.1-2
   assert.match(widgetSource, /'\{total, plural, one \{of # registered user\} other \{of # registered users\}\}'/);
   assert.doesNotMatch(widgetSource, /widget\.stats\.(onlineNow|last15min|last30min|lastHour|today|offline)/, 'retired tiles are gone');
   assert.doesNotMatch(widgetSource, /15 \* 60|FIFTEEN_MINUTES|ONE_HOUR|startOfLocalDay/, 'no hard-coded activity windows');
-  assert.match(widgetSource, /repeat\(auto-fit, minmax\(min\(100%, max\(14rem, 50%\)\), 1fr\)\)/,
-    'at most two columns, one column on narrow widgets, never wider than the widget');
+  assert.match(widgetSource, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+    'always 2 x 2, like the native Key statistics tiles; columns may shrink below their content');
+  assert.doesNotMatch(widgetSource, /auto-fit/, 'tiles never stack into one column that the fixed widget height would cut off');
+  assert.match(widgetSource, /container-type: inline-size;/, 'the tile frame is a size container');
+  assert.match(widgetSource, /@container \(max-width: 28rem\) \{\s*& \[data-tile-icon\] \{\s*display: none;/,
+    'below 280px (admin root font size 10px), i.e. on 320px screens, the decorative icons hide, so labels keep their width');
+  assert.match(widgetSource, /data-tile-icon=""/);
+  assert.match(widgetSource, /overflow-wrap: anywhere;/, 'long translated words wrap inside a tile');
   assert.match(widgetSource, /height="100%"/, 'tiles fill their grid row, so a row has equal heights');
   assert.match(widgetSource, /grid-auto-rows: 1fr;/, 'both rows share one height, so the 2 x 2 tiles are equal');
   assert.doesNotMatch(widgetSource, /gap: 1px/, 'cell lines are tile borders, not an off-scale 1px grid gap');

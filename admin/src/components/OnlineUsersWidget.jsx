@@ -38,11 +38,12 @@ const hasNativeState = (state) => typeof NativeWidget?.[state] === 'function';
  * 2 x 2 tile grid in the style of Strapi's "Key statistics" widget. The frame
  * clips the grid, which is 1px larger than the frame on the right and bottom:
  * every tile draws its own right and bottom line, and the lines of the last
- * column and row fall outside the frame, so the cell lines are correct for one
- * or two columns without an off-scale 1px grid gap. Each column is at least
- * half the width, so there are never more than two columns; below 14rem per
- * column the tiles stack into one column, so nothing overflows at 320px (F10).
- * All rows share one height, so the four tiles are equal.
+ * column and row fall outside the frame, so the cell lines are correct without
+ * an off-scale 1px grid gap. The grid is always 2 x 2 like the native tiles:
+ * one stacked column would be taller than the fixed widget height and cut off
+ * the last tile. The frame is a size container; below 28rem (280px, the admin
+ * root font size is 10px), i.e. on 320px screens, the decorative icons hide, so the labels keep enough width and
+ * nothing overflows (F10). All rows share one height, so the tiles are equal.
  */
 const TileFrame = styled.div`
   width: 100%;
@@ -50,11 +51,18 @@ const TileFrame = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.neutral200};
   border-radius: ${({ theme }) => theme.borderRadius};
   overflow: hidden;
+  container-type: inline-size;
+
+  @container (max-width: 28rem) {
+    & [data-tile-icon] {
+      display: none;
+    }
+  }
 `;
 
 const TileGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(14rem, 50%)), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 1fr;
   gap: 0;
   min-width: 0;
@@ -63,6 +71,7 @@ const TileGrid = styled.div`
   & > [data-widget-tile] {
     border-right: 1px solid ${({ theme }) => theme.colors.neutral200};
     border-bottom: 1px solid ${({ theme }) => theme.colors.neutral200};
+    overflow-wrap: anywhere;
   }
 `;
 
@@ -97,6 +106,7 @@ const StatTile = ({ icon: Icon, tone, label, value, detail }) => (
         justifyContent="center"
         alignItems="center"
         aria-hidden
+        data-tile-icon=""
       >
         <Icon aria-hidden focusable={false} />
       </TileIcon>
@@ -136,6 +146,11 @@ const LoadingState = ({ label }) => {
   );
 };
 
+/** Centres the text of Widget.Error, which aligns it to the start when it wraps. */
+const CenteredText = styled(Box)`
+  text-align: center;
+`;
+
 /**
  * Error state with a retry action. Uses Widget.Error when available. That
  * helper fills the widget height, so it sits in an auto-height box and the
@@ -147,9 +162,9 @@ const LoadingState = ({ label }) => {
 const ErrorState = ({ message, retryLabel, onRetry }) => (
   <Flex direction="column" alignItems="center" justifyContent="center" gap={4} height="100%" role="alert">
     {hasNativeState('Error') ? (
-      <Box>
+      <CenteredText>
         <NativeWidget.Error>{message}</NativeWidget.Error>
-      </Box>
+      </CenteredText>
     ) : (
       <Flex direction="column" alignItems="center" gap={2}>
         <TileIcon $tone="danger" aria-hidden>
