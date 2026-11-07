@@ -1,3 +1,25 @@
+# [4.9.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.8.0...v4.9.0) (2026-11-07)
+
+
+### Bug Fixes
+
+* **admin:** analytics and license desktop acceptance ([34a550a](https://github.com/Schero94/Magic-Sessionmanager/commit/34a550a569d287f420630379e0f7b1ded64338cc))
+* **admin:** analytics and license mobile acceptance ([ef901b2](https://github.com/Schero94/Magic-Sessionmanager/commit/ef901b2d6a765da50a2f87fbc17e8d46b45dd544))
+* **admin:** configuration desktop acceptance ([297a663](https://github.com/Schero94/Magic-Sessionmanager/commit/297a66316ee2dea7d9342010a18061a714ae75ad))
+* **admin:** configuration mobile acceptance ([3a67244](https://github.com/Schero94/Magic-Sessionmanager/commit/3a67244b7575bb8c050c71c107f7fdb782c7d6bb))
+* **admin:** remove DS-internal style overrides, panel link and page titles ([449564c](https://github.com/Schero94/Magic-Sessionmanager/commit/449564c6a4cdb4281366d9c01c51b4d4973d4b69))
+* **admin:** sessions dashboard desktop acceptance ([7dabcf5](https://github.com/Schero94/Magic-Sessionmanager/commit/7dabcf5628bb706fd72e5c68dedde76acc725b17))
+* **admin:** sessions dashboard mobile acceptance ([0d06e6d](https://github.com/Schero94/Magic-Sessionmanager/commit/0d06e6d13e0ccf0b9bb1e2ddecc4d61fda594975))
+* **admin:** widget and user panel desktop acceptance ([14d942f](https://github.com/Schero94/Magic-Sessionmanager/commit/14d942f9089f33f865baba33e754ec835f4ca0d4))
+* **admin:** widget and user panel mobile acceptance ([4b8d7b4](https://github.com/Schero94/Magic-Sessionmanager/commit/4b8d7b48fbfb9887e065bb1e95da36c705ca7718))
+* resolve all ESLint findings ([b14636f](https://github.com/Schero94/Magic-Sessionmanager/commit/b14636f13147d30e12a47b84cb15c88f9f3da742))
+
+
+### Features
+
+* **admin:** apply session information architecture to every screen ([9a4c30d](https://github.com/Schero94/Magic-Sessionmanager/commit/9a4c30dd2af47e4559d5c3521f7ee9d6938e39a9))
+* **admin:** rebuild UI on shared Design System blocks and fix review findings ([187dbac](https://github.com/Schero94/Magic-Sessionmanager/commit/187dbacac505abc747e1f761d913f8dc74874bc6))
+
 ## [Unreleased]
 
 Branch `claude/sessionmanager-ui-redesign`. Not yet accepted: see `GATES.md` and `gates/ui-redesign.md`. Whoever cuts the next release must fold this section into the generated release entry, so it does not stay behind as a second `[Unreleased]` block.
