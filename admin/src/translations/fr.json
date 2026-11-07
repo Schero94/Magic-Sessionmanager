@@ -339,6 +339,7 @@
   "settings.config.requires.localDatabase": "Les paramètres de base de données ci-dessous nécessitent le fournisseur Automatique ou Base de données locale.",
   "settings.config.requires.credentials": "Ajoutez d’abord des identifiants MaxMind.",
   "settings.config.feedback.adjusted": "Paramètres enregistrés. Certaines valeurs ont été ajustées aux limites autorisées : {fields}.",
+  "settings.config.feedback.conflict": "Un autre administrateur a enregistré les paramètres entre-temps. Rechargez la page pour voir ses modifications, puis appliquez à nouveau les vôtres.",
   "settings.config.feedback.saveError": "Les paramètres n’ont pas pu être enregistrés. Vos modifications sont toujours dans le formulaire.",
   "settings.config.feedback.deletedEnded": "{count, plural, one {# session terminée supprimée.} other {# sessions terminées supprimées.}}",
   "settings.config.feedback.deletedNone": "Il n’y avait aucune session terminée à supprimer.",

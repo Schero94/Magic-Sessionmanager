@@ -84,6 +84,9 @@ export function useSettingsForm() {
   // refs are updated after each commit, before any later event handler runs.
   const settingsRef = useRef(settings);
   const savedSettingsRef = useRef(savedSettings);
+  // Server settings revision the draft is based on. Sent with every save so
+  // the server rejects it (409) when another administrator saved in between.
+  const revisionRef = useRef(null);
   useLayoutEffect(() => {
     settingsRef.current = settings;
     savedSettingsRef.current = savedSettings;
@@ -163,6 +166,9 @@ export function useSettingsForm() {
         throw new Error('Invalid settings response');
       }
       const nextSettings = normalizeSettings(response.data.settings);
+      revisionRef.current = Number.isInteger(response.data.revision)
+        ? response.data.revision
+        : null;
       setSettings(nextSettings);
       setSavedSettings(nextSettings);
       await fetchGeoIpStatus();
@@ -216,10 +222,16 @@ export function useSettingsForm() {
 
     setSaving(true);
     try {
-      const response = await put(`/${pluginId}/settings`, submitted);
+      const response = await put(
+        `/${pluginId}/settings`,
+        revisionRef.current === null ? submitted : { ...submitted, revision: revisionRef.current }
+      );
       if (!response?.data?.success) {
         throw new Error('Save failed');
       }
+      revisionRef.current = Number.isInteger(response.data.revision)
+        ? response.data.revision
+        : null;
       // Prefer the stored settings from the PUT response; re-read them when
       // the response does not include them.
       const storedPayload =
@@ -252,12 +264,19 @@ export function useSettingsForm() {
       return true;
     } catch (err) {
       logSafeAdminError('settings.save', err);
+      const isConflict =
+        err?.response?.status === 409 || err?.response?.data?.error?.status === 409;
       toggleNotification({
         type: 'danger',
-        message: t(
-          'settings.config.feedback.saveError',
-          'Settings could not be saved. Your changes are still in the form.'
-        ),
+        message: isConflict
+          ? t(
+              'settings.config.feedback.conflict',
+              'Another administrator saved the settings in the meantime. Reload the page to see their changes, then apply yours again.'
+            )
+          : t(
+              'settings.config.feedback.saveError',
+              'Settings could not be saved. Your changes are still in the form.'
+            ),
       });
       return false;
     } finally {

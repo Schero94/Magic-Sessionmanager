@@ -339,6 +339,7 @@
   "settings.config.requires.localDatabase": "Die folgenden Datenbankeinstellungen erfordern den Anbieter „Automatisch“ oder „Lokale Datenbank“.",
   "settings.config.requires.credentials": "Fügen Sie zuerst MaxMind-Zugangsdaten hinzu.",
   "settings.config.feedback.adjusted": "Einstellungen gespeichert. Einige Werte wurden an die zulässigen Grenzen angepasst: {fields}.",
+  "settings.config.feedback.conflict": "Eine andere Person hat die Einstellungen inzwischen gespeichert. Laden Sie die Seite neu, um deren Änderungen zu sehen, und übernehmen Sie Ihre Änderungen dann erneut.",
   "settings.config.feedback.saveError": "Die Einstellungen konnten nicht gespeichert werden. Ihre Änderungen sind noch im Formular.",
   "settings.config.feedback.deletedEnded": "{count, plural, one {# beendete Sitzung gelöscht.} other {# beendete Sitzungen gelöscht.}}",
   "settings.config.feedback.deletedNone": "Es gab keine beendeten Sitzungen zum Löschen.",
