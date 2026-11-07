@@ -61,6 +61,16 @@ function createHarness(
         },
       };
     },
+    db: {
+      // Session state changes are conditional updateMany calls (compare-and-
+      // set across instances); the harness records them like updates.
+      query: () => ({
+        updateMany: async (payload) => {
+          updates.push(payload);
+          return { count: 1 };
+        },
+      }),
+    },
     config: {
       get(key, fallback) {
         if (key === 'plugin::users-permissions.jwtManagement') return jwtManagement;

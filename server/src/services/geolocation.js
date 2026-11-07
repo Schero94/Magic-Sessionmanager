@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const { getPluginSettings } = require('../utils/settings-loader');
+const { getCoordinator, hashedKey } = require('../utils/coordination');
 const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
 
 const GEO_API_TIMEOUT_MS = 4000;
@@ -21,6 +22,7 @@ const IPAPI_RATE_LIMIT_BACKOFF_MS = 15 * 60 * 1000;
 const IPAPI_RATE_LIMIT_LOG_INTERVAL_MS = 60 * 1000;
 const IPAPI_MAX_CONCURRENT_REQUESTS = 4;
 const IPAPI_MAX_QUEUE_SIZE = 50;
+const SHARED_BACKOFF_KEY = 'geo:ipapi:backoff';
 const DEFAULT_CITY_MMDB_PATH = resolveDatabaseTarget('GeoLite2-City.mmdb');
 const DEFAULT_COUNTRY_MMDB_PATH = resolveDatabaseTarget('GeoLite2-Country.mmdb');
 const VALID_PROVIDERS = new Set(['auto', 'local-mmdb', 'ipapi', 'disabled']);
@@ -138,6 +140,94 @@ function cacheIpapiResult(lookupIp, data, ttlMs) {
     data: cloneGeoData(data),
     expiresAt: Date.now() + ttlMs,
   });
+}
+
+/**
+ * Shared (cross-process) ipapi.co cache, an L2 behind `ipapiCache`. Entries
+ * are keyed by a hash of the IP. Failures never break the lookup.
+ *
+ * @param {object} strapiInstance
+ * @param {string} lookupIp
+ * @returns {Promise<object|null>}
+ */
+async function getSharedIpapiResult(strapiInstance, lookupIp) {
+  try {
+    const data = await getCoordinator(strapiInstance).cacheGet(hashedKey('geo:ipapi', lookupIp));
+    return data && typeof data === 'object' ? { ...data, ip: lookupIp } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stores a result in the shared cache (best effort).
+ *
+ * @param {object} strapiInstance
+ * @param {string} lookupIp
+ * @param {object} data
+ * @param {number} ttlMs
+ * @returns {Promise<void>}
+ */
+async function shareIpapiResult(strapiInstance, lookupIp, data, ttlMs) {
+  if (!lookupIp || !data || ttlMs <= 0) return;
+  try {
+    // The IP itself is not stored: the key is a hash and the reader puts
+    // the looked-up IP back.
+    const { ip: _ip, ...withoutIp } = data;
+    await getCoordinator(strapiInstance).cacheSet(
+      hashedKey('geo:ipapi', lookupIp),
+      withoutIp,
+      ttlMs
+    );
+  } catch {
+    // best effort
+  }
+}
+
+/**
+ * Caches a result locally and in the shared cache.
+ */
+async function cacheIpapiResultEverywhere(strapiInstance, lookupIp, data, ttlMs) {
+  cacheIpapiResult(lookupIp, data, ttlMs);
+  await shareIpapiResult(strapiInstance, lookupIp, data, ttlMs);
+}
+
+/**
+ * Reads the shared back-off deadline set by any process after an HTTP 429
+ * and adopts it locally.
+ *
+ * @param {object} strapiInstance
+ * @returns {Promise<number>} Remaining back-off in ms
+ */
+async function syncSharedIpapiBackoff(strapiInstance) {
+  try {
+    const until = Number(await getCoordinator(strapiInstance).cacheGet(SHARED_BACKOFF_KEY));
+    if (Number.isFinite(until) && until > ipapiRateLimitedUntil) ipapiRateLimitedUntil = until;
+  } catch {
+    // local state only
+  }
+  return getIpapiRateLimitRemainingMs();
+}
+
+/**
+ * Publishes the local back-off deadline so other processes stop calling
+ * ipapi.co as well.
+ *
+ * @param {object} strapiInstance
+ * @returns {Promise<void>}
+ */
+async function shareIpapiBackoff(strapiInstance) {
+  const remaining = getIpapiRateLimitRemainingMs();
+  if (remaining <= 0) return;
+  try {
+    await getCoordinator(strapiInstance).cacheSet(
+      SHARED_BACKOFF_KEY,
+      ipapiRateLimitedUntil,
+      remaining
+    );
+  } catch {
+    // best effort
+  }
 }
 
 function getRetryAfterMs(response) {
@@ -536,7 +626,15 @@ module.exports = ({ strapi }) => ({
     const cached = getCachedIpapiResult(lookupIp);
     if (cached) return cached;
 
-    const rateLimitRemainingMs = getIpapiRateLimitRemainingMs();
+    const shared = await getSharedIpapiResult(strapi, lookupIp);
+    if (shared) {
+      // Keep the shared entry locally for a short time only, so its
+      // remaining shared TTL is not extended.
+      cacheIpapiResult(lookupIp, shared, IPAPI_FAILURE_CACHE_TTL_MS);
+      return cloneGeoData(shared);
+    }
+
+    const rateLimitRemainingMs = await syncSharedIpapiBackoff(strapi);
     if (rateLimitRemainingMs > 0) {
       logIpapiRateLimit(
         strapi,
@@ -563,7 +661,7 @@ module.exports = ({ strapi }) => ({
           'ipapi',
           'Remote GeoIP provider concurrency limit reached'
         );
-        cacheIpapiResult(lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
+        await cacheIpapiResultEverywhere(strapi, lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
         return fallback;
       }
 
@@ -596,6 +694,7 @@ module.exports = ({ strapi }) => ({
           const reason = response.status === 429 ? 'rate_limited' : 'error';
           if (response.status === 429) {
             const backoffMs = markIpapiRateLimited(response);
+            await shareIpapiBackoff(strapi);
             logIpapiRateLimit(
               strapi,
               `[magic-sessionmanager/geolocation] API returned HTTP 429; backing off ipapi.co lookups for ${Math.ceil(backoffMs / 1000)}s`
@@ -612,7 +711,7 @@ module.exports = ({ strapi }) => ({
             'ipapi',
             `HTTP ${response.status}`
           );
-          cacheIpapiResult(lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
+          await cacheIpapiResultEverywhere(strapi, lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
           return fallback;
         }
 
@@ -622,6 +721,7 @@ module.exports = ({ strapi }) => ({
           const reason = /rate/i.test(data.reason || '') ? 'rate_limited' : 'error';
           if (reason === 'rate_limited') {
             const backoffMs = markIpapiRateLimited();
+            await shareIpapiBackoff(strapi);
             logIpapiRateLimit(
               strapi,
               `[magic-sessionmanager/geolocation] API reported rate limit; backing off ipapi.co lookups for ${Math.ceil(backoffMs / 1000)}s`
@@ -631,7 +731,7 @@ module.exports = ({ strapi }) => ({
           }
 
           const fallback = this.getFallbackData(lookupIp, reason, 'ipapi', data.reason);
-          cacheIpapiResult(lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
+          await cacheIpapiResultEverywhere(strapi, lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
           return fallback;
         }
 
@@ -674,7 +774,7 @@ module.exports = ({ strapi }) => ({
         };
 
         strapi.log.debug('[magic-sessionmanager/geolocation] ipapi lookup completed');
-        cacheIpapiResult(lookupIp, result, IPAPI_SUCCESS_CACHE_TTL_MS);
+        await cacheIpapiResultEverywhere(strapi, lookupIp, result, IPAPI_SUCCESS_CACHE_TTL_MS);
 
         return result;
       } catch (error) {
@@ -684,7 +784,7 @@ module.exports = ({ strapi }) => ({
           error?.name || 'Error'
         );
         const fallback = this.getFallbackData(lookupIp, status, 'ipapi', error.message);
-        cacheIpapiResult(lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
+        await cacheIpapiResultEverywhere(strapi, lookupIp, fallback, IPAPI_FAILURE_CACHE_TTL_MS);
         return fallback;
       } finally {
         clearTimeout(timer);

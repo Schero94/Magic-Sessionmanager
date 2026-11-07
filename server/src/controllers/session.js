@@ -12,6 +12,7 @@ const { extractBearerToken } = require('../utils/extract-token');
 const { parseNativeSessionKey } = require('../utils/native-session-view');
 const { runWithCallerRevocation } = require('../utils/block-revocation-scope');
 const { sendServerError } = require('../utils/http-errors');
+const { getCoordinator } = require('../utils/coordination');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
@@ -1186,21 +1187,34 @@ module.exports = {
         return ctx.notFound('User not found');
       }
 
-      const user = await strapi.documents(USER_UID).findOne({ documentId: userDocumentId });
+      const mode = hasRequestedState ? 'explicit' : 'toggle';
 
-      if (!user) {
+      // Toggle mode reads the current state and writes its inverse. Two
+      // parallel toggles on different instances would both read the same
+      // value, so the read and write run in a cluster-wide critical section
+      // per user. Explicit mode is idempotent and needs no lock.
+      const applyBlockedState = async () => {
+        const user = await strapi.documents(USER_UID).findOne({ documentId: userDocumentId });
+        if (!user) return null;
+        const nextBlocked = hasRequestedState ? requestedBlocked : !user.blocked;
+        await runWithCallerRevocation(userDocumentId, () =>
+          strapi.documents(USER_UID).update({
+            documentId: userDocumentId,
+            data: { blocked: nextBlocked },
+          })
+        );
+        return { blocked: nextBlocked };
+      };
+
+      const applied =
+        mode === 'toggle'
+          ? await getCoordinator(strapi).withLock(`user-block:${userDocumentId}`, applyBlockedState)
+          : await applyBlockedState();
+
+      if (!applied) {
         return ctx.notFound('User not found');
       }
-
-      const mode = hasRequestedState ? 'explicit' : 'toggle';
-      const newBlockedStatus = hasRequestedState ? requestedBlocked : !user.blocked;
-
-      await runWithCallerRevocation(userDocumentId, () =>
-        strapi.documents(USER_UID).update({
-          documentId: userDocumentId,
-          data: { blocked: newBlockedStatus },
-        })
-      );
+      const newBlockedStatus = applied.blocked;
 
       if (newBlockedStatus) {
         const sessionService = strapi.plugin('magic-sessionmanager').service('session');

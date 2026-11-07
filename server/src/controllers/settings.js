@@ -1,10 +1,13 @@
 'use strict';
 
 const {
-  invalidateSettingsCache,
+  getSettingsRevision,
   normalizeGeoIpProvider,
   normalizeGeoLookupFailureMode,
+  notifySettingsChanged,
 } = require('../utils/settings-loader');
+const { withPluginStoreKey } = require('../utils/plugin-store');
+const { LockTimeoutError } = require('../utils/coordination');
 const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
 const { sendServerError, sendValidationError } = require('../utils/http-errors');
 const path = require('node:path');
@@ -497,6 +500,40 @@ function validateSettingsUpdate(body, current) {
 }
 
 /**
+ * Reads the shared settings revision; null when it cannot be read.
+ *
+ * @returns {Promise<number|null>}
+ */
+async function readRevision() {
+  try {
+    return await getSettingsRevision(strapi);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes a 409 response for a settings PUT whose base revision is stale.
+ *
+ * @param {object} ctx Koa context
+ * @param {number} currentRevision Revision currently stored
+ * @returns {object} Response body
+ */
+function sendSettingsConflict(ctx, currentRevision) {
+  ctx.status = 409;
+  ctx.body = {
+    data: null,
+    error: {
+      status: 409,
+      name: 'ConflictError',
+      message: 'Settings were changed by another administrator. Reload and try again.',
+      details: { revision: currentRevision },
+    },
+  };
+  return ctx.body;
+}
+
+/**
  * Settings controller
  * Manages plugin settings stored in Strapi database
  */
@@ -518,9 +555,11 @@ module.exports = {
 
       const storedSettings = await pluginStore.get({ key: 'settings' });
       const settings = mergeSettingsWithDefaults(storedSettings);
+      const revision = await readRevision();
 
       ctx.send({
         settings,
+        ...(revision === null ? {} : { revision }),
         success: true,
       });
     } catch (error) {
@@ -545,8 +584,6 @@ module.exports = {
    * @returns {Promise<void>}
    */
   async updateSettings(ctx) {
-    let pluginStore;
-    let current;
     try {
       const { body } = ctx.request;
 
@@ -554,45 +591,73 @@ module.exports = {
         return ctx.badRequest('Settings data must be an object');
       }
 
-      pluginStore = strapi.store({
-        type: 'plugin',
-        name: 'magic-sessionmanager',
-      });
-
-      // PUT merges: omitted fields keep their stored value. The stored
-      // GeoIP path is kept verbatim (legacy read paths stay readable) unless
-      // the payload replaces it.
-      const stored = await pluginStore.get({ key: 'settings' });
-      const storedObject = stored && typeof stored === 'object' ? stored : {};
-      current = {
-        ...mergeSettingsWithDefaults(storedObject),
-        geoIpDatabasePath:
-          typeof storedObject.geoIpDatabasePath === 'string' ? storedObject.geoIpDatabasePath : '',
-      };
-
-      const { settings: sanitizedSettings, errors } = validateSettingsUpdate(body, current);
-      if (errors.length > 0) {
-        return sendValidationError(ctx, 'Invalid settings', errors);
+      const hasBaseRevision = Object.prototype.hasOwnProperty.call(body, 'revision');
+      if (hasBaseRevision && !(Number.isInteger(body.revision) && body.revision >= 0)) {
+        return sendValidationError(ctx, 'Invalid settings', [
+          { path: ['revision'], message: 'revision must be a non-negative integer' },
+        ]);
       }
 
-      await pluginStore.set({
-        key: 'settings',
-        value: sanitizedSettings,
+      // Read, validate, merge and write in one cluster-wide critical section,
+      // so two partial PUTs on different instances cannot drop each other's
+      // fields and the store never gets a duplicate settings row.
+      const outcome = await withPluginStoreKey(strapi, 'settings', async (pluginStore) => {
+        if (hasBaseRevision) {
+          const currentRevision = await readRevision();
+          if (currentRevision !== null && currentRevision !== body.revision) {
+            return { conflict: true, currentRevision };
+          }
+        }
+
+        // PUT merges: omitted fields keep their stored value. The stored
+        // GeoIP path is kept verbatim (legacy read paths stay readable)
+        // unless the payload replaces it.
+        const stored = await pluginStore.get({ key: 'settings' });
+        const storedObject = stored && typeof stored === 'object' ? stored : {};
+        const current = {
+          ...mergeSettingsWithDefaults(storedObject),
+          geoIpDatabasePath:
+            typeof storedObject.geoIpDatabasePath === 'string'
+              ? storedObject.geoIpDatabasePath
+              : '',
+        };
+
+        const { settings: sanitizedSettings, errors } = validateSettingsUpdate(body, current);
+        if (errors.length > 0) return { errors };
+
+        await pluginStore.set({
+          key: 'settings',
+          value: sanitizedSettings,
+        });
+        const revision = await notifySettingsChanged(strapi);
+        return { settings: sanitizedSettings, revision };
       });
 
-      invalidateSettingsCache();
+      if (outcome.conflict) {
+        return sendSettingsConflict(ctx, outcome.currentRevision);
+      }
+      if (outcome.errors) {
+        return sendValidationError(ctx, 'Invalid settings', outcome.errors);
+      }
 
       strapi.log.info('[magic-sessionmanager/settings] Settings updated successfully');
 
       ctx.send({
         settings: {
-          ...sanitizedSettings,
-          geoIpDatabasePath: getSafeGeoIpFilename(sanitizedSettings.geoIpDatabasePath),
+          ...outcome.settings,
+          geoIpDatabasePath: getSafeGeoIpFilename(outcome.settings.geoIpDatabasePath),
         },
+        ...(outcome.revision === null || outcome.revision === undefined
+          ? {}
+          : { revision: outcome.revision }),
         success: true,
         message: 'Settings saved successfully!',
       });
     } catch (error) {
+      if (error instanceof LockTimeoutError) {
+        strapi.log.warn('[magic-sessionmanager/settings] Settings are being saved elsewhere');
+        return sendServerError(ctx, 503, 'Settings are being saved by another request');
+      }
       strapi.log.error(
         '[magic-sessionmanager/settings] Error updating settings:',
         error?.name || 'Error'

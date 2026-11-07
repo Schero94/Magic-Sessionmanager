@@ -163,7 +163,24 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+/**
+ * Returns a short check value derived from the encryption key with HMAC. It
+ * reveals nothing usable about the key and lets several instances detect
+ * that they do not share the same SESSION_ENCRYPTION_KEY.
+ *
+ * @returns {string} 16 hex characters
+ * @throws {Error} When no key is available in production
+ */
+function getEncryptionKeyCheck() {
+  return crypto
+    .createHmac('sha256', getEncryptionKey())
+    .update('magic-sessionmanager:encryption-key-check:v1')
+    .digest('hex')
+    .slice(0, 16);
+}
+
 module.exports = {
+  getEncryptionKeyCheck,
   encryptToken,
   decryptToken,
   generateSessionId,

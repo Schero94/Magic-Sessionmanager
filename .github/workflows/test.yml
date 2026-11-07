@@ -80,3 +80,44 @@ jobs:
           test -f .releaserc.json
           test -f README.md
           test -f LICENSE
+
+  multi-process:
+    name: Multi-process coordination (SQLite + PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: strapi
+          POSTGRES_PASSWORD: strapi
+          POSTGRES_DB: magic_sessionmanager_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Eight processes against SQLite and PostgreSQL
+        env:
+          MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_ci
+          MSM_CONCURRENCY_REQUIRE: sqlite,postgres
+        run: npm run test:concurrency

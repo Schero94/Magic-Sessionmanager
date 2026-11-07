@@ -1183,8 +1183,17 @@ module.exports = ({ strapi }) => {
           }
         }
 
-        await strapi.documents(SESSION_UID).update({
-          documentId: sessionDocId,
+        // The write is its own de-duplication across processes: only a row
+        // that is still active and was not touched within `rateLimit` ms by
+        // any instance is updated. The local cache above is just an L1 that
+        // saves the query inside one process.
+        const staleBefore = new Date(now.getTime() - rateLimit);
+        await strapi.db.query(SESSION_UID).updateMany({
+          where: {
+            documentId: sessionDocId,
+            isActive: true,
+            $or: [{ lastActive: { $lt: staleBefore } }, { lastActive: { $null: true } }],
+          },
           data: { lastActive: now },
         });
         log.debug('[TOUCH] End-user session lastActive updated');
@@ -1300,9 +1309,31 @@ module.exports = ({ strapi }) => {
         let deactivatedCount = 0;
         for (const session of sessionsToDeactivate) {
           try {
-            if (nativeManager) await revokeNativeSessionForSidecar(nativeManager, session);
-            await strapi.documents(SESSION_UID).update({
+            // Compare-and-set against the idle condition: the snapshot above
+            // can be stale when another instance touched, rotated or
+            // terminated the row meanwhile. Such rows are skipped, so a fresh
+            // session is never killed and a 'manual'/'blocked' reason is
+            // never overwritten.
+            const idleWhere = {
               documentId: session.documentId,
+              isActive: true,
+              $or: [
+                { lastActive: { $lt: cutoffTime } },
+                { lastActive: { $null: true }, loginTime: { $lt: cutoffTime } },
+              ],
+            };
+            if (nativeManager) {
+              // Re-check right before the irreversible native revoke. A
+              // failed native revoke keeps the sidecar active (retry later).
+              const stillIdle = await strapi.documents(SESSION_UID).findFirst({
+                filters: idleWhere,
+                fields: ['documentId'],
+              });
+              if (!stillIdle) continue;
+              await revokeNativeSessionForSidecar(nativeManager, session);
+            }
+            const result = await strapi.db.query(SESSION_UID).updateMany({
+              where: idleWhere,
               data: {
                 isActive: false,
                 terminatedManually: false,
@@ -1310,7 +1341,7 @@ module.exports = ({ strapi }) => {
                 logoutTime: now,
               },
             });
-            deactivatedCount++;
+            if (Number(result?.count) === 1) deactivatedCount++;
           } catch (err) {
             log.debug('[CLEANUP] Failed to deactivate an end-user session:', err?.name || 'Error');
           }

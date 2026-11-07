@@ -16,6 +16,7 @@ const crypto = require('crypto');
 const os = require('os');
 const pluginPkg = require('../../../package.json');
 const { createLogger } = require('../utils/logger');
+const { setPluginStoreValue, withPluginStoreKey } = require('../utils/plugin-store');
 
 const DEFAULT_LICENSE_SERVER_URL = 'https://magicapi.fitlex.me';
 
@@ -55,35 +56,38 @@ module.exports = ({ strapi }) => {
 
     async generateDeviceId() {
       try {
-        const pluginStore = strapi.store({ type: 'plugin', name: 'magic-sessionmanager' });
-        const stored = await pluginStore.get({ key: 'deviceId' });
-        if (stored && typeof stored === 'string' && stored.length >= 16) {
-          return stored;
-        }
+        // Read and create inside one critical section so parallel first
+        // boots on several instances agree on a single device id.
+        return await withPluginStoreKey(strapi, 'deviceId', async (pluginStore) => {
+          const stored = await pluginStore.get({ key: 'deviceId' });
+          if (stored && typeof stored === 'string' && stored.length >= 16) {
+            return stored;
+          }
 
-        let identifier;
-        try {
-          const networkInterfaces = os.networkInterfaces();
-          const macAddresses = [];
-          Object.values(networkInterfaces).forEach((interfaces) => {
-            interfaces?.forEach((iface) => {
-              if (iface.mac && iface.mac !== '00:00:00:00:00:00') {
-                macAddresses.push(iface.mac);
-              }
+          let identifier;
+          try {
+            const networkInterfaces = os.networkInterfaces();
+            const macAddresses = [];
+            Object.values(networkInterfaces).forEach((interfaces) => {
+              interfaces?.forEach((iface) => {
+                if (iface.mac && iface.mac !== '00:00:00:00:00:00') {
+                  macAddresses.push(iface.mac);
+                }
+              });
             });
-          });
-          identifier = `${macAddresses.join('-')}-${os.hostname()}`;
-        } catch {
-          identifier = `${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
-        }
+            identifier = `${macAddresses.join('-')}-${os.hostname()}`;
+          } catch {
+            identifier = `${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
+          }
 
-        const deviceId = crypto
-          .createHash('sha256')
-          .update(identifier)
-          .digest('hex')
-          .substring(0, 32);
-        await pluginStore.set({ key: 'deviceId', value: deviceId });
-        return deviceId;
+          const deviceId = crypto
+            .createHash('sha256')
+            .update(identifier)
+            .digest('hex')
+            .substring(0, 32);
+          await pluginStore.set({ key: 'deviceId', value: deviceId });
+          return deviceId;
+        });
       } catch {
         return crypto.randomBytes(16).toString('hex');
       }
@@ -172,8 +176,7 @@ module.exports = ({ strapi }) => {
 
         const data = await response.json();
         if (data.success && data.data) {
-          const pluginStore = strapi.store({ type: 'plugin', name: 'magic-sessionmanager' });
-          await pluginStore.set({ key: 'lastValidated', value: new Date().toISOString() });
+          await setPluginStoreValue(strapi, 'lastValidated', new Date().toISOString());
           return { valid: true, data: data.data };
         }
         return { valid: false, data: null };
@@ -211,9 +214,8 @@ module.exports = ({ strapi }) => {
     },
 
     async storeLicenseKey(licenseKey) {
-      const pluginStore = strapi.store({ type: 'plugin', name: 'magic-sessionmanager' });
-      await pluginStore.set({ key: 'licenseKey', value: licenseKey });
-      await pluginStore.set({ key: 'lastValidated', value: new Date().toISOString() });
+      await setPluginStoreValue(strapi, 'licenseKey', licenseKey);
+      await setPluginStoreValue(strapi, 'lastValidated', new Date().toISOString());
       log.info('[SUCCESS] License key stored');
       return true;
     },
