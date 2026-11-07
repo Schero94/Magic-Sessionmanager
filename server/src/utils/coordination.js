@@ -51,6 +51,11 @@ const TABLES = Object.freeze({
 const PG_LOCK_NAMESPACE = 0x4d534d; // "MSM"
 const NEVER_EXPIRES = 8_000_000_000_000_000; // < 2^63, > any realistic epoch ms
 const MAX_KEY_LENGTH = 191;
+/**
+ * A held lease is taken over when it ends more than this much later than a
+ * lease taken now with the caller's TTL would (see tryAcquireLease).
+ */
+const LEASE_SHRINK_MARGIN_MS = 60_000;
 const COUNTER_COLUMNS = Object.freeze(['hits', 'window_start', 'blocked_until']);
 
 let instanceIdCache = null;
@@ -203,7 +208,14 @@ function createMemoryBackend() {
 
     async tryAcquireLease(name, ttlMs, owner, now = Date.now()) {
       const lease = leases.get(name);
-      if (lease && lease.until > now && lease.owner !== owner) return false;
+      if (
+        lease &&
+        lease.until > now &&
+        lease.owner !== owner &&
+        lease.until <= now + ttlMs + LEASE_SHRINK_MARGIN_MS
+      ) {
+        return false;
+      }
       leases.set(name, { owner, until: now + ttlMs });
       return true;
     },
@@ -400,7 +412,15 @@ function createDatabaseBackend({ knex, dialect }) {
     const changed = await knex(TABLES.leases)
       .where({ name })
       .andWhere((qb) => {
-        qb.where('lease_until', '<=', now).orWhere('owner', owner);
+        // Free when expired or already ours. A lease that ends later than a
+        // fresh one would (plus a margin for clock skew between hosts) was
+        // taken under a longer interval, for example before the cleanup
+        // interval was shortened or by a process that has since been
+        // replaced; it may be taken over, so the new interval applies
+        // without waiting for the old lease to run out.
+        qb.where('lease_until', '<=', now)
+          .orWhere('owner', owner)
+          .orWhere('lease_until', '>', now + ttlMs + LEASE_SHRINK_MARGIN_MS);
       })
       .update({ owner, lease_until: now + ttlMs });
     return toNumber(changed) === 1;

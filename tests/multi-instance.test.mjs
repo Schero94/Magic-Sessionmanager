@@ -876,3 +876,33 @@ test(
     }
   }
 );
+
+test(
+  'a job lease taken under a longer interval does not delay a shortened one',
+  { skip: !sqliteAvailable && 'better-sqlite3 not available' },
+  async () => {
+    const shared = await createSharedSqlite();
+    try {
+      const minutes = (n) => n * 60_000;
+      // Process A ran the job under a 30-minute interval, then was replaced.
+      assert.equal(await shared.processA.tryAcquireLease('job:idle', minutes(29.5)), true);
+      // Same interval: B must wait.
+      assert.equal(await shared.processB.tryAcquireLease('job:idle', minutes(29.5)), false);
+      // Interval shortened to 5 minutes: B may take over at once, exactly once.
+      const [first, second] = await Promise.all([
+        shared.processB.tryAcquireLease('job:idle', minutes(4.5)),
+        shared.processB.tryAcquireLease('job:idle', minutes(4.5)),
+      ]);
+      assert.equal(first || second, true);
+      assert.equal(await shared.processA.tryAcquireLease('job:idle', minutes(4.5)), false);
+
+      const memory = createMemoryBackend();
+      assert.equal(await memory.tryAcquireLease('job', minutes(29.5), 'a'), true);
+      assert.equal(await memory.tryAcquireLease('job', minutes(29.5), 'b'), false);
+      assert.equal(await memory.tryAcquireLease('job', minutes(4.5), 'b'), true);
+      assert.equal(await memory.tryAcquireLease('job', minutes(4.5), 'a'), false);
+    } finally {
+      await shared.close();
+    }
+  }
+);
