@@ -1,3 +1,10 @@
+# [4.11.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.10.0...v4.11.0) (2026-11-07)
+
+
+### Features
+
+* remove the license feature and every license server call ([#8](https://github.com/Schero94/Magic-Sessionmanager/issues/8)) ([c5ba2ef](https://github.com/Schero94/Magic-Sessionmanager/commit/c5ba2ef6b3e32f11cfadaed479a6d2e5688b3415))
+
 ## [Unreleased]
 
 Release type: minor. `feat:` removes the license feature; `fix:` corrects the package metadata. No `BREAKING CHANGE` footer, see "Version decision" below.
