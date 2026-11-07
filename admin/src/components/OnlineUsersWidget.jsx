@@ -11,7 +11,7 @@ import { getTranslation } from '../utils/getTranslation';
 import { requireSessionList } from '../utils/adminResponse.mjs';
 import { normalizeUserCounts } from '../utils/onlineStats.mjs';
 import { computeWidgetStats } from '../utils/widgetStats.mjs';
-import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
+import { isCancelledRequest, logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -261,6 +261,8 @@ const OnlineUsersWidget = () => {
           if (showLoading) setUserCounts(null);
         }
       } catch (error) {
+        // A request aborted because the widget unmounted is not a failure.
+        if (isCancelledRequest(error)) return;
         logSafeAdminError('onlineUsers.loadSessions', error);
         if (showLoading) setLoadError(true);
       } finally {

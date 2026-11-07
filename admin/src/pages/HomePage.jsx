@@ -32,7 +32,7 @@ import { EmptyDocuments } from '@strapi/icons/symbols';
 import styled from 'styled-components';
 import pluginId from '../pluginId';
 import { getTranslation } from '../utils/getTranslation';
-import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
+import { isCancelledRequest, logSafeAdminError } from '../utils/safeAdminLog.mjs';
 import { getSessionStatus } from '../utils/sessionStatus.mjs';
 import { requireSessionList } from '../utils/adminResponse.mjs';
 import { restoreDialogFocus } from '../utils/restoreDialogFocus.mjs';
@@ -196,7 +196,8 @@ const HomePage = () => {
       setNow(Date.now());
       hasLoadedRef.current = true;
     } catch (err) {
-      if (requestId !== requestIdRef.current) return;
+      // A request aborted because the page unmounted is not a failure.
+      if (requestId !== requestIdRef.current || isCancelledRequest(err)) return;
       setLoadError(true);
       logSafeAdminError('dashboard.loadSessions', err);
     } finally {
