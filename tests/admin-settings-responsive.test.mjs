@@ -24,9 +24,10 @@ test('Session Manager settings use the current Strapi API and keep the existing 
   assert.ok(/id:\s*pluginId/.test(section), 'the existing section id is preserved');
   assert.ok(!/\bto\s*:/.test(section), 'section metadata contains only supported fields');
 
-  for (const route of ['general', 'analytics', 'license']) {
+  for (const route of ['general', 'analytics']) {
     assert.ok(source.includes(`to: \`${'${pluginId}'}/${route}\``), `${route} route stays stable`);
   }
+  assert.ok(!source.includes('/license`'), 'the removed license page has no settings link');
   assert.ok(
     /permissions:\s*pluginPermissions/.test(source),
     'settings link permissions remain enforced'

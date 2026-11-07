@@ -419,7 +419,7 @@ async function testAdminGetUserSessions() {
   return true;
 }
 
-/** IP Geolocation (premium) */
+/** IP Geolocation */
 async function testAdminGeolocation() {
   const res = await api('/magic-sessionmanager/geolocation/8.8.8.8', { token: adminJwt });
   
@@ -428,25 +428,9 @@ async function testAdminGeolocation() {
     print(`  [INFO] 8.8.8.8 -> ${geo.city}, ${geo.country} (Score: ${geo.securityScore}/100)`, C.blue);
     return true;
   }
-  if (res.status === 403) {
-    print(`  [INFO] Premium license required (403)`, C.yellow);
-    return null;
-  }
   return false;
 }
 
-/** License status */
-async function testAdminLicenseStatus() {
-  const res = await api('/magic-sessionmanager/license/status', { token: adminJwt });
-  if (!res.ok) return false;
-  
-  print(`  [INFO] Valid: ${res.data.valid}, Demo: ${res.data.demo}`, C.blue);
-  if (res.data.data?.features) {
-    const f = res.data.data.features;
-    print(`  [INFO] Features: Premium=${f.premium}, Advanced=${f.advanced}`, C.blue);
-  }
-  return true;
-}
 
 /** Terminate a session (admin) */
 async function testAdminTerminateSession() {
@@ -1096,8 +1080,6 @@ async function testFixGeolocationIpValidation() {
     const res = await api(`/magic-sessionmanager/geolocation/${encodeURIComponent(ip)}`, { token: adminJwt });
     if (res.status === 400) {
       print(`  [OK] "${ip}" -> 400 Bad Request`, C.dim);
-    } else if (res.status === 403) {
-      print(`  [OK] "${ip}" -> 403 (license check before validation)`, C.dim);
     } else if (res.ok) {
       print(`  [FAIL] "${ip}" -> 200 (should be rejected!)`, C.red);
       allBlocked = false;
@@ -1213,7 +1195,6 @@ async function testFixAuthBoundaryAdminApi() {
     ['GET',  '/magic-sessionmanager/sessions'],
     ['GET',  '/magic-sessionmanager/sessions/active'],
     ['GET',  '/magic-sessionmanager/settings'],
-    ['GET',  '/magic-sessionmanager/license/status'],
     ['POST', '/magic-sessionmanager/sessions/clean-inactive'],
   ];
   
@@ -1420,27 +1401,6 @@ async function testFixMetadataConsistency() {
   return false;
 }
 
-/**
- * FIX-15: License ping endpoint works
- */
-async function testFixLicensePing() {
-  if (!adminJwt) return null;
-  
-  const res = await api('/magic-sessionmanager/license/ping', { method: 'POST', token: adminJwt });
-  
-  // 200 = license exists and pinged, 400 = no license key (demo mode)
-  if (res.ok) {
-    print(`  [PASS] License ping successful`, C.green);
-    return true;
-  }
-  if (res.status === 400 && res.data?.error?.message?.includes('No license')) {
-    print(`  [SKIP] No license key (demo mode)`, C.yellow);
-    return null;
-  }
-  // Any response is fine as long as it doesn't crash
-  print(`  [PASS] License ping handled gracefully (${res.status})`, C.green);
-  return true;
-}
 
 // -------------------------------------------------------------------
 // FALSE POSITIVE TESTS (real user behavior that MUST work)
@@ -1826,7 +1786,6 @@ async function main() {
     await runTest('admin', 'Admin: IP Geolocation', testAdminGeolocation);
     await sleep(500);
     
-    await runTest('admin', 'Admin: License Status', testAdminLicenseStatus);
     await sleep(500);
     
     await runTest('admin', 'Admin: Settings Roundtrip', testAdminSettings);
@@ -1936,7 +1895,6 @@ async function main() {
     await runTest('fixes', 'FIX-14: Session Metadata Consistency', testFixMetadataConsistency);
     await sleep(LOGIN_DELAY);
     
-    await runTest('fixes', 'FIX-15: License Ping Endpoint', testFixLicensePing);
     await sleep(LOGIN_DELAY);
     
     // False positive tests (real user behavior)

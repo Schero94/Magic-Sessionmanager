@@ -165,6 +165,20 @@ test('Content API permission retry waits for the authenticated role and complete
   assert.equal(harness.storeWrites.length, markerWriteCountAfterFirstRequest);
 });
 
+test('a missing Authenticated role on a new database logs info, not a warning', async () => {
+  const harness = createHarness();
+  const warnings = [];
+  const infos = [];
+  const log = { ...harness.log, warn: (...a) => warnings.push(a), info: (...a) => infos.push(a) };
+
+  const ready = await bootstrap.__private.ensureContentApiPermissions(harness.strapi, log);
+
+  assert.equal(ready, false);
+  assert.deepEqual(warnings, []);
+  assert.equal(infos.length, 1);
+  assert.match(String(infos[0][0]), /runs again on the first Session Manager API request/);
+});
+
 test('deferred permission retry ignores unrelated routes and never grants the Public role', async () => {
   const harness = createHarness({ authenticatedRole: { id: 17, type: 'authenticated' } });
   bootstrap.__private.mountDeferredContentApiPermissionRetry({

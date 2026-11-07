@@ -12,13 +12,8 @@ const readAdminFile = (relativePath) =>
     ? readSettingsSource()
     : readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8');
 
-test('dashboard, settings, analytics and activation use the shared Strapi page layout', () => {
-  const pages = [
-    'pages/HomePage.jsx',
-    'pages/Settings.jsx',
-    'pages/Analytics.jsx',
-    'pages/License.jsx',
-  ];
+test('dashboard, settings and analytics use the shared Strapi page layout', () => {
+  const pages = ['pages/HomePage.jsx', 'pages/Settings.jsx', 'pages/Analytics.jsx'];
 
   for (const page of pages) {
     assert.match(
@@ -72,7 +67,7 @@ test('end-user panel includes all current native sessions and uses Strapi action
   );
 });
 
-test('analytics and activation labels are present in every supported locale', () => {
+test('dashboard, settings and analytics labels are present in every supported locale', () => {
   const locales = ['en', 'de', 'es', 'fr', 'pt'];
   const requiredKeys = [
     'analytics.title',
@@ -85,12 +80,6 @@ test('analytics and activation labels are present in every supported locale', ()
     'homepage.search.label',
     'homepage.filter.label',
     'homepage.noResults.reset',
-    'license.title',
-    'license.key.copy',
-    'license.state.noKey',
-    'license.details.title',
-    'license.features.always',
-    'license.status.title',
     'common.tryAgain',
     'settings.geofencing.pick.label',
     'settings.geofencing.pick.hint',
@@ -257,10 +246,6 @@ test('changed non-trivial admin handlers include JSDoc contracts', () => {
     ['pages/Settings/hooks/useSettingsForm.js', 'handleSave'],
     ['pages/Settings/hooks/useSettingsForm.js', 'handleReset'],
     ['pages/Analytics.jsx', 'fetchAnalytics'],
-    ['pages/License.jsx', 'fetchLicenseStatus'],
-    ['pages/License.jsx', 'checkLicenseStatus'],
-    ['pages/License.jsx', 'handleCopyLicenseKey'],
-    ['pages/License.jsx', 'handleDownloadLicenseKey'],
     ['components/SessionDetailModal.jsx', 'handleTerminate'],
     ['utils/sessionExports.mjs', 'buildSessionCsv'],
     ['utils/sessionExports.mjs', 'buildSessionJson'],

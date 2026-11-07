@@ -36,7 +36,7 @@ const assertOrdered = (text, ids, message) => {
   );
 };
 
-test('settings links read Configuration, Analytics and License on unchanged routes (IA I.1-3, C)', () => {
+test('settings links read Configuration and Analytics on unchanged routes (IA I.1-3, C)', () => {
   assert.match(
     adminIndex,
     /id: `\$\{pluginId\}\.settings\.link\.configuration`,\s*defaultMessage: 'Configuration'/
@@ -45,18 +45,17 @@ test('settings links read Configuration, Analytics and License on unchanged rout
     adminIndex,
     /id: `\$\{pluginId\}\.settings\.link\.analytics`,\s*defaultMessage: 'Analytics'/
   );
-  assert.match(
-    adminIndex,
-    /id: `\$\{pluginId\}\.settings\.link\.license`,\s*defaultMessage: 'License'/
-  );
-  assert.doesNotMatch(adminIndex, /defaultMessage: '(?:General|Activation)'/);
-  for (const id of ['general', 'analytics', 'license']) {
+  assert.doesNotMatch(adminIndex, /defaultMessage: '(?:General|Activation|License)'/);
+  assert.doesNotMatch(adminIndex, /settings\.link\.license|pages\/License/);
+  for (const id of ['general', 'analytics']) {
     assert.match(
       adminIndex,
       new RegExp(`id: '${id}',\\s*to: \`\\$\\{pluginId\\}/${id}\``),
       `${id} link id and route stay`
     );
   }
+  const links = adminIndex.match(/to: `\$\{pluginId\}\/\w+`/g) || [];
+  assert.equal(links.length, 2, 'exactly two settings links');
 });
 
 test('settings are split into a page, one module per tab and the useSettingsForm hook', () => {

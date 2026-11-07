@@ -8,10 +8,8 @@ const createNotifications = require('../server/src/services/notifications');
 const createGeolocation = require('../server/src/services/geolocation');
 const rateLimit = require('../server/src/middlewares/rate-limit');
 const createLogger = require('../server/src/utils/logger').createLogger;
-const createLicenseController = require('../server/src/controllers/license');
 const createGeoIpController = require('../server/src/controllers/geoip');
 const settingsController = require('../server/src/controllers/settings');
-const createLicenseGuard = require('../server/src/services/license-guard');
 
 const SENSITIVE_EMAIL = 'private.user@example.invalid';
 const SENSITIVE_IP = '203.0.113.42';
@@ -183,7 +181,7 @@ test('plugin logger never serializes exception messages or arbitrary object fiel
   assert.equal(logs.join('\n').includes(SENSITIVE_LICENSE_KEY), false);
 });
 
-test('license, GeoIP and settings controller failures do not log raw exception details', async () => {
+test('GeoIP and settings controller failures do not log raw exception details', async () => {
   const logs = [];
   const log = {
     debug() {},
@@ -195,21 +193,6 @@ test('license, GeoIP and settings controller failures do not log raw exception d
   const previousStrapi = global.strapi;
 
   try {
-    const licenseController = createLicenseController({
-      strapi: {
-        plugin: () => ({
-          service: () => ({
-            getLicenseByKey: async () => {
-              throw new Error(SENSITIVE_ERROR);
-            },
-          }),
-        }),
-        store: () => ({ get: async () => SENSITIVE_LICENSE_KEY }),
-        log,
-      },
-    });
-    await licenseController.getStatus({ badRequest: (message) => message });
-
     global.strapi = {
       store: () => ({
         get: async () => null,
@@ -245,45 +228,6 @@ test('license, GeoIP and settings controller failures do not log raw exception d
   } finally {
     if (previousStrapi === undefined) delete global.strapi;
     else global.strapi = previousStrapi;
-  }
-});
-
-test('optional license provider errors and response messages are redacted from logs', async () => {
-  const previousFetch = global.fetch;
-  const logs = [];
-  const service = createLicenseGuard({
-    strapi: {
-      config: { get: () => '5.58.0' },
-      store: () => ({ get: async () => null, set: async () => undefined }),
-      log: {
-        info: (message) => logs.push(String(message)),
-        debug: (message) => logs.push(String(message)),
-        warn: (message) => logs.push(String(message)),
-        error: (message) => logs.push(String(message)),
-      },
-    },
-  });
-
-  try {
-    global.fetch = async () => ({
-      json: async () => {
-        throw new Error(SENSITIVE_ERROR);
-      },
-    });
-    await service.createLicense({ email: SENSITIVE_EMAIL, firstName: 'Test', lastName: 'User' });
-    await service.verifyLicense(SENSITIVE_LICENSE_KEY);
-    await service.getLicenseByKey(SENSITIVE_LICENSE_KEY);
-
-    global.fetch = async () => ({
-      json: async () => ({ success: false, message: SENSITIVE_ERROR }),
-    });
-    await service.createLicense({ email: SENSITIVE_EMAIL, firstName: 'Test', lastName: 'User' });
-
-    assert.equal(logs.join('\n').includes(SENSITIVE_EMAIL), false);
-    assert.equal(logs.join('\n').includes(SENSITIVE_IP), false);
-    assert.equal(logs.join('\n').includes(SENSITIVE_LICENSE_KEY), false);
-  } finally {
-    global.fetch = previousFetch;
   }
 });
 

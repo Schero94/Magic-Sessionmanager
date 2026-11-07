@@ -184,7 +184,6 @@ test('plugin surfaces use Strapi theme colors instead of removed legacy color va
     'pages/HomePage.jsx',
     'pages/Settings.jsx',
     'pages/Analytics.jsx',
-    'pages/License.jsx',
     'components/SessionInfoPanel.jsx',
     'components/SessionDetailModal.jsx',
   ];

@@ -97,10 +97,40 @@ async function setPluginStoreValue(strapi, key, value) {
   await withPluginStoreKey(strapi, key, (store) => store.set({ key, value }));
 }
 
+/**
+ * Plugin store keys written by the license feature that versions before
+ * 4.11 shipped. The feature is gone; these rows are removed at startup.
+ */
+const LEGACY_LICENSE_STORE_KEYS = Object.freeze(['licenseKey', 'lastValidated', 'deviceId']);
+
+/**
+ * Deletes the Core Store rows left behind by the removed license feature
+ * (license key, last validation time, device hash).
+ *
+ * One `deleteMany` statement removes every row for these keys, duplicates
+ * included. It is idempotent: once the rows are gone it deletes nothing, so
+ * every boot and every instance can run it in parallel without a lock.
+ *
+ * @param {object} strapi
+ * @returns {Promise<number>} Number of rows removed
+ * @sideeffect Deletes rows from `strapi_core_store_settings`.
+ */
+async function removeLegacyLicenseData(strapi) {
+  const query = strapi?.db?.query?.(CORE_STORE_UID);
+  if (!query || typeof query.deleteMany !== 'function') return 0;
+
+  const result = await query.deleteMany({
+    where: { key: { $in: LEGACY_LICENSE_STORE_KEYS.map(coreStoreKey) } },
+  });
+  return Number(result?.count) || 0;
+}
+
 module.exports = {
+  LEGACY_LICENSE_STORE_KEYS,
   PLUGIN_ID,
   collapseDuplicateStoreRows,
   coreStoreKey,
+  removeLegacyLicenseData,
   setPluginStoreValue,
   withPluginStoreKey,
 };

@@ -39,7 +39,6 @@ export const NAMESPACES = [
   'panel',
   'widget',
   'analytics',
-  'license',
   'settings',
   'notifications',
 ];

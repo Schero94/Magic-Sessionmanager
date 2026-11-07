@@ -208,7 +208,10 @@ function createJwtHarness({
 }
 
 test('deleting an active session persists only its token hash until JWT expiry', async () => {
-  const token = makeJwt(Math.floor(Date.now() / 1000) + 3600);
+  // One exp value for the token and the assertion: reading the clock twice
+  // fails when a second boundary passes in between.
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+  const token = makeJwt(exp);
   const session = {
     documentId: 'active-session',
     token: encryptToken(token),
@@ -227,7 +230,7 @@ test('deleting an active session persists only its token hash until JWT expiry',
   const record = harness.revocations.get(hashToken(token));
   assert.equal(record.token, undefined);
   assert.equal(record.user, undefined);
-  assert.equal(record.expiresAt.getTime(), Math.floor(Date.now() / 1000 + 3600) * 1000);
+  assert.equal(record.expiresAt.getTime(), exp * 1000);
 });
 
 test('inactive-session cleanup persists a revocation before removing each unexpired token', async () => {

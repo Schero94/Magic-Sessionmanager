@@ -6,9 +6,38 @@
     <meta name="color-scheme" content="light dark" />
     <meta
       name="description"
-      content="Magic Session Manager for Strapi 5: see, end and analyse the sessions of your app's users, with login protection, location data, alerts and retention controls."
+      content="Magic Session Manager for Strapi 5: see who is signed in, end sessions, block users, limit failed sign-ins and keep session history under control. Free, MIT, no telemetry."
     />
     <title>Magic Session Manager for Strapi 5</title>
+    <link rel="canonical" href="https://schero94.github.io/Magic-Sessionmanager/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Magic Session Manager" />
+    <meta property="og:title" content="Magic Session Manager for Strapi 5" />
+    <meta
+      property="og:description"
+      content="See who is signed in to your Strapi 5 app, end any session in one click and stop password guessing. Free, MIT, no telemetry."
+    />
+    <meta property="og:url" content="https://schero94.github.io/Magic-Sessionmanager/" />
+    <meta
+      property="og:image"
+      content="https://schero94.github.io/Magic-Sessionmanager/img/dashboard.webp"
+    />
+    <meta property="og:image:width" content="1440" />
+    <meta property="og:image:height" content="900" />
+    <meta
+      property="og:image:alt"
+      content="Sessions dashboard with stat cards, filters and a table of sessions"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Magic Session Manager for Strapi 5" />
+    <meta
+      name="twitter:description"
+      content="See who is signed in to your Strapi 5 app, end any session in one click and stop password guessing."
+    />
+    <meta
+      name="twitter:image"
+      content="https://schero94.github.io/Magic-Sessionmanager/img/dashboard.webp"
+    />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./site.css" />
     <link rel="stylesheet" href="./site-extra.css" />
@@ -24,7 +53,14 @@
         <nav class="top-links" aria-label="Project links">
           <a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub</a>
           <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm</a>
-          <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">Issues</a>
+          <a
+            class="top-link-wide"
+            href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md"
+            >Changelog</a
+          >
+          <a class="top-link-wide" href="https://github.com/Schero94/Magic-Sessionmanager/releases"
+            >Releases</a
+          >
         </nav>
       </div>
     </header>
@@ -36,8 +72,10 @@
           <h1 id="page-title">See who is signed in. End access in one click.</h1>
           <p>
             Magic Session Manager records every sign-in of your app's users (Users &amp;
-            Permissions) as a session. Admins see which sessions are Active, Idle or Ended, end
-            them, block users, and decide how long the history is kept.
+            Permissions) as a session. Admins see who is online, end single sessions or all sessions
+            of a user, and block accounts. Your app gets logout routes, a "my devices" list,
+            failed-login lockout and optional country rules. It works with Strapi's native
+            refresh-token sessions and with several server processes on one database.
           </p>
           <div class="hero-actions">
             <a class="button primary" href="#install">Install the plugin</a>
@@ -50,7 +88,8 @@
             <li class="badge">Strapi 5, tested on 5.61</li>
             <li class="badge">Node.js 22.22.2+ or 24.15.0+</li>
             <li class="badge">5 admin languages</li>
-            <li class="badge">MIT license, no paid tier</li>
+            <li class="badge">MIT, free, no telemetry</li>
+            <li class="badge">npm, Yarn and pnpm</li>
           </ul>
         </div>
       </section>
@@ -58,23 +97,187 @@
 
     <div class="layout">
       <nav class="side-nav" aria-label="Page sections">
-        <a href="#screenshots">Screenshots</a>
+        <a href="#install">Quick start</a>
         <a href="#features">Features</a>
-        <a href="#install">Install</a>
+        <a href="#screenshots">Screenshots</a>
         <a href="#configuration">Configuration</a>
         <a href="#api">API</a>
+        <a href="#examples">Examples</a>
         <a href="#security">Security</a>
+        <a href="#instances">Several instances</a>
+        <a href="#performance">Performance</a>
         <a href="#compatibility">Compatibility</a>
+        <a href="#faq">FAQ</a>
+        <a href="#migration">Migration</a>
         <a href="#releases">Releases</a>
       </nav>
 
       <main class="content" id="main-content" tabindex="-1">
-        <div class="callout warning status-callout">
-          <strong>Maintenance status:</strong> the screens on this page are the redesigned admin UI
-          that carries the fixes for the next release. Version 4.8.0 on npm was published before its
-          acceptance gates closed and is not accepted. Details under
-          <a href="#releases">Releases</a>.
-        </div>
+        <section class="section" id="install" aria-labelledby="install-title">
+          <h2 id="install-title">Quick start (1 minute)</h2>
+          <p class="section-lead">
+            Install, enable, rebuild. Yarn and pnpm work the same way (<code>yarn add</code>,
+            <code>pnpm add</code>).
+          </p>
+          <ol class="steps">
+            <li>
+              <p>Install the package.</p>
+              <div class="code-card">
+                <div class="code-label"><span>Terminal</span></div>
+                <pre><code>npm install strapi-plugin-magic-sessionmanager</code></pre>
+              </div>
+            </li>
+            <li>
+              <p>Enable the plugin.</p>
+              <div class="code-card">
+                <div class="code-label"><span>config/plugins.ts</span></div>
+                <pre><code>export default () =&gt; ({
+  'magic-sessionmanager': {
+    enabled: true,
+  },
+});</code></pre>
+              </div>
+            </li>
+            <li>
+              <p>Set the token encryption key. Production startup fails without it.</p>
+              <div class="code-card">
+                <div class="code-label"><span>Terminal</span></div>
+                <pre><code>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# add the output to .env as SESSION_ENCRYPTION_KEY="..."</code></pre>
+              </div>
+            </li>
+            <li>
+              <p>Rebuild the admin and start Strapi.</p>
+              <div class="code-card">
+                <div class="code-label"><span>Terminal</span></div>
+                <pre><code>npm run build
+npm run develop</code></pre>
+              </div>
+            </li>
+          </ol>
+          <p>
+            Open <strong>Session Manager</strong> in the main menu. Super Admins have access
+            automatically. For other admin roles, grant
+            <em>Plugins › Session Manager › Access the Session Manager plugin</em> under Settings ›
+            Administration Panel › Roles.
+          </p>
+          <p>
+            Both Users &amp; Permissions modes work: with
+            <code>jwtManagement: 'refresh'</code> Strapi issues and revokes native sessions and the
+            plugin adds device, IP and location history; with <code>'legacy-support'</code> the
+            plugin keeps its own session records. The plugin never changes the host's authentication
+            configuration.
+          </p>
+        </section>
+
+        <section class="section" id="features" aria-labelledby="features-title">
+          <h2 id="features-title">Features</h2>
+          <p class="section-lead">
+            One vocabulary on every screen. A session is <strong>Active</strong> (open, used within
+            the inactivity timeout), <strong>Idle</strong> (open, unused for longer) or
+            <strong>Ended</strong>. An ended session shows its end reason: Logged out, Timed out,
+            Expired, Ended manually, User blocked or Reason not recorded.
+          </p>
+
+          <div class="verb-grid">
+            <div class="verb">
+              <span class="verb-name">End</span>
+              <p>The session stops working. The record stays in the history.</p>
+            </div>
+            <div class="verb">
+              <span class="verb-name">Delete record</span>
+              <p>
+                The record leaves history, statistics and exports. An open session also ends, and
+                its token stays revoked.
+              </p>
+            </div>
+            <div class="verb">
+              <span class="verb-name">Block</span>
+              <p>
+                The user cannot sign in, and all open sessions end. Unblock allows sign-in again.
+              </p>
+            </div>
+          </div>
+          <p>
+            A user is <strong>Online</strong> when at least one of their sessions is Active. The
+            dashboard, the widget and the user panel use this one rule.
+          </p>
+
+          <div class="card-grid">
+            <article class="card">
+              <h3>Sessions dashboard</h3>
+              <p>
+                Main menu › Session Manager. Header links Analytics and Settings, and an Export menu
+                (CSV or JSON, with an End reason column and no tokens). Four stat cards that filter
+                the list, search by user, email, IP or device, Status and End reason filters, and
+                the row actions View details, End session and More actions › Delete record. Filters
+                and search live in the URL. Below 768 px the table becomes a card list.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Session details</h3>
+              <p>
+                A sentence that says why the session is in its state, then user, session times,
+                device, location and security score. Look up location runs only when you click it.
+                Technical details hold the record ID and the raw user agent. End session asks for
+                confirmation.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Sessions panel on a user</h3>
+              <p>
+                In the Content Manager edit view of a Users &amp; Permissions user: Online or Not
+                online, the number of open sessions and the last activity, End all sessions and
+                Block user with confirmation, the open sessions, and Show all sessions, which opens
+                the dashboard filtered by the user's email.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Online users widget</h3>
+              <p>
+                On the Strapi homepage (Strapi 5.13 and later): Online users out of all registered
+                users, Active sessions, Idle sessions and Blocked users, refreshed every 30 seconds.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Configuration</h3>
+              <p>
+                Settings › Session Manager › Configuration with five tabs: Sessions, Login
+                protection, Location data, Alerts, and Data and retention. Each tab is a deep link
+                (<code>?tab=</code>). Save and Discard changes sit in the header, and leaving with
+                unsaved changes asks first.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Analytics</h3>
+              <p>
+                All and active sessions, sign-ins in the last 24 hours and 7 days, sessions by
+                device and browser, and the average session length.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Routes for your app</h3>
+              <p>
+                My sessions, current session, log out, log out everywhere and log out other devices.
+                Each user only ever sees and ends their own sessions.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Login protection</h3>
+              <p>
+                Temporary IP lockout after failed sign-ins, Content API rate limits, optional
+                rejection of VPN, proxy or low-score sign-ins, and country allow or block lists.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Alerts</h3>
+              <p>
+                Security emails to the user through Strapi's Email plugin, and sign-in notifications
+                to Discord or Slack.
+              </p>
+            </article>
+          </div>
+        </section>
 
         <section class="section" id="screenshots" aria-labelledby="screenshots-title">
           <h2 id="screenshots-title">Screenshots</h2>
@@ -201,148 +404,6 @@
           </div>
         </section>
 
-        <section class="section" id="features" aria-labelledby="features-title">
-          <h2 id="features-title">Features</h2>
-          <p class="section-lead">
-            One vocabulary on every screen. A session is <strong>Active</strong> (open, used within
-            the inactivity timeout), <strong>Idle</strong> (open, unused for longer) or
-            <strong>Ended</strong>. An ended session shows its end reason: Logged out, Timed out,
-            Expired, Ended manually, User blocked or Reason not recorded.
-          </p>
-
-          <div class="verb-grid">
-            <div class="verb">
-              <span class="verb-name">End</span>
-              <p>The session stops working. The record stays in the history.</p>
-            </div>
-            <div class="verb">
-              <span class="verb-name">Delete record</span>
-              <p>
-                The record leaves history, statistics and exports. An open session also ends, and
-                its token stays revoked.
-              </p>
-            </div>
-            <div class="verb">
-              <span class="verb-name">Block</span>
-              <p>
-                The user cannot sign in, and all open sessions end. Unblock allows sign-in again.
-              </p>
-            </div>
-          </div>
-          <p>
-            A user is <strong>Online</strong> when at least one of their sessions is Active. The
-            dashboard, the widget and the user panel use this one rule.
-          </p>
-
-          <div class="card-grid">
-            <article class="card">
-              <h3>Sessions dashboard</h3>
-              <p>
-                Main menu › Session Manager. Header links Analytics and Settings, and an Export menu
-                (CSV or JSON, with an End reason column and no tokens). Four stat cards that filter
-                the list, search by user, email, IP or device, Status and End reason filters, and
-                the row actions View details, End session and More actions › Delete record. Filters
-                and search live in the URL. Below 768 px the table becomes a card list.
-              </p>
-            </article>
-            <article class="card">
-              <h3>Session details</h3>
-              <p>
-                A sentence that says why the session is in its state, then user, session times,
-                device, location and security score. Look up location runs only when you click it.
-                Technical details hold the record ID and the raw user agent. End session asks for
-                confirmation.
-              </p>
-            </article>
-            <article class="card">
-              <h3>Sessions panel on a user</h3>
-              <p>
-                In the Content Manager edit view of a Users &amp; Permissions user: Online or Not
-                online, the number of open sessions and the last activity, End all sessions and
-                Block user with confirmation, the open sessions, and Show all sessions, which opens
-                the dashboard filtered by the user's email.
-              </p>
-            </article>
-            <article class="card">
-              <h3>Online users widget</h3>
-              <p>
-                On the Strapi homepage (Strapi 5.13 and later): Online users out of all registered
-                users, Active sessions, Idle sessions and Blocked users, refreshed every 30 seconds.
-              </p>
-            </article>
-            <article class="card">
-              <h3>Configuration</h3>
-              <p>
-                Settings › Session Manager › Configuration with five tabs: Sessions, Login
-                protection, Location data, Alerts, and Data and retention. Each tab is a deep link
-                (<code>?tab=</code>). Save and Discard changes sit in the header, and leaving with
-                unsaved changes asks first.
-              </p>
-            </article>
-            <article class="card">
-              <h3>Analytics and License</h3>
-              <p>
-                Analytics shows all and active sessions, sign-ins in the last 24 hours and 7 days,
-                sessions by device and browser, and the average session length. License shows
-                whether an optional key is stored and valid; every feature works without one.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section class="section" id="install" aria-labelledby="install-title">
-          <h2 id="install-title">Install</h2>
-          <ol class="steps">
-            <li>
-              <p>Install the package.</p>
-              <div class="code-card">
-                <div class="code-label"><span>Terminal</span></div>
-                <pre><code>npm install strapi-plugin-magic-sessionmanager</code></pre>
-              </div>
-            </li>
-            <li>
-              <p>Enable the plugin.</p>
-              <div class="code-card">
-                <div class="code-label"><span>config/plugins.ts</span></div>
-                <pre><code>export default () =&gt; ({
-  'magic-sessionmanager': {
-    enabled: true,
-  },
-});</code></pre>
-              </div>
-            </li>
-            <li>
-              <p>Set the token encryption key. Production startup fails without it.</p>
-              <div class="code-card">
-                <div class="code-label"><span>Terminal</span></div>
-                <pre><code>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-# add the output to .env as SESSION_ENCRYPTION_KEY="..."</code></pre>
-              </div>
-            </li>
-            <li>
-              <p>Rebuild the admin and start Strapi.</p>
-              <div class="code-card">
-                <div class="code-label"><span>Terminal</span></div>
-                <pre><code>npm run build
-npm run develop</code></pre>
-              </div>
-            </li>
-          </ol>
-          <p>
-            Open <strong>Session Manager</strong> in the main menu. Super Admins have access
-            automatically. For other admin roles, grant
-            <em>Plugins › Session Manager › Access the Session Manager plugin</em> under Settings ›
-            Administration Panel › Roles.
-          </p>
-          <p>
-            Both Users &amp; Permissions modes work: with
-            <code>jwtManagement: 'refresh'</code> Strapi issues and revokes native sessions and the
-            plugin adds device, IP and location history; with <code>'legacy-support'</code> the
-            plugin keeps its own session records. The plugin never changes the host's authentication
-            configuration.
-          </p>
-        </section>
-
         <section class="section" id="configuration" aria-labelledby="configuration-title">
           <h2 id="configuration-title">Configuration</h2>
           <p class="section-lead">
@@ -387,22 +448,22 @@ npm run develop</code></pre>
                   <td rowspan="6">Sessions</td>
                   <td>Inactivity timeout (<code>inactivityTimeout</code>)</td>
                   <td>15 min</td>
-                  <td>1–1440 min</td>
+                  <td>1 to 1440 min</td>
                 </tr>
                 <tr>
                   <td>Maximum session age (<code>maxSessionAgeDays</code>)</td>
                   <td>30 days</td>
-                  <td>1–365 days</td>
+                  <td>1 to 365 days</td>
                 </tr>
                 <tr>
                   <td>Update "Last active" at most every (<code>lastSeenRateLimit</code>)</td>
                   <td>30 s</td>
-                  <td>5–300 s</td>
+                  <td>5 to 300 s</td>
                 </tr>
                 <tr>
                   <td>Run idle check every (<code>cleanupInterval</code>)</td>
                   <td>30 min</td>
-                  <td>5–1440 min</td>
+                  <td>5 to 1440 min</td>
                 </tr>
                 <tr>
                   <td>Token check (<code>strictSessionEnforcement</code>)</td>
@@ -412,13 +473,13 @@ npm run develop</code></pre>
                 <tr>
                   <td>Grace period after sign-in (<code>sessionCreationGraceMs</code>)</td>
                   <td>5 s</td>
-                  <td>0–30 s</td>
+                  <td>0 to 30 s</td>
                 </tr>
                 <tr>
                   <td rowspan="4">Login protection</td>
                   <td>Temporary IP lockout after (<code>maxFailedLogins</code>)</td>
                   <td>5</td>
-                  <td>0–100, 0 = off</td>
+                  <td>0 to 100, 0 = off</td>
                 </tr>
                 <tr>
                   <td>Trust proxy headers (<code>trustedProxies</code>)</td>
@@ -472,14 +533,15 @@ npm run develop</code></pre>
                   <td>Data and retention</td>
                   <td>Keep ended sessions for (<code>retentionDays</code>)</td>
                   <td>90 days</td>
-                  <td>1–365 days or Forever (-1)</td>
+                  <td>1 to 365 days or Forever (-1)</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p>
-            Retention is checked once a day, the first time about 24 hours after the server starts.
-            It deletes records of ended sessions only; open sessions are never deleted by retention.
+            Retention is checked once a day across all instances, the first time about 5 minutes
+            after the server starts. It deletes records of ended sessions only; open sessions are
+            never deleted by retention.
             <strong>Delete ended sessions</strong> on the same tab removes the records of all ended
             sessions of all users at once. The idle check ends idle sessions as Timed out and
             deletes nothing.
@@ -630,11 +692,6 @@ npm run develop</code></pre>
                   <td><code>/settings</code></td>
                   <td>Configuration</td>
                 </tr>
-                <tr>
-                  <td>GET</td>
-                  <td><code>/license/status</code></td>
-                  <td>License page</td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -645,6 +702,40 @@ npm run develop</code></pre>
             policy <code>plugin::magic-sessionmanager.session-required</code> adds an explicit check
             to your own routes. Response shapes and error codes are in the
             <a href="https://github.com/Schero94/Magic-Sessionmanager#content-api">README</a>.
+          </p>
+        </section>
+
+        <section class="section" id="examples" aria-labelledby="examples-title">
+          <h2 id="examples-title">Examples</h2>
+          <p class="section-lead">
+            Synthetic host <code>api.example.test</code>; replace <code>&lt;JWT&gt;</code> with a
+            Users &amp; Permissions token.
+          </p>
+          <div class="code-card">
+            <div class="code-label"><span>"Your devices" list</span></div>
+            <pre><code>const res = await fetch('https://api.example.test/api/magic-sessionmanager/my-sessions', {
+  headers: { Authorization: `Bearer ${jwt}` },
+});
+const { data, meta } = await res.json();
+// data[0].isCurrentSession === true</code></pre>
+          </div>
+          <div class="code-card">
+            <div class="code-label"><span>Sign out all other devices</span></div>
+            <pre><code>curl -X POST https://api.example.test/api/magic-sessionmanager/logout-others \
+  -H "Authorization: Bearer &lt;JWT&gt;"
+# {"message":"2 other session(s) terminated","terminatedCount":2,"currentSessionPreserved":true}</code></pre>
+          </div>
+          <div class="code-card">
+            <div class="code-label">
+              <span>config/middlewares.js: let browsers read the reason</span>
+            </div>
+            <pre><code>{ name: 'strapi::cors', config: { expose: ['X-Session-Terminated-Reason'] } }</code></pre>
+          </div>
+          <p>
+            A request with an ended session gets 401 with
+            <code>X-Session-Terminated-Reason</code>. Cross-origin JavaScript can read that header
+            only when CORS exposes it, as above. More examples are in the
+            <a href="https://github.com/Schero94/Magic-Sessionmanager#examples">README</a>.
           </p>
         </section>
 
@@ -698,6 +789,14 @@ npm run develop</code></pre>
               </p>
             </article>
             <article class="card">
+              <h3>What leaves your server</h3>
+              <p>
+                Only what you turn on: ipapi.co lookups, Discord or Slack webhooks, emails through
+                your own Email provider and the MaxMind download. No telemetry, no install ping and
+                no license check.
+              </p>
+            </article>
+            <article class="card">
               <h3>Secrets</h3>
               <p>
                 The MaxMind license key is stored in the plugin store and never sent back to the
@@ -706,10 +805,123 @@ npm run develop</code></pre>
             </article>
           </div>
           <p>
-            Strapi administrator sessions are out of scope. Report security issues through
-            <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">GitHub issues</a>
-            without including credentials or personal data.
+            Strapi administrator sessions are out of scope. To report a vulnerability, do not post
+            exploit details publicly: open a
+            <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">GitHub issue</a> that
+            asks for a private contact, without credentials or personal data.
           </p>
+        </section>
+
+        <section class="section" id="instances" aria-labelledby="instances-title">
+          <h2 id="instances-title">Running several instances (Railway replicas, pm2 cluster)</h2>
+          <p class="section-lead">
+            Several Strapi processes can share one PostgreSQL or MySQL database, for example two
+            Railway replicas with four pm2 workers each. No sticky sessions and no Redis are needed;
+            the database is the single source of truth.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <caption>
+                Shared state across processes
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">State</th>
+                  <th scope="col">How it stays consistent</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Session validity</td>
+                  <td>
+                    Read from the database on every request; state changes are conditional updates,
+                    so a stale process cannot revive an ended session.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Failed-login lockout, rate limits</td>
+                  <td>
+                    Atomic shared counters (<code>magic_sm_counters</code>), IP stored as a hash.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Idle cleanup, retention</td>
+                  <td>A job lease (<code>magic_sm_leases</code>): one process runs each job.</td>
+                </tr>
+                <tr>
+                  <td>Settings</td>
+                  <td>A shared revision; every process reloads within about 2 seconds.</td>
+                </tr>
+                <tr>
+                  <td>ipapi.co cache and back-off</td>
+                  <td>Shared through <code>magic_sm_cache</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ol class="steps">
+            <li><p>Point every instance at one PostgreSQL or MySQL database.</p></li>
+            <li>
+              <p>
+                Use identical secrets everywhere, including <code>SESSION_ENCRYPTION_KEY</code>; the
+                plugin logs an error when instances use different keys.
+              </p>
+            </li>
+            <li>
+              <p>
+                Behind a proxy, turn on Koa's proxy mode (<code>proxy: { koa: true }</code> in
+                <code>config/server.js</code>) so lockout and rate limits see the client IP.
+              </p>
+            </li>
+            <li>
+              <p>
+                Start a single process first on an empty database or after a content-type change
+                (Strapi core races on its own tables otherwise), then scale out.
+              </p>
+            </li>
+            <li>
+              <p>
+                With a local GeoIP database, download it on every instance before start, for example
+                with <code>npx strapi-magic-sessionmanager-geoip</code>.
+              </p>
+            </li>
+          </ol>
+          <p>
+            Measured on Strapi 5.61 with PostgreSQL 16, 4 processes and pm2 cluster mode: 48
+            parallel wrong passwords from one IP let exactly 5 reach the password check. Full setup,
+            a pm2 ecosystem file and an optional Redis counter store are in the
+            <a
+              href="https://github.com/Schero94/Magic-Sessionmanager#running-several-instances-railway-replicas-pm2-cluster"
+              >README</a
+            >.
+          </p>
+        </section>
+
+        <section class="section" id="performance" aria-labelledby="performance-title">
+          <h2 id="performance-title">Performance</h2>
+          <div class="card-grid">
+            <article class="card">
+              <h3>Per request</h3>
+              <p>
+                One session lookup by token hash, backed by indexes the plugin creates at startup.
+                "Last active" is written at most every 30 seconds per session by default.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Caches</h3>
+              <p>
+                Settings are cached for 30 seconds with a 2-second revision check. ipapi.co results
+                are cached for 24 hours and shared; a local MaxMind database needs no network call.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Bounded work</h3>
+              <p>
+                The admin loads at most the latest 1,000 sessions, <code>/my-sessions</code> returns
+                at most 200, and retention deletes ended sessions after 90 days by default.
+              </p>
+            </article>
+          </div>
         </section>
 
         <section class="section" id="compatibility" aria-labelledby="compatibility-title">
@@ -741,9 +953,23 @@ npm run develop</code></pre>
                   <td>English, German, French, Spanish, Portuguese</td>
                 </tr>
                 <tr>
+                  <th scope="row">Required peers</th>
+                  <td>
+                    <code>@strapi/strapi</code>, <code>@strapi/plugin-users-permissions</code>,
+                    <code>react</code>, <code>react-dom</code>, <code>react-router-dom</code>,
+                    <code>styled-components</code>: all present in a new Strapi 5 app
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Package managers</th>
+                  <td>npm, Yarn 1 and pnpm, with no install warning about this plugin</td>
+                </tr>
+                <tr>
                   <th scope="row">Database</th>
                   <td>
-                    Tables <code>magic_sessions</code> and <code>magic_session_revocations</code>
+                    PostgreSQL, MySQL or SQLite. Tables <code>magic_sessions</code>,
+                    <code>magic_session_revocations</code> and three <code>magic_sm_*</code>
+                    coordination tables
                   </td>
                 </tr>
               </tbody>
@@ -751,67 +977,103 @@ npm run develop</code></pre>
           </div>
         </section>
 
+        <section class="section" id="faq" aria-labelledby="faq-title">
+          <h2 id="faq-title">FAQ</h2>
+          <details class="faq">
+            <summary>Does it manage Strapi admin accounts?</summary>
+            <p>
+              No. It manages end users of Users &amp; Permissions. Strapi administrator sessions are
+              out of scope.
+            </p>
+          </details>
+          <details class="faq">
+            <summary>Do I need a license key, account or activation?</summary>
+            <p>
+              No. Everything is free under MIT and the plugin contacts no license or telemetry
+              server. The only key you may add is your own MaxMind key for the GeoLite2 database.
+            </p>
+          </details>
+          <details class="faq">
+            <summary>Do I have to add the <code>session-required</code> policy?</summary>
+            <p>
+              No. Revocation works on every Content API route without configuration. The policy is
+              an optional, explicit per-route check.
+            </p>
+          </details>
+          <details class="faq">
+            <summary>Does it work with <code>jwtManagement: 'refresh'</code>?</summary>
+            <p>
+              Yes. Strapi issues, rotates and revokes its own sessions; the plugin adds device, IP
+              address, location and history, and ends the native session when you end it.
+            </p>
+          </details>
+          <details class="faq">
+            <summary>Does it send my users' IP addresses anywhere?</summary>
+            <p>
+              Only when location lookup uses ipapi.co (provider <code>ipapi</code>, or
+              <code>auto</code> without a local database). Choose <code>local-mmdb</code> or
+              <code>disabled</code> to keep IP addresses on your server.
+            </p>
+          </details>
+          <details class="faq">
+            <summary>Why do sign-ins get 429?</summary>
+            <p>
+              The temporary IP lockout counts failed sign-ins per IP address. Behind a proxy, turn
+              on Koa's proxy mode or Trust proxy headers, otherwise all users share the proxy's
+              address.
+            </p>
+          </details>
+        </section>
+
+        <section class="section" id="migration" aria-labelledby="migration-title">
+          <h2 id="migration-title">Migration and upgrading</h2>
+          <h3 class="sub-title">To the next release (from 4.10.x)</h3>
+          <ul>
+            <li>
+              The License page and the admin routes under <code>/magic-sessionmanager/license</code>
+              are removed; Settings shows Configuration and Analytics.
+            </li>
+            <li>
+              Stored <code>licenseKey</code>, <code>lastValidated</code> and
+              <code>deviceId</code> values are deleted on first start. MaxMind credentials and
+              settings stay.
+            </li>
+            <li>
+              <code>MAGIC_LICENSE_SERVER_URL</code> and <code>MAGIC_LICENSE_TIMEOUT_MS</code> are no
+              longer read.
+            </li>
+            <li>No change to your <code>package.json</code> or config is needed.</li>
+          </ul>
+          <h3 class="sub-title">From 3.x (Strapi 4)</h3>
+          <p>
+            Version 4 requires Strapi 5. Upgrade Strapi first with the
+            <a href="https://docs.strapi.io/cms/migration/v4-to-v5/introduction-and-faq"
+              >official upgrade guide</a
+            >, then install the latest 4.x, rebuild the admin and restart. Sessions are addressed by
+            <code>documentId</code>. Details for every 4.x step are in the
+            <a href="https://github.com/Schero94/Magic-Sessionmanager#migration-and-upgrading"
+              >README</a
+            >.
+          </p>
+        </section>
+
         <section class="section" id="releases" aria-labelledby="releases-title">
           <h2 id="releases-title">Releases and maintenance</h2>
           <p class="section-lead">
-            Status as of 6 November 2026. Releases use Conventional Commits and semantic-release on
-            Node.js 22 with npm Trusted Publishing. The next release (4.9.0 or 5.0.0) is blocked
-            until every acceptance gate is signed off.
+            Actively maintained for Strapi 5. Releases are cut by semantic-release from
+            <code>main</code> and published to npm with npm Trusted Publishing. Use 4.9.0 or later:
+            4.8.0 was published before its acceptance gates closed and has defects that 4.9.0 fixed.
           </p>
-
           <div class="status-grid">
-            <article class="card status-card status-bad">
-              <h3>4.8.0: not accepted</h3>
-              <p>
-                Published before its acceptance gates closed. Known defects, all fixed on the
-                redesign branch:
-              </p>
-              <ul>
-                <li>The Session details dialog has no accessible name.</li>
-                <li>Settings field hints, including the GeoIP privacy note, never render.</li>
-                <li>
-                  Three Settings alerts have unnamed close buttons; country chips cannot be removed
-                  with the keyboard.
-                </li>
-                <li>
-                  In <code>legacy-support</code> mode a password reset leaves older sessions usable.
-                </li>
-                <li>
-                  A failed block followed by a retry of the bodyless toggle unblocks the user.
-                </li>
-                <li>The Content API rate limiter can be bypassed by varying the request path.</li>
-              </ul>
-            </article>
             <article class="card status-card status-good">
-              <h3>Accepted on the redesign branch</h3>
+              <h3>Quality gates on every release</h3>
               <ul>
+                <li>ESLint, Prettier, both type checks and the full unit and HTTP test suite.</li>
                 <li>
-                  Clean install: 749 of 749 tests pass, both type checks, build,
-                  <code>verify</code>, <code>verify:runtime</code> and
-                  <code>npm pack --dry-run</code>.
+                  <code>strapi-plugin verify</code>, a runtime check of the server bundle and
+                  <code>npm pack</code> review.
                 </li>
-                <li>
-                  Desktop and mobile browser passes for every screen on an isolated Strapi 5.61.0
-                  host with synthetic data and outbound network blocked.
-                </li>
-                <li>
-                  Strict source symmetry contract: 7 of 7 (no <code>window.confirm</code>, emoji,
-                  colour literals, px font sizes or custom media queries).
-                </li>
-                <li>
-                  Measured: widget at 320 px with 0 px document overflow; user panel link 32 px
-                  high; document titles set by the shared page shell.
-                </li>
-              </ul>
-            </article>
-            <article class="card status-card status-open">
-              <h3>Open before the next release</h3>
-              <ul>
-                <li>Keyboard and screen-reader walks in all five languages.</li>
-                <li>Dark-mode contrast and the complete state matrix.</li>
-                <li>Layout symmetry measured at every breakpoint from 1440 to 320 px.</li>
-                <li>A fresh-database host boot and the shared multi-plugin host build.</li>
-                <li>A consent decision for the Automatic provider's ipapi.co default.</li>
+                <li>An 8-process concurrency suite on SQLite and PostgreSQL 16 in CI.</li>
               </ul>
             </article>
             <article class="card status-card status-open">
@@ -842,7 +1104,10 @@ npm run build &amp;&amp; npm run verify &amp;&amp; npm run verify:runtime</code>
               >Changelog</a
             >
             <a href="https://github.com/Schero94/Magic-Sessionmanager/releases">Release history</a>
-            <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">Report an issue</a>
+            <a href="https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose"
+              >Report an issue</a
+            >
+            <a href="https://github.com/Schero94/Magic-Sessionmanager/discussions">Discussions</a>
             <a href="https://github.com/Schero94/Magic-Sessionmanager">Source repository</a>
             <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager"
               >npm package</a
@@ -854,8 +1119,8 @@ npm run build &amp;&amp; npm run verify &amp;&amp; npm run verify:runtime</code>
 
     <footer class="footer">
       <p>
-        Magic Session Manager is released under the MIT License. All features are available without
-        a license key.
+        Magic Session Manager is free software under the MIT License. It sends no telemetry and
+        needs no account or key.
       </p>
       <p>
         <a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub repository</a> ·

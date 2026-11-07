@@ -114,7 +114,6 @@ test(
       'GEOIP_COUNTRY_DATABASE_PATH',
       'GEOLITE2_CITY_MMDB',
       'GEOLITE2_COUNTRY_MMDB',
-      'MAGIC_LICENSE_SERVER_URL',
       'HTTP_PROXY',
       'HTTPS_PROXY',
       'ALL_PROXY',
@@ -262,7 +261,7 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 21);
+        assert.equal(routes.length, 16);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)
@@ -377,18 +376,6 @@ test(
       'HTTP input failures keep stable client errors without leaking details',
       async () => {
         for (const [method, url, body] of [
-          [
-            'POST',
-            '/magic-sessionmanager/license/create',
-            { email: {}, firstName: 'Test', lastName: 'Owner' },
-          ],
-          ['POST', '/magic-sessionmanager/license/store-key', { licenseKey: '' }],
-          ['POST', '/magic-sessionmanager/license/store-key', { licenseKey: 12345 }],
-          [
-            'POST',
-            '/magic-sessionmanager/license/store-key',
-            { licenseKey: 'synthetic-key', email: 42 },
-          ],
           ['PUT', '/magic-sessionmanager/settings', { inactivityTimeout: 0 }],
           ['PUT', '/magic-sessionmanager/settings', { enableGeolocation: 'true' }],
           ['PUT', '/magic-sessionmanager/geoip/credentials', {}],
@@ -403,30 +390,60 @@ test(
       }
     );
     await t.test(
-      'license ping without a stored key stops before provider verification',
+      'the removed license routes are gone and former license rows are deleted idempotently',
       async () => {
-        const store = app.store({ type: 'plugin', name: 'magic-sessionmanager' });
-        assert.equal(
-          await store.get({ key: 'licenseKey' }),
-          null,
-          'fresh isolated host has no license key'
-        );
-        const guard = app.plugin('magic-sessionmanager').service('license-guard');
-        const originalVerify = guard.verifyLicense;
-        let calls = 0;
-        guard.verifyLicense = async () => {
-          calls += 1;
-          throw new Error('unexpected provider call');
-        };
-        try {
-          const result = await request('POST', '/magic-sessionmanager/license/ping', adminToken);
-          assert.equal(result.status, 400);
-          assert.equal(result.body.error?.message, 'No license key found');
-          assert.equal(calls, 0, 'missing credentials must not trigger provider verification');
-          assert.equal(await store.get({ key: 'licenseKey' }), null);
-        } finally {
-          guard.verifyLicense = originalVerify;
+        for (const [method, url] of [
+          ['GET', '/magic-sessionmanager/license/status'],
+          ['POST', '/magic-sessionmanager/license/auto-create'],
+          ['POST', '/magic-sessionmanager/license/create'],
+          ['POST', '/magic-sessionmanager/license/ping'],
+          ['POST', '/magic-sessionmanager/license/store-key'],
+        ]) {
+          // Nothing handles these paths any more: the router answers 404, or
+          // 405 where only the admin panel's GET catch-all matches the path.
+          const response = await fetch(`http://127.0.0.1:${port}${url}`, {
+            method,
+            headers: { authorization: `Bearer ${adminToken}` },
+          });
+          await response.text();
+          assert.ok(
+            [404, 405].includes(response.status),
+            `${method} ${url} is no longer registered (got ${response.status})`
+          );
         }
+        const {
+          LEGACY_LICENSE_STORE_KEYS,
+          removeLegacyLicenseData,
+        } = require('../server/src/utils/plugin-store');
+        const coreStore = app.db.query('strapi::core-store');
+        const rowKeys = LEGACY_LICENSE_STORE_KEYS.map(
+          (key) => `plugin_magic-sessionmanager_${key}`
+        );
+        // Two rows for one key reproduce the duplicate rows parallel boots used to create.
+        for (const key of [...rowKeys, rowKeys[0]]) {
+          await coreStore.create({
+            data: { key, value: '"synthetic-legacy-value"', type: 'string' },
+          });
+        }
+        const settingsBefore = await coreStore.count({
+          where: { key: 'plugin_magic-sessionmanager_settings' },
+        });
+        const removed = await Promise.all([
+          removeLegacyLicenseData(app),
+          removeLegacyLicenseData(app),
+        ]);
+        assert.equal(
+          removed[0] + removed[1],
+          rowKeys.length + 1,
+          'parallel runs delete every row once'
+        );
+        assert.equal(await coreStore.count({ where: { key: { $in: rowKeys } } }), 0);
+        assert.equal(await removeLegacyLicenseData(app), 0, 'a second run deletes nothing');
+        assert.equal(
+          await coreStore.count({ where: { key: 'plugin_magic-sessionmanager_settings' } }),
+          settingsBefore,
+          'other plugin rows stay'
+        );
       }
     );
     await t.test(
@@ -1295,17 +1312,6 @@ test(
     await t.test(
       'all admin routes reach their handler with the plugin-access permission',
       async () => {
-        const license = app.plugin('magic-sessionmanager').service('license-guard');
-        license.createLicense = async () => ({
-          licenseKey: 'synthetic-key',
-          email: 'fixture@example.invalid',
-        });
-        license.getLicenseByKey = async () => ({ email: 'fixture@example.invalid' });
-        license.verifyLicense = async () => ({ valid: true, data: {} });
-        license.storeLicenseKey = async (key) =>
-          app
-            .store({ type: 'plugin', name: 'magic-sessionmanager' })
-            .set({ key: 'licenseKey', value: key });
         app.plugin('magic-sessionmanager').service('geolocation').getIpInfo = async () => ({
           country: 'Synthetic',
         });
@@ -1319,15 +1325,6 @@ test(
         };
         const bodies = {
           'POST /user/:userId/toggle-block': { blocked: true },
-          'POST /license/create': {
-            email: 'fixture@example.invalid',
-            firstName: 'Test',
-            lastName: 'Owner',
-          },
-          'POST /license/store-key': {
-            licenseKey: 'synthetic-key',
-            email: 'fixture@example.invalid',
-          },
           'PUT /geoip/credentials': { accountId: 'synthetic-account', licenseKey: 'synthetic-key' },
           'PUT /settings': { enableGeolocation: false, geoIpProvider: 'disabled' },
         };
@@ -1366,20 +1363,6 @@ test(
       }
     );
     await t.test('HTTP handler failures are sanitized when fake providers fail', async () => {
-      const guard = app.plugin('magic-sessionmanager').service('license-guard');
-      guard.createLicense = async () => {
-        throw new Error('synthetic-provider-private-detail');
-      };
-      const result = await request('POST', '/magic-sessionmanager/license/create', adminToken, {
-        email: 'fixture@example.invalid',
-        firstName: 'Test',
-        lastName: 'Owner',
-      });
-      assert.equal(result.status, 500, 'a provider exception is a server error (API-7)');
-      assert.equal(
-        JSON.stringify(result.body).includes('synthetic-provider-private-detail'),
-        false
-      );
       const settings = await request('PUT', '/magic-sessionmanager/settings', adminToken, {
         enableGeolocation: true,
         geoIpProvider: 'ipapi',
@@ -1470,57 +1453,6 @@ test(
           ).isActive,
           true
         );
-      }
-    );
-    await t.test(
-      'remaining license provider failures and mismatch are redacted over HTTP',
-      async () => {
-        const guard = app.plugin('magic-sessionmanager').service('license-guard');
-        const marker = 'synthetic-license-provider-private-detail';
-        for (const [operation, method, url, body] of [
-          ['getLicenseByKey', 'GET', '/magic-sessionmanager/license/status'],
-          ['createLicense', 'POST', '/magic-sessionmanager/license/auto-create'],
-          ['verifyLicense', 'POST', '/magic-sessionmanager/license/ping'],
-          [
-            'verifyLicense',
-            'POST',
-            '/magic-sessionmanager/license/store-key',
-            { licenseKey: 'synthetic-key' },
-          ],
-        ]) {
-          const original = guard[operation];
-          guard[operation] = async () => {
-            throw new Error(marker);
-          };
-          try {
-            const result = await request(method, url, adminToken, body);
-            assert.equal(
-              result.status,
-              500,
-              `${method} ${url}: provider exceptions are server errors (API-7)`
-            );
-            assert.equal(JSON.stringify(result.body).includes(marker), false);
-          } finally {
-            guard[operation] = original;
-          }
-        }
-        const oldVerify = guard.verifyLicense;
-        const oldLookup = guard.getLicenseByKey;
-        guard.verifyLicense = async () => ({ valid: true });
-        guard.getLicenseByKey = async () => ({ email: 'other@example.invalid' });
-        try {
-          const result = await request(
-            'POST',
-            '/magic-sessionmanager/license/store-key',
-            adminToken,
-            { licenseKey: 'synthetic-key', email: 'owner@example.invalid' }
-          );
-          assert.equal(result.status, 400);
-          assert.equal(result.body.error?.message, 'Email address does not match this license key');
-        } finally {
-          guard.verifyLicense = oldVerify;
-          guard.getLicenseByKey = oldLookup;
-        }
       }
     );
     await t.test('GeoIP update uses only a fake updater and redacts its failure', async () => {
