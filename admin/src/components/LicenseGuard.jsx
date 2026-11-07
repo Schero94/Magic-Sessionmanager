@@ -1,9 +1,9 @@
 /**
- * LicenseGuard — kept for backwards compatibility with older admin routes.
+ * LicenseGuard: kept for backwards compatibility with older admin routes.
  *
- * Magic Session Manager is free to use without activation. The optional
- * license page can still store a key for install tracking / display, but it
- * must not block access to the plugin.
+ * Magic Session Manager never gates features behind a license key. The
+ * License page only shows whether a key is stored and valid, so this guard
+ * must never block access to the plugin.
  */
 const LicenseGuard = ({ children }) => <>{children}</>;
 

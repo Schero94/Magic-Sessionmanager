@@ -34,7 +34,11 @@ test('safe admin error logging records only a bounded scope and HTTP status', as
       message: sensitiveValues.join(' '),
       response: {
         status: 403,
-        data: { email: sensitiveValues[1], ipAddress: sensitiveValues[2], token: sensitiveValues[0] },
+        data: {
+          email: sensitiveValues[1],
+          ipAddress: sensitiveValues[2],
+          token: sensitiveValues[0],
+        },
       },
       config: { headers: { Authorization: `Bearer ${sensitiveValues[0]}` } },
     });

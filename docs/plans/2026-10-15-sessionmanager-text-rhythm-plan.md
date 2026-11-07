@@ -13,6 +13,7 @@
 ### Task 1: Add a failing text-rhythm regression test
 
 **Files:**
+
 - Create: `tests/admin-text-rhythm.test.mjs`
 
 **Acceptance:** The test describes shared readable copy styles, field-hint line-height/spacing, their adoption on all target surfaces, and compact metric exceptions. Run it first and confirm it fails because the shared style does not yet exist.
@@ -20,6 +21,7 @@
 ### Task 2: Implement shared copy and field-hint rhythm
 
 **Files:**
+
 - Create: `admin/src/components/ReadableText.jsx`
 - Modify: `admin/src/components/FormField.jsx`
 - Modify: `admin/src/components/PluginPageLayout.jsx`
@@ -37,6 +39,7 @@
 ### Task 3: Verify regressions and responsive acceptance
 
 **Files:**
+
 - Test: `tests/admin-text-rhythm.test.mjs`
 - Run: `npm test`
 - Run: `npm run test:ts:front`

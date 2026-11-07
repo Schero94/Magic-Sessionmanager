@@ -72,7 +72,10 @@ test('geoip status reports stored credentials without leaking license key', asyn
     assert.equal(ctx.sent.status.accountId, '12345');
     assert.equal(ctx.sent.status.editionId, 'GeoLite2-Country');
     assert.equal(ctx.sent.status.databaseDirectory, 'data/magic-sessionmanager/geoip');
-    assert.equal(ctx.sent.status.databasePath, 'data/magic-sessionmanager/geoip/GeoLite2-Country.mmdb');
+    assert.equal(
+      ctx.sent.status.databasePath,
+      'data/magic-sessionmanager/geoip/GeoLite2-Country.mmdb'
+    );
     assert.doesNotMatch(ctx.sent.status.databasePath, /^\//);
     assert.equal(ctx.sent.status.licenseKey, undefined);
     assert.equal(JSON.stringify(ctx.sent).includes('very-secret'), false);

@@ -1,27 +1,28 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { readSettingsFile, readSettingsSource } from './helpers/settingsSource.mjs';
 
-const settingsSource = readFileSync(new URL('../admin/src/pages/Settings.jsx', import.meta.url), 'utf8');
+const settingsSource = readSettingsSource();
+const alerts = readSettingsFile('AlertsTab.jsx');
 
-test('email alert checkboxes update the controlled Strapi Design System v2 state', () => {
+test('email type checkboxes update the controlled Strapi Design System v2 state', () => {
   const checkboxBlocks = settingsSource.match(/<Checkbox\b[\s\S]*?<\/Checkbox>/g) || [];
-  const expectedFields = [
-    'alertOnSuspiciousLogin',
-    'alertOnNewLocation',
-    'alertOnVpnProxy',
-  ];
+  assert.equal(checkboxBlocks.length, 1, 'one Checkbox rendered per email type from a list');
+  const [checkbox] = checkboxBlocks;
+  assert.match(checkbox, /checked=\{settings\[field\]\}/);
+  assert.match(
+    checkbox,
+    /onCheckedChange=\{\(checked\) => handleChange\(field, checked === true\)\}/,
+    'stores a boolean from the Radix checked state'
+  );
+  assert.doesNotMatch(checkbox, /\bonChange=/, 'no native input callback prop');
+  assert.match(
+    checkbox,
+    /aria-describedby=\{hintId\}/,
+    'each checkbox is described by its helper text'
+  );
+  assert.match(checkbox, /disabled=\{emailTypesDisabled\}/);
 
-  assert.equal(checkboxBlocks.length, expectedFields.length);
-
-  for (const field of expectedFields) {
-    const checkbox = checkboxBlocks.find((block) => block.includes(`checked={settings.${field}}`));
-    assert.ok(checkbox, `expected a checkbox bound to ${field}`);
-    assert.match(
-      checkbox,
-      new RegExp(`onCheckedChange=\\{\\(checked\\) => handleChange\\('${field}', checked === true\\)\\}`),
-      `${field} must receive Radix's checked state and store a boolean`
-    );
-    assert.doesNotMatch(checkbox, /\bonChange=/, `${field} must not use the native input callback prop`);
-  }
+  const fields = [...alerts.matchAll(/field: '(\w+)'/g)].map((match) => match[1]);
+  assert.deepEqual(fields, ['alertOnSuspiciousLogin', 'alertOnNewLocation', 'alertOnVpnProxy']);
 });

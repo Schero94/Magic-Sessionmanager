@@ -767,7 +767,8 @@ module.exports = ({ strapi }) => {
      *                                           still match before a
      *                                           single-session update.
      * @param {'logout'|'manual'|'idle'|'expired'|'blocked'} [params.reason='manual']
-     * @returns {Promise<{terminatedCount: number}>}
+     * @returns {Promise<{terminatedCount: number}>} Completed count; rejects if
+     *   active rows cannot be updated. Earlier updates may already be committed.
      */
     async terminateSession({
       sessionId,
@@ -941,14 +942,12 @@ module.exports = ({ strapi }) => {
 
             if (batchTerminated === 0) {
               log.warn('Could not terminate remaining active sessions for one user');
-              break;
+              throw new Error('Unable to terminate all requested sessions');
             }
           }
 
           const label = exceptSessionId ? 'OTHER sessions' : 'ALL sessions';
-          log.info(
-            `${label} terminated (reason: ${finalReason}, count: ${terminatedCount})`
-          );
+          log.info(`${label} terminated (reason: ${finalReason}, count: ${terminatedCount})`);
           return { terminatedCount: nativeManager ? terminatedKeys.size : terminatedCount };
         }
 
@@ -1453,7 +1452,14 @@ module.exports = ({ strapi }) => {
      * Removes all inactive session rows, retaining deny hashes for unexpired
      * access tokens. A failed hash write leaves its session row in place.
      *
-     * @returns {Promise<number>} Number of session rows removed
+     * A row that cannot be removed is excluded from later batches, so one
+     * persistently failing row cannot block the rest of the cleanup. Expired
+     * revocation records are cleaned up in every case.
+     *
+     * @returns {Promise<number>} Number of rows removed when every row succeeded
+     * @throws {Error} `PartialCleanupError` with `deletedCount` and
+     *   `failedCount` when at least one row could not be removed; the other
+     *   rows have been removed by then
      * @sideeffect Writes revocation records before deleting session rows
      */
     async deleteInactiveSessions() {
@@ -1461,12 +1467,16 @@ module.exports = ({ strapi }) => {
         log.info('[DELETE] Deleting all inactive sessions...');
 
         let deletedCount = 0;
+        const failedIds = new Set();
         const BATCH_SIZE = 100;
-        let consecutiveEmptyLoops = 0;
 
         while (true) {
+          const filters = { isActive: false };
+          if (failedIds.size > 0) {
+            filters.documentId = { $notIn: [...failedIds] };
+          }
           const batch = await strapi.documents(SESSION_UID).findMany({
-            filters: { isActive: false },
+            filters,
             fields: ['documentId', 'token', 'tokenHash', 'nativeSessionId'],
             populate: { user: { fields: ['id', 'documentId'] } },
             limit: BATCH_SIZE,
@@ -1478,29 +1488,36 @@ module.exports = ({ strapi }) => {
             batch.map((session) => deleteSessionPreservingRevocation(session))
           );
 
-          const successful = deleteResults.filter((r) => r.status === 'fulfilled').length;
-          deletedCount += successful;
-
-          if (successful === 0) {
-            consecutiveEmptyLoops++;
-            if (consecutiveEmptyLoops >= 3) {
-              log.warn(
-                '[DELETE] No progress on 3 consecutive batches, aborting to prevent infinite loop'
-              );
-              break;
+          deleteResults.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+              deletedCount += 1;
+            } else {
+              failedIds.add(batch[index].documentId);
             }
-          } else {
-            consecutiveEmptyLoops = 0;
-          }
+          });
 
           if (batch.length < BATCH_SIZE) break;
         }
 
         await cleanupExpiredRevocations();
+
+        if (failedIds.size > 0) {
+          log.warn(
+            `[DELETE] Deleted ${deletedCount} inactive sessions; ${failedIds.size} could not be removed`
+          );
+          const error = new Error('Unable to remove all inactive sessions');
+          error.name = 'PartialCleanupError';
+          error.deletedCount = deletedCount;
+          error.failedCount = failedIds.size;
+          throw error;
+        }
+
         log.info(`[SUCCESS] Deleted ${deletedCount} inactive sessions`);
         return deletedCount;
       } catch (err) {
-        log.error('Error deleting inactive sessions:', err?.name || 'Error');
+        if (err?.name !== 'PartialCleanupError') {
+          log.error('Error deleting inactive sessions:', err?.name || 'Error');
+        }
         throw err;
       }
     },

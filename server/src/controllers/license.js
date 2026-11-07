@@ -5,7 +5,17 @@
  *
  * The plugin is free to use without activation. License keys are optional
  * metadata for install tracking / display and never unlock or lock features.
+ *
+ * Error contract: invalid input is a 400, an unreachable license provider a
+ * 503, and any other server-side failure (store, provider exception) a 500.
+ * Messages are fixed strings and never include exception details.
  */
+
+const { sendServerError } = require('../utils/http-errors');
+
+const PROVIDER_UNREACHABLE_MESSAGE =
+  'License server unreachable. The plugin keeps working without a key.';
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 module.exports = ({ strapi }) => ({
   async getStatus(ctx) {
@@ -63,8 +73,11 @@ module.exports = ({ strapi }) => ({
         },
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager] Error getting license status:', error?.name || 'Error');
-      return ctx.badRequest('Error getting license status');
+      strapi.log.error(
+        '[magic-sessionmanager] Error getting license status:',
+        error?.name || 'Error'
+      );
+      return sendServerError(ctx, 500, 'Error getting license status');
     }
   },
 
@@ -83,7 +96,7 @@ module.exports = ({ strapi }) => ({
       });
 
       if (!license) {
-        return ctx.badRequest('License server unreachable. The plugin keeps working without a key.');
+        return sendServerError(ctx, 503, PROVIDER_UNREACHABLE_MESSAGE);
       }
 
       await licenseGuard.storeLicenseKey(license.licenseKey);
@@ -94,8 +107,11 @@ module.exports = ({ strapi }) => ({
         data: license,
       });
     } catch (error) {
-      strapi.log.error('[magic-sessionmanager] Error auto-creating license:', error?.name || 'Error');
-      return ctx.badRequest('Error creating license');
+      strapi.log.error(
+        '[magic-sessionmanager] Error auto-creating license:',
+        error?.name || 'Error'
+      );
+      return sendServerError(ctx, 500, 'Error creating license');
     }
   },
 
@@ -103,7 +119,9 @@ module.exports = ({ strapi }) => ({
     try {
       const { email, firstName, lastName } = ctx.request.body || {};
 
-      if (!email || !firstName || !lastName) {
+      if (
+        ![email, firstName, lastName].every((value) => typeof value === 'string' && value.trim())
+      ) {
         return ctx.badRequest('Email, firstName, and lastName are required');
       }
 
@@ -111,7 +129,7 @@ module.exports = ({ strapi }) => ({
       const license = await licenseGuard.createLicense({ email, firstName, lastName });
 
       if (!license) {
-        return ctx.badRequest('License server unreachable. The plugin keeps working without a key.');
+        return sendServerError(ctx, 503, PROVIDER_UNREACHABLE_MESSAGE);
       }
 
       await licenseGuard.storeLicenseKey(license.licenseKey);
@@ -123,7 +141,7 @@ module.exports = ({ strapi }) => ({
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager] Error creating license:', error?.name || 'Error');
-      return ctx.badRequest('Error creating license');
+      return sendServerError(ctx, 500, 'Error creating license');
     }
   },
 
@@ -148,7 +166,7 @@ module.exports = ({ strapi }) => ({
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager] Error refreshing license:', error?.name || 'Error');
-      return ctx.badRequest('Error refreshing license');
+      return sendServerError(ctx, 500, 'Error refreshing license');
     }
   },
 
@@ -156,12 +174,19 @@ module.exports = ({ strapi }) => ({
     try {
       const { licenseKey, email } = ctx.request.body || {};
 
-      if (!licenseKey || !licenseKey.trim()) {
+      if (typeof licenseKey !== 'string' || !licenseKey.trim()) {
         return ctx.badRequest('License key is required');
       }
 
+      if (email !== undefined && email !== null && email !== '') {
+        if (typeof email !== 'string' || !EMAIL_PATTERN.test(email.trim())) {
+          return ctx.badRequest('Email must be a valid email address');
+        }
+      }
+
       const trimmedKey = licenseKey.trim();
-      const trimmedEmail = email?.trim().toLowerCase() || null;
+      const trimmedEmail =
+        typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null;
       const licenseGuard = strapi.plugin('magic-sessionmanager').service('license-guard');
 
       const verification = await licenseGuard.verifyLicense(trimmedKey);
@@ -189,7 +214,7 @@ module.exports = ({ strapi }) => ({
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager] Error storing license key:', error?.name || 'Error');
-      return ctx.badRequest('Error validating license key');
+      return sendServerError(ctx, 500, 'Error validating license key');
     }
   },
 });

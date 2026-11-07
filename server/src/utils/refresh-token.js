@@ -4,10 +4,12 @@ const DEFAULT_REFRESH_COOKIE_NAME = 'strapi_up_refresh';
 
 function getRefreshCookieName(strapi) {
   try {
-    return strapi.config.get(
-      'plugin::users-permissions.sessions.cookie.name',
-      DEFAULT_REFRESH_COOKIE_NAME
-    ) || DEFAULT_REFRESH_COOKIE_NAME;
+    return (
+      strapi.config.get(
+        'plugin::users-permissions.sessions.cookie.name',
+        DEFAULT_REFRESH_COOKIE_NAME
+      ) || DEFAULT_REFRESH_COOKIE_NAME
+    );
   } catch {
     return DEFAULT_REFRESH_COOKIE_NAME;
   }

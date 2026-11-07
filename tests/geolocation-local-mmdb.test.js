@@ -59,43 +59,46 @@ test('local-mmdb provider returns normalized country data without remote fetch',
   };
 
   try {
-    await withFakeMaxmind({
-      Reader: {
-        open: async (openedPath) => {
-          openCalls.push(openedPath);
-          return {
-            country(ip) {
-              assert.equal(ip, '8.8.8.8');
-              return {
-                country: {
-                  isoCode: 'DE',
-                  names: { en: 'Germany', de: 'Deutschland' },
-                },
-                traits: { network: '8.8.8.0/24' },
-              };
-            },
-          };
+    await withFakeMaxmind(
+      {
+        Reader: {
+          open: async (openedPath) => {
+            openCalls.push(openedPath);
+            return {
+              country(ip) {
+                assert.equal(ip, '8.8.8.8');
+                return {
+                  country: {
+                    isoCode: 'DE',
+                    names: { en: 'Germany', de: 'Deutschland' },
+                  },
+                  traits: { network: '8.8.8.0/24' },
+                };
+              },
+            };
+          },
         },
       },
-    }, async () => {
-      const service = createGeolocationService({
-        strapi: createStrapi({
-          geoIpProvider: 'local-mmdb',
-          geoIpDatabasePath: dbPath,
-        }),
-      });
+      async () => {
+        const service = createGeolocationService({
+          strapi: createStrapi({
+            geoIpProvider: 'local-mmdb',
+            geoIpDatabasePath: dbPath,
+          }),
+        });
 
-      const result = await service.getIpInfo('8.8.8.8');
+        const result = await service.getIpInfo('8.8.8.8');
 
-      assert.equal(result._status, 'ok');
-      assert.equal(result._source, 'local-mmdb');
-      assert.equal(result.country_code, 'DE');
-      assert.equal(result.country, 'Germany');
-      assert.equal(result.isVpn, false);
-      assert.equal(result.isProxy, false);
-      assert.equal(result.securityScore, 100);
-      assert.deepEqual(openCalls, [dbPath]);
-    });
+        assert.equal(result._status, 'ok');
+        assert.equal(result._source, 'local-mmdb');
+        assert.equal(result.country_code, 'DE');
+        assert.equal(result.country, 'Germany');
+        assert.equal(result.isVpn, false);
+        assert.equal(result.isProxy, false);
+        assert.equal(result.securityScore, 100);
+        assert.deepEqual(openCalls, [dbPath]);
+      }
+    );
   } finally {
     global.fetch = fetchBefore;
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -115,61 +118,64 @@ test('local-mmdb provider returns city data from a GeoLite2 City database', asyn
   };
 
   try {
-    await withFakeMaxmind({
-      Reader: {
-        open: async () => ({
-          metadata: { databaseType: 'GeoLite2-City' },
-          city(ip) {
-            assert.equal(ip, '8.8.8.8');
-            return {
-              country: {
-                isoCode: 'DE',
-                names: { en: 'Germany', de: 'Deutschland' },
-              },
-              city: {
-                names: { en: 'Eschborn', de: 'Eschborn' },
-              },
-              subdivisions: [
-                {
-                  isoCode: 'HE',
-                  names: { en: 'Hesse', de: 'Hessen' },
+    await withFakeMaxmind(
+      {
+        Reader: {
+          open: async () => ({
+            metadata: { databaseType: 'GeoLite2-City' },
+            city(ip) {
+              assert.equal(ip, '8.8.8.8');
+              return {
+                country: {
+                  isoCode: 'DE',
+                  names: { en: 'Germany', de: 'Deutschland' },
                 },
-              ],
-              location: {
-                latitude: 50.1433,
-                longitude: 8.5711,
-                timeZone: 'Europe/Berlin',
-                accuracyRadius: 20,
-              },
-              postal: { code: '65760' },
-              traits: { network: '8.8.8.0/24' },
-            };
-          },
-        }),
+                city: {
+                  names: { en: 'Eschborn', de: 'Eschborn' },
+                },
+                subdivisions: [
+                  {
+                    isoCode: 'HE',
+                    names: { en: 'Hesse', de: 'Hessen' },
+                  },
+                ],
+                location: {
+                  latitude: 50.1433,
+                  longitude: 8.5711,
+                  timeZone: 'Europe/Berlin',
+                  accuracyRadius: 20,
+                },
+                postal: { code: '65760' },
+                traits: { network: '8.8.8.0/24' },
+              };
+            },
+          }),
+        },
       },
-    }, async () => {
-      const service = createGeolocationService({
-        strapi: createStrapi({
-          geoIpProvider: 'local-mmdb',
-          geoIpDatabasePath: dbPath,
-        }),
-      });
+      async () => {
+        const service = createGeolocationService({
+          strapi: createStrapi({
+            geoIpProvider: 'local-mmdb',
+            geoIpDatabasePath: dbPath,
+          }),
+        });
 
-      const result = await service.getIpInfo('8.8.8.8');
+        const result = await service.getIpInfo('8.8.8.8');
 
-      assert.equal(result._status, 'ok');
-      assert.equal(result._source, 'local-mmdb');
-      assert.equal(result._databaseType, 'city');
-      assert.equal(result.country_code, 'DE');
-      assert.equal(result.country, 'Germany');
-      assert.equal(result.city, 'Eschborn');
-      assert.equal(result.region, 'Hesse');
-      assert.equal(result.timezone, 'Europe/Berlin');
-      assert.equal(result.postal, '65760');
-      assert.equal(result.latitude, 50.1433);
-      assert.equal(result.longitude, 8.5711);
-      assert.equal(result.accuracyRadius, 20);
-    });
+        assert.equal(result._status, 'ok');
+        assert.equal(result._source, 'local-mmdb');
+        assert.equal(result._databaseType, 'city');
+        assert.equal(result.country_code, 'DE');
+        assert.equal(result.country, 'Germany');
+        assert.equal(result.city, 'Eschborn');
+        assert.equal(result.region, 'Hesse');
+        assert.equal(result.timezone, 'Europe/Berlin');
+        assert.equal(result.postal, '65760');
+        assert.equal(result.latitude, 50.1433);
+        assert.equal(result.longitude, 8.5711);
+        assert.equal(result.accuracyRadius, 20);
+      }
+    );
   } finally {
     global.fetch = fetchBefore;
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -188,21 +194,24 @@ test('local-mmdb provider fails locally when configured database is missing', as
     }),
   });
 
-  await withFakeMaxmind({
-    Reader: {
-      open: async (openedPath) => {
-        openCalls.push(openedPath);
-        throw new Error('should not open a missing file');
+  await withFakeMaxmind(
+    {
+      Reader: {
+        open: async (openedPath) => {
+          openCalls.push(openedPath);
+          throw new Error('should not open a missing file');
+        },
       },
     },
-  }, async () => {
-    const result = await service.getIpInfo('8.8.4.4');
+    async () => {
+      const result = await service.getIpInfo('8.8.4.4');
 
-    assert.equal(result._status, 'error');
-    assert.equal(result._source, 'local-mmdb');
-    assert.match(result._reason, /not found|missing/i);
-    assert.deepEqual(openCalls, []);
-  });
+      assert.equal(result._status, 'error');
+      assert.equal(result._source, 'local-mmdb');
+      assert.match(result._reason, /not found|missing/i);
+      assert.deepEqual(openCalls, []);
+    }
+  );
 });
 
 test('auto provider keeps local MMDB errors when fail-closed mode is configured', async () => {
@@ -223,30 +232,33 @@ test('auto provider keeps local MMDB errors when fail-closed mode is configured'
   };
 
   try {
-    await withFakeMaxmind({
-      Reader: {
-        open: async () => ({
-          country() {
-            throw new Error('corrupt mmdb');
-          },
-        }),
+    await withFakeMaxmind(
+      {
+        Reader: {
+          open: async () => ({
+            country() {
+              throw new Error('corrupt mmdb');
+            },
+          }),
+        },
       },
-    }, async () => {
-      const service = createGeolocationService({
-        strapi: createStrapi({
-          geoIpProvider: 'auto',
-          geoIpDatabasePath: dbPath,
-          geoLookupFailureMode: 'block',
-        }),
-      });
+      async () => {
+        const service = createGeolocationService({
+          strapi: createStrapi({
+            geoIpProvider: 'auto',
+            geoIpDatabasePath: dbPath,
+            geoLookupFailureMode: 'block',
+          }),
+        });
 
-      const result = await service.getIpInfo('8.8.8.8');
+        const result = await service.getIpInfo('8.8.8.8');
 
-      assert.equal(result._status, 'error');
-      assert.equal(result._source, 'local-mmdb');
-      assert.match(result._reason, /corrupt mmdb/);
-      assert.equal(fetchCalls, 0);
-    });
+        assert.equal(result._status, 'error');
+        assert.equal(result._source, 'local-mmdb');
+        assert.match(result._reason, /corrupt mmdb/);
+        assert.equal(fetchCalls, 0);
+      }
+    );
   } finally {
     global.fetch = fetchBefore;
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -276,30 +288,33 @@ test('auto provider may fall back to ipapi when local MMDB fails in allow mode',
   };
 
   try {
-    await withFakeMaxmind({
-      Reader: {
-        open: async () => ({
-          country() {
-            throw new Error('temporary local failure');
-          },
-        }),
+    await withFakeMaxmind(
+      {
+        Reader: {
+          open: async () => ({
+            country() {
+              throw new Error('temporary local failure');
+            },
+          }),
+        },
       },
-    }, async () => {
-      const service = createGeolocationService({
-        strapi: createStrapi({
-          geoIpProvider: 'auto',
-          geoIpDatabasePath: dbPath,
-          geoLookupFailureMode: 'allow',
-        }),
-      });
+      async () => {
+        const service = createGeolocationService({
+          strapi: createStrapi({
+            geoIpProvider: 'auto',
+            geoIpDatabasePath: dbPath,
+            geoLookupFailureMode: 'allow',
+          }),
+        });
 
-      const result = await service.getIpInfo('8.8.4.4');
+        const result = await service.getIpInfo('8.8.4.4');
 
-      assert.equal(result._status, 'ok');
-      assert.equal(result._source, 'ipapi');
-      assert.equal(result.country_code, 'US');
-      assert.equal(fetchCalls, 1);
-    });
+        assert.equal(result._status, 'ok');
+        assert.equal(result._source, 'ipapi');
+        assert.equal(result.country_code, 'US');
+        assert.equal(fetchCalls, 1);
+      }
+    );
   } finally {
     global.fetch = fetchBefore;
     fs.rmSync(tmpDir, { recursive: true, force: true });

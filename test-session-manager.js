@@ -21,7 +21,7 @@
  */
 
 // Load .env if available
-try { require('dotenv').config({ path: '../../../.env' }); } catch (_) { /* ok */ }
+try { require('dotenv').config({ path: '../../../.env' }); } catch { /* ok */ }
 
 // -------------------------------------------------------------------
 // Configuration
@@ -386,14 +386,6 @@ async function testTerminateOwnSession() {
 // ADMIN API TESTS
 // -------------------------------------------------------------------
 
-/** Admin login */
-async function testAdminLogin() {
-  adminJwt = await adminLogin();
-  if (!adminJwt) return false;
-  print(`  [INFO] Admin JWT: ${adminJwt.substring(0, 40)}...`, C.blue);
-  return true;
-}
-
 /** Get all sessions (admin) */
 async function testAdminGetAllSessions() {
   const res = await api('/magic-sessionmanager/sessions', { token: adminJwt });
@@ -588,7 +580,6 @@ async function testSecJwtBlockedAfterTerminate() {
   const data = await login(USER_CREDS);
   if (!data) return false;
   const jwt = data.jwt;
-  const docId = data.user.documentId;
   await sleep(500);
   
   // Step 2: Verify JWT works
@@ -1060,7 +1051,6 @@ async function testFixEmailTemplateXss() {
   
   const saved = putRes.data.settings;
   const htmlContent = saved.emailTemplates?.suspiciousLogin?.html || '';
-  const subjectContent = saved.emailTemplates?.suspiciousLogin?.subject || '';
   
   const scriptStripped = !htmlContent.includes('<script>') && !htmlContent.includes('</script>');
   const iframeStripped = !htmlContent.includes('<iframe');
@@ -1973,7 +1963,6 @@ async function main() {
   
   // Exit code
   const secFails = results.security.filter(t => t.status === 'fail').length;
-  const fixFails = results.fixes.filter(t => t.status === 'fail').length;
   const totalFails = [...results.user, ...results.admin, ...results.security, ...results.fixes]
     .filter(t => t.status === 'fail').length;
   

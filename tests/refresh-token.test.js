@@ -66,10 +66,7 @@ test('cookie extraction matches the configured native refresh-cookie name exactl
 
 test('strips access and refresh tokens from body and Set-Cookie', () => {
   const headers = {
-    'set-cookie': [
-      'strapi_up_refresh=secret; Path=/; HttpOnly',
-      'locale=de; Path=/',
-    ],
+    'set-cookie': ['strapi_up_refresh=secret; Path=/; HttpOnly', 'locale=de; Path=/'],
   };
   const ctx = {
     body: { jwt: 'access', refreshToken: 'refresh', user: { id: 1 } },
@@ -79,9 +76,7 @@ test('strips access and refresh tokens from body and Set-Cookie', () => {
     },
     append(name, value) {
       const key = name.toLowerCase();
-      headers[key] = headers[key]
-        ? [].concat(headers[key], value)
-        : value;
+      headers[key] = headers[key] ? [].concat(headers[key], value) : value;
     },
   };
 

@@ -357,6 +357,66 @@ test('native own-session revoke refuses to terminate the current session', async
   }
 });
 
+test('native linked sidecar revoke refuses the verified current session even after token rotation', async () => {
+  const terminateCalls = [];
+  const installed = installStrapi(
+    {
+      terminateSession: async (params) => {
+        terminateCalls.push(params);
+      },
+    },
+    {
+      documents: () => ({
+        findOne: async () => ({
+          documentId: 'magic-sidecar-doc-id',
+          user: { documentId: USER.documentId },
+          nativeSessionId: CURRENT_NATIVE_ID,
+          tokenHash: 'an-earlier-token-hash',
+          isActive: true,
+        }),
+      }),
+    }
+  );
+  const ctx = createContext({ params: { sessionId: 'magic-sidecar-doc-id' } });
+  try {
+    await controller.terminateOwnSession(ctx);
+    assert.equal(ctx.error?.status, 400);
+    assert.deepEqual(terminateCalls, []);
+  } finally {
+    installed.restore();
+  }
+});
+
+test('native linked sidecar revoke still permits an owned non-current session', async () => {
+  const terminateCalls = [];
+  const installed = installStrapi(
+    {
+      terminateSession: async (params) => {
+        terminateCalls.push(params);
+      },
+    },
+    {
+      documents: () => ({
+        findOne: async () => ({
+          documentId: 'magic-sidecar-doc-id',
+          user: { documentId: USER.documentId },
+          nativeSessionId: 'other-native-id',
+          tokenHash: 'an-earlier-token-hash',
+          isActive: true,
+        }),
+      }),
+    }
+  );
+  const ctx = createContext({ params: { sessionId: 'magic-sidecar-doc-id' } });
+  try {
+    await controller.terminateOwnSession(ctx);
+    assert.equal(ctx.body.success, true);
+    assert.deepEqual(terminateCalls, [{ sessionId: 'magic-sidecar-doc-id', reason: 'manual' }]);
+  } finally {
+    installed.restore();
+  }
+});
+
 test('repeating an own native-session revoke preserves the existing idempotent success envelope', async () => {
   const terminateCalls = [];
   const key = nativeSessionKey(USER.documentId, 'already-revoked');

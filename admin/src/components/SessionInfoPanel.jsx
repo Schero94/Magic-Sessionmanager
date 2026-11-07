@@ -1,113 +1,185 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
-import styled from 'styled-components';
-import { Box, Typography, Flex, Badge, Button, Divider, Alert } from '@strapi/design-system';
-import { Check, Cross, Monitor, Phone, Server, Clock, User, Information } from '@strapi/icons';
-import { useFetchClient, useNotification, useRBAC } from '@strapi/strapi/admin';
-import parseUserAgent from '../utils/parseUserAgent';
-import { getSessionStatus } from '../utils/sessionStatus.mjs';
+import { NavLink } from 'react-router-dom';
+import { Badge, Box, Button, Flex, Loader, Typography } from '@strapi/design-system';
+import { CheckCircle, Lock, SignOut } from '@strapi/icons';
+import { useFetchClient, useForm, useNotification, useRBAC } from '@strapi/strapi/admin';
+import Alert from './PersistentAlert';
+import ReadableText from './ReadableText';
+import { ActionStack, ConfirmAction, DeviceIcon, StatusBadge, TargetLink } from './ui';
+import { requireSessionList, requireSuccessfulMutation } from '../utils/adminResponse.mjs';
 import { getManageableSessions } from '../utils/sessionFilters.mjs';
+import { getDevicePresentation } from '../utils/devicePresentation.mjs';
+import { toValidDate } from '../utils/sessionDates.mjs';
+import { presentText } from '../utils/missingValue.mjs';
+import { useSessionFormatters } from '../utils/useSessionFormatters';
+import {
+  applyBlockedFormSync,
+  buildUserSessionsHref,
+  endOpenSessions,
+  getPanelUserLabel,
+  getUserSessionSummary,
+  getVisiblePanelSessions,
+  isNotFoundError,
+  isUserModel,
+  planBlockedFormSync,
+} from '../utils/userPanelState.mjs';
 import { getTranslation } from '../utils/getTranslation';
 import pluginPermissions from '../permissions';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
-import ReadableText, { paragraphRhythm } from './ReadableText';
 
-// ================ STYLED COMPONENTS ================
-
-const PanelContainer = styled(Box)`
-  width: 100%;
-  min-width: 0;
-
-  ${paragraphRhythm}
-`;
-
-const StatusCard = styled(Box)`
-  padding: 20px;
-  border-radius: 4px;
-  border: 1px solid ${(p) => p.theme.colors.neutral150};
-  background: ${(p) => p.theme.colors.neutral0};
-`;
-
-const BlockedWarning = styled(Box)`
-  padding: 16px;
-  border-radius: 4px;
-  background: ${(p) => p.theme.colors.danger100};
-  border: 1px solid ${(p) => p.theme.colors.danger200};
-`;
-
-const SessionCard = styled(Box)`
-  padding: 16px;
-  background: ${(p) => p.theme.colors.neutral0};
-  border-radius: 4px;
-  border: 1px solid ${(p) => p.theme.colors.neutral150};
-`;
-
-const EmptyState = styled(Box)`
-  padding: 32px;
-  background: ${(p) => p.theme.colors.neutral0};
-  border-radius: 4px;
-  border: 1px solid ${(p) => p.theme.colors.neutral150};
-  text-align: center;
-`;
-
-const EmptyIcon = styled(Box)`
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: ${(p) => p.theme.colors.neutral100};
-  border-radius: 50%;
-  color: ${(p) => p.theme.colors.neutral500};
-`;
-
-const IconWrapper = styled(Box)`
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: ${(p) => p.theme.colors.neutral100};
-  border-radius: 8px;
-  flex-shrink: 0;
-  
-  svg {
-    width: 16px;
-    height: 16px;
-    color: ${(p) => p.theme.colors.neutral600};
-  }
-`;
-
-const MutedIcon = styled.div`
-  display: flex;
-  color: ${(p) => p.theme.colors.neutral500};
-`;
+const FORM_CONSUMER = 'MagicSessionManagerPanel';
 
 /**
- * Shows session status and confirmed session actions for a saved end user.
- * New Users & Permissions entries receive a save-first message until Strapi assigns an ID.
+ * One compact open-session card: device icon and translated device type,
+ * state badge (Active or Idle), "{browser} · {os}", IP address and last
+ * activity. The badge is the only state signal; the activity line is neutral
+ * text, so an idle session never reads as active (F3).
+ *
+ * @param {{session: object, t: Function}} props Session row and translator.
+ * @returns {import('react').ReactElement} Session card.
+ */
+const PanelSessionCard = ({ session, t }) => {
+  const { formatDate, formatRelativeTime, translate } = useSessionFormatters();
+  const device = getDevicePresentation(session);
+  const hasSummary = Boolean(device.browserLabel || device.os);
+  const summary = hasSummary
+    ? (device.summary.text ?? translate(device.summary, device.summary.values))
+    : '';
+  const lastActivity = toValidDate(session.lastActive) || toValidDate(session.loginTime);
+  const ipAddress = presentText(session.ipAddress);
+
+  return (
+    <Box
+      tag="li"
+      padding={3}
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      minWidth={0}
+      data-panel-session=""
+    >
+      <Flex gap={3} alignItems="flex-start" minWidth={0}>
+        <Flex
+          background="neutral100"
+          color="neutral700"
+          hasRadius
+          padding={2}
+          shrink={0}
+          justifyContent="center"
+          alignItems="center"
+          aria-hidden
+        >
+          <DeviceIcon icon={device.icon} />
+        </Flex>
+        <Flex direction="column" alignItems="stretch" gap={1} minWidth={0} flex="1 1 auto">
+          <Flex justifyContent="space-between" alignItems="center" gap={2} wrap="wrap">
+            <Typography variant="omega" fontWeight="semiBold" textColor="neutral800">
+              {translate(device.deviceTypeMessage)}
+            </Typography>
+            <StatusBadge session={session} size="S" />
+          </Flex>
+          {summary ? (
+            <Typography variant="pi" textColor="neutral600">
+              {summary}
+            </Typography>
+          ) : null}
+          {ipAddress ? (
+            <Typography variant="pi" textColor="neutral600">
+              {t('panel.sessions.ip', 'IP {ip}', { ip: ipAddress })}
+            </Typography>
+          ) : null}
+          {lastActivity ? (
+            <Typography variant="pi" textColor="neutral600" title={formatDate(lastActivity)}>
+              {t('panel.sessions.lastActive', 'Last active {time}', {
+                time: formatRelativeTime(lastActivity),
+              })}
+            </Typography>
+          ) : null}
+        </Flex>
+      </Flex>
+    </Box>
+  );
+};
+
+/**
+ * Content Manager side panel "Sessions" for Users & Permissions users (IA D3):
+ * what access the user has and how to cut it off. Summary (Online / Not
+ * online, open sessions, last activity), blocked alert, "End all sessions"
+ * and "Block user" (both confirmed) or "Unblock user" (not destructive, no
+ * confirmation), up to five open-session cards and a link to the dashboard.
+ * Renders nothing for any other model or without the plugin permission.
+ * New entries get a save-first message until Strapi assigns an ID.
  */
 const SessionInfoPanel = ({ documentId, model, document }) => {
   const { formatMessage } = useIntl();
-  const { allowedActions: { canAccess }, isLoading: permissionsLoading } = useRBAC(pluginPermissions.access);
+  const { formatDate, formatRelativeTime } = useSessionFormatters();
+  const {
+    allowedActions: { canAccess },
+    isLoading: permissionsLoading,
+  } = useRBAC(pluginPermissions.access);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [isBlocked, setIsBlocked] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(Boolean(document?.blocked));
+  const [pendingAction, setPendingAction] = useState(null);
+  const [formOutOfSync, setFormOutOfSync] = useState(false);
+  const panelRef = useRef(null);
+  const blockToggleRef = useRef(null);
+  const focusBlockToggle = useRef(false);
+  const noOpenSessionsHintId = useId();
   const { get, post: postRequest } = useFetchClient();
   const { toggleNotification } = useNotification();
-  const t = (id, defaultMessage, values) => formatMessage({ id: getTranslation(id), defaultMessage }, values);
-  const unavailableValue = t('common.unavailable', 'Unavailable');
+  // The side panels render inside the edit view <Form>. Without it, Strapi's
+  // default context has no "blocked" initial value and the panel shows a notice.
+  const formInitialValues = useForm(FORM_CONSUMER, (state) => state.initialValues, false);
+  const formModified = useForm(FORM_CONSUMER, (state) => state.modified, false);
+  const formOnChange = useForm(FORM_CONSUMER, (state) => state.onChange, false);
+  const formResetForm = useForm(FORM_CONSUMER, (state) => state.resetForm, false);
+  const t = (id, defaultMessage, values) =>
+    formatMessage({ id: getTranslation(id), defaultMessage }, values);
 
   const userId = document?.documentId || documentId;
+  const isUserPanel = isUserModel(model);
+  const persistedBlocked = Boolean(document?.blocked);
+  const userLabel = getPanelUserLabel(document) || String(userId ?? '');
+
+  useEffect(() => {
+    setIsBlocked(persistedBlocked);
+    setFormOutOfSync(false);
+  }, [persistedBlocked, userId]);
+
+  // Block and Unblock swap the button; keep keyboard focus on the new one.
+  // Strapi renders the panel content one commit after this hook, the new
+  // button stays disabled until the pending action is cleared, and Radix
+  // focuses <body> in a zero-delay timeout when the Block dialog unmounts.
+  // So the focus is moved in later timeouts, once the swapped and enabled
+  // button is in the document.
+  useEffect(() => {
+    if (!focusBlockToggle.current || pendingAction !== null) return undefined;
+    const expected = isBlocked ? 'unblock' : 'block';
+    let attempts = 0;
+    let timer;
+    const tryFocus = () => {
+      const button = blockToggleRef.current;
+      if (button?.isConnected && !button.disabled && button.dataset.blockToggle === expected) {
+        focusBlockToggle.current = false;
+        button.focus();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 20) timer = window.setTimeout(tryFocus, 25);
+      else focusBlockToggle.current = false;
+    };
+    timer = window.setTimeout(tryFocus, 0);
+    return () => window.clearTimeout(timer);
+  }, [isBlocked, pendingAction]);
 
   useEffect(() => {
     if (model !== 'plugin::users-permissions.user' || !userId || permissionsLoading || !canAccess) {
       setLoading(false);
-      return;
+      return undefined;
     }
 
     let cancelled = false;
@@ -117,8 +189,8 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
       try {
         const { data } = await get(`/magic-sessionmanager/user/${userId}/sessions`);
         if (cancelled) return;
-        setSessions(getManageableSessions(data.data || []));
-        setIsBlocked(document?.blocked || false);
+        // All rows are kept: ended ones only feed the "Last active" line.
+        setSessions(requireSessionList(data));
       } catch (err) {
         if (!cancelled) setLoadError(true);
         logSafeAdminError('userSessions.load', err);
@@ -131,94 +203,129 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     return () => {
       cancelled = true;
     };
-  }, [userId, model, document, get, reloadKey, canAccess, permissionsLoading]);
+  }, [userId, model, get, reloadKey, canAccess, permissionsLoading]);
 
   /**
-   * Confirms and terminates all active sessions for the displayed user.
+   * Ends every open session of the displayed user. Runs only from the
+   * ConfirmAction dialog. Errors are reported and re-thrown so the dialog
+   * stays open for a retry.
    *
    * @returns {Promise<void>}
    */
-  const handleLogoutAll = async () => {
+  const handleEndAll = async () => {
     if (!userId) return;
-    if (!confirm(t('panel.confirm.terminateAll', 'End all active sessions for this user?'))) return;
-    
-    setActionLoading(true);
+    setPendingAction('endAll');
     try {
       const response = await postRequest(`/magic-sessionmanager/user/${userId}/terminate-all`);
-      
-      if (response.data?.success) {
-        toggleNotification({
-          type: 'success',
-          message: t('notifications.success.terminatedAll', 'All sessions terminated successfully'),
-        });
-        setSessions([]);
-      }
+      requireSuccessfulMutation(response.data);
+      setSessions((rows) => endOpenSessions(rows, 'manual'));
+      toggleNotification({
+        type: 'success',
+        message: t('panel.notify.endAllSuccess', 'All sessions of {user} ended.', {
+          user: userLabel,
+        }),
+      });
     } catch (error) {
       toggleNotification({
-        type: 'warning',
-        message: t('notifications.error.terminateAll', 'Failed to terminate sessions'),
+        type: 'danger',
+        message: isNotFoundError(error)
+          ? t('panel.notify.userNotFound', 'User not found.')
+          : t('panel.notify.endAllError', 'The sessions could not be ended. Please try again.'),
       });
-      logSafeAdminError('userSessions.terminateAll', error);
+      logSafeAdminError('userSessions.endAll', error);
+      throw error;
     } finally {
-      setActionLoading(false);
+      setPendingAction(null);
     }
   };
 
   /**
-   * Confirms the access change before blocking or unblocking the displayed user.
-   * Blocking also ends that user's active sessions on the server.
+   * Sets the user's blocked state (blocking also ends the open sessions on
+   * the server), then writes the confirmed value into the open edit form so
+   * a later Save cannot restore the old value (F1).
+   *
+   * @param {boolean} blocked Requested state.
+   * @returns {Promise<boolean>} The state the server confirmed.
+   */
+  const changeBlocked = async (blocked) => {
+    const response = await postRequest(`/magic-sessionmanager/user/${userId}/toggle-block`, {
+      blocked,
+    });
+    requireSuccessfulMutation(response.data);
+    const newBlockedStatus = response.data.blocked === true;
+    focusBlockToggle.current = newBlockedStatus !== isBlocked;
+    setIsBlocked(newBlockedStatus);
+    if (newBlockedStatus) setSessions((rows) => endOpenSessions(rows, 'blocked'));
+
+    const plan = planBlockedFormSync({
+      initialValues: formInitialValues,
+      modified: formModified,
+      blocked: newBlockedStatus,
+    });
+    const synced = applyBlockedFormSync(plan, { resetForm: formResetForm, onChange: formOnChange });
+    setFormOutOfSync(!synced);
+    return newBlockedStatus;
+  };
+
+  /**
+   * Blocks the user. Runs only from the ConfirmAction dialog; errors are
+   * reported and re-thrown so the dialog stays open for a retry.
    *
    * @returns {Promise<void>}
    */
-  const handleToggleBlock = async () => {
+  const handleBlock = async () => {
     if (!userId) return;
-    const confirmation = isBlocked
-      ? t('panel.confirm.unblockUser', 'Unblock this user?')
-      : t('panel.confirm.blockUser', 'Block this user and end all active sessions?');
-    if (!confirm(confirmation)) return;
-    
-    setActionLoading(true);
+    setPendingAction('block');
     try {
-      const response = await postRequest(`/magic-sessionmanager/user/${userId}/toggle-block`);
-      
-      if (response.data?.success) {
-        const newBlockedStatus = response.data.blocked;
-        setIsBlocked(newBlockedStatus);
-        
-        toggleNotification({
-          type: 'success',
-          message: newBlockedStatus 
-            ? t('notifications.success.blocked', 'User blocked successfully') 
-            : t('notifications.success.unblocked', 'User unblocked successfully'),
-        });
-        
-        if (newBlockedStatus) {
-          setSessions([]);
-        }
-      }
+      await changeBlocked(true);
+      toggleNotification({
+        type: 'success',
+        message: t('panel.notify.blockSuccess', '{user} is blocked.', { user: userLabel }),
+      });
     } catch (error) {
       toggleNotification({
-        type: 'warning',
-        message: t('notifications.error.block', 'Failed to update user status'),
+        type: 'danger',
+        message: isNotFoundError(error)
+          ? t('panel.notify.userNotFound', 'User not found.')
+          : t('panel.notify.blockError', 'The user could not be blocked. Please try again.'),
       });
-      logSafeAdminError('userSessions.toggleBlock', error);
+      logSafeAdminError('userSessions.block', error);
+      throw error;
     } finally {
-      setActionLoading(false);
+      setPendingAction(null);
     }
   };
 
   /**
-   * Returns the appropriate device icon component
+   * Unblocks the user. Not destructive, so there is no confirmation (IA E.1);
+   * the button shows its own loading state and errors become a notification.
+   *
+   * @returns {Promise<void>}
    */
-  const getDeviceIcon = (deviceType) => {
-    if (deviceType === 'Mobile' || deviceType === 'Tablet') return Phone;
-    if (deviceType === 'Desktop' || deviceType === 'Laptop') return Monitor;
-    if (deviceType === 'API Client') return Server;
-    return Information;
+  const handleUnblock = async () => {
+    if (!userId) return;
+    setPendingAction('unblock');
+    try {
+      await changeBlocked(false);
+      toggleNotification({
+        type: 'success',
+        message: t('panel.notify.unblockSuccess', '{user} can sign in again.', { user: userLabel }),
+      });
+    } catch (error) {
+      toggleNotification({
+        type: 'danger',
+        message: isNotFoundError(error)
+          ? t('panel.notify.userNotFound', 'User not found.')
+          : t('panel.notify.unblockError', 'The block could not be removed. Please try again.'),
+      });
+      logSafeAdminError('userSessions.unblock', error);
+    } finally {
+      setPendingAction(null);
+    }
   };
 
-  // Only show for User content type
-  if (model !== 'plugin::users-permissions.user') {
+  // Only show for the Users & Permissions user content type
+  if (!isUserPanel) {
     return null;
   }
 
@@ -226,28 +333,15 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
     return null;
   }
 
+  const title = t('panel.title', 'Sessions');
+
   if (!userId) {
     return {
-      title: t('panel.title', 'Session Info'),
+      title,
       content: (
-        <PanelContainer>
-          <Box padding={4}>
-            <ReadableText variant="pi" textColor="neutral600" tag="p">
-              {t('panel.user.saveBeforeManagingSessions', 'Save this user before managing sessions.')}
-            </ReadableText>
-          </Box>
-        </PanelContainer>
-      ),
-    };
-  }
-
-  if (loading) {
-    return {
-      title: t('panel.title', 'Session Info'),
-      content: (
-        <Box padding={4} background="neutral0">
-          <ReadableText variant="pi" textColor="neutral600" tag="p">
-            {t('panel.loading', 'Loading...')}
+        <Box width="100%" minWidth={0}>
+          <ReadableText variant="omega" textColor="neutral700" tag="p">
+            {t('panel.unsaved.description', 'Save this user before you can manage sessions.')}
           </ReadableText>
         </Box>
       ),
@@ -256,216 +350,237 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
 
   if (loadError) {
     return {
-      title: t('panel.title', 'Session Info'),
+      title,
       content: (
-        <Box padding={4}>
+        <Box width="100%" minWidth={0}>
           <Alert
             variant="danger"
-            title={t('panel.error.title', 'Sessions could not be loaded')}
             closeLabel={t('common.close', 'Close')}
-            action={(
+            action={
               <Button size="S" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
-                {t('common.retry', 'Retry')}
+                {t('common.tryAgain', 'Try again')}
               </Button>
-            )}
+            }
           >
-            <ReadableText variant="pi" textColor="neutral700" tag="span">
-              {t('panel.error.description', 'Try again. If the problem continues, check permissions for this user.')}
-            </ReadableText>
+            {t('panel.error.message', 'Sessions could not be loaded.')}
           </Alert>
         </Box>
       ),
     };
   }
 
-  const onlineCount = sessions.filter((session) => getSessionStatus(session) === 'active').length;
-  const isOnline = onlineCount > 0;
+  const openSessions = getManageableSessions(sessions);
+  const summary = getUserSessionSummary(sessions);
+  const { visible, hiddenCount } = getVisiblePanelSessions(openSessions);
+  const actionsDisabled = loading || pendingAction !== null;
+  const hasOpenSessions = summary.openCount > 0;
+  const endAllLabel = t('panel.actions.endAll', 'End all sessions');
+  const blockLabel = t('panel.actions.blockUser', 'Block user');
+  const unblockLabel = t('panel.actions.unblock', 'Unblock user');
 
   return {
-    title: t('panel.title', 'Session Info'),
+    title,
     content: (
-      <PanelContainer>
-        <Flex direction="column" gap={4} alignItems="stretch">
-          
-          {/* Status Card */}
-          <StatusCard>
-            <Flex direction="column" gap={3} alignItems="center">
-              <Badge variant={isOnline ? 'success' : 'neutral'} size="M">
-                {isOnline ? t('panel.status.active', 'Online') : t('panel.status.offline', 'Offline')}
+      <Flex
+        ref={panelRef}
+        direction="column"
+        alignItems="stretch"
+        gap={4}
+        width="100%"
+        minWidth={0}
+        tabIndex={-1}
+      >
+        {/* Summary */}
+        {loading ? (
+          <Flex justifyContent="center" padding={2} data-panel-summary="">
+            <Loader small>{t('panel.loading', 'Loading sessions')}</Loader>
+          </Flex>
+        ) : (
+          <Flex direction="column" alignItems="stretch" gap={1} data-panel-summary="">
+            <Flex gap={2} alignItems="center" wrap="wrap">
+              <Badge variant={summary.isOnline ? 'success' : 'neutral'} size="M">
+                {summary.isOnline
+                  ? t('panel.status.online', 'Online')
+                  : t('panel.status.notOnline', 'Not online')}
               </Badge>
-              <Typography
-                variant="omega"
-                fontWeight="semiBold"
-                textColor={isOnline ? 'success700' : 'neutral700'}
-              >
+              <Typography variant="omega" fontWeight="semiBold" textColor="neutral800">
                 {t(
-                  'panel.sessions.currentCount',
-                  '{count, plural, one {# current session} other {# current sessions}}',
-                  { count: sessions.length }
+                  'panel.summary.openCount',
+                  '{count, plural, one {# open session} other {# open sessions}}',
+                  { count: summary.openCount }
                 )}
               </Typography>
             </Flex>
-          </StatusCard>
-
-          {/* User Blocked Warning */}
-          {isBlocked && (
-            <BlockedWarning>
-              <Typography variant="omega" fontWeight="bold" textColor="danger700">
-                {t('panel.blocked.title', 'User is blocked')}
-              </Typography>
-              <ReadableText variant="pi" textColor="danger600" tag="p">
-                {t('panel.blocked.description', 'Authentication disabled')}
-              </ReadableText>
-            </BlockedWarning>
-          )}
-
-          {/* Active Sessions List */}
-          {sessions.length > 0 ? (
-            <Flex direction="column" gap={3} alignItems="stretch">
-              <Typography variant="pi" fontWeight="semiBold" textColor="neutral600">
-                {t('panel.sessions.title', 'Current Sessions')}
-              </Typography>
-              
-              {sessions.slice(0, 5).map((session) => {
-                const userAgent = typeof session.userAgent === 'string' ? session.userAgent.trim() : '';
-                const hasUserAgent = Boolean(userAgent && userAgent.toLowerCase() !== 'unknown');
-                const parsedDevice = hasUserAgent ? parseUserAgent(userAgent) : null;
-                const nativeDeviceType = typeof session.deviceType === 'string'
-                  && session.deviceType.trim().toLowerCase() !== 'unknown'
-                  ? session.deviceType.trim()
-                  : '';
-                const nativeDeviceName = typeof session.deviceName === 'string'
-                  && session.deviceName.trim().toLowerCase() !== 'unknown'
-                  ? session.deviceName.trim()
-                  : '';
-                const availableValue = (value) =>
-                  typeof value === 'string' && value.trim() && value.trim().toLowerCase() !== 'unknown'
-                    ? value.trim()
-                    : '';
-                const deviceInfo = {
-                  device: nativeDeviceName || nativeDeviceType || availableValue(parsedDevice?.device) || unavailableValue,
-                  browser: availableValue(session.browserName) || availableValue(parsedDevice?.browser) || unavailableValue,
-                  os: availableValue(session.osName) || availableValue(parsedDevice?.os) || unavailableValue,
-                };
-                const DeviceIcon = getDeviceIcon(nativeDeviceType || parsedDevice?.device);
-                const sessionStatus = getSessionStatus(session);
-                const isSessionOnline = sessionStatus === 'active';
-                
-                return (
-                  <SessionCard key={session.id}>
-                    <Flex direction="column" gap={2} alignItems="flex-start">
-                      <Flex gap={2} alignItems="center">
-                        <IconWrapper>
-                          <DeviceIcon />
-                        </IconWrapper>
-                        <Typography variant="omega" fontWeight="bold" textColor="neutral800">
-                          {deviceInfo.device}
-                        </Typography>
-                      </Flex>
-                      
-                      <Badge variant={isSessionOnline ? 'success' : 'warning'} size="S">
-                        {isSessionOnline
-                          ? t('panel.sessions.active', 'Active')
-                          : t('panel.sessions.idle', 'Idle')}
-                      </Badge>
-                      
-                      <Typography variant="pi" textColor="neutral600">
-                        {deviceInfo.browser} on {deviceInfo.os}
-                      </Typography>
-                      
-                      <Divider />
-                      
-                      <Flex gap={2} alignItems="center">
-                        <MutedIcon><Server width="14px" height="14px" /></MutedIcon>
-                        <Typography variant="pi" textColor="neutral600">
-                          {session.ipAddress || unavailableValue}
-                        </Typography>
-                      </Flex>
-                      
-                      <Flex gap={2} alignItems="center">
-                        <MutedIcon><Clock width="14px" height="14px" /></MutedIcon>
-                        <Typography variant="pi" textColor="neutral600">
-                          {new Date(session.loginTime).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </Typography>
-                      </Flex>
-                      
-                      {session.minutesSinceActive !== undefined && session.minutesSinceActive < 60 && (
-                        <Typography variant="pi" textColor="success600" fontWeight="semiBold">
-                          {session.minutesSinceActive === 0 
-                            ? t('panel.sessions.activeNow', 'Active now')
-                            : t('panel.sessions.activeAgo', 'Active {minutes} min ago', { minutes: session.minutesSinceActive })
-                          }
-                        </Typography>
-                      )}
-                    </Flex>
-                  </SessionCard>
-                );
-              })}
-              
-              {sessions.length > 5 && (
-                <Box padding={3} background="primary100" hasRadius style={{ textAlign: 'center' }}>
-                  <Typography variant="pi" textColor="primary600" fontWeight="semiBold">
-                    +{sessions.length - 5} {t('panel.sessions.more', 'more session')}{sessions.length - 5 !== 1 ? 's' : ''}
-                  </Typography>
-                </Box>
-              )}
-            </Flex>
-          ) : (
-                <EmptyState>
-              <EmptyIcon>
-                <User width="24px" height="24px" />
-              </EmptyIcon>
-                  <Typography variant="omega" fontWeight="semiBold" textColor="neutral700" style={{ display: 'block' }}>
-                    {t('panel.empty.title', 'No current sessions')}
-              </Typography>
-              <ReadableText variant="pi" textColor="neutral500" tag="p">
-                {t('panel.empty.description', 'User has not logged in yet')}
-              </ReadableText>
-            </EmptyState>
-          )}
-
-          {/* Action Buttons */}
-          <Divider />
-          
-          <Flex direction="column" gap={3} alignItems="stretch">
-            <Typography variant="pi" fontWeight="semiBold" textColor="neutral600">
-              {t('panel.actions.title', 'Actions')}
+            <Typography variant="pi" textColor="neutral600">
+              {t('panel.summary.openHint', 'Active or idle')}
             </Typography>
-            
-            <Button
-              fullWidth
-              variant="danger-light"
-              startIcon={<Cross />}
-              onClick={handleLogoutAll}
-              loading={actionLoading}
-              disabled={actionLoading || sessions.length === 0}
-              type="button"
-            >
-              {t('panel.actions.terminateAll', 'Terminate All Sessions')}
-            </Button>
-            
-            <Button
-              fullWidth
-              variant={isBlocked ? 'secondary' : 'danger-light'}
-              startIcon={isBlocked ? <Check /> : <Cross />}
-              onClick={handleToggleBlock}
-              loading={actionLoading}
-              disabled={actionLoading}
-              type="button"
-            >
-              {isBlocked 
-                ? t('panel.actions.unblockUser', 'Unblock User') 
-                : t('panel.actions.blockUser', 'Block User')
-              }
-            </Button>
+            {summary.lastActive ? (
+              <Typography
+                variant="pi"
+                textColor="neutral600"
+                title={formatDate(summary.lastActive)}
+              >
+                {t('panel.sessions.lastActive', 'Last active {time}', {
+                  time: formatRelativeTime(summary.lastActive),
+                })}
+              </Typography>
+            ) : (
+              <Typography variant="pi" textColor="neutral600">
+                {t('panel.summary.noSessions', 'No sessions recorded')}
+              </Typography>
+            )}
           </Flex>
+        )}
+
+        {isBlocked ? (
+          <Alert variant="danger" closeLabel={t('common.close', 'Close')}>
+            {t('panel.blocked.message', 'This account is blocked. The user cannot sign in.')}
+          </Alert>
+        ) : null}
+
+        {formOutOfSync ? (
+          <Alert variant="warning" closeLabel={t('common.close', 'Close')}>
+            {t(
+              'panel.form.reloadNotice',
+              'Reload this page before saving, or the Blocked field will be overwritten.'
+            )}
+          </Alert>
+        ) : null}
+
+        {/* Action Buttons */}
+        <Flex direction="column" alignItems="stretch" gap={2} data-panel-actions="">
+          <ActionStack>
+            <ConfirmAction
+              title={t('panel.confirm.endAllTitle', 'End all sessions of {user}?', {
+                user: userLabel,
+              })}
+              body={t(
+                'panel.confirm.endAllBody',
+                '{count, plural, one {# open session ends} other {# open sessions end}} on all devices. {user} can sign in again unless you also block the account.',
+                { count: summary.openCount, user: userLabel }
+              )}
+              confirmLabel={endAllLabel}
+              onConfirm={handleEndAll}
+              fallbackFocusRef={panelRef}
+              disabled={actionsDisabled || !hasOpenSessions}
+              trigger={
+                <Button
+                  fullWidth
+                  size="S"
+                  variant="danger-light"
+                  startIcon={<SignOut aria-hidden focusable={false} />}
+                  loading={pendingAction === 'endAll'}
+                  disabled={actionsDisabled || !hasOpenSessions}
+                  aria-describedby={!loading && !hasOpenSessions ? noOpenSessionsHintId : undefined}
+                  type="button"
+                >
+                  {endAllLabel}
+                </Button>
+              }
+            />
+            {isBlocked ? (
+              <Button
+                ref={blockToggleRef}
+                data-block-toggle="unblock"
+                fullWidth
+                size="S"
+                variant="secondary"
+                startIcon={<CheckCircle aria-hidden focusable={false} />}
+                loading={pendingAction === 'unblock'}
+                disabled={actionsDisabled}
+                onClick={handleUnblock}
+                type="button"
+              >
+                {unblockLabel}
+              </Button>
+            ) : (
+              <ConfirmAction
+                title={t('panel.confirm.blockTitle', 'Block {user}?', { user: userLabel })}
+                body={t(
+                  'panel.confirm.blockBody',
+                  '{user} can no longer sign in, and {count, plural, =0 {no open sessions are affected} one {# open session ends now} other {# open sessions end now}}. You can unblock the account later; ended sessions stay ended.',
+                  { count: summary.openCount, user: userLabel }
+                )}
+                confirmLabel={blockLabel}
+                onConfirm={handleBlock}
+                fallbackFocusRef={panelRef}
+                disabled={actionsDisabled}
+                trigger={
+                  <Button
+                    ref={blockToggleRef}
+                    data-block-toggle="block"
+                    fullWidth
+                    size="S"
+                    variant="danger-light"
+                    startIcon={<Lock aria-hidden focusable={false} />}
+                    loading={pendingAction === 'block'}
+                    disabled={actionsDisabled}
+                    type="button"
+                  >
+                    {blockLabel}
+                  </Button>
+                }
+              />
+            )}
+          </ActionStack>
+          {!loading && !hasOpenSessions ? (
+            <Typography id={noOpenSessionsHintId} variant="pi" textColor="neutral600">
+              {t('panel.actions.noOpenSessions', 'No open sessions')}
+            </Typography>
+          ) : null}
+          <ReadableText variant="pi" textColor="neutral600" tag="p">
+            {t(
+              'panel.actions.hint',
+              'End all sessions lets the user sign in again. Block user also prevents new sign-ins.'
+            )}
+          </ReadableText>
         </Flex>
-      </PanelContainer>
+
+        {/* Open sessions */}
+        {loading ? null : (
+          <Flex direction="column" alignItems="stretch" gap={2} data-panel-sessions="">
+            <Typography variant="sigma" textColor="neutral600" tag="h3">
+              {t('panel.sessions.openTitle', 'Open sessions')}
+            </Typography>
+            {visible.length > 0 ? (
+              <Flex
+                tag="ul"
+                direction="column"
+                alignItems="stretch"
+                gap={2}
+                margin={0}
+                padding={0}
+                style={{ listStyle: 'none' }}
+              >
+                {visible.map((session) => (
+                  <PanelSessionCard key={session.id} session={session} t={t} />
+                ))}
+              </Flex>
+            ) : (
+              <Box padding={3} background="neutral0" borderColor="neutral200" hasRadius>
+                <ReadableText variant="omega" textColor="neutral800" tag="p">
+                  {t(
+                    'panel.empty.noOpenSessions',
+                    'No open sessions. {user} is not signed in on any device.',
+                    { user: userLabel }
+                  )}
+                </ReadableText>
+              </Box>
+            )}
+            {hiddenCount > 0 ? (
+              <Typography variant="pi" textColor="neutral600">
+                {t('panel.sessions.more', '{count, plural, other {+# more}}', {
+                  count: hiddenCount,
+                })}
+              </Typography>
+            ) : null}
+          </Flex>
+        )}
+
+        <TargetLink tag={NavLink} to={buildUserSessionsHref(document)}>
+          {t('panel.sessions.showAllLink', 'Show all sessions')}
+        </TargetLink>
+      </Flex>
     ),
   };
 };

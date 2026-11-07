@@ -13,6 +13,7 @@
 ### Task 1: Establish Shared Authentication Classification
 
 **Files:**
+
 - Create: `server/src/utils/auth-routes.js`
 - Modify: `server/src/bootstrap.js`
 - Test: `tests/auth-routes.test.js`
@@ -50,6 +51,7 @@ Expected: PASS.
 ### Task 2: Correct Last-Seen Ordering And Inactivity Enforcement
 
 **Files:**
+
 - Modify: `server/src/middlewares/last-seen.js`
 - Modify: `server/src/bootstrap.js`
 - Test: `tests/last-seen.test.js`
@@ -95,6 +97,7 @@ Expected: PASS.
 ### Task 3: Make Login, Password Change, And Refresh Fail Closed
 
 **Files:**
+
 - Create: `server/src/utils/refresh-token.js`
 - Modify: `server/src/services/session.js`
 - Modify: `server/src/bootstrap.js`
@@ -116,6 +119,7 @@ assert.equal(getOutgoingRefreshToken(ctx, strapi), 'rotated-refresh');
 **Step 2: Write failing interceptor tests**
 
 Assert:
+
 - failed session creation replaces a JWT response with HTTP 503;
 - change-password rotates the current token-matched session;
 - body refresh rotates access and refresh hashes;
@@ -156,6 +160,7 @@ Expected: PASS.
 ### Task 4: Remove Bulk Session Caps
 
 **Files:**
+
 - Modify: `server/src/services/session.js`
 - Modify: `server/src/register.js`
 - Modify: `server/src/controllers/session.js`
@@ -185,6 +190,7 @@ Expected: PASS.
 ### Task 5: Honor GeoIP And Notification Settings
 
 **Files:**
+
 - Modify: `server/src/services/session.js`
 - Modify: `server/src/controllers/session.js`
 - Modify: `server/src/utils/enhance-session.js`
@@ -221,6 +227,7 @@ Expected: PASS.
 ### Task 6: Synchronize Defaults And Admin Reporting
 
 **Files:**
+
 - Modify: `server/src/config/index.js`
 - Modify: `server/src/controllers/settings.js`
 - Create: `admin/src/utils/sessionStatus.mjs`
@@ -263,6 +270,7 @@ Expected: PASS and successful production bundle.
 ### Task 7: Full Stability Gate
 
 **Files:**
+
 - Modify: `README.md` only where refresh/cookie/fail-closed behavior needs documenting
 
 **Step 1: Run all tests with coverage**

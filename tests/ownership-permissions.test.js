@@ -133,18 +133,20 @@ test('content API denies session listing when the authenticated user has no docu
 });
 
 test('admin session routes require both an admin identity and the plugin access action', () => {
-  const sensitiveRoutes = adminRoutes.filter((route) =>
-    /sessions|user\/:userId/.test(route.path)
-  );
+  const sensitiveRoutes = adminRoutes.filter((route) => /sessions|user\/:userId/.test(route.path));
 
   assert.ok(sensitiveRoutes.length > 0);
   for (const route of sensitiveRoutes) {
     const policies = route.config?.policies || [];
-    assert.ok(policies.includes('admin::isAuthenticatedAdmin'), `${route.path} must require an admin`);
     assert.ok(
-      policies.some((policy) =>
-        policy?.name === 'admin::hasPermissions' &&
-        policy.config?.actions?.includes('plugin::magic-sessionmanager.access')
+      policies.includes('admin::isAuthenticatedAdmin'),
+      `${route.path} must require an admin`
+    );
+    assert.ok(
+      policies.some(
+        (policy) =>
+          policy?.name === 'admin::hasPermissions' &&
+          policy.config?.actions?.includes('plugin::magic-sessionmanager.access')
       ),
       `${route.path} must require the Sessionmanager access permission`
     );
@@ -156,7 +158,11 @@ test('content API session routes require users-permissions authentication and ra
 
   assert.ok(sessionRoutes.length > 0);
   for (const route of sessionRoutes) {
-    assert.deepEqual(route.config?.auth?.strategies, ['users-permissions'], `${route.path} must require user JWT auth`);
+    assert.deepEqual(
+      route.config?.auth?.strategies,
+      ['users-permissions'],
+      `${route.path} must require user JWT auth`
+    );
     assert.ok(route.config?.middlewares?.length > 0, `${route.path} must be rate limited`);
   }
 });

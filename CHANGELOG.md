@@ -1,3 +1,63 @@
+## [Unreleased]
+
+Branch `claude/sessionmanager-ui-redesign`. Not yet accepted: see `GATES.md` and `gates/ui-redesign.md`. Whoever cuts the next release must fold this section into the generated release entry, so it does not stay behind as a second `[Unreleased]` block.
+
+### Known issues in 4.8.0
+
+4.8.0 was released before its acceptance gates closed, although its release-readiness audit said not to publish. It is not accepted. Known defects in 4.8.0, fixed on this branch:
+
+* The Session Details dialog has no accessible name, and focus can land on the page body after Escape.
+* Settings field hints, including the GeoIP privacy disclosure, never render.
+* Three Settings alerts have close buttons without a name; country chips cannot be removed with the keyboard.
+* In `legacy-support` mode, a password reset leaves the user's older sessions usable.
+* A failed block followed by a retry of the bodyless toggle unblocks the user.
+* The Content API rate limiter is keyed on the raw request path, so varying the path opens a fresh budget.
+
+### Changed
+
+* **Terminology and information architecture** (`docs/plans/2026-11-06-ui-information-architecture.md`). One term per concept on every screen and in all five locales: **End** a session (it stops working, the record stays), **Delete record** (history removed; an open session also ends), **Block user** (no sign-in, all open sessions end). "Terminate", "Terminated", "Clean now", "Remove session details", "Activation" and "Online" for sessions are retired. "Online" now describes users only: a user is online when at least one of their sessions is Active. German uses "Sitzung", "Im Leerlauf", "sperren" for accounts only and formal "Sie" throughout.
+* **Session states:** a session is **Active** (open and used within the inactivity timeout), **Idle** (open, unused for longer than the timeout) or **Ended**, and an ended session shows its **end reason**: Logged out, Timed out, Expired, Ended manually, User blocked, or Reason not recorded. Idle covers open sessions only; sessions closed by the idle check show "Ended · Timed out" instead of a red "Terminated" badge. Danger colour is no longer a session state. Rows without a stored reason show "Reason not recorded" instead of being guessed as "Logged out".
+* **Settings navigation:** the three links under Settings › Session Manager are **Configuration** (was "General"), **Analytics** and **License** (was "Activation"); routes are unchanged. Configuration has five tabs, deep-linkable with `?tab=`: **Sessions**, **Login protection**, **Location data**, **Alerts**, **Data and retention**. "Reset" is now **Discard changes** (it re-loads the stored values and asks first); "Clean now" is now **Delete ended sessions** and states that idle sessions are not affected. The footer says that other server processes apply saved changes within 30 seconds, instead of "immediately". Login protection copy states that it acts on new sign-ins only and that the IP lockout locks out an IP address for 15 minutes, not the user account. Webhook copy names Discord and Slack only ("or custom endpoints" removed). Country rules read "Allow only listed countries" / "Reject listed countries".
+* **Home widget "Online users":** tiles are Online users (of all registered users), Active sessions, Idle sessions and Blocked users. "Online" follows the configured inactivity timeout (`isTrulyActive`) like every other screen, instead of fixed 15 and 30 minute windows; the "Last 15 min", "Last 30 min" and "Offline" tiles are removed, so numbers differ from earlier releases.
+* **On-demand location lookup:** the Session details dialog no longer calls `GET /geolocation/:ip` when it opens. Sessions without a stored location offer a **Look up location** button with a note that the IP address can be sent to ipapi.co.
+* **Export:** CSV and JSON exports gain an additive **End reason** column. Existing columns are unchanged, but the Status value of rows without a stored reason changes (see Session states).
+* **Analytics:** "Online now" is now **Active sessions**; "Logins today / this week" are **Sign-ins in the last 24 hours / last 7 days** (rolling windows). Devices come from the stored device type, with an "Unknown" bucket for sessions without a user agent.
+* **Admin UI redesign** to match Strapi's own screens. Shared building blocks (`PageShell`, `SectionCard`, `StatGrid`, `PropertyList`, `StatusBadge`, `ConfirmAction`) are used on every page. Only Design System components, spacing tokens and breakpoints are used: no emoji, colour literals or px font sizes.
+* **Dashboard:** export menu (CSV, JSON) in the header; Strapi search, status filter and refresh in one action bar; four equal stat cards (Active, Idle, Ended, All) that set the status filter; status filter (All sessions, Open, Active, Idle, Ended) with an End reason filter for ended sessions; row actions View details, End session (disabled on ended rows) and More actions › Delete record; Design System table without a fixed minimum width, so the Actions column is no longer clipped; row actions reachable by keyboard; page, page size, status and search kept in the URL; native pagination; refreshing keeps the table and the focus in place; an alert when only the latest 1,000 sessions are loaded. Between the medium and large breakpoints the IP address and Signed in columns are hidden; below the medium breakpoint the table becomes a card list.
+* **Session details:** named dialog with device icon and status badge; sections for user, session, device, location and security, and technical details; copy button for the session ID; a state sentence that explains why the session is in its state; "Ended at" and "End reason" rows; the security score as "{score}/100" with its threshold note; separate VPN and proxy values; **End session** asks for confirmation, and ended sessions show "This session has already ended." instead.
+* **Settings:** split into the five Configuration tabs above with Save and Discard changes in the header, a warning before leaving with unsaved changes, inline validation, and a form that shows what the server actually stored after saving. "Copy for .env" quotes the value so `#` survives. A newly generated key stays hidden until revealed. Countries are chosen with a searchable combobox. The privacy note on IP lookups sits next to the switch that enables them.
+* **Analytics, License, home widget, user panel:** equal-height cards and readable bar labels; license details as a property list with a masked key; widget tiles in a 2×2 grid; the user panel shows Online / Not online, "{n} open sessions" and the last activity, with **End all sessions** and **Block user** as equal buttons with confirmation (Unblock user without confirmation) and a "Show all sessions" link to the dashboard filtered by the user's email. After block or unblock the open Content Manager form is updated, so a later Save does not undo it.
+* Destructive actions use Strapi's confirmation dialog instead of `window.confirm`.
+* All visible text is translated in English, German (formal "Sie"), French, Spanish and Portuguese, and dates use the admin locale.
+* CSV and JSON exports use stable English column names, write device type keys (for example `desktop`) and leave missing values empty instead of writing the translated word "Unavailable". Invalid timestamps no longer abort the CSV export.
+* Server-side store and provider failures now return 500 (502 for a failed MaxMind download, 503 when the licence server is unreachable) instead of 400. The `{ data: null, error }` envelope is unchanged; clients that check for 400 must be updated.
+* Admin session lists no longer include the internal `sessionId` field. Actions use `documentId`; the Content API `/my-sessions` response keeps `sessionId`.
+* `POST /magic-sessionmanager/user/:userId/toggle-block` accepts `{ "blocked": true | false }` to set the state, which is safe to retry and is what the admin UI sends. A request without a body still toggles, as before, but is deprecated. A `blocked` value that is not a boolean returns 400. The response adds `mode` (`explicit` or `toggle`).
+* Session objects in admin and Content API responses no longer include `nativeSessionId` (token and token-hash fields were already removed).
+* Admin `POST /magic-sessionmanager/sessions/:sessionId/terminate` returns 404 for an unknown session, and `POST /magic-sessionmanager/user/:userId/terminate-all` returns 404 for an unknown user. Both answered 200 before.
+* Admin `POST /magic-sessionmanager/sessions/clean-inactive` returns 500 with `deletedCount` and `failedCount` when some records cannot be removed, instead of stopping and reporting success.
+* Settings `PUT`: a webhook URL on a host other than Discord or Slack is rejected with a field error instead of being saved as empty, and an email template longer than its limit (subject 200, HTML 10,000, text 5,000 characters) is rejected instead of being cut off.
+* The opt-in `plugin::magic-sessionmanager.session-required` policy follows the global token check more closely. With Strict token check it now also returns 401 when the user cannot be resolved, when settings or the session lookup fail, and, with `jwtManagement: 'refresh'`, when Strapi verified no native session or the session row does not match it. Relaxed behaviour is unchanged. No plugin route attaches the policy.
+* If the plugin settings cannot be read from the store, IP location lookup is turned off as well (Strict token check was already enforced in that case) until the store recovers, so the static defaults cannot override a saved opt-out.
+* Every admin page sets the browser tab title, for example "Sessions | Strapi".
+
+### Fixed
+
+* A successful password reset ends every older session of the user in both JWT modes; if that fails, the reset fails closed.
+* The Content API rate limiter keys buckets on the matched route instead of the raw path, and admin settings can only make the write limit stricter.
+* A partial settings update keeps omitted fields; invalid values are rejected with field errors instead of being clamped silently.
+* `store-key` rejects non-string keys and invalid emails before calling the licence server.
+* Deleting another user's session answers exactly like a missing session, so session IDs cannot be probed.
+* Blocking a user from the admin revokes the user's sessions once instead of twice.
+* `tests/isolated-fallback-logout-http.test.js` skips with a clear message instead of failing when no Strapi host dependencies are available.
+* iPad user agents are recorded as tablets, and iPhone and iPad sessions report iOS instead of macOS.
+* IPv4-mapped IPv6 addresses in expanded or hexadecimal form are recognised as private or loopback addresses, so they are no longer sent to a location provider.
+
+### Documentation and maintenance
+
+* README and the project site (`docs/site`) are rewritten for the new screens and terminology. They include a configuration, Content API and Admin API reference checked against the code, a section on the opt-in `session-required` policy and a maintenance status. The screenshots in `pics/` and `docs/site/img/` are new and show synthetic data only.
+* Dependabot proposes weekly patch and minor updates. A workflow merges a Dependabot pull request that is not a major update once tests, type checks, build, verify and a critical-level production audit pass. The lint step runs only if a `lint` script exists, and there is none yet. Merges use `GITHUB_TOKEN`, so they do not trigger the release workflow.
+
 # [4.8.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.2...v4.8.0) (2026-11-06)
 
 
@@ -12,11 +72,7 @@
 * add Strapi-native end-user session management ([2f00880](https://github.com/Schero94/Magic-Sessionmanager/commit/2f00880337bf590e4e5cbc8059c31fd0d18aee05))
 * improve session settings and admin access ([36ccd50](https://github.com/Schero94/Magic-Sessionmanager/commit/36ccd503433a7b8d6ade9e7d0ec971ba124518aa))
 
-## [Unreleased]
-
-### Added
-
-* Add native Strapi Users & Permissions end-user session support for `jwtManagement: 'refresh'` while retaining `legacy-support`, Magic session metadata and history, and existing endpoint contracts. The plugin does not change host authentication configuration. Strapi administrator-account sessions remain out of scope.
+The native Strapi Users & Permissions end-user session support from 2f00880 covers sessions with `jwtManagement: 'refresh'` and keeps `legacy-support`, Magic session metadata and history, and the existing endpoint contracts. The plugin does not change host authentication configuration. Strapi administrator-account sessions remain out of scope. (Moved here from a stale `[Unreleased]` block on 2026-11-06.)
 
 ## [4.7.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.7.1...v4.7.2) (2026-07-11)
 

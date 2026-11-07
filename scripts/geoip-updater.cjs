@@ -11,7 +11,12 @@ const gunzip = promisify(zlib.gunzip);
 
 const DEFAULT_EDITION_ID = 'GeoLite2-City';
 const DEFAULT_MMDB_NAME = `${DEFAULT_EDITION_ID}.mmdb`;
-const DEFAULT_GEOIP_DIRECTORY = path.resolve(process.cwd(), 'data', 'magic-sessionmanager', 'geoip');
+const DEFAULT_GEOIP_DIRECTORY = path.resolve(
+  process.cwd(),
+  'data',
+  'magic-sessionmanager',
+  'geoip'
+);
 const DEFAULT_OUTPUT_PATH = path.join(DEFAULT_GEOIP_DIRECTORY, DEFAULT_MMDB_NAME);
 const SUPPORTED_EDITION_IDS = new Set([
   'GeoLite2-City',
@@ -19,7 +24,9 @@ const SUPPORTED_EDITION_IDS = new Set([
   'GeoIP2-City',
   'GeoIP2-Country',
 ]);
-const SUPPORTED_MMDB_NAMES = new Set([...SUPPORTED_EDITION_IDS].map((editionId) => `${editionId}.mmdb`));
+const SUPPORTED_MMDB_NAMES = new Set(
+  [...SUPPORTED_EDITION_IDS].map((editionId) => `${editionId}.mmdb`)
+);
 
 /**
  * Resolves a supported MMDB filename into the plugin's dedicated database
@@ -171,9 +178,9 @@ function resolveConfig(env = process.env, argv = process.argv.slice(2), override
     '';
   const editionId = normalizeEditionId(
     overrides.editionId ||
-    env.MAXMIND_EDITION_ID ||
-    inferEditionIdFromPath(configuredOutputPath) ||
-    DEFAULT_EDITION_ID
+      env.MAXMIND_EDITION_ID ||
+      inferEditionIdFromPath(configuredOutputPath) ||
+      DEFAULT_EDITION_ID
   );
   const databaseDirectory = overrides.databaseDirectory || DEFAULT_GEOIP_DIRECTORY;
   const outputPath = resolveDatabaseTarget(
@@ -197,12 +204,7 @@ function resolveConfig(env = process.env, argv = process.argv.slice(2), override
  * @param {object} options Comparison inputs and force flag
  * @returns {boolean} Whether the updater should fetch a fresh archive
  */
-function needsDownload({
-  force,
-  localExists,
-  localMetadata,
-  remoteLastModified,
-}) {
+function needsDownload({ force, localExists, localMetadata, remoteLastModified }) {
   if (force) return true;
   if (!localExists) return true;
   if (!remoteLastModified) return true;
@@ -420,12 +422,14 @@ async function updateGeoIpDatabase(config = resolveConfig()) {
     fileExists(outputPath),
   ]);
 
-  if (!needsDownload({
-    force: config.force,
-    localExists,
-    localMetadata,
-    remoteLastModified: head.lastModified,
-  })) {
+  if (
+    !needsDownload({
+      force: config.force,
+      localExists,
+      localMetadata,
+      remoteLastModified: head.lastModified,
+    })
+  ) {
     return {
       changed: false,
       outputPath,
@@ -438,13 +442,20 @@ async function updateGeoIpDatabase(config = resolveConfig()) {
   const extracted = await extractMmdbFromTarGz(archive, mmdbFileName);
 
   await writeAtomic(outputPath, extracted.data);
-  await writeAtomic(metadataPath, JSON.stringify({
-    editionId,
-    sourceFile: extracted.name,
-    lastModified: head.lastModified,
-    downloadedAt: new Date().toISOString(),
-    sourceUrl: url,
-  }, null, 2));
+  await writeAtomic(
+    metadataPath,
+    JSON.stringify(
+      {
+        editionId,
+        sourceFile: extracted.name,
+        lastModified: head.lastModified,
+        downloadedAt: new Date().toISOString(),
+        sourceUrl: url,
+      },
+      null,
+      2
+    )
+  );
 
   return {
     changed: true,

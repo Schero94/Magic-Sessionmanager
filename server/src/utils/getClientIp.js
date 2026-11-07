@@ -39,9 +39,10 @@ function isProxyTrusted(ctx) {
   }
 
   try {
-    const config = ctx?.state?.__magicSessionSettings
-      || ctx?.app?.context?.strapi?.config?.get?.('plugin::magic-sessionmanager')
-      || {};
+    const config =
+      ctx?.state?.__magicSessionSettings ||
+      ctx?.app?.context?.strapi?.config?.get?.('plugin::magic-sessionmanager') ||
+      {};
     const trusted = config.trustedProxies;
     if (trusted === true) return true;
     if (Array.isArray(trusted) && trusted.length > 0) return true;
@@ -88,7 +89,10 @@ const getClientIp = (ctx) => {
     return 'unknown';
   } catch (error) {
     if (ctx?.app?.context?.strapi?.log?.debug) {
-      ctx.app.context.strapi.log.debug('[getClientIp] Error extracting IP:', error?.name || 'Error');
+      ctx.app.context.strapi.log.debug(
+        '[getClientIp] Error extracting IP:',
+        error?.name || 'Error'
+      );
     }
     return 'unknown';
   }

@@ -2,6 +2,7 @@
 
 const { createLogger } = require('./utils/logger');
 const { createContentApiPermissionsLifecycle } = require('./utils/content-api-permissions');
+const { isCallerRevocationScope } = require('./utils/block-revocation-scope');
 
 const USER_UID = 'plugin::users-permissions.user';
 
@@ -82,6 +83,10 @@ module.exports = async ({ strapi }) => {
           const userDocId = result.documentId;
           if (!userDocId) return;
 
+          // The admin block endpoint revokes the sessions itself and reports
+          // failures; revoking here as well would run every revocation twice.
+          if (isCallerRevocationScope(userDocId)) return;
+
           const sessionService = strapi.plugin('magic-sessionmanager').service('session');
           const { terminatedCount: terminated } = await sessionService.terminateSession({
             userId: userDocId,
@@ -98,7 +103,6 @@ module.exports = async ({ strapi }) => {
     });
 
     log.info('[SUCCESS] Plugin registered successfully');
-
   } catch (err) {
     log.error('[ERROR] Registration error:', err?.name || 'Error');
   }

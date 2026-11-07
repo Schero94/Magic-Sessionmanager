@@ -13,9 +13,11 @@ const SESSION_UID = 'plugin::magic-sessionmanager.session';
  */
 function shouldResolveGeoData(settings = {}) {
   if (settings.enableGeolocation === false) return false;
-  return settings.enableGeolocation === true ||
+  return (
+    settings.enableGeolocation === true ||
     settings.enableGeofencing === true ||
-    settings.blockSuspiciousSessions === true;
+    settings.blockSuspiciousSessions === true
+  );
 }
 
 /**
@@ -67,9 +69,7 @@ async function enhanceSession(session, opts = {}) {
       : parsedUA.browserName);
   const osName =
     session.osName ||
-    (parsedUA.osVersion
-      ? `${parsedUA.osName} ${parsedUA.osVersion}`
-      : parsedUA.osName);
+    (parsedUA.osVersion ? `${parsedUA.osName} ${parsedUA.osVersion}` : parsedUA.osName);
 
   let geoLocation = session.geoLocation;
   if (typeof geoLocation === 'string') {
@@ -110,7 +110,9 @@ async function enhanceSession(session, opts = {}) {
                 securityScore: geoData.securityScore ?? null,
               },
             })
-            .catch(() => { /* fire-and-forget */ });
+            .catch(() => {
+              /* fire-and-forget */
+            });
         }
       }
     } catch {
@@ -154,9 +156,7 @@ async function enhanceSessions(sessions, opts = {}, maxGeoLookups = 20) {
   const geoCounter = { remaining: maxGeoLookups };
   const now = new Date();
 
-  return Promise.all(
-    sessions.map((s) => enhanceSession(s, { ...opts, geoCounter, now }))
-  );
+  return Promise.all(sessions.map((s) => enhanceSession(s, { ...opts, geoCounter, now })));
 }
 
 module.exports = { enhanceSession, enhanceSessions, shouldResolveGeoData };

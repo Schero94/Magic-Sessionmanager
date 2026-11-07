@@ -26,10 +26,7 @@ test('classifies every supported Strapi JWT-issuing route', () => {
     assert.equal(classifyJwtIssuingRequest(path, method), 'new-session', `${method} ${path}`);
   }
 
-  assert.equal(
-    classifyJwtIssuingRequest('/api/auth/change-password', 'POST'),
-    'rotate-current'
-  );
+  assert.equal(classifyJwtIssuingRequest('/api/auth/change-password', 'POST'), 'rotate-current');
   assert.equal(classifyJwtIssuingRequest('/api/auth/refresh', 'POST'), 'refresh');
   assert.equal(classifyJwtIssuingRequest('/api/articles', 'GET'), null);
 });
@@ -48,4 +45,13 @@ test('failed-login lockout only counts credential verification routes', () => {
   assert.equal(isFailedLoginTrackedPath('/api/magic-link/login/challenge', 'GET'), true);
   assert.equal(isFailedLoginTrackedPath('/api/auth/local/register', 'POST'), false);
   assert.equal(isFailedLoginTrackedPath('/api/auth/reset-password', 'POST'), false);
+});
+
+test('GA-04: identifies only the successful-reset route as a password reset', () => {
+  const { isPasswordResetRequest } = require('../server/src/utils/auth-routes');
+  assert.equal(isPasswordResetRequest('/api/auth/reset-password', 'POST'), true);
+  assert.equal(isPasswordResetRequest('/api/auth/reset-password', 'post'), true);
+  assert.equal(isPasswordResetRequest('/api/auth/reset-password', 'GET'), false);
+  assert.equal(isPasswordResetRequest('/api/auth/forgot-password', 'POST'), false);
+  assert.equal(isPasswordResetRequest('/api/auth/local', 'POST'), false);
 });

@@ -20,18 +20,26 @@ const SENSITIVE_ERROR = `private error for ${SENSITIVE_EMAIL} ${SENSITIVE_IP} ${
 
 function createNotificationHarness(send) {
   const logs = [];
-  const templates = Object.fromEntries(['suspiciousLogin', 'newLocation', 'vpnProxy'].map((name) => [
-    name,
-    { subject: 'test', html: '{{user.email}} {{session.ipAddress}}', text: '{{user.email}} {{session.ipAddress}}' },
-  ]));
+  const templates = Object.fromEntries(
+    ['suspiciousLogin', 'newLocation', 'vpnProxy'].map((name) => [
+      name,
+      {
+        subject: 'test',
+        html: '{{user.email}} {{session.ipAddress}}',
+        text: '{{user.email}} {{session.ipAddress}}',
+      },
+    ])
+  );
   const strapi = {
     store: () => ({ get: async () => ({ emailTemplates: templates }) }),
     plugins: { email: { services: { email: { send } } } },
     log: {
       debug: (...args) => logs.push(args.map(String).join(' ')),
       info: (...args) => logs.push(args.map(String).join(' ')),
-      warn: (...args) => logs.push(args.map((arg) => arg instanceof Error ? arg.message : String(arg)).join(' ')),
-      error: (...args) => logs.push(args.map((arg) => arg instanceof Error ? arg.message : String(arg)).join(' ')),
+      warn: (...args) =>
+        logs.push(args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')),
+      error: (...args) =>
+        logs.push(args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')),
     },
   };
   return { service: createNotifications({ strapi }), logs };
@@ -69,7 +77,10 @@ test('webhook transport errors do not log the secret URL or its path token', asy
   };
 
   try {
-    assert.equal(await service.sendWebhook({ event: 'session-alert', data: {}, webhookUrl }), false);
+    assert.equal(
+      await service.sendWebhook({ event: 'session-alert', data: {}, webhookUrl }),
+      false
+    );
     assert.equal(logs.join('\n').includes(webhookUrl), false);
     assert.equal(logs.join('\n').includes('private-secret'), false);
   } finally {
@@ -138,7 +149,8 @@ test('rate-limit warnings do not include caller identifiers or IP addresses', as
 });
 
 test('auth and session log templates omit IP, email, and stable user/session identifiers', () => {
-  const readServerFile = (relativePath) => fs.readFileSync(path.join(__dirname, '..', 'server', 'src', relativePath), 'utf8');
+  const readServerFile = (relativePath) =>
+    fs.readFileSync(path.join(__dirname, '..', 'server', 'src', relativePath), 'utf8');
   const bootstrap = readServerFile('bootstrap.js');
   const policy = readServerFile(path.join('policies', 'session-required.js'));
   const sessionController = readServerFile(path.join('controllers', 'session.js'));
@@ -177,14 +189,21 @@ test('license, GeoIP and settings controller failures do not log raw exception d
     debug() {},
     info() {},
     warn: (message) => logs.push(String(message)),
-    error: (...args) => logs.push(args.map((arg) => arg instanceof Error ? arg.message : String(arg)).join(' ')),
+    error: (...args) =>
+      logs.push(args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')),
   };
   const previousStrapi = global.strapi;
 
   try {
     const licenseController = createLicenseController({
       strapi: {
-        plugin: () => ({ service: () => ({ getLicenseByKey: async () => { throw new Error(SENSITIVE_ERROR); } }) }),
+        plugin: () => ({
+          service: () => ({
+            getLicenseByKey: async () => {
+              throw new Error(SENSITIVE_ERROR);
+            },
+          }),
+        }),
         store: () => ({ get: async () => SENSITIVE_LICENSE_KEY }),
         log,
       },
@@ -194,7 +213,9 @@ test('license, GeoIP and settings controller failures do not log raw exception d
     global.strapi = {
       store: () => ({
         get: async () => null,
-        set: async () => { throw new Error(SENSITIVE_ERROR); },
+        set: async () => {
+          throw new Error(SENSITIVE_ERROR);
+        },
       }),
       log,
     };
@@ -206,7 +227,11 @@ test('license, GeoIP and settings controller failures do not log raw exception d
     });
 
     global.strapi = {
-      store: () => ({ get: async () => { throw new Error(SENSITIVE_ERROR); } }),
+      store: () => ({
+        get: async () => {
+          throw new Error(SENSITIVE_ERROR);
+        },
+      }),
       log,
     };
     await settingsController.getSettings({
@@ -240,7 +265,11 @@ test('optional license provider errors and response messages are redacted from l
   });
 
   try {
-    global.fetch = async () => ({ json: async () => { throw new Error(SENSITIVE_ERROR); } });
+    global.fetch = async () => ({
+      json: async () => {
+        throw new Error(SENSITIVE_ERROR);
+      },
+    });
     await service.createLicense({ email: SENSITIVE_EMAIL, firstName: 'Test', lastName: 'User' });
     await service.verifyLicense(SENSITIVE_LICENSE_KEY);
     await service.getLicenseByKey(SENSITIVE_LICENSE_KEY);
@@ -271,7 +300,10 @@ test('server log call sites do not interpolate or pass raw exceptions or provide
   visit(serverRoot);
 
   const unsafeLogPatterns = [
-    ['raw exception message', /\.log\.(?:debug|info|warn|error)\([^\r\n]*(?:err|error|cleanupErr|e)\.message/],
+    [
+      'raw exception message',
+      /\.log\.(?:debug|info|warn|error)\([^\r\n]*(?:err|error|cleanupErr|e)\.message/,
+    ],
     ['raw exception object', /\.log\.(?:debug|info|warn|error)\([^\r\n]*,\s*(?:err|error)\s*\)/],
     ['provider response message', /\.log\.(?:debug|info|warn|error)\([^\r\n]*data\.message/],
     ['user identifier in log template', /\$\{userDocId\.substring\(/],

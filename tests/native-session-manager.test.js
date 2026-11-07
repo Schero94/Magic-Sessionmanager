@@ -66,9 +66,7 @@ test('legacy-support returns null without reading or calling the native manager'
   };
 
   Object.defineProperty(strapi, 'sessionManager', {
-    get() {
-      assert.fail('legacy mode must not read strapi.sessionManager');
-    },
+    get: () => assert.fail('legacy mode must not read strapi.sessionManager'),
   });
 
   assert.equal(getNativeSessionManager(strapi), null);
@@ -80,9 +78,7 @@ test('missing mode defaults to legacy-support without consulting native sessions
   };
 
   Object.defineProperty(strapi, 'sessionManager', {
-    get() {
-      assert.fail('the default legacy mode must not read strapi.sessionManager');
-    },
+    get: () => assert.fail('the default legacy mode must not read strapi.sessionManager'),
   });
 
   assert.equal(getNativeSessionManager(strapi), null);

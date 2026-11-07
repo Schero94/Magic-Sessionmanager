@@ -30,12 +30,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_FETCH_TIM
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // eslint-disable-next-line no-await-in-loop
       return await fetch(url, { ...options, signal: controller.signal });
     } catch (err) {
       lastError = err;
       if (attempt < FETCH_RETRIES) {
-        // eslint-disable-next-line no-await-in-loop
         await new Promise((r) => setTimeout(r, FETCH_RETRY_BACKOFF_MS));
         continue;
       }
@@ -79,7 +77,11 @@ module.exports = ({ strapi }) => {
           identifier = `${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
         }
 
-        const deviceId = crypto.createHash('sha256').update(identifier).digest('hex').substring(0, 32);
+        const deviceId = crypto
+          .createHash('sha256')
+          .update(identifier)
+          .digest('hex')
+          .substring(0, 32);
         await pluginStore.set({ key: 'deviceId', value: deviceId });
         return deviceId;
       } catch {
@@ -121,21 +123,24 @@ module.exports = ({ strapi }) => {
 
     async createLicense({ email, firstName, lastName }) {
       try {
-        const response = await fetchWithTimeout(`${this.getLicenseServerUrl()}/api/licenses/create`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            firstName,
-            lastName,
-            deviceName: this.getDeviceName(),
-            deviceId: await this.generateDeviceId(),
-            ipAddress: this.getIpAddress(),
-            userAgent: this.getUserAgent(),
-            pluginName: 'magic-sessionmanager',
-            productName: 'Magic Session Manager',
-          }),
-        });
+        const response = await fetchWithTimeout(
+          `${this.getLicenseServerUrl()}/api/licenses/create`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email,
+              firstName,
+              lastName,
+              deviceName: this.getDeviceName(),
+              deviceId: await this.generateDeviceId(),
+              ipAddress: this.getIpAddress(),
+              userAgent: this.getUserAgent(),
+              pluginName: 'magic-sessionmanager',
+              productName: 'Magic Session Manager',
+            }),
+          }
+        );
 
         const data = await response.json();
         if (data.success) {
@@ -152,15 +157,18 @@ module.exports = ({ strapi }) => {
 
     async verifyLicense(licenseKey) {
       try {
-        const response = await fetchWithTimeout(`${this.getLicenseServerUrl()}/api/licenses/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            licenseKey,
-            pluginName: 'magic-sessionmanager',
-            productName: 'Magic Session Manager',
-          }),
-        });
+        const response = await fetchWithTimeout(
+          `${this.getLicenseServerUrl()}/api/licenses/verify`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              licenseKey,
+              pluginName: 'magic-sessionmanager',
+              productName: 'Magic Session Manager',
+            }),
+          }
+        );
 
         const data = await response.json();
         if (data.success && data.data) {
@@ -181,10 +189,13 @@ module.exports = ({ strapi }) => {
     async getLicenseByKey(licenseKey) {
       try {
         const encodedKey = encodeURIComponent(licenseKey);
-        const response = await fetchWithTimeout(`${this.getLicenseServerUrl()}/api/licenses/key/${encodedKey}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
+        const response = await fetchWithTimeout(
+          `${this.getLicenseServerUrl()}/api/licenses/key/${encodedKey}`,
+          {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
 
         const data = await response.json();
         if (data.success && data.data) return data.data;

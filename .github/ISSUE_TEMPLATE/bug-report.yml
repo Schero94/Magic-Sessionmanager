@@ -7,28 +7,28 @@ body:
     attributes:
       value: |
         ## Thanks for taking the time to report a bug!
-        
+
   - type: textarea
     id: bug-description
     attributes:
       label: 🐛 Bug Description
     validations:
       required: true
-      
+
   - type: textarea
     id: expected-behavior
     attributes:
       label: ✅ Expected Behavior
     validations:
       required: true
-      
+
   - type: textarea
     id: actual-behavior
     attributes:
       label: ❌ Actual Behavior
     validations:
       required: true
-      
+
   - type: textarea
     id: reproduction-steps
     attributes:
@@ -40,7 +40,7 @@ body:
         4. See error...
     validations:
       required: true
-      
+
   - type: dropdown
     id: feature-area
     attributes:
@@ -59,7 +59,7 @@ body:
         - Other
     validations:
       required: true
-      
+
   - type: dropdown
     id: user-provider
     attributes:
@@ -72,7 +72,7 @@ body:
         - Other
     validations:
       required: false
-      
+
   - type: input
     id: plugin-version
     attributes:
@@ -80,7 +80,7 @@ body:
       placeholder: e.g. 4.0.2
     validations:
       required: true
-      
+
   - type: input
     id: strapi-version
     attributes:
@@ -88,7 +88,7 @@ body:
       placeholder: e.g. 5.30.0
     validations:
       required: true
-      
+
   - type: input
     id: node-version
     attributes:
@@ -96,7 +96,7 @@ body:
       placeholder: e.g. 20.19.4
     validations:
       required: true
-      
+
   - type: dropdown
     id: database
     attributes:
@@ -109,7 +109,7 @@ body:
         - Other
     validations:
       required: false
-      
+
   - type: textarea
     id: error-logs
     attributes:
@@ -117,7 +117,7 @@ body:
       render: shell
     validations:
       required: false
-      
+
   - type: textarea
     id: session-config
     attributes:
@@ -126,7 +126,7 @@ body:
       render: javascript
     validations:
       required: false
-      
+
   - type: checkboxes
     id: terms
     attributes:

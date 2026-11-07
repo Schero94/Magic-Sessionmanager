@@ -1,4 +1,19 @@
-const CSV_HEADERS = [
+import { getSessionEndReason as defaultGetSessionEndReason } from './sessionStatus.mjs';
+
+/**
+ * Column names of the CSV export.
+ *
+ * These are deliberately stable English, machine-readable identifiers and are
+ * NOT translated (I18N-11): spreadsheets, SIEM imports and scripts address the
+ * columns by name, so a German and an English administrator must produce the
+ * same file. Cell values are data (status keys, ISO timestamps, device type
+ * keys), not UI text, for the same reason.
+ *
+ * "End Reason" (logout, idle, expired, manual, blocked, unrecorded; empty for
+ * open sessions) is appended last so existing column positions stay valid
+ * (decision I.2-4). Status values are active, idle or ended (decision I.2-1).
+ */
+export const CSV_HEADERS = Object.freeze([
   'ID',
   'Status',
   'User Email',
@@ -11,10 +26,25 @@ const CSV_HEADERS = [
   'Last Active',
   'Logout Time',
   'Minutes Idle',
-];
+  'End Reason',
+]);
 
 /** Quotes one CSV field and escapes embedded double quotes. */
 const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+/**
+ * Converts a timestamp to ISO 8601, or '' when it is missing or invalid.
+ * `new Date(undefined).toISOString()` throws, which used to abort the whole
+ * export when one legacy row had no login time.
+ *
+ * @param {unknown} value Timestamp.
+ * @returns {string} ISO string or ''.
+ */
+export function toIsoTimestamp(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const date = value instanceof Date ? value : new Date(/** @type {any} */ (value));
+  return Number.isFinite(date.getTime()) ? date.toISOString() : '';
+}
 
 /**
  * Serializes the complete filtered session collection to CSV rows.
@@ -23,17 +53,30 @@ const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
  *
  * @param {object[]} sessions Complete filtered session collection.
  * @param {object} options Export fallbacks and session presentation functions.
- * @param {string} options.unavailableValue Localized missing-value label.
+ * @param {string} options.unavailableValue Value written for missing details.
  * @param {(session: object, unavailableValue: string) => object} options.getDeviceInfo
  *   Normalizes optional device fields.
  * @param {(session: object) => string} options.getSessionStatus
  *   Returns the normalized lifecycle status.
+ * @param {(session: object) => (string|null)} [options.getSessionEndReason]
+ *   Returns the end reason key, or null for an open session.
  * @returns {string} CSV text with a header and one row per supplied session.
  */
-export function buildSessionCsv(sessions, { unavailableValue, getDeviceInfo, getSessionStatus }) {
+export function buildSessionCsv(
+  sessions,
+  {
+    unavailableValue,
+    getDeviceInfo,
+    getSessionStatus,
+    getSessionEndReason = defaultGetSessionEndReason,
+  }
+) {
   const rows = Array.isArray(sessions) ? sessions : [];
   const csvRows = rows.map((session) => {
     const deviceInfo = getDeviceInfo(session, unavailableValue);
+    const minutesIdle = Number.isFinite(session.minutesSinceActive)
+      ? session.minutesSinceActive
+      : '';
 
     return [
       session.id,
@@ -44,10 +87,11 @@ export function buildSessionCsv(sessions, { unavailableValue, getDeviceInfo, get
       deviceInfo.browser,
       deviceInfo.os,
       session.ipAddress || unavailableValue,
-      new Date(session.loginTime).toISOString(),
-      new Date(session.lastActive || session.loginTime).toISOString(),
-      session.logoutTime ? new Date(session.logoutTime).toISOString() : '',
-      session.minutesSinceActive,
+      toIsoTimestamp(session.loginTime),
+      toIsoTimestamp(session.lastActive || session.loginTime),
+      toIsoTimestamp(session.logoutTime),
+      minutesIdle,
+      getSessionEndReason(session) || '',
     ];
   });
 
@@ -66,33 +110,43 @@ export function buildSessionCsv(sessions, { unavailableValue, getDeviceInfo, get
  * @param {string} options.filterStatus Selected status filter.
  * @param {number} options.totalSessions Total sessions before filtering.
  * @param {string} options.exportedAt ISO timestamp for deterministic tests.
- * @param {string} options.unavailableValue Localized missing-value label.
+ * @param {string} options.unavailableValue Value written for missing details.
  * @param {(session: object, unavailableValue: string) => object} options.getDeviceInfo
  *   Normalizes optional device fields.
  * @param {(session: object) => string} options.getSessionStatus
  *   Returns the normalized lifecycle status.
+ * @param {(session: object) => (string|null)} [options.getSessionEndReason]
+ *   Returns the end reason key, or null for an open session.
+ * @param {boolean} [options.truncated] The list holds only the latest sessions the API returned.
  * @returns {string} Pretty-printed JSON document.
  */
-export function buildSessionJson(sessions, {
-  filterStatus,
-  totalSessions,
-  exportedAt,
-  unavailableValue,
-  getDeviceInfo,
-  getSessionStatus,
-}) {
+export function buildSessionJson(
+  sessions,
+  {
+    filterStatus,
+    totalSessions,
+    exportedAt,
+    unavailableValue,
+    getDeviceInfo,
+    getSessionStatus,
+    getSessionEndReason = defaultGetSessionEndReason,
+    truncated = false,
+  }
+) {
   const rows = Array.isArray(sessions) ? sessions : [];
   const exportData = {
     exportedAt,
     filter: filterStatus,
     totalSessions,
     exportedSessions: rows.length,
+    ...(truncated ? { truncated: true } : {}),
     sessions: rows.map((session) => {
       const deviceInfo = getDeviceInfo(session, unavailableValue);
 
       return {
         id: session.id,
         status: getSessionStatus(session),
+        endReason: getSessionEndReason(session) || null,
         user: {
           id: session.user?.documentId || session.user?.id,
           email: session.user?.email,

@@ -301,7 +301,10 @@ test('saving the Authenticated role before the first API request preserves its p
 
   assert.equal(nextCalls, 1);
   assert.equal(harness.permissionWrites.length, 0);
-  assert.equal(harness.permissions.some(({ role }) => role === harness.publicRole.id), false);
+  assert.equal(
+    harness.permissions.some(({ role }) => role === harness.publicRole.id),
+    false
+  );
 });
 
 test('saving the Public role does not suppress Authenticated permission initialization', async () => {

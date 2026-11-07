@@ -49,3 +49,19 @@ export const selectGeofencingMode = (currentMode, requestedMode) => {
     clearField: requestedMode === 'allowlist' ? 'blockedCountries' : 'allowedCountries',
   };
 };
+
+/**
+ * Tells whether switching modes would discard countries. The form then asks
+ * for confirmation instead of clearing the other list silently (SET-05).
+ *
+ * @param {{ allowedCountries?: unknown, blockedCountries?: unknown }} settings Draft settings.
+ * @param {'allowlist' | 'blocklist'} currentMode Current form mode.
+ * @param {'allowlist' | 'blocklist'} requestedMode Mode chosen by the user.
+ * @returns {{ confirm: boolean, clearField: 'allowedCountries' | 'blockedCountries' | null, count: number }}
+ *   Whether to confirm, which list would be cleared and how many entries it has.
+ */
+export const getModeChangeImpact = (settings, currentMode, requestedMode) => {
+  const { clearField } = selectGeofencingMode(currentMode, requestedMode);
+  const list = clearField && Array.isArray(settings?.[clearField]) ? settings[clearField] : [];
+  return { confirm: list.length > 0, clearField, count: list.length };
+};

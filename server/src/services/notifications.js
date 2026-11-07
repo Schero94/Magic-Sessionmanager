@@ -9,11 +9,7 @@
  * prevent XSS via user-controlled inputs (user-agent, geo data, etc.).
  */
 
-const ALLOWED_WEBHOOK_HOSTS = [
-  'discord.com',
-  'discordapp.com',
-  'hooks.slack.com',
-];
+const ALLOWED_WEBHOOK_HOSTS = ['discord.com', 'discordapp.com', 'hooks.slack.com'];
 
 const WEBHOOK_TIMEOUT_MS = 5000;
 
@@ -34,7 +30,7 @@ module.exports = ({ strapi }) => ({
 
       if (settings?.emailTemplates && Object.keys(settings.emailTemplates).length > 0) {
         const hasContent = Object.values(settings.emailTemplates).some(
-          template => template.html || template.text
+          (template) => template.html || template.text
         );
 
         if (hasContent) {
@@ -42,8 +38,10 @@ module.exports = ({ strapi }) => ({
           return settings.emailTemplates;
         }
       }
-    } catch (err) {
-      strapi.log.warn('[magic-sessionmanager/notifications] Could not load templates from DB; using defaults');
+    } catch {
+      strapi.log.warn(
+        '[magic-sessionmanager/notifications] Could not load templates from DB; using defaults'
+      );
     }
 
     strapi.log.debug('[magic-sessionmanager/notifications] Using default fallback templates');
@@ -137,8 +135,10 @@ module.exports = ({ strapi }) => ({
     result = result.replace(/\{\{user\.email\}\}/g, esc(data.user?.email || 'N/A'));
     result = result.replace(/\{\{user\.username\}\}/g, esc(data.user?.username || 'N/A'));
 
-    result = result.replace(/\{\{session\.loginTime\}\}/g,
-      esc(data.session?.loginTime ? new Date(data.session.loginTime).toLocaleString() : 'N/A'));
+    result = result.replace(
+      /\{\{session\.loginTime\}\}/g,
+      esc(data.session?.loginTime ? new Date(data.session.loginTime).toLocaleString() : 'N/A')
+    );
     result = result.replace(/\{\{session\.ipAddress\}\}/g, esc(data.session?.ipAddress || 'N/A'));
     result = result.replace(/\{\{session\.userAgent\}\}/g, esc(data.session?.userAgent || 'N/A'));
 
@@ -149,7 +149,10 @@ module.exports = ({ strapi }) => ({
     result = result.replace(/\{\{reason\.isVpn\}\}/g, data.reason?.isVpn ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isProxy\}\}/g, data.reason?.isProxy ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isThreat\}\}/g, data.reason?.isThreat ? 'Yes' : 'No');
-    result = result.replace(/\{\{reason\.securityScore\}\}/g, esc(String(data.reason?.securityScore || '0')));
+    result = result.replace(
+      /\{\{reason\.securityScore\}\}/g,
+      esc(String(data.reason?.securityScore || '0'))
+    );
 
     return result;
   },
@@ -178,7 +181,10 @@ module.exports = ({ strapi }) => ({
       strapi.log.info('[magic-sessionmanager/notifications] Suspicious login alert sent');
       return true;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] Email alert failed:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/notifications] Email alert failed:',
+        err?.name || 'Error'
+      );
       return false;
     }
   },
@@ -207,7 +213,10 @@ module.exports = ({ strapi }) => ({
       strapi.log.info('[magic-sessionmanager/notifications] New location alert sent');
       return true;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] New-location email failed:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/notifications] New-location email failed:',
+        err?.name || 'Error'
+      );
       return false;
     }
   },
@@ -236,7 +245,10 @@ module.exports = ({ strapi }) => ({
       strapi.log.info('[magic-sessionmanager/notifications] VPN/Proxy alert sent');
       return true;
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] VPN/Proxy email failed:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/notifications] VPN/Proxy email failed:',
+        err?.name || 'Error'
+      );
       return false;
     }
   },
@@ -262,8 +274,11 @@ module.exports = ({ strapi }) => ({
     try {
       try {
         const parsed = new URL(webhookUrl);
-        const isAllowed = parsed.protocol === 'https:' &&
-          ALLOWED_WEBHOOK_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
+        const isAllowed =
+          parsed.protocol === 'https:' &&
+          ALLOWED_WEBHOOK_HOSTS.some(
+            (h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`)
+          );
         if (!isAllowed) {
           strapi.log.warn('[magic-sessionmanager/notifications] Blocked webhook to untrusted host');
           return false;
@@ -302,7 +317,10 @@ module.exports = ({ strapi }) => ({
         clearTimeout(timer);
       }
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager/notifications] Webhook request failed:', err?.name || 'Error');
+      strapi.log.error(
+        '[magic-sessionmanager/notifications] Webhook request failed:',
+        err?.name || 'Error'
+      );
       return false;
     }
   },
@@ -452,12 +470,12 @@ module.exports = ({ strapi }) => ({
    */
   getEventColor(event) {
     const colors = {
-      'login.suspicious': 0xFF0000,
-      'login.new_location': 0xFFA500,
-      'login.vpn': 0xFF6B6B,
-      'login.threat': 0x8B0000,
+      'login.suspicious': 0xff0000,
+      'login.new_location': 0xffa500,
+      'login.vpn': 0xff6b6b,
+      'login.threat': 0x8b0000,
       'session.terminated': 0x808080,
     };
-    return colors[event] || 0x5865F2;
+    return colors[event] || 0x5865f2;
   },
 });

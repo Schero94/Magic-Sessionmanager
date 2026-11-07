@@ -25,6 +25,7 @@
 ## Task 1: Define and test the native adapter boundary
 
 **Files:**
+
 - Create: `server/src/utils/native-session-manager.js`
 - Test: `tests/native-session-manager.test.js`
 - Modify only if needed: `server/src/bootstrap.js`
@@ -48,6 +49,7 @@ Expected: all adapter contract tests pass.
 ## Task 2: Add the non-destructive native-sidecar link
 
 **Files:**
+
 - Modify: `server/src/content-types/session/schema.json`
 - Modify: `server/src/services/session.js`
 - Test: `tests/session-service.test.js`
@@ -66,6 +68,7 @@ Expected: existing service coverage remains green and native link/rotation cases
 ## Task 3: Integrate login, password-change rotation, refresh, and built-in logout hooks
 
 **Files:**
+
 - Modify: `server/src/bootstrap.js`
 - Modify if required: `server/src/utils/auth-routes.js`
 - Modify if required: `server/src/utils/refresh-token.js`
@@ -87,6 +90,7 @@ Expected: native lifecycle and legacy lifecycle tests pass; no native generator/
 ## Task 4: Keep JWT enforcement and last-seen behavior coherent
 
 **Files:**
+
 - Modify: `server/src/bootstrap.js`
 - Modify: `server/src/middlewares/last-seen.js`
 - Test: `tests/session-aware-jwt.test.js`
@@ -105,6 +109,7 @@ Expected: native and legacy denial cases pass, including persistent Magic access
 ## Task 5: Adapt service listing, reconciliation, and session actions
 
 **Files:**
+
 - Modify: `server/src/services/session.js`
 - Create if useful: `server/src/utils/native-session-view.js`
 - Test: `tests/native-session-service.test.js`
@@ -127,6 +132,7 @@ Expected: the merged native view, lifecycle operations, limits, and legacy behav
 ## Task 6: Preserve route contracts and authorization
 
 **Files:**
+
 - Modify only if needed: `server/src/controllers/session.js`
 - Modify only if needed: `server/src/routes/content-api.js`
 - Modify only if needed: `server/src/routes/admin.js`
@@ -151,6 +157,7 @@ Expected: route matrix, response-envelope, ownership, and permission tests pass.
 ## Task 7: Verify UI model and update user documentation
 
 **Files:**
+
 - Modify only if needed: `admin/src/pages/HomePage.jsx`
 - Modify only if needed: `admin/src/components/SessionDetailModal.jsx`
 - Modify: `README.md`
@@ -195,6 +202,7 @@ Expected: plugin build completes and the server bundle verifier remains green.
 ## Task 9: Local Strapi integration and browser acceptance
 
 **Files:**
+
 - Test evidence under ignored `output/playwright/`
 - Update: root `gates/audit-sessionmanager.md` only for this integration's relevant status, preserving existing audit entries
 

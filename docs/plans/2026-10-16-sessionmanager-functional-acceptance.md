@@ -40,24 +40,24 @@
 
 The admin API contains 20 normal routes and one development-only test route:
 
-| Surface | Method and path suffix | Expected use |
-| --- | --- | --- |
-| Sessions | `GET /sessions`, `GET /sessions/active`, `GET /user/:userId/sessions` | Dashboard, active list, end-user panel |
-| Session actions | `POST /sessions/:sessionId/terminate`, `DELETE /sessions/:sessionId`, `POST /sessions/clean-inactive`, `POST /user/:userId/terminate-all`, `POST /user/:userId/toggle-block` | Confirmed session and user actions |
-| User counts | `GET /users/stats` | Online Users widget. Returns counts only, no user records |
-| Activation | `GET /license/status`, `POST /license/auto-create`, `POST /license/create`, `POST /license/ping`, `POST /license/store-key` | Optional activation, with provider calls stubbed |
-| Geolocation | `GET /geolocation/:ipAddress` | Details modal, with provider calls disabled or stubbed |
-| GeoIP | `GET /geoip/status`, `PUT /geoip/credentials`, `POST /geoip/update` | Local status and credential/update flows, without MaxMind calls |
-| Settings | `GET /settings`, `PUT /settings` | Load, save, and reset settings |
-| Development only | `POST /sessions/:sessionId/simulate-timeout` | Verify it is unavailable outside development |
+| Surface          | Method and path suffix                                                                                                                                                       | Expected use                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Sessions         | `GET /sessions`, `GET /sessions/active`, `GET /user/:userId/sessions`                                                                                                        | Dashboard, active list, end-user panel                          |
+| Session actions  | `POST /sessions/:sessionId/terminate`, `DELETE /sessions/:sessionId`, `POST /sessions/clean-inactive`, `POST /user/:userId/terminate-all`, `POST /user/:userId/toggle-block` | Confirmed session and user actions                              |
+| User counts      | `GET /users/stats`                                                                                                                                                           | Online Users widget. Returns counts only, no user records       |
+| Activation       | `GET /license/status`, `POST /license/auto-create`, `POST /license/create`, `POST /license/ping`, `POST /license/store-key`                                                  | Optional activation, with provider calls stubbed                |
+| Geolocation      | `GET /geolocation/:ipAddress`                                                                                                                                                | Details modal, with provider calls disabled or stubbed          |
+| GeoIP            | `GET /geoip/status`, `PUT /geoip/credentials`, `POST /geoip/update`                                                                                                          | Local status and credential/update flows, without MaxMind calls |
+| Settings         | `GET /settings`, `PUT /settings`                                                                                                                                             | Load, save, and reset settings                                  |
+| Development only | `POST /sessions/:sessionId/simulate-timeout`                                                                                                                                 | Verify it is unavailable outside development                    |
 
 The Content API has seven routes:
 
-| Method and path suffix | Expected use |
-| --- | --- |
-| `POST /logout`, `POST /logout-all`, `POST /logout-others` | Authenticated user's native or legacy session lifecycle |
-| `GET /my-sessions`, `GET /current-session`, `GET /user/:userId/sessions` | Current user's session views and owner checks |
-| `DELETE /my-sessions/:sessionId` | Revoke an owned, non-current session |
+| Method and path suffix                                                   | Expected use                                            |
+| ------------------------------------------------------------------------ | ------------------------------------------------------- |
+| `POST /logout`, `POST /logout-all`, `POST /logout-others`                | Authenticated user's native or legacy session lifecycle |
+| `GET /my-sessions`, `GET /current-session`, `GET /user/:userId/sessions` | Current user's session views and owner checks           |
+| `DELETE /my-sessions/:sessionId`                                         | Revoke an owned, non-current session                    |
 
 Strapi's native session routes are separately verified: `GET /api/auth/sessions`, `DELETE /api/auth/sessions/:sessionId`, `POST /api/auth/logout`, and refresh rotation. They must remain end-user scoped. Do not call any Strapi Admin session APIs.
 

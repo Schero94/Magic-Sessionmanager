@@ -197,12 +197,12 @@ function normalizeStoredSettings(stored) {
  */
 async function getPluginSettings(strapi) {
   const now = Date.now();
-  if (cached && (now - cachedAt) < CACHE_TTL_MS) {
+  if (cached && now - cachedAt < CACHE_TTL_MS) {
     return cached;
   }
 
   const staticConfig = strapi.config.get(`plugin::${PLUGIN_ID}`) || {};
-  let storedSettings = {};
+  let storedSettings;
 
   try {
     const pluginStore = strapi.store({ type: 'plugin', name: PLUGIN_ID });
@@ -211,9 +211,12 @@ async function getPluginSettings(strapi) {
   } catch {
     // If the runtime policy cannot be read, do not silently fall back to the
     // relaxed static default. Keep the rest of static config available while
-    // requiring a matching session until the settings store recovers.
-    strapi.log.error(`[${PLUGIN_ID}] settings-loader: store read failed; strict session enforcement is enabled`);
-    storedSettings = { strictSessionEnforcement: true };
+    // requiring a matching session until the settings store recovers. A saved
+    // geolocation opt-out must also not be bypassed by the static defaults.
+    strapi.log.error(
+      `[${PLUGIN_ID}] settings-loader: store read failed; strict session enforcement is enabled and geolocation is disabled`
+    );
+    storedSettings = { strictSessionEnforcement: true, enableGeolocation: false };
   }
 
   const merged = { ...staticConfig, ...storedSettings };

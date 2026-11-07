@@ -5,9 +5,6 @@
  * Use this if old fields persist in database after removing injection
  */
 
-const fs = require('fs');
-const path = require('path');
-
 console.log('╔════════════════════════════════════════════════════════════╗');
 console.log('║  🧹 Remove isOnline, lastLogin, lastLogout, lastSeen      ║');
 console.log('╚════════════════════════════════════════════════════════════╝\n');
@@ -33,4 +30,3 @@ console.log('  rm -rf .tmp/data.db');
 console.log('  npm run develop  # Strapi recreates DB automatically');
 console.log('');
 console.log('✅ After cleanup, only "sessions" relation will remain in User!');
-

@@ -13,6 +13,7 @@
 ### Task 1: Add failing navigation, toggle-layout, and text-width tests
 
 **Files:**
+
 - Create: `tests/admin-settings-responsive.test.mjs`
 - Modify: `tests/plugin-standards.test.mjs`
 
@@ -21,6 +22,7 @@
 ### Task 2: Update Strapi settings navigation
 
 **Files:**
+
 - Modify: `admin/src/index.js`
 - Test: `tests/admin-settings-responsive.test.mjs`
 
@@ -29,6 +31,7 @@
 ### Task 3: Use Strapi Switch rows with readable responsive copy
 
 **Files:**
+
 - Create: `admin/src/components/SettingsToggleRow.jsx`
 - Modify: `admin/src/pages/Settings.jsx`
 - Modify: `admin/src/components/ReadableText.jsx`
@@ -40,6 +43,7 @@
 ### Task 4: Strengthen cross-plugin rules and skills
 
 **Files:**
+
 - Modify: `templates/strapi-plugin-quality.mdc`
 - Synchronize: root and all eight plugin `.cursor/rules/strapi-plugin-quality.mdc`
 - Modify: workbench `.agents/skills/strapi-workbench/SKILL.md`
@@ -52,6 +56,7 @@
 ### Task 5: Verify without persisting settings
 
 **Files:**
+
 - Run: `npm test`, `npm run test:ts:front`, `npm run build`, `npm run verify`, `npm run verify:runtime`
 - Run: shared `npm run app:build` and `npm run app:dev`
 - Browser: Playwright CLI navigation, labels, toggle geometry, overflow, console and keyboard checks at required widths when authenticated access is available.

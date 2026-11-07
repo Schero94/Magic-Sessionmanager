@@ -122,7 +122,7 @@ const baseRoutes = [
     handler: 'session.toggleUserBlock',
     config: {
       policies: adminPolicy(),
-      description: 'Toggle user blocked status (admin)',
+      description: 'Set an explicit user blocked status (admin)',
     },
   },
   {

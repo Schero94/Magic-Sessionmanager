@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import { readSettingsSource } from './helpers/settingsSource.mjs';
+import { LOCALES, readCatalogue } from './helpers/settingsCatalogue.mjs';
+import { unwrapSource } from './helpers/unwrapSource.mjs';
+
+// pages/Settings.jsx re-exports the split settings page (pages/Settings/*).
 const readAdminFile = (relativePath) =>
-  readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8');
+  relativePath === 'pages/Settings.jsx'
+    ? readSettingsSource()
+    : readFileSync(new URL(`../admin/src/${relativePath}`, import.meta.url), 'utf8');
 
 test('dashboard, settings, analytics and activation use the shared Strapi page layout', () => {
   const pages = [
@@ -14,38 +21,55 @@ test('dashboard, settings, analytics and activation use the shared Strapi page l
   ];
 
   for (const page of pages) {
-    assert.match(readAdminFile(page), /<PluginPageLayout\b/, `${page} should use PluginPageLayout`);
+    assert.match(
+      readAdminFile(page),
+      /<(?:PageShell|PluginPageLayout)\b/,
+      `${page} should use the shared PageShell layout`
+    );
   }
 });
 
 test('shared page layout uses Strapi Main and Layouts primitives', () => {
-  const source = readAdminFile('components/PluginPageLayout.jsx');
+  assert.match(readAdminFile('components/PluginPageLayout.jsx'), /from '\.\/ui\/PageShell'/);
+  const source = readAdminFile('components/ui/PageShell.jsx');
 
-  assert.match(source, /<Main\b/);
+  assert.match(source, /<(?:Page\.)?Main\b/);
   assert.match(source, /<Layouts\.Header\b/);
   assert.match(source, /<Layouts\.Content\b/);
 });
 
 test('session detail status is shared with the dashboard and uses Strapi badges', () => {
   const source = readAdminFile('components/SessionDetailModal.jsx');
+  const table = readAdminFile('pages/Dashboard/SessionTable.jsx');
 
   assert.match(source, /getSessionStatus\(session\)/);
-  assert.match(source, /<Badge\b/);
-  assert.doesNotMatch(source, /ModalStatusBadge|StatusDot/);
+  // One StatusBadge (DS Badge) for table, cards and dialog (DUX-03, DASH-10).
+  assert.match(source, /<StatusBadge\b/);
+  assert.match(table, /<StatusBadge\b/);
+  assert.match(readAdminFile('components/ui/StatusBadge.jsx'), /<Badge\b/);
+  assert.doesNotMatch(source, /ModalStatusBadge|StatusDot|modal\.status\./);
 });
 
-test('session terminate actions are disabled when the authoritative session is inactive', () => {
-  const source = readAdminFile('pages/HomePage.jsx');
+test('End session is unavailable when the authoritative session has ended', () => {
+  const actions = readAdminFile('pages/Dashboard/SessionActions.jsx');
+  const modal = readAdminFile('components/SessionDetailModal.jsx');
 
-  assert.ok((source.match(/disabled=\{[^}]*!session\.isActive[^}]*\}/gs) || []).length >= 2);
+  assert.match(actions, /const canEnd = session\.isActive === true/);
+  assert.ok((actions.match(/disabled=\{!canEnd[^}]*\}/g) || []).length >= 2);
+  assert.match(modal, /const canEnd = session\.isActive === true/);
+  assert.ok((modal.match(/disabled=\{!canEnd\}/g) || []).length >= 2);
 });
 
 test('end-user panel includes all current native sessions and uses Strapi actions', () => {
   const source = readAdminFile('components/SessionInfoPanel.jsx');
 
-  assert.match(source, /getManageableSessions\(data\.data \|\| \[\]\)/);
+  assert.match(source, /setSessions\(requireSessionList\(data\)\)/);
+  assert.match(source, /const openSessions = getManageableSessions\(sessions\);/);
   assert.match(source, /<Button\b/);
-  assert.doesNotMatch(source, /const activeSessions = \(data\.data \|\| \[\]\)\.filter\(s => s\.isTrulyActive\)/);
+  assert.doesNotMatch(
+    source,
+    /const activeSessions = \(data\.data \|\| \[\]\)\.filter\(s => s\.isTrulyActive\)/
+  );
 });
 
 test('analytics and activation labels are present in every supported locale', () => {
@@ -59,57 +83,19 @@ test('analytics and activation labels are present in every supported locale', ()
     'analytics.duration.title',
     'homepage.subtitle',
     'homepage.search.label',
-    'homepage.search.hint',
     'homepage.filter.label',
-    'homepage.filter.hint',
-    'homepage.entries.label',
-    'homepage.entries.hint',
     'homepage.noResults.reset',
-    'homepage.error.title',
-    'homepage.pagination.previous',
-    'homepage.pagination.next',
-    'homepage.pagination.page',
-    'homepage.pagination.range',
-    'homepage.pagination.filteredRange',
-    'homepage.pagination.label',
     'license.title',
-    'license.status.noKey.title',
     'license.key.copy',
-    'license.account.title',
-    'license.features.title',
-    'license.system.title',
-    'common.retry',
-    'settings.geofencing.provider.hint',
-    'settings.geofencing.failureMode.hint',
-    'settings.geofencing.maxmind.accountId.hint',
-    'settings.geofencing.maxmind.licenseKey.hint',
+    'license.state.noKey',
+    'license.details.title',
+    'license.features.always',
+    'license.status.title',
+    'common.tryAgain',
     'settings.geofencing.pick.label',
     'settings.geofencing.pick.hint',
     'settings.geofencing.manual.label',
     'settings.geofencing.manual.hint',
-    'settings.security.enforcement.title',
-    'settings.security.enforcement.badgeRelaxed',
-    'settings.security.enforcement.badgeStrict',
-    'settings.security.enforcement.description',
-    'settings.security.enforcement.strict.title',
-    'settings.security.enforcement.strict.description',
-    'settings.security.enforcement.maxAge.title',
-    'settings.security.enforcement.maxAge.hint',
-    'settings.security.enforcement.maxAge.1day',
-    'settings.security.enforcement.maxAge.7days',
-    'settings.security.enforcement.maxAge.14days',
-    'settings.security.enforcement.maxAge.30days',
-    'settings.security.enforcement.maxAge.60days',
-    'settings.security.enforcement.maxAge.90days',
-    'settings.security.enforcement.maxAge.180days',
-    'settings.security.enforcement.maxAge.365days',
-    'settings.security.enforcement.trustedProxies.title',
-    'settings.security.enforcement.trustedProxies.description',
-    'settings.security.enforcement.warning.title',
-    'settings.security.enforcement.warning.body',
-    'settings.security.encryption.fieldHint',
-    'settings.security.maxFailed.fieldHint',
-    'settings.email.types.description',
     'settings.email.templates.subjectHint',
     'settings.email.templates.html.editorLabel',
     'settings.email.templates.text.editorLabel',
@@ -127,16 +113,26 @@ test('analytics and activation labels are present in every supported locale', ()
 
 test('analytics headings use the Strapi Typography tag prop', () => {
   const source = readAdminFile('pages/Analytics.jsx');
+  const sectionCard = readAdminFile('components/ui/SectionCard.jsx');
 
-  assert.equal((source.match(/<Typography[^>]*tag="h2"/g) || []).length, 3);
+  // Section headings come from the shared SectionCard (Typography tag={headingTag}, h2 by default).
+  assert.match(sectionCard, /<Typography[\s\S]*?tag=\{headingTag\}/);
+  assert.match(sectionCard, /headingTag = 'h2'/);
+  // Devices, Browsers and Average session length (IA D6; no hour-of-day timeline, I.2-8).
+  assert.equal((source.match(/<SectionCard\b[^>]*?\btitle=/g) || []).length, 3);
   assert.doesNotMatch(source, /<Typography[^>]*as="h2"/);
 });
 
 test('session detail section headings use the Strapi Typography tag prop', () => {
   const source = readAdminFile('components/SessionDetailModal.jsx');
 
-  assert.equal((source.match(/<Typography[^>]*tag="h2"/g) || []).length, 5);
-  assert.doesNotMatch(source, /<Typography[^>]*as="h2"/);
+  // Modal.Title is the dialog's h2; every section heading is one shared h3;
+  // Technical details is a collapsed DS Accordion (IA D2.7).
+  assert.match(source, /<Typography variant="delta" tag="h3"/);
+  assert.equal((source.match(/<DetailSection\b/g) || []).length, 4);
+  assert.match(unwrapSource(source), /<Accordion\.Trigger>\{t\('modal\.section\.technical'/);
+  assert.doesNotMatch(source, /<Typography[^>]*tag="h2"/);
+  assert.doesNotMatch(source, /<Typography[^>]*as="h[23]"/);
 });
 
 test('online user statistic cards are not exposed as links without destinations', () => {
@@ -147,30 +143,36 @@ test('online user statistic cards are not exposed as links without destinations'
 
 test('settings grids define a mobile breakpoint for split fields', () => {
   const source = readAdminFile('pages/Settings.jsx');
-  const splitItems = source.match(/<Grid\.Item col=\{(?:4|6)\}[^>]*>/g) || [];
+  const splitGrids = source.match(/<EqualGrid\b[^>]*>/g) || [];
 
-  assert.ok(splitItems.length > 0, 'expected responsive split settings fields');
-  for (const [index, item] of splitItems.entries()) {
-    assert.match(item, /s=\{12\}/, `split grid item ${index + 1} should stack at the Strapi small breakpoint`);
-    assert.match(item, /xs=\{12\}/, `split grid item ${index + 1} should stack at the Strapi mobile breakpoint`);
+  assert.ok(splitGrids.length > 0, 'expected responsive split settings fields');
+  for (const [index, grid] of splitGrids.entries()) {
+    // EqualGrid maps to Grid.Item xs=12 s=12 below the DS medium breakpoint.
+    assert.match(
+      grid,
+      /stackBelow="medium"/,
+      `split grid ${index + 1} should stack below the Strapi medium breakpoint`
+    );
   }
 });
 
-test('cleanup strategy options stay compact and keep the recommendation in helper text', () => {
-  const locales = ['en', 'de', 'es', 'fr', 'pt'];
-
-  for (const locale of locales) {
-    const translations = JSON.parse(
-      readFileSync(new URL(`../admin/src/translations/${locale}.json`, import.meta.url), 'utf8')
-    );
+test('idle check method options stay compact and the helper names the trade-off (IA F 1.1 #5)', () => {
+  for (const locale of LOCALES) {
+    const translations = readCatalogue(locale);
     const documentService = translations['settings.general.cleanupMode.ds'];
     const directSql = translations['settings.general.cleanupMode.db'];
-    const hint = translations['settings.general.cleanupMode.hint'];
+    const hint = translations['settings.config.sessions.idleMethod.hint'];
 
     assert.ok(typeof documentService === 'string', `${locale} has a Document Service label`);
     assert.ok(typeof directSql === 'string', `${locale} has a Direct SQL label`);
-    assert.ok(typeof hint === 'string' && hint.toLowerCase().includes('document service'), `${locale} explains the recommended strategy`);
-    assert.ok(documentService.length <= 24, `${locale} Document Service label fits a mobile select`);
+    assert.ok(
+      typeof hint === 'string' && hint.toLowerCase().includes('direct sql'),
+      `${locale} explains the Direct SQL trade-off`
+    );
+    assert.ok(
+      documentService.length <= 24,
+      `${locale} Document Service label fits a mobile select`
+    );
     assert.ok(directSql.length <= 24, `${locale} Direct SQL label fits a mobile select`);
   }
 });
@@ -180,34 +182,63 @@ test('settings dirty state compares against the persisted baseline without stale
 
   assert.match(source, /const \[savedSettings, setSavedSettings\] = useState\(settings\)/);
   assert.match(source, /const hasChanges = !areSettingsEqual\(settings, savedSettings\)/);
-  assert.match(source, /setSettings\(\(previousSettings\) => \(\{ \.\.\.previousSettings, \[key\]: value \}\)\)/);
-  assert.match(source, /setSavedSettings\(settings\)/);
+  assert.match(
+    source,
+    /setSettings\(\(previousSettings\) => \(\{ \.\.\.previousSettings, \[key\]: value \}\)\)/
+  );
+  // After a save the baseline is what the server stored, not the submitted draft (SET-01 browser).
+  assert.match(source, /setSavedSettings\(stored\)/);
+  assert.doesNotMatch(source, /setSavedSettings\(settings\)/);
 });
 
 test('geofencing country controls wrap without fixed-width mobile overflow', () => {
   const source = readAdminFile('pages/Settings.jsx');
-  const controlsStart = source.indexOf("t('settings.geofencing.pick'");
-  const controlsEnd = source.indexOf('</Grid.Item>', controlsStart);
-  const controls = source.slice(source.lastIndexOf('<Flex', controlsStart), controlsEnd);
+  const controlsStart = source.indexOf('id="country-picker"');
+  const controlsEnd = source.indexOf('</EqualGrid>', controlsStart);
+  const controls = source.slice(source.lastIndexOf('<EqualGrid', controlsStart), controlsEnd);
 
   assert.ok(controlsStart >= 0 && controlsEnd > controlsStart, 'geofencing country controls exist');
-  assert.match(controls, /<Flex\b[^>]*wrap="wrap"/);
-  assert.match(controls, /flex: '1 1 12rem', minWidth: 0/);
-  assert.doesNotMatch(controls, /width: '180px'/);
+  assert.match(
+    controls,
+    /<EqualGrid\b[^>]*stackBelow="medium"/,
+    'picker and code field share a responsive grid'
+  );
+  assert.match(
+    unwrapSource(source),
+    /<ChipList ref=\{chipListRef\} tag="ul" gap=\{2\} wrap="wrap"/,
+    'country chips wrap'
+  );
+  assert.match(
+    source,
+    /const ChipList = styled\(Flex\)`[\s\S]*?min-height:\s*\$\{\(\{ theme \}\) => theme\.spaces\[7\]\}/,
+    'chip remove buttons reach 32 px on phones'
+  );
+  assert.doesNotMatch(controls, /12rem|width: '180px'/);
 });
 
 test('dashboard paginates the full filtered result set and keeps both layouts aligned', () => {
   const source = readAdminFile('pages/HomePage.jsx');
-  const tableHeader = source.match(/<Thead>([\s\S]*?)<\/Thead>/)?.[1];
-  const exportHandlers = source.slice(source.indexOf('const handleExportCSV'), source.indexOf('const getDeviceIcon'));
+  const table = readAdminFile('pages/Dashboard/SessionTable.jsx');
+  const cards = readAdminFile('pages/Dashboard/SessionCardList.jsx');
+  const tableHeader = table.match(/<Thead>([\s\S]*?)<\/Thead>/)?.[1];
+  const exportHandlers = source.slice(
+    source.indexOf('const handleExportCSV'),
+    source.indexOf('const handleSessionClick')
+  );
 
-  assert.match(source, /paginateSessions\(filteredSessions, currentPage, entriesPerPage\)/);
-  assert.equal((source.match(/pageResult\.items\.map\(\(session\) =>/g) || []).length, 2);
-  assert.doesNotMatch(source, /\.slice\(0, parseInt\(entriesPerPage\)\)/);
-  assert.match(source, /homepage\.pagination\.previous/);
-  assert.match(source, /homepage\.pagination\.next/);
-  assert.match(source, /homepage\.pagination\.range/);
-  assert.match(source, /homepage\.pagination\.filteredRange/);
+  assert.match(
+    source,
+    /paginateSessions\(filteredSessions, dashboard\.page, dashboard\.pageSize\)/
+  );
+  // Table and cards render the same page of rows.
+  assert.match(source, /sessions: pageResult\.items/);
+  assert.match(table, /sessions\.map\(\(session\) =>/);
+  assert.match(cards, /sessions\.map\(\(session\) =>/);
+  assert.doesNotMatch(source, /\.slice\(0, parseInt\(/);
+  // Native Strapi pagination (page links + page size) with URL query state.
+  assert.match(source, /<Pagination\.Root\b[\s\S]*?pageCount=\{pageResult\.pageCount\}/);
+  assert.match(source, /<Pagination\.Links \/>/);
+  assert.match(source, /homepage\.caption/);
   assert.ok(tableHeader, 'desktop session table has a header row');
   assert.equal((tableHeader.match(/homepage\.table\.status/g) || []).length, 1);
   assert.match(exportHandlers, /buildSessionCsv\(filteredSessions/);
@@ -221,12 +252,13 @@ test('changed non-trivial admin handlers include JSDoc contracts', () => {
     ['pages/HomePage.jsx', 'handleTerminateSession'],
     ['pages/HomePage.jsx', 'handleExportCSV'],
     ['pages/HomePage.jsx', 'handleExportJSON'],
-    ['pages/Settings.jsx', 'fetchSettings'],
-    ['pages/Settings.jsx', 'handleChange'],
-    ['pages/Settings.jsx', 'handleSave'],
-    ['pages/Settings.jsx', 'handleReset'],
+    ['pages/Settings/hooks/useSettingsForm.js', 'fetchSettings'],
+    ['pages/Settings/hooks/useSettingsForm.js', 'handleChange'],
+    ['pages/Settings/hooks/useSettingsForm.js', 'handleSave'],
+    ['pages/Settings/hooks/useSettingsForm.js', 'handleReset'],
     ['pages/Analytics.jsx', 'fetchAnalytics'],
     ['pages/License.jsx', 'fetchLicenseStatus'],
+    ['pages/License.jsx', 'checkLicenseStatus'],
     ['pages/License.jsx', 'handleCopyLicenseKey'],
     ['pages/License.jsx', 'handleDownloadLicenseKey'],
     ['components/SessionDetailModal.jsx', 'handleTerminate'],
@@ -238,6 +270,10 @@ test('changed non-trivial admin handlers include JSDoc contracts', () => {
     const source = readAdminFile(path);
     const escapedHandler = handler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const declaration = `(?:const|export function) ${escapedHandler}`;
-    assert.match(source, new RegExp(`/\\*\\*[\\s\\S]*?\\*/\\s*${declaration}\\b`), `${path} ${handler} needs JSDoc`);
+    assert.match(
+      source,
+      new RegExp(`/\\*\\*[\\s\\S]*?\\*/\\s*${declaration}\\b`),
+      `${path} ${handler} needs JSDoc`
+    );
   }
 });

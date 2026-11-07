@@ -18,11 +18,14 @@ function createStrapi(settings) {
 }
 
 test('disabled geolocation prevents all session enrichment lookups, including geofencing requests', () => {
-  assert.equal(shouldResolveGeoData({
-    enableGeolocation: false,
-    enableGeofencing: true,
-    blockSuspiciousSessions: true,
-  }), false);
+  assert.equal(
+    shouldResolveGeoData({
+      enableGeolocation: false,
+      enableGeofencing: true,
+      blockSuspiciousSessions: true,
+    }),
+    false
+  );
 });
 
 test('geolocation service does not call ipapi when the global setting is disabled', async (t) => {
@@ -64,8 +67,12 @@ test('geolocation detail route returns a disabled result without calling the pro
 
   const ctx = {
     params: { ipAddress: '8.8.8.8' },
-    internalServerError(message) { throw new Error(message); },
-    badRequest(message) { throw new Error(message); },
+    internalServerError(message) {
+      throw new Error(message);
+    },
+    badRequest(message) {
+      throw new Error(message);
+    },
   };
 
   try {
@@ -85,13 +92,24 @@ test('invalid IP input is rejected before the geolocation provider is called', a
   let lookupCalls = 0;
   global.strapi = {
     ...createStrapi({ enableGeolocation: true, geoIpProvider: 'ipapi' }),
-    plugin: () => ({ service: () => ({ getIpInfo: async () => { lookupCalls++; } }) }),
+    plugin: () => ({
+      service: () => ({
+        getIpInfo: async () => {
+          lookupCalls++;
+        },
+      }),
+    }),
   };
   invalidateSettingsCache();
   const ctx = {
     params: { ipAddress: 'not-an-ip' },
-    badRequest(message) { this.error = message; return this.error; },
-    internalServerError(message) { throw new Error(message); },
+    badRequest(message) {
+      this.error = message;
+      return this.error;
+    },
+    internalServerError(message) {
+      throw new Error(message);
+    },
   };
 
   try {

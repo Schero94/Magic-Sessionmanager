@@ -9,9 +9,7 @@ function createCtx({ headers = {}, requestIp = '10.0.0.10', trustedProxies } = {
       headers,
       ip: requestIp,
     },
-    state: trustedProxies === undefined
-      ? {}
-      : { __magicSessionSettings: { trustedProxies } },
+    state: trustedProxies === undefined ? {} : { __magicSessionSettings: { trustedProxies } },
     app: {
       proxy: false,
       context: {

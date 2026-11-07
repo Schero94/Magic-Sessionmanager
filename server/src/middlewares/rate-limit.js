@@ -16,10 +16,13 @@
  *     config: { profile: 'read' | 'write', max: 20, window: 60000 } }
  *
  * If a `profile` is supplied, the admin-facing `rateLimitReadMax` /
- * `rateLimitWriteMax` / `rateLimitWindowSeconds` settings can RELAX the
- * limit at runtime — never tighten below the route-level value. This lets
- * a power user expand their polling budget without being able to
- * paper over the write-side safeguards.
+ * `rateLimitWriteMax` / `rateLimitWindowSeconds` settings apply at runtime:
+ * the read profile can be RELAXED, the write profile can only be TIGHTENED
+ * (lower max, longer window), so the destructive endpoints keep their floor.
+ *
+ * Buckets are keyed on the matched route template plus the caller identity,
+ * never on the raw request path, so varying path parameters, letter case or
+ * a trailing slash cannot open a fresh bucket.
  */
 
 const { getPluginSettings } = require('../utils/settings-loader');
@@ -41,65 +44,100 @@ const prune = (now) => {
 const callerKey = (ctx) => {
   const userId = ctx.state?.user?.id;
   if (userId) return `u:${userId}`;
-  const tokenId =
-    ctx.state?.auth?.credentials?.id ??
-    ctx.state?.auth?.credentials?.token ??
-    null;
+  const tokenId = ctx.state?.auth?.credentials?.id ?? ctx.state?.auth?.credentials?.token ?? null;
   if (tokenId) return `t:${String(tokenId).slice(-16)}`;
   return `ip:${ctx.request.ip || ctx.ip || 'unknown'}`;
 };
 
 /**
+ * Returns the bucket identity of the matched route. Strapi stores the
+ * matched route definition in `ctx.state.route` before route middlewares run,
+ * so every concrete URL of one route template shares a bucket regardless of
+ * path parameters, letter case or a trailing slash (Strapi's router matches
+ * all of those to the same handler).
+ *
+ * Without route information the request path is normalised the same way the
+ * router matches it; this fallback only applies outside Strapi's router.
+ *
+ * @param {object} ctx Koa context
+ * @returns {string} Route identity
+ */
+const routeKey = (ctx) => {
+  const route = ctx.state?.route;
+  const method = String(route?.method || ctx.method || '').toUpperCase();
+  if (route && typeof route.path === 'string') {
+    const plugin = route.info?.pluginName || route.plugin || '';
+    const handler = typeof route.handler === 'string' ? route.handler : '';
+    return `${method} ${plugin}:${handler}:${route.path.toLowerCase()}`;
+  }
+  const rawPath = String(ctx.path || '').toLowerCase();
+  const normalizedPath = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') || '/' : rawPath;
+  return `${method} path:${normalizedPath}`;
+};
+
+/**
  * Short TTL cache for the per-process effective limit so we don't re-read
  * settings on every request. Settings changes are picked up after the TTL.
+ * Entries are keyed by profile and route ceiling so routes with different
+ * hard limits never share a resolved value.
  */
 const RESOLVED_TTL_MS = 30_000;
-let resolvedCache = null;
-let resolvedAt = 0;
+const resolvedCache = new Map();
 
 /**
  * Resolves the effective { max, windowMs } for a given profile by
- * combining the route-level hard ceiling with the admin-configurable
- * soft ceiling. Returns the LOOSER of the two for read profile (admins
- * can raise read limits), the STRICTER for write (we never allow
- * loosening destructive endpoints).
+ * combining the route-level ceiling with the admin-configurable settings.
+ *
+ * - read: admins may RELAX the limit (higher max, any allowed window).
+ * - write: admins may only TIGHTEN it. The max is the lower of both values
+ *   and the window the longer of both, so max/window can never exceed the
+ *   route's own rate (API-5).
+ *
+ * @param {{profile: 'read'|'write', routeMax: number, routeWindowMs: number, strapi: object}} input
+ * @returns {Promise<{max: number, windowMs: number}>}
  */
 async function resolveLimits({ profile, routeMax, routeWindowMs, strapi }) {
   const now = Date.now();
-  if (resolvedCache && now - resolvedAt < RESOLVED_TTL_MS) {
-    const p = resolvedCache[profile];
-    if (p) {
-      return { max: p.max, windowMs: p.windowMs };
-    }
+  const cacheKey = `${profile}:${routeMax}:${routeWindowMs}`;
+  const cachedEntry = resolvedCache.get(cacheKey);
+  if (cachedEntry && now - cachedEntry.at < RESOLVED_TTL_MS) {
+    return { max: cachedEntry.max, windowMs: cachedEntry.windowMs };
   }
 
-  let settings = {};
+  let settings;
   try {
     settings = await getPluginSettings(strapi);
   } catch {
     settings = {};
   }
 
-  const windowSec = Number.isFinite(settings.rateLimitWindowSeconds)
-    ? settings.rateLimitWindowSeconds
-    : Math.round(routeWindowMs / 1000);
-  const windowMs = Math.max(10_000, windowSec * 1000);
+  const settingsWindowMs = Number.isFinite(settings.rateLimitWindowSeconds)
+    ? Math.max(10_000, settings.rateLimitWindowSeconds * 1000)
+    : routeWindowMs;
 
-  const resolvedWrite = {
-    max: Math.min(routeMax, Number.isFinite(settings.rateLimitWriteMax) ? settings.rateLimitWriteMax : routeMax),
-    windowMs,
-  };
-  const resolvedRead = {
-    max: Math.max(routeMax, Number.isFinite(settings.rateLimitReadMax) ? settings.rateLimitReadMax : routeMax),
-    windowMs,
-  };
+  let resolved;
+  if (profile === 'write') {
+    resolved = {
+      max: Math.min(
+        routeMax,
+        Number.isFinite(settings.rateLimitWriteMax) ? settings.rateLimitWriteMax : routeMax
+      ),
+      windowMs: Math.max(routeWindowMs, settingsWindowMs),
+    };
+  } else if (profile === 'read') {
+    resolved = {
+      max: Math.max(
+        routeMax,
+        Number.isFinite(settings.rateLimitReadMax) ? settings.rateLimitReadMax : routeMax
+      ),
+      windowMs: settingsWindowMs,
+    };
+  } else {
+    resolved = { max: routeMax, windowMs: routeWindowMs };
+  }
 
-  resolvedCache = { read: resolvedRead, write: resolvedWrite };
-  resolvedAt = now;
-
-  if (profile === 'read') return resolvedRead;
-  if (profile === 'write') return resolvedWrite;
-  return { max: routeMax, windowMs };
+  resolvedCache.set(cacheKey, { ...resolved, at: now });
+  return resolved;
 }
 
 /**
@@ -115,7 +153,7 @@ const rateLimit = (cfg = {}, { strapi }) => {
       ? await resolveLimits({ profile, routeMax, routeWindowMs, strapi })
       : { max: routeMax, windowMs: routeWindowMs };
 
-    const key = `${ctx.path}::${callerKey(ctx)}`;
+    const key = `${routeKey(ctx)}::${callerKey(ctx)}`;
     const now = Date.now();
 
     if (buckets.size > 5000) prune(now);
@@ -147,6 +185,19 @@ const rateLimit = (cfg = {}, { strapi }) => {
 
     await next();
   };
+};
+
+/**
+ * Test-only access to the limiter internals. `reset` clears all buckets and
+ * resolved limits so tests do not depend on execution order.
+ */
+rateLimit.__private = {
+  resolveLimits,
+  routeKey,
+  reset() {
+    buckets.clear();
+    resolvedCache.clear();
+  },
 };
 
 module.exports = rateLimit;

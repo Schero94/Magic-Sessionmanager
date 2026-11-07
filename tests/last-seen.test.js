@@ -88,9 +88,7 @@ test('last-seen still touches sessions after ordinary authenticated requests', a
     ctx.body = { ok: true };
   });
 
-  assert.deepEqual(touched, [
-    { userId: 'user-doc-id', sessionId: 'session-doc-id' },
-  ]);
+  assert.deepEqual(touched, [{ userId: 'user-doc-id', sessionId: 'session-doc-id' }]);
 });
 
 test('last-seen waits for Strapi route authentication before resolving the session', async () => {
@@ -115,9 +113,7 @@ test('last-seen waits for Strapi route authentication before resolving the sessi
     ctx.body = { ok: true };
   });
 
-  assert.deepEqual(touched, [
-    { userId: 'user-doc-id', sessionId: 'session-doc-id' },
-  ]);
+  assert.deepEqual(touched, [{ userId: 'user-doc-id', sessionId: 'session-doc-id' }]);
 });
 
 test('last-seen does not touch sessions after failed authenticated requests', async () => {
@@ -150,11 +146,14 @@ test('last-seen matches the native session identity to its Magic sidecar', async
   const queries = [];
   const touched = [];
   const middleware = createLastSeenMiddleware({
-    strapi: createStrapi({
-      documentId: 'magic-sidecar-1',
-      nativeSessionId: 'native-session-1',
-      isActive: true,
-    }, queries),
+    strapi: createStrapi(
+      {
+        documentId: 'magic-sidecar-1',
+        nativeSessionId: 'native-session-1',
+        isActive: true,
+      },
+      queries
+    ),
     sessionService: {
       touch: async (payload) => touched.push(payload),
     },
@@ -180,7 +179,11 @@ test('last-seen does not fabricate a Magic session for a native-only session', a
   const queries = [];
   const middleware = createLastSeenMiddleware({
     strapi: createStrapi(null, queries),
-    sessionService: { touch: async () => { touchCalls++; } },
+    sessionService: {
+      touch: async () => {
+        touchCalls++;
+      },
+    },
   });
   const ctx = createCtx('/api/articles');
   ctx.state.session = { id: 'native-only-session' };

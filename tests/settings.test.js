@@ -17,8 +17,8 @@ function createSettingsCtx(body) {
     send(payload) {
       this.sent = payload;
     },
-    badRequest(message) {
-      this.error = { status: 400, message };
+    badRequest(message, details) {
+      this.error = { status: 400, message, details };
       return this.error;
     },
   };
@@ -34,6 +34,7 @@ test('updateSettings stores retentionDays=-1 from the admin UI', async () => {
   let storedSettings = null;
   global.strapi = {
     store: () => ({
+      get: async () => null,
       set: async ({ value }) => {
         storedSettings = value;
       },
@@ -94,6 +95,7 @@ test('updateSettings stores local GEOIP firewall settings', async () => {
   let storedSettings = null;
   global.strapi = {
     store: () => ({
+      get: async () => null,
       set: async ({ value }) => {
         storedSettings = value;
       },
@@ -133,6 +135,7 @@ test('updateSettings rejects GeoIP paths outside the dedicated MMDB directory', 
   let storedSettings = null;
   global.strapi = {
     store: () => ({
+      get: async () => null,
       set: async ({ value }) => {
         storedSettings = value;
       },
@@ -164,6 +167,7 @@ test('updateSettings rejects non-string GeoIP database paths without writing set
   let storedSettings = null;
   global.strapi = {
     store: () => ({
+      get: async () => null,
       set: async ({ value }) => {
         storedSettings = value;
       },
@@ -204,10 +208,11 @@ test('getSettings merges old partial settings with every current default', async
   assert.equal(response.settings.cleanupUseDbDirect, false);
 });
 
-test('updateSettings treats string booleans as invalid instead of enabling features', async () => {
+test('updateSettings rejects string booleans instead of enabling features', async () => {
   let storedSettings;
   global.strapi = {
     store: () => ({
+      get: async () => null,
       set: async ({ value }) => {
         storedSettings = value;
       },
@@ -220,25 +225,33 @@ test('updateSettings treats string booleans as invalid instead of enabling featu
     trustedProxies: 'false',
     enableGeolocation: 'false',
     enableWebhooks: 'false',
-    blockSuspiciousSessions: 'false',
-    enableEmailAlerts: 'false',
+    blockSuspiciousSessions: 'true',
+    enableEmailAlerts: 'true',
     emailTemplates: {},
   });
 
   await settingsController.updateSettings(ctx);
 
-  assert.equal(storedSettings.strictSessionEnforcement, false);
-  assert.equal(storedSettings.trustedProxies, false);
-  assert.equal(storedSettings.enableGeolocation, false);
-  assert.equal(storedSettings.enableWebhooks, false);
-  assert.equal(storedSettings.blockSuspiciousSessions, false);
-  assert.equal(storedSettings.enableEmailAlerts, false);
+  // A string can never switch a feature on: the whole payload is rejected
+  // with a field error per invalid boolean and nothing is persisted.
+  assert.equal(ctx.error.status, 400);
+  assert.equal(storedSettings, undefined);
+  const invalidFields = ctx.error.details.errors.map((error) => error.path[0]).sort();
+  assert.deepEqual(invalidFields, [
+    'blockSuspiciousSessions',
+    'enableEmailAlerts',
+    'enableGeolocation',
+    'enableWebhooks',
+    'strictSessionEnforcement',
+    'trustedProxies',
+  ]);
 });
 
 test('updateSettings rejects a non-object settings payload without persisting it', async () => {
   let persisted = false;
   global.strapi = {
     store: () => ({
+      get: async () => null,
       set: async () => {
         persisted = true;
       },

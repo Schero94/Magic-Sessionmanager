@@ -1,2 +1,15 @@
+# Build output and coverage
 dist
 coverage
+
+# Binary and generated assets
+pics
+docs/site/img
+
+# Lockfiles and files written by tooling
+package-lock.json
+CHANGELOG.md
+
+# Agent rules synced from the workbench templates
+.agents
+.cursor

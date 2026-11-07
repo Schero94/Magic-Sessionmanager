@@ -13,10 +13,12 @@
 ### Task 1: Add failing presentation regressions
 
 **Files:**
+
 - Create: `tests/session-presentation.test.mjs`
 - Create: `tests/admin-modal-layout.test.mjs`
 
 **Steps:**
+
 1. Test browser-version extraction for Chrome, Edge, Firefox, Safari, unknown agents, and native version metadata.
 2. Test localized date output and a stable unavailable fallback for invalid timestamps.
 3. Add a source contract that requires the relaxed-mode Alert's title and body paragraphs to take full rows, and the modal's label/value groups to use shrink-safe semantic layout.
@@ -25,9 +27,11 @@
 ### Task 2: Fix the warning layout
 
 **Files:**
+
 - Modify: `admin/src/pages/Settings.jsx`
 
 **Steps:**
+
 1. Add a narrowly scoped styled Strapi `Alert` wrapper that places its title and body paragraphs on separate full-width rows.
 2. Wire the dismiss control to local view state. Restore the warning when the strict-enforcement draft changes.
 3. Keep the existing warning copy, design-system variant, and translations.
@@ -36,6 +40,7 @@
 ### Task 3: Improve session detail presentation
 
 **Files:**
+
 - Create: `admin/src/utils/sessionPresentation.mjs`
 - Modify: `admin/src/components/SessionDetailModal.jsx`
 - Modify: `admin/src/pages/HomePage.jsx` only if sharing its existing session-device mapping is needed
@@ -43,6 +48,7 @@
 - Modify: `tests/admin-modal-layout.test.mjs`
 
 **Steps:**
+
 1. Implement and test browser-version and locale-aware date helpers.
 2. Replace repeated icon-led rows with responsive semantic label/value pairs under the existing sections.
 3. Increase label readability, use shrink-safe columns, and allow long values to wrap.
@@ -53,10 +59,12 @@
 ### Task 4: Exercise modal and logout in the browser
 
 **Files:**
+
 - No new browser automation framework or test runner.
 - Evidence recorded in `gates/sessionmanager-modal-ux.md`.
 
 **Steps:**
+
 1. Use the existing authenticated, isolated Chrome tab on port 1340. Do not revisit port 1338 with the exposed local credential.
 2. Use Playwright CLI route interception to supply a synthetic end-user session and a local fake termination response. Include embedded synthetic location data so no GeoIP provider request can occur.
 3. Open the row and inspect the user, device, timeline, security, and technical data in the modal.
@@ -67,10 +75,12 @@
 ### Task 5: Re-run quality gates and update evidence
 
 **Files:**
+
 - Modify: `../../docs/audits/2026-10-14/sessionmanager.md`
 - Update: `gates/sessionmanager-modal-ux.md`
 
 **Steps:**
+
 1. Run the complete Session Manager tests, frontend/backend TypeScript checks, package verification, runtime verification, and plugin build.
 2. Run the shared Strapi admin build.
 3. Re-run the task gate checker and record exact results.

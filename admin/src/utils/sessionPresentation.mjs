@@ -1,3 +1,7 @@
+import { formatSessionDate } from './sessionDates.mjs';
+
+export { formatSessionDate, formatRelative, getRelativeTimeParts } from './sessionDates.mjs';
+
 const BROWSER_VERSION_PATTERNS = [
   /\bEdg(?:A|iOS)?\/([\d.]+)/i,
   /\bOPR\/([\d.]+)/i,
@@ -14,7 +18,11 @@ const BROWSER_VERSION_PATTERNS = [
  * @returns {string} Browser version, or an empty string when it is unavailable.
  */
 export function getBrowserVersionFromUserAgent(userAgent) {
-  if (typeof userAgent !== 'string' || !userAgent.trim() || userAgent.trim().toLowerCase() === 'unknown') {
+  if (
+    typeof userAgent !== 'string' ||
+    !userAgent.trim() ||
+    userAgent.trim().toLowerCase() === 'unknown'
+  ) {
     return '';
   }
 
@@ -36,15 +44,5 @@ export function getBrowserVersionFromUserAgent(userAgent) {
  * @returns {string} A localized date and time or the supplied fallback.
  */
 export function formatSessionDateTime(value, locale, fallback) {
-  if (value === null || value === undefined || value === '') return fallback;
-
-  const date = value instanceof Date ? value : new Date(value);
-  if (!Number.isFinite(date.getTime())) return fallback;
-
-  const options = { dateStyle: 'medium', timeStyle: 'short' };
-  try {
-    return new Intl.DateTimeFormat(locale || 'en', options).format(date);
-  } catch {
-    return new Intl.DateTimeFormat('en', options).format(date);
-  }
+  return formatSessionDate(value, locale, fallback);
 }

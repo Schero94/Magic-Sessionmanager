@@ -8,29 +8,53 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Test & Verify Build
+    name: Test & Verify Build (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [20.x, 22.x]
-    
+        # package.json engines: ^22.22.2 || >=24.15.0
+        node-version: ['22', '24']
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
       - name: Run regression test suite
         run: npm test
+
+      - name: Type checks
+        run: |
+          npm run test:ts:front
+          npm run test:ts:back
 
       - name: Build plugin
         run: npm run build
@@ -43,39 +67,16 @@ jobs:
 
       - name: Verify build output
         run: |
-          echo "Checking admin build..."
-          test -f "dist/admin/index.js" && echo "✓ Admin JS built" || exit 1
-          test -f "dist/admin/index.mjs" && echo "✓ Admin MJS built" || exit 1
-          
-          echo "Checking server build..."
-          test -f "dist/server/index.js" && echo "✓ Server JS built" || exit 1
-          test -f "dist/server/index.mjs" && echo "✓ Server MJS built" || exit 1
-          
-          echo "✓ All build artifacts present"
-
-  lint:
-    name: Code Quality
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: '20.x'
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+          test -f dist/admin/index.js
+          test -f dist/admin/index.mjs
+          test -f dist/server/index.js
+          test -f dist/server/index.mjs
 
       - name: Check file structure
         run: |
-          echo "Verifying plugin structure..."
-          test -d "admin/src" && echo "✓ Admin src found" || exit 1
-          test -d "server/src" && echo "✓ Server src found" || exit 1
-          test -f "package.json" && echo "✓ package.json found" || exit 1
-          test -f ".releaserc.json" && echo "✓ .releaserc.json found" || exit 1
-          test -f "README.md" && echo "✓ README.md found" || exit 1
-          test -f "LICENSE" && echo "✓ LICENSE found" || exit 1
-          echo "✓ All required files present"
+          test -d admin/src
+          test -d server/src
+          test -f package.json
+          test -f .releaserc.json
+          test -f README.md
+          test -f LICENSE

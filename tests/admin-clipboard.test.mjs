@@ -21,5 +21,12 @@ test('clipboard helper reports unavailable or rejected writes instead of claimin
   const failure = new Error('clipboard denied');
 
   await assert.rejects(copyText('value', null), { message: 'clipboard_unavailable' });
-  await assert.rejects(copyText('value', { writeText: async () => { throw failure; } }), (error) => error === failure);
+  await assert.rejects(
+    copyText('value', {
+      writeText: async () => {
+        throw failure;
+      },
+    }),
+    (error) => error === failure
+  );
 });
