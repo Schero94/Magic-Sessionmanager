@@ -1450,7 +1450,12 @@ async function ensureContentApiPermissionsLocked(strapi, log, pluginStore) {
   const authenticatedRole = roles?.[0];
 
   if (!authenticatedRole) {
-    log.warn('Authenticated role not found - skipping permission setup');
+    // Normal on the first boot of a new database: Users & Permissions can
+    // create its roles after this bootstrap ran. The deferred retry below
+    // finishes the setup before the first Session Manager API request.
+    log.info(
+      'Authenticated role does not exist yet; permission setup runs again on the first Session Manager API request'
+    );
     return false;
   }
 
