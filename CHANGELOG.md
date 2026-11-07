@@ -19,6 +19,7 @@ Release type: minor. `feat:` removes the license feature; `fix:` corrects the pa
 ### Fixed
 
 * A unit test for revocation expiry read the clock twice and failed when a second boundary passed in between.
+* The first start on a new database no longer logs the warning "Authenticated role not found - skipping permission setup". Users & Permissions can create its roles after the plugin's bootstrap, and the plugin already finished the setup before the first Session Manager API request. The message is now an info line that says so.
 
 ### Version decision
 
@@ -284,7 +285,7 @@ The native Strapi Users & Permissions end-user session support from 2f00880 cove
 
 ### Bug Fixes
 
-* **deps:** bump devDependencies (sdk-plugin v6, design-system 2.2, styled-components 6.4) ([bf9a743](https://github.com/Schero94/Magic-Sessionmanager/commit/bf9a7433995dc96c23f8f4a149081fe858b7332f)), closes [package.json#exports](https://github.com/package.json/issues/exports)
+* **deps:** bump devDependencies (sdk-plugin v6, design-system 2.2, styled-components 6.4) ([bf9a743](https://github.com/Schero94/Magic-Sessionmanager/commit/bf9a7433995dc96c23f8f4a149081fe858b7332f))
 
 ## [4.5.6](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.5.5...v4.5.6) (2026-04-20)
 
