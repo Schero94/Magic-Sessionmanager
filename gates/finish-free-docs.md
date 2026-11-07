@@ -14,6 +14,10 @@ All evidence below is from 2026-11-07 on this branch. Hosts: Strapi 5.61.0, Node
       CHECK: isolated HTTP test "the removed license routes are gone and former license rows are deleted idempotently" (`node --test tests/isolated-http-access.test.js`); real boot on the isolated host with 4 seeded rows (`licenseKey` twice, `lastValidated`, `deviceId`).
       EXPECT: two parallel cleanups delete every row once, a second run deletes 0, other plugin rows stay; after a restart the 4 rows are gone.
       EVIDENCE: HTTP suite 37/37 pass. Host on port 1401: "legacy rows 4" before restart, "legacy rows after 0" and the settings row kept ("all plugin rows after 1").
+- [x] L2b: The cleanup is safe when several processes boot at once on PostgreSQL.
+      CHECK: own database `fin_sm_license` on PostgreSQL 16.15 (127.0.0.1:5440); one boot to create the schema, 5 legacy rows seeded (duplicates of `licenseKey` and `deviceId`), then 4 `strapi start` processes started at the same moment (ports 1403 to 1406).
+      EXPECT: all 4 healthy, no error in the logs, 0 legacy rows, no duplicate plugin store rows.
+      EVIDENCE: `/_health` 204 on all four; no error line; "legacy rows after 4 parallel boots 0"; the only plugin store row left is `contentApiPermissionsVersion` (one row).
 - [x] L3: The five removed admin routes are not served.
       CHECK: same HTTP test, plus an admin-JWT `fetch('/magic-sessionmanager/license/status')` from the browser on port 1401.
       EXPECT: 404 or 405 in the test; 404 in the browser.
