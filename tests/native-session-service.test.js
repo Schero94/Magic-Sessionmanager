@@ -745,6 +745,49 @@ test('native user-wide termination preserves the encoded current sidecar until o
   assert.equal(result.terminatedCount, 2);
 });
 
+test('user-wide termination tolerates a native session revoked concurrently elsewhere', async () => {
+  invalidateSettingsCache();
+  const revokedElsewhere = new Set();
+  const harness = createHarness({
+    sessions: [
+      magicSidecar('magic-current', 'native-current'),
+      magicSidecar('magic-other', 'native-other'),
+    ],
+    nativeSessions: [nativeSession('native-current'), nativeSession('native-other')],
+    // Another instance revokes 'native-other' between our check and our revoke.
+    isActive: (id) => !revokedElsewhere.has(id),
+    revoke: async (_userId, id) => {
+      revokedElsewhere.add(id);
+      return false;
+    },
+  });
+
+  const result = await harness.service.terminateSession({
+    userId: 'user-7',
+    exceptSessionId: createNativeSessionKey('user-7', 'native-current'),
+    reason: 'logout',
+  });
+
+  assert.equal(harness.sessionRows.get('magic-other').isActive, false);
+  assert.equal(harness.sessionRows.get('magic-current').isActive, true);
+  assert.equal(result.terminatedCount, 1);
+});
+
+test('user-wide termination still fails when an unconfirmed revoke leaves the session active', async () => {
+  invalidateSettingsCache();
+  const harness = createHarness({
+    sessions: [magicSidecar('magic-other', 'native-other')],
+    nativeSessions: [nativeSession('native-other')],
+    revoke: async () => false,
+  });
+
+  await assert.rejects(
+    harness.service.terminateSession({ userId: 'user-7', reason: 'logout' }),
+    /not confirmed/
+  );
+  assert.equal(harness.sessionRows.get('magic-other').isActive, true);
+});
+
 test('a linked session ID that is active under another owner cannot mutate its sidecar', async () => {
   invalidateSettingsCache();
   const harness = createHarness({

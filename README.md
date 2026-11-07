@@ -30,6 +30,7 @@ Free and open under the MIT license. All features are available without a paid l
 - [Content API](#content-api)
 - [Optional route policy: `session-required`](#optional-route-policy-session-required)
 - [Admin API and permissions](#admin-api-and-permissions)
+- [Running several instances (Railway replicas, pm2 cluster)](#running-several-instances-railway-replicas-pm2-cluster)
 - [Security and privacy](#security-and-privacy)
 - [Troubleshooting](#troubleshooting)
 - [Development and tests](#development-and-tests)
@@ -275,32 +276,32 @@ export default () => ({
 
 Static defaults from `server/src/config/index.js`; admin units and ranges from the settings validation in `server/src/controllers/settings.js`. Out-of-range admin values are rejected with a field error, not clamped silently.
 
-| Key                                                                 | Default                                       | Admin unit and range                                              | Configuration tab             | Meaning                                                                                                                                                                     |
-| ------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inactivityTimeout`                                                 | 15 min (`900000` ms)                          | min, 1–1440                                                       | Sessions                      | Unused this long, a session becomes idle and then ends as "Timed out". Also decides who counts as online.                                                                   |
-| `maxSessionAgeDays`                                                 | 30                                            | days, 1–365                                                       | Sessions                      | Maximum age from sign-in, regardless of activity. Applied on the session's next request.                                                                                    |
-| `lastSeenRateLimit`                                                 | 30 s (`30000` ms)                             | s, 5–300                                                          | Sessions › Advanced           | Minimum interval between "Last active" updates.                                                                                                                             |
-| `cleanupInterval`                                                   | 30 min (`1800000` ms)                         | min, 5–1440                                                       | Sessions › Advanced           | How often the idle check runs. It ends idle sessions and deletes nothing. It also runs once at server start.                                                                |
-| `cleanupUseDbDirect`                                                | `false`                                       | boolean                                                           | Sessions › Advanced           | Idle check with one SQL update instead of the Document Service (skips lifecycle hooks).                                                                                     |
-| `strictSessionEnforcement`                                          | `false` (Relaxed)                             | boolean                                                           | Sessions                      | Strict rejects tokens without a session record and requests where the check itself fails. Ended, expired and revoked sessions and blocked users are rejected in both modes. |
-| `sessionCreationGraceMs`                                            | `5000`                                        | ms, 0–30000 (shown in seconds)                                    | Sessions › Advanced           | Window after sign-in in which a token is accepted while its record is being created.                                                                                        |
-| `maxFailedLogins`                                                   | 5                                             | 0–100, 0 = off                                                    | Login protection              | Temporary IP lockout threshold (failed sign-ins from one IP within 15 minutes).                                                                                             |
-| `trustedProxies`                                                    | off                                           | boolean                                                           | Login protection              | Read the client IP from proxy headers. Only behind a proxy you control.                                                                                                     |
-| `blockSuspiciousSessions`                                           | `false`                                       | boolean                                                           | Login protection              | Reject suspicious sign-ins.                                                                                                                                                 |
-| `geoLookupFailureMode`                                              | `'auto'`                                      | auto, allow, block                                                | Login protection              | What happens when the location cannot be determined.                                                                                                                        |
-| `enableGeofencing`                                                  | `false`                                       | boolean                                                           | Login protection              | Use country rules.                                                                                                                                                          |
-| `allowedCountries` / `blockedCountries`                             | `[]`                                          | ISO 3166-1 alpha-2 codes                                          | Login protection              | Allow only listed countries / Reject listed countries.                                                                                                                      |
-| `enableGeolocation`                                                 | `true`                                        | boolean                                                           | Location data                 | IP location lookup at sign-in. Required by country rules, suspicious-sign-in checks and alerts.                                                                             |
-| `enableSecurityScoring`                                             | `true`                                        | boolean                                                           | Location data                 | Apply the security score thresholds (below 70: suspicious-sign-in email, below 50: rejection if enabled).                                                                   |
-| `geoIpProvider`                                                     | `'auto'`                                      | auto, local-mmdb, ipapi, disabled                                 | Location data                 | Where location data comes from.                                                                                                                                             |
-| `geoIpDatabasePath`                                                 | `MAGIC_SESSIONMANAGER_GEOIP_DATABASE` or `''` | file name                                                         | Location data › Advanced      | Local MaxMind-compatible database.                                                                                                                                          |
-| `enableEmailAlerts`                                                 | `false`                                       | boolean                                                           | Alerts                        | Security emails to users.                                                                                                                                                   |
-| `alertOnSuspiciousLogin` / `alertOnNewLocation` / `alertOnVpnProxy` | `true`                                        | boolean                                                           | Alerts                        | Which events send an email.                                                                                                                                                 |
-| `enableWebhooks`                                                    | `false`                                       | boolean                                                           | Alerts                        | Team notifications.                                                                                                                                                         |
-| `discordWebhookUrl` / `slackWebhookUrl`                             | `''`                                          | https URL on discord.com / discordapp.com, or hooks.slack.com     | Alerts                        | Any other host is rejected.                                                                                                                                                 |
-| `retentionDays`                                                     | 90                                            | days, 1–365 or -1 (forever)                                       | Data and retention            | How long records of ended sessions are kept. Checked once a day, the first time about 24 hours after the server starts. Open sessions are never deleted by retention.       |
-| `rateLimitWriteMax` / `rateLimitReadMax` / `rateLimitWindowSeconds` | 10 / 120 / 60                                 | 1–1000 / 1–10000 / 10–3600                                        | not shown                     | Content API rate limits. Not editable in the UI; Save keeps the stored values. The write limit can only be made stricter than the route floor.                              |
-| `emailTemplates`                                                    | empty                                         | subject ≤ 200, HTML ≤ 10,000 (sanitised), text ≤ 5,000 characters | Alerts › Edit email templates | As soon as any template has content, only stored templates are used. Fill in all three, or none.                                                                            |
+| Key                                                                 | Default                                       | Admin unit and range                                              | Configuration tab             | Meaning                                                                                                                                                                                     |
+| ------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inactivityTimeout`                                                 | 15 min (`900000` ms)                          | min, 1–1440                                                       | Sessions                      | Unused this long, a session becomes idle and then ends as "Timed out". Also decides who counts as online.                                                                                   |
+| `maxSessionAgeDays`                                                 | 30                                            | days, 1–365                                                       | Sessions                      | Maximum age from sign-in, regardless of activity. Applied on the session's next request.                                                                                                    |
+| `lastSeenRateLimit`                                                 | 30 s (`30000` ms)                             | s, 5–300                                                          | Sessions › Advanced           | Minimum interval between "Last active" updates.                                                                                                                                             |
+| `cleanupInterval`                                                   | 30 min (`1800000` ms)                         | min, 5–1440                                                       | Sessions › Advanced           | How often the idle check runs. It ends idle sessions and deletes nothing. It also runs at server start; with several instances only one runs it per interval.                               |
+| `cleanupUseDbDirect`                                                | `false`                                       | boolean                                                           | Sessions › Advanced           | Idle check with one SQL update instead of the Document Service (skips lifecycle hooks).                                                                                                     |
+| `strictSessionEnforcement`                                          | `false` (Relaxed)                             | boolean                                                           | Sessions                      | Strict rejects tokens without a session record and requests where the check itself fails. Ended, expired and revoked sessions and blocked users are rejected in both modes.                 |
+| `sessionCreationGraceMs`                                            | `5000`                                        | ms, 0–30000 (shown in seconds)                                    | Sessions › Advanced           | Window after sign-in in which a token is accepted while its record is being created.                                                                                                        |
+| `maxFailedLogins`                                                   | 5                                             | 0–100, 0 = off                                                    | Login protection              | Temporary IP lockout threshold (failed sign-ins from one IP within 15 minutes).                                                                                                             |
+| `trustedProxies`                                                    | off                                           | boolean                                                           | Login protection              | Read the client IP from proxy headers. Only behind a proxy you control.                                                                                                                     |
+| `blockSuspiciousSessions`                                           | `false`                                       | boolean                                                           | Login protection              | Reject suspicious sign-ins.                                                                                                                                                                 |
+| `geoLookupFailureMode`                                              | `'auto'`                                      | auto, allow, block                                                | Login protection              | What happens when the location cannot be determined.                                                                                                                                        |
+| `enableGeofencing`                                                  | `false`                                       | boolean                                                           | Login protection              | Use country rules.                                                                                                                                                                          |
+| `allowedCountries` / `blockedCountries`                             | `[]`                                          | ISO 3166-1 alpha-2 codes                                          | Login protection              | Allow only listed countries / Reject listed countries.                                                                                                                                      |
+| `enableGeolocation`                                                 | `true`                                        | boolean                                                           | Location data                 | IP location lookup at sign-in. Required by country rules, suspicious-sign-in checks and alerts.                                                                                             |
+| `enableSecurityScoring`                                             | `true`                                        | boolean                                                           | Location data                 | Apply the security score thresholds (below 70: suspicious-sign-in email, below 50: rejection if enabled).                                                                                   |
+| `geoIpProvider`                                                     | `'auto'`                                      | auto, local-mmdb, ipapi, disabled                                 | Location data                 | Where location data comes from.                                                                                                                                                             |
+| `geoIpDatabasePath`                                                 | `MAGIC_SESSIONMANAGER_GEOIP_DATABASE` or `''` | file name                                                         | Location data › Advanced      | Local MaxMind-compatible database.                                                                                                                                                          |
+| `enableEmailAlerts`                                                 | `false`                                       | boolean                                                           | Alerts                        | Security emails to users.                                                                                                                                                                   |
+| `alertOnSuspiciousLogin` / `alertOnNewLocation` / `alertOnVpnProxy` | `true`                                        | boolean                                                           | Alerts                        | Which events send an email.                                                                                                                                                                 |
+| `enableWebhooks`                                                    | `false`                                       | boolean                                                           | Alerts                        | Team notifications.                                                                                                                                                                         |
+| `discordWebhookUrl` / `slackWebhookUrl`                             | `''`                                          | https URL on discord.com / discordapp.com, or hooks.slack.com     | Alerts                        | Any other host is rejected.                                                                                                                                                                 |
+| `retentionDays`                                                     | 90                                            | days, 1–365 or -1 (forever)                                       | Data and retention            | How long records of ended sessions are kept. Checked once a day across all instances, the first time about 5 minutes after the server starts. Open sessions are never deleted by retention. |
+| `rateLimitWriteMax` / `rateLimitReadMax` / `rateLimitWindowSeconds` | 10 / 120 / 60                                 | 1–1000 / 1–10000 / 10–3600                                        | not shown                     | Content API rate limits. Not editable in the UI; Save keeps the stored values. The write limit can only be made stricter than the route floor.                                              |
+| `emailTemplates`                                                    | empty                                         | subject ≤ 200, HTML ≤ 10,000 (sanitised), text ≤ 5,000 characters | Alerts › Edit email templates | As soon as any template has content, only stored templates are used. Fill in all three, or none.                                                                                            |
 
 ### Environment variables
 
@@ -355,12 +356,12 @@ The updater checks MaxMind's `Last-Modified` header and skips the download when 
 
 Configuration › Login protection checks **new sign-ins only**. Existing sessions are not affected, and refused sign-ins are not recorded.
 
-| Rule                          | Response                            | Notes                                                                                                                                                                             |
-| ----------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Temporary IP lockout          | 429 with `Retry-After`              | After `maxFailedLogins` failed sign-ins from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Counted per server process. |
-| Reject suspicious sign-ins    | 403                                 | VPN, proxy or known threat address, or, with security scoring on, a score below 50.                                                                                               |
-| Country rules                 | 403                                 | Allow only listed countries, or reject listed countries. With "Allow only listed countries", an empty list allows every country.                                                  |
-| Location cannot be determined | 403 "Login temporarily unavailable" | When `geoLookupFailureMode` says reject (`auto` rejects only when "Reject suspicious sign-ins" is on).                                                                            |
+| Rule                          | Response                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Temporary IP lockout          | 429 with `Retry-After`              | After `maxFailedLogins` failed sign-ins from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Shared by all server processes. Each attempt is counted before the password check, so a parallel burst cannot exceed the limit; when more attempts from one address are running at once than the limit, the extra ones get 429 with `Retry-After: 1` and no lock. |
+| Reject suspicious sign-ins    | 403                                 | VPN, proxy or known threat address, or, with security scoring on, a score below 50.                                                                                                                                                                                                                                                                                                                                     |
+| Country rules                 | 403                                 | Allow only listed countries, or reject listed countries. With "Allow only listed countries", an empty list allows every country.                                                                                                                                                                                                                                                                                        |
+| Location cannot be determined | 403 "Login temporarily unavailable" | When `geoLookupFailureMode` says reject (`auto` rejects only when "Reject suspicious sign-ins" is on).                                                                                                                                                                                                                                                                                                                  |
 
 Requests with an ended session get **401** with the header `X-Session-Terminated-Reason` (`logout`, `manual`, `idle`, `expired` or `blocked`).
 
@@ -505,6 +506,158 @@ Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404
 
 ---
 
+## Running several instances (Railway replicas, pm2 cluster)
+
+The plugin works with several Strapi processes that share one database, for example 2 Railway replicas with 4 pm2 cluster workers each (8 processes). No sticky sessions are needed (Railway does not offer them) and no extra infrastructure: the database is the single source of truth.
+
+### What is shared and how
+
+| State                                                                                              | How it stays consistent across processes                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session validity (end, block, revoke, idle, expiry)                                                | Read from `magic_sessions` on every request. State changes are conditional updates (`UPDATE … WHERE isActive = …`), so a stale read on one process can never revive a terminated session or overwrite a `manual` / `blocked` reason set by another one. |
+| Failed-login lockout (`maxFailedLogins`)                                                           | One counter per client IP (stored as a SHA-256 hash) in `magic_sm_counters`, updated with a single atomic `UPDATE`. A lock or a successful sign-in applies on every process at once and survives restarts.                                              |
+| Content API rate limits                                                                            | Same shared counters, keyed by route template and caller. The configured limit is the limit for the whole cluster, not per process.                                                                                                                     |
+| Idle cleanup, retention                                                                            | A job lease in `magic_sm_leases`: every process keeps its timer, but only the process that takes the lease runs the job. Cleanup runs about once per `cleanupInterval`, retention once per day (first run about 5 minutes after a start).               |
+| Permission setup, session indexes, plugin-store writes (settings, GeoIP credentials, license data) | A cluster-wide critical section: `pg_advisory_xact_lock` on PostgreSQL, a lease row on SQLite and MySQL. Duplicate Core Store rows and duplicate Authenticated-role permissions left by older versions are removed automatically.                       |
+| Settings cache                                                                                     | Each save bumps a shared revision. Every process checks it at most every 2 seconds and reloads when it changed, so a new policy applies everywhere within about 2 seconds.                                                                              |
+| Concurrent settings saves                                                                          | The admin sends the revision it loaded. If another administrator saved in between, the save is refused with 409 and nothing is overwritten. API clients that send no `revision` keep the previous behaviour.                                            |
+| ipapi.co results and back-off                                                                      | Shared through `magic_sm_cache` (IP stored only as a hash), so one lookup or one HTTP 429 serves all processes.                                                                                                                                         |
+| `SESSION_ENCRYPTION_KEY`                                                                           | Each process compares an HMAC check value of its key (never the key) at start and logs an error when instances use different keys.                                                                                                                      |
+
+The three `magic_sm_*` tables are created at startup with portable statements (PostgreSQL, MySQL, SQLite 3.24+). The database user needs the `CREATE` privilege once. Strapi leaves tables it does not manage untouched.
+
+What stays per process, by design: the fail-open error budget in Relaxed token check mode (10 errors per minute per process; Strict mode never fails open), short in-process caches in front of the shared state, and the GeoIP database file (see below).
+
+### Exact setup
+
+1. **One PostgreSQL (or MySQL) database for all instances.** SQLite works only when all processes run on one machine and share the file.
+2. **Identical secrets on every instance.** On Railway, define them as shared variables: `SESSION_ENCRYPTION_KEY`, `APP_KEYS`, `JWT_SECRET`, `ADMIN_JWT_SECRET`, `API_TOKEN_SALT`, `TRANSFER_TOKEN_SALT`, `ENCRYPTION_KEY`, and `NODE_ENV=production`. Different `SESSION_ENCRYPTION_KEY` values make stored tokens unreadable on the other instances; the plugin logs an error at startup when it detects that.
+3. **The real client IP.** Railway and most platforms put a proxy in front of the app. Turn on Koa's proxy mode identically everywhere, otherwise lockout and rate limits see the proxy address:
+
+   ```js
+   // config/server.js
+   module.exports = ({ env }) => ({
+     host: env('HOST', '0.0.0.0'),
+     port: env.int('PORT', 1337),
+     app: { keys: env.array('APP_KEYS') },
+     proxy: { koa: env.bool('IS_PROXIED', true), maxIpsCount: env.int('MAX_IPS_COUNT', 1) },
+   });
+   ```
+
+   With `proxy.koa` on, the plugin reads the client IP from the proxy headers (`CF-Connecting-IP`, `X-Real-IP`, then the first `X-Forwarded-For` entry). Only enable it behind a proxy you control.
+
+4. **pm2 in cluster mode** (one container or VM):
+
+   ```js
+   // ecosystem.config.js
+   module.exports = {
+     apps: [
+       {
+         name: 'strapi',
+         script: 'node_modules/@strapi/strapi/bin/strapi.js',
+         args: 'start',
+         instances: 4,
+         exec_mode: 'cluster',
+         env: { NODE_ENV: 'production' },
+       },
+     ],
+   };
+   ```
+
+   Start it with `pm2-runtime start ecosystem.config.js` in containers.
+
+5. **Start one process first after a schema change.** Strapi itself syncs its database schema at every start. On an empty database, several processes starting at the same moment race on Strapi's own tables (`strapi_migrations` already exists / duplicate key in `pg_type`) and crash; we reproduced this with 4 processes on PostgreSQL 16 and Strapi 5.61. This is Strapi core behaviour, not the plugin's. For the first deploy and for deploys that change content types, start a single process once (for example a Railway [pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command) or one replica with `instances: 1`), then scale out. The plugin's own start-up work is safe to run in parallel.
+6. **GeoIP database file on every instance.** Railway replicas cannot use volumes ([Railway docs](https://docs.railway.com/volumes/reference#caveats)), and the file is local to each container. With `local-mmdb`, download it during the build or before pm2 starts, so every replica has it:
+
+   ```bash
+   # build or start command, before pm2 forks the workers
+   npx strapi-magic-sessionmanager-geoip && pm2-runtime start ecosystem.config.js
+   ```
+
+   with `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY` and `MAXMIND_EDITION_ID=GeoLite2-City` set. **Update database** in the admin downloads the file only on the instance that answered; the GeoIP status reports `scope: "instance"` and a non-reversible `instance` fingerprint so you can tell instances apart. The pm2 workers of one container share the file.
+
+### Configuration
+
+```js
+// config/plugins.js
+module.exports = () => ({
+  'magic-sessionmanager': {
+    enabled: true,
+    config: {
+      coordination: {
+        enabled: true, // false = per-process state, the behaviour before 4.10
+        counterStore: null, // optional: Redis (or other) store for lockout and rate-limit counters
+      },
+    },
+  },
+});
+```
+
+The database store needs nothing else. If you already run Redis and want the counters there, pass an object with four async methods (`hit` must return the count written by that call, as the Lua script below does) and an optional `release`. Example with [node-redis](https://github.com/redis/node-redis) (`npm i redis`); when Redis fails, the plugin falls back to the database for that call:
+
+```js
+// config/plugins.js
+const { createClient } = require('redis');
+
+const redis = createClient({ url: process.env.REDIS_URL });
+redis.connect();
+
+const HIT = `
+local start = tonumber(redis.call('HGET', KEYS[1], 's') or '0')
+local now, win = tonumber(ARGV[1]), tonumber(ARGV[2])
+if start <= now - win then redis.call('HSET', KEYS[1], 'h', 1, 's', now)
+else redis.call('HINCRBY', KEYS[1], 'h', 1) end
+if redis.call('PTTL', KEYS[1]) < win then redis.call('PEXPIRE', KEYS[1], win) end
+return redis.call('HMGET', KEYS[1], 'h', 's', 'b')`;
+
+const toState = ([h, s, b]) =>
+  h === null && b === null
+    ? null
+    : { hits: Number(h || 0), windowStart: Number(s || 0), blockedUntil: Number(b || 0) };
+
+module.exports = () => ({
+  'magic-sessionmanager': {
+    config: {
+      coordination: {
+        counterStore: {
+          hit: async (key, windowMs) =>
+            toState(
+              await redis.eval(HIT, {
+                keys: [`msm:${key}`],
+                arguments: [String(Date.now()), String(windowMs)],
+              })
+            ),
+          peek: async (key) => toState(await redis.hmGet(`msm:${key}`, ['h', 's', 'b'])),
+          block: async (key, untilMs) => {
+            await redis.hSet(`msm:${key}`, 'b', String(untilMs));
+            // Keep the key at least until the block ends (-1 = no expiry yet).
+            if ((await redis.pTTL(`msm:${key}`)) < untilMs - Date.now()) {
+              await redis.pExpireAt(`msm:${key}`, untilMs);
+            }
+          },
+          clear: async (key) => {
+            await redis.del(`msm:${key}`);
+          },
+          // Optional: gives back one hit (a login that ended with a 5xx or
+          // was turned away as over the limit). Without it the hit stays.
+          release: async (key) => {
+            await redis.hIncrBy(`msm:${key}`, 'h', -1);
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+### Verifying
+
+`npm run test:concurrency` starts 8 Node processes against one database and checks exact shared counts (every hit also reports its own count), a single job-lease winner, lock-protected read-modify-write, no duplicate check-then-create rows, exact revision bumps and a cluster-wide lockout. It runs on SQLite by default and also on PostgreSQL with `MSM_TEST_PG_URL=postgres://user@host:5432/db`. A control step does the same check-then-create without the lock and reports the duplicates that Strapi's Core Store produces in that case.
+
+Measured over HTTP on an isolated Strapi 5.61 host with one PostgreSQL 16 database (synthetic users and IPs, outbound network blocked), once with 4 separate processes and once with pm2 cluster mode (4 workers): 48 parallel wrong passwords from one IP let exactly `maxFailedLogins` (5) reach the password check, after which every process answers 429; 48 parallel `logout-others` calls with a limit of 10 allowed exactly 10; 50 parallel refreshes with one refresh token produced exactly one new token and one active session; 60 parallel partial settings saves lost no field; 20 saves with the same `revision` gave one 200 and nineteen 409; a settings change reached the other processes within 2.5 seconds; idle cleanup ran exactly once per interval and retention once. The same suite passed on SQLite with one process. Not covered: MySQL, the Redis counter store over HTTP, and Railway itself.
+
+---
+
 ## Security and privacy
 
 - **Encryption key.** Stored tokens are encrypted with AES-256-GCM using `SESSION_ENCRYPTION_KEY`. In production, startup fails without it. Outside production a derived development key is used with a warning. Changing the key makes existing encrypted tokens unreadable, so keep it stable. Generate one in **Configuration › Sessions › Advanced** ("Copy for .env" copies `SESSION_ENCRYPTION_KEY="…"`; nothing is saved in Strapi) or with:
@@ -524,15 +677,15 @@ Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404
 
 ## Troubleshooting
 
-| Problem                                                               | Fix                                                                                                                                                      |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin". |
-| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                        |
-| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                            |
-| 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                   |
-| 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client.    |
-| Location is always "—"                                                | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data.                               |
-| Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                          |
+| Problem                                                               | Fix                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin".                                                                                                                       |
+| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                                                                                                                                              |
+| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                                                                                                                                                  |
+| 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                                                                                                                                         |
+| 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client. With `Retry-After: 1`: more sign-ins from one address were running at once than `maxFailedLogins`; retry after a second. |
+| Location is always "—"                                                | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data.                                                                                                                                                     |
+| Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                                                                                                                                                |
 
 The plugin stores sessions in the `magic_sessions` table and revocations in its own revoked-token table.
 
@@ -543,6 +696,7 @@ The plugin stores sessions in the `magic_sessions` table and revocations in its 
 ```bash
 npm ci --legacy-peer-deps
 npm test                  # node --test tests/*.test.js tests/*.test.mjs
+npm run test:concurrency  # 8 processes on one database (SQLite; PostgreSQL with MSM_TEST_PG_URL)
 npm run test:ts:front
 npm run test:ts:back
 npm run build

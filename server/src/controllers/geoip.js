@@ -16,6 +16,8 @@ const {
   normalizeGeoIpDatabasePath,
 } = require('../utils/settings-loader');
 const { sendServerError } = require('../utils/http-errors');
+const { setPluginStoreValue } = require('../utils/plugin-store');
+const { getHostFingerprint } = require('../utils/coordination');
 
 const CREDENTIALS_KEY = 'geoipCredentials';
 const SAFE_GEOIP_DIRECTORY_LABEL = 'data/magic-sessionmanager/geoip';
@@ -63,11 +65,9 @@ async function getStoredCredentials(strapi) {
  * @sideeffect Writes credential values to the plugin store
  */
 async function setStoredCredentials(strapi, credentials) {
-  const store = getGeoIpStore(strapi);
-  await store.set({
-    key: CREDENTIALS_KEY,
-    value: credentials,
-  });
+  // Locked write: parallel saves on several instances must not create two
+  // credential rows in the Core Store.
+  await setPluginStoreValue(strapi, CREDENTIALS_KEY, credentials);
 }
 
 /**
@@ -178,6 +178,11 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
           hasCredentials: credentialSource !== 'missing',
           credentialSource,
           accountId: process.env.MAXMIND_ACCOUNT_ID || storedCredentials.accountId || '',
+          // The MMDB file lives on the local disk of the instance that
+          // answered. In multi-instance deployments each instance reports
+          // its own file; `instance` is a non-reversible host fingerprint.
+          scope: 'instance',
+          instance: getHostFingerprint(),
         },
       });
     } catch (error) {

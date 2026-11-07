@@ -45,6 +45,16 @@ module.exports = {
     slackWebhookUrl: '',
 
     trustedProxies: null,
+
+    // Cross-process state for pm2 cluster / several replicas. `enabled:
+    // false` keeps every counter, lease and cache per process (the pre-4.10
+    // behaviour). `counterStore` may supply an object with async
+    // hit/peek/block/clear methods (for example backed by Redis) for the
+    // lockout and rate-limit counters; see README "Running several instances".
+    coordination: {
+      enabled: true,
+      counterStore: null,
+    },
   },
   validator: (config) => {
     if (config.lastSeenRateLimit !== undefined && typeof config.lastSeenRateLimit !== 'number') {
@@ -82,6 +92,27 @@ module.exports = {
       !['auto', 'allow', 'block'].includes(config.geoLookupFailureMode)
     ) {
       throw new Error('geoLookupFailureMode must be one of: auto, allow, block');
+    }
+    if (config.coordination !== undefined && config.coordination !== null) {
+      const coordination = config.coordination;
+      if (typeof coordination !== 'object' || Array.isArray(coordination)) {
+        throw new Error('coordination must be an object');
+      }
+      if (coordination.enabled !== undefined && typeof coordination.enabled !== 'boolean') {
+        throw new Error('coordination.enabled must be a boolean');
+      }
+      const store = coordination.counterStore;
+      if (store !== undefined && store !== null) {
+        const required = ['hit', 'peek', 'block', 'clear'];
+        if (
+          typeof store !== 'object' ||
+          required.some((method) => typeof store[method] !== 'function')
+        ) {
+          throw new Error(
+            'coordination.counterStore must implement async hit, peek, block and clear methods'
+          );
+        }
+      }
     }
   },
 };

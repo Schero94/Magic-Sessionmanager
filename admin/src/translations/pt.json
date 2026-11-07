@@ -339,6 +339,7 @@
   "settings.config.requires.localDatabase": "As definições de base de dados abaixo requerem o fornecedor Automático ou Base de dados local.",
   "settings.config.requires.credentials": "Adicione primeiro as credenciais do MaxMind.",
   "settings.config.feedback.adjusted": "Definições guardadas. Alguns valores foram ajustados aos limites permitidos: {fields}.",
+  "settings.config.feedback.conflict": "Outro administrador guardou as definições entretanto. Recarregue a página para ver as alterações dele e volte a aplicar as suas.",
   "settings.config.feedback.saveError": "Não foi possível guardar as definições. As suas alterações continuam no formulário.",
   "settings.config.feedback.deletedEnded": "{count, plural, one {# sessão terminada eliminada.} other {# sessões terminadas eliminadas.}}",
   "settings.config.feedback.deletedNone": "Não havia sessões terminadas para eliminar.",

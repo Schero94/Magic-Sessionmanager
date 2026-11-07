@@ -339,6 +339,7 @@
   "settings.config.requires.localDatabase": "The database settings below require the Automatic or Local database provider.",
   "settings.config.requires.credentials": "Add MaxMind credentials first.",
   "settings.config.feedback.adjusted": "Settings saved. Some values were adjusted to the allowed limits: {fields}.",
+  "settings.config.feedback.conflict": "Another administrator saved the settings in the meantime. Reload the page to see their changes, then apply yours again.",
   "settings.config.feedback.saveError": "Settings could not be saved. Your changes are still in the form.",
   "settings.config.feedback.deletedEnded": "{count, plural, one {# ended session deleted.} other {# ended sessions deleted.}}",
   "settings.config.feedback.deletedNone": "There were no ended sessions to delete.",

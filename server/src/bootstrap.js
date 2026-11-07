@@ -8,12 +8,14 @@
  * users-permissions JWT verify function so ALL authenticated requests are
  * validated against the session store.
  *
- * For multi-instance deployments, consider Redis locks for session
- * reactivation or a shared session store.
+ * Multi-instance deployments (pm2 cluster, several replicas) share state
+ * through `utils/coordination.js`: lockout and rate-limit counters, job
+ * leases, critical sections and the settings revision live in the database,
+ * and session state changes use conditional (compare-and-set) updates.
  */
 
 const getClientIp = require('./utils/getClientIp');
-const { encryptToken, hashToken } = require('./utils/encryption');
+const { encryptToken, getEncryptionKeyCheck, hashToken } = require('./utils/encryption');
 const { createLogger } = require('./utils/logger');
 const { resolveUserDocumentId } = require('./utils/resolve-user');
 const { getPluginSettings, getSessionCreationGraceMs } = require('./utils/settings-loader');
@@ -23,6 +25,13 @@ const { evaluateGeoFirewall } = require('./utils/geo-firewall');
 const { REVOCATION_UID } = require('./utils/session-revocation');
 const { getNativeSessionManager } = require('./utils/native-session-manager');
 const { CONTENT_API_PERMISSIONS_VERSION } = require('./utils/content-api-permissions');
+const {
+  getCoordinator,
+  hashedKey,
+  initCoordination,
+  LockTimeoutError,
+} = require('./utils/coordination');
+const { withPluginStoreKey } = require('./utils/plugin-store');
 const {
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,
@@ -37,6 +46,13 @@ const {
 } = require('./utils/refresh-token');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
+const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** Leases for the periodic jobs. Only the holder runs the job. */
+const JOB_LEASES = Object.freeze({
+  idleCleanup: 'job:idle-cleanup',
+  retention: 'job:retention',
+});
 
 const JWT_WRAPPED_FLAG = Symbol.for('magic-sessionmanager.jwt.wrapped');
 const deferredContentApiPermissionSetup = new WeakMap();
@@ -73,6 +89,11 @@ module.exports = async ({ strapi }) => {
   }
 
   try {
+    // Shared state first: everything below may use leases, locks or counters.
+    const coordinator = await initCoordination(strapi, log);
+
+    await checkEncryptionKeyConsistency(strapi, log);
+
     await ensureSessionLookupIndexes(strapi, log);
 
     await registerSessionAwareAuthStrategy(strapi);
@@ -87,12 +108,37 @@ module.exports = async ({ strapi }) => {
       strapi.sessionManagerIntervals = {};
     }
 
+    /**
+     * Runs the idle cleanup when this process wins the job lease. The lease
+     * lasts slightly less than one interval, so across all processes the job
+     * runs about once per interval, whichever process's timer fires first.
+     *
+     * @param {number} intervalMs
+     * @param {boolean} useDbDirect
+     * @returns {Promise<void>}
+     */
+    const runIdleCleanupIfLeader = async (intervalMs, useDbDirect) => {
+      const leaseMs = Math.max(60 * 1000, intervalMs - 30 * 1000);
+      if (!(await coordinator.tryAcquireLease(JOB_LEASES.idleCleanup, leaseMs))) {
+        log.debug('[CLEANUP] Another instance holds the cleanup lease; skipping this run');
+        return;
+      }
+      const service = strapi.plugin('magic-sessionmanager').service('session');
+      await service.cleanupInactiveSessions({ useDbDirect });
+      try {
+        await coordinator.prune();
+      } catch (err) {
+        log.debug('[CLEANUP] Shared counter pruning failed:', err?.name || 'Error');
+      }
+    };
+
     log.info('Running initial session cleanup...');
     try {
       const settings = await getPluginSettings(strapi);
-      await sessionService.cleanupInactiveSessions({
-        useDbDirect: settings.cleanupUseDbDirect === true,
-      });
+      await runIdleCleanupIfLeader(
+        Math.max(5 * 60 * 1000, settings.cleanupInterval || 30 * 60 * 1000),
+        settings.cleanupUseDbDirect === true
+      );
     } catch (cleanupErr) {
       log.warn('Initial cleanup failed:', cleanupErr?.name || 'Error');
     }
@@ -101,7 +147,8 @@ module.exports = async ({ strapi }) => {
     // of setInterval, so that changes to `settings.cleanupInterval` take
     // effect on the next scheduled tick rather than requiring a restart.
     // The minimum is clamped to 5 minutes to avoid pathological configs
-    // from turning the job into a hot loop.
+    // from turning the job into a hot loop. Every process keeps a timer, but
+    // only the lease holder does the work.
     const scheduleIdleCleanup = async () => {
       let intervalMs = 30 * 60 * 1000;
       let useDbDirect = false;
@@ -115,8 +162,7 @@ module.exports = async ({ strapi }) => {
 
       const handle = setTimeout(async () => {
         try {
-          const service = strapi.plugin('magic-sessionmanager').service('session');
-          await service.cleanupInactiveSessions({ useDbDirect });
+          await runIdleCleanupIfLeader(intervalMs, useDbDirect);
         } catch (err) {
           log.error('Periodic cleanup error:', err?.name || 'Error');
         }
@@ -128,10 +174,8 @@ module.exports = async ({ strapi }) => {
     await scheduleIdleCleanup();
 
     // Separate scheduler for retention (permanently-delete inactive sessions
-    // older than settings.retentionDays). We run this at most once per day,
-    // because retention is a slow-moving property and more frequent runs
-    // add no business value.
-    const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+    // older than settings.retentionDays). It runs at most once per day across
+    // all processes: the lease lasts 23 hours.
     const scheduleRetention = async () => {
       let useDbDirect = false;
       try {
@@ -143,8 +187,7 @@ module.exports = async ({ strapi }) => {
 
       const handle = setTimeout(async () => {
         try {
-          const service = strapi.plugin('magic-sessionmanager').service('session');
-          await service.deleteOldSessions({ useDbDirect });
+          await runRetentionIfLeader(useDbDirect);
         } catch (err) {
           log.error('Retention cleanup error:', err?.name || 'Error');
         }
@@ -153,10 +196,35 @@ module.exports = async ({ strapi }) => {
 
       strapi.sessionManagerIntervals.retentionTimeout = handle;
     };
+
+    /**
+     * Runs retention when this process wins the daily retention lease.
+     *
+     * @param {boolean} useDbDirect
+     * @returns {Promise<void>}
+     */
+    const runRetentionIfLeader = async (useDbDirect) => {
+      const leaseMs = RETENTION_INTERVAL_MS - 60 * 60 * 1000;
+      if (!(await coordinator.tryAcquireLease(JOB_LEASES.retention, leaseMs))) {
+        log.debug('[RETENTION] Another instance holds the retention lease; skipping this run');
+        return;
+      }
+      const service = strapi.plugin('magic-sessionmanager').service('session');
+      await service.deleteOldSessions({ useDbDirect });
+    };
+
     // Delay the first retention run by 5 minutes so Strapi bootstrap is
-    // fully settled and we do not compete with startup DB activity.
+    // fully settled and we do not compete with startup DB activity. Before
+    // the lease existed every boot ran retention once 5 minutes later; the
+    // lease keeps that at one run per day for the whole cluster.
     strapi.sessionManagerIntervals.retentionStartup = setTimeout(
-      () => {
+      async () => {
+        try {
+          const settings = await getPluginSettings(strapi);
+          await runRetentionIfLeader(settings.cleanupUseDbDirect === true);
+        } catch (err) {
+          log.error('Retention cleanup error:', err?.name || 'Error');
+        }
         scheduleRetention();
       },
       5 * 60 * 1000
@@ -203,6 +271,37 @@ module.exports = async ({ strapi }) => {
     log.error('[ERROR] Bootstrap error:', err?.name || 'Error');
   }
 };
+
+/**
+ * Detects instances that do not share the same SESSION_ENCRYPTION_KEY. Each
+ * process compares an HMAC check value of its key (never the key) with the
+ * value stored in the shared cache table and logs an error on mismatch, then
+ * stores its own value so a deliberate key change is accepted after one
+ * warning per mismatching boot.
+ *
+ * @param {object} strapi
+ * @param {object} log
+ * @returns {Promise<void>}
+ */
+async function checkEncryptionKeyConsistency(strapi, log) {
+  const coordinator = getCoordinator(strapi);
+  if (!coordinator.dialect) return;
+  try {
+    const current = getEncryptionKeyCheck();
+    const stored = await coordinator.cacheGet('instance:encryption-key-check');
+    if (stored && stored !== current) {
+      log.error(
+        '[CONFIG] SESSION_ENCRYPTION_KEY differs from the key another instance used. ' +
+          'Set the same value on every replica and worker, otherwise stored tokens cannot be read across instances.'
+      );
+    }
+    if (stored !== current) {
+      await coordinator.cacheSet('instance:encryption-key-check', current, Infinity);
+    }
+  } catch (err) {
+    log.debug('[CONFIG] Encryption key consistency check skipped:', err?.name || 'Error');
+  }
+}
 
 /**
  * Pre-login geo guard: blocks suspicious IPs BEFORE the login controller runs,
@@ -497,15 +596,15 @@ async function compensateNativeSession({ nativeSessionManager, nativeSession, lo
 }
 
 /**
- * In-memory IP-based lockout after `maxFailedLogins` failed attempts within
- * a 15-minute rolling window. Lockout duration = 15 minutes.
+ * IP-based lockout after `maxFailedLogins` failed attempts within a 15-minute
+ * window. Lockout duration = 15 minutes.
  *
- * Trade-offs of the in-memory approach:
- *  - single-process only (multi-instance deployments share nothing)
- *  - resets on restart (attackers can reset by crashing the process)
- * These are acceptable for a first-line defense that runs BEFORE the
- * auth handler and adds no new DB writes. For multi-instance deployments,
- * swap this with a Redis-backed counter.
+ * The counter lives in the shared coordination store (database table by
+ * default, see `utils/coordination.js`), keyed by a SHA-256 hash of the
+ * client IP. Every pm2 worker and replica therefore sees the same count and
+ * the same lock, a successful login clears it everywhere, and a restart does
+ * not reset it. When the shared store is unavailable the middleware falls
+ * back to per-process counters.
  *
  * The feature is opt-in via `settings.maxFailedLogins > 0`. When the
  * setting is 0 or missing, the middleware is a no-op (still mounted for
@@ -514,34 +613,9 @@ async function compensateNativeSession({ nativeSessionManager, nativeSession, lo
  * @param {{strapi: object, log: object}} deps
  */
 function mountFailedLoginLockout({ strapi, log }) {
-  const WINDOW_MS = 15 * 60 * 1000;
-  const failed = new Map(); // ip → { count, firstFailAt, blockedUntil }
-
-  const prune = (now) => {
-    if (failed.size < 5000) return;
-    for (const [k, v] of failed) {
-      if (v.blockedUntil < now && now - v.firstFailAt > WINDOW_MS) failed.delete(k);
-    }
-  };
-
-  const recordFailure = (ip, max) => {
-    const now = Date.now();
-    prune(now);
-    const entry = failed.get(ip) || { count: 0, firstFailAt: now, blockedUntil: 0 };
-    if (now - entry.firstFailAt > WINDOW_MS) {
-      entry.count = 0;
-      entry.firstFailAt = now;
-      entry.blockedUntil = 0;
-    }
-    entry.count += 1;
-    if (entry.count >= max) {
-      entry.blockedUntil = now + WINDOW_MS;
-    }
-    failed.set(ip, entry);
-    return entry;
-  };
-
-  const clearFailures = (ip) => failed.delete(ip);
+  const WINDOW_MS = FAILED_LOGIN_WINDOW_MS;
+  const coordinator = getCoordinator(strapi);
+  const keyFor = (ip) => hashedKey('lf', ip);
 
   strapi.server.use(async (ctx, next) => {
     if (!isFailedLoginTrackedPath(ctx.path, ctx.method)) return next();
@@ -553,10 +627,15 @@ function mountFailedLoginLockout({ strapi, log }) {
     const ip = getClientIp(ctx);
     if (!ip || ip === 'unknown') return next();
 
+    const key = keyFor(ip);
     const now = Date.now();
-    const existing = failed.get(ip);
-    if (existing && existing.blockedUntil > now) {
-      const retrySec = Math.ceil((existing.blockedUntil - now) / 1000);
+    let existing = null;
+    try {
+      existing = await coordinator.peek(key);
+    } catch (err) {
+      log.debug('[LOCKOUT] Counter read failed:', err?.name || 'Error');
+    }
+    const rejectLocked = (retrySec) => {
       ctx.set('Retry-After', String(retrySec));
       log.warn(`[LOCKOUT] Rejected login from locked client (${retrySec}s remaining)`);
       ctx.status = 429;
@@ -568,25 +647,113 @@ function mountFailedLoginLockout({ strapi, log }) {
           details: { retryAfter: retrySec },
         },
       };
+    };
+    if (existing && existing.blockedUntil > now) {
+      rejectLocked(Math.ceil((existing.blockedUntil - now) / 1000));
       return;
     }
 
-    await next();
-
-    // Count every 4xx from a login endpoint as a failure. 5xx is almost
-    // always a server bug and we don't want to punish the user for it.
-    // 200 with a jwt resets the counter.
-    if (ctx.status === 200 && ctx.body && ctx.body.jwt) {
-      clearFailures(ip);
-    } else if (ctx.status >= 400 && ctx.status < 500 && ctx.status !== 429) {
-      const entry = recordFailure(ip, maxFailed);
-      if (entry.blockedUntil > now) {
-        log.warn(`[LOCKOUT] Client locked for 15min after ${entry.count} failed login attempts`);
-      }
+    // Reserve the attempt BEFORE the password check. Counting only after
+    // the handler returned let every request of a parallel burst pass the
+    // `peek` above before the first failure was recorded (measured: 10 of 48
+    // parallel wrong passwords reached the check with a limit of 5). The
+    // shared counter returns the value written by this request, so at most
+    // `maxFailed` attempts that are failed or still running reach the
+    // password check per window, cluster-wide.
+    //
+    // A request over that number is turned away with a short Retry-After
+    // and gives its reservation back. It does NOT lock the client: it may be
+    // one of several correct logins arriving at once from one address (for
+    // example an office behind NAT). Only completed failures lock.
+    let reserved = null;
+    try {
+      reserved = await coordinator.hit(key, WINDOW_MS);
+    } catch (err) {
+      log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
     }
+    if (reserved && reserved.hits > maxFailed) {
+      try {
+        await coordinator.release(key);
+      } catch (err) {
+        log.debug('[LOCKOUT] Counter release failed:', err?.name || 'Error');
+      }
+      ctx.set('Retry-After', '1');
+      ctx.status = 429;
+      ctx.body = {
+        error: {
+          status: 429,
+          name: 'TooManyRequestsError',
+          message: 'Too many login attempts at once. Please try again.',
+          details: { retryAfter: 1 },
+        },
+      };
+      return;
+    }
+
+    // Users & Permissions reports a wrong password by THROWING a
+    // ValidationError; Strapi's outer errors middleware turns it into the
+    // 400 response. The outcome is therefore read from the thrown error as
+    // well as from ctx.status, and the error is re-thrown unchanged.
+    let thrown = null;
+    try {
+      await next();
+    } catch (err) {
+      thrown = err;
+    }
+    const status = thrown ? statusOfThrownError(thrown) : ctx.status;
+
+    // Every 4xx from a login endpoint is a failure and keeps its reserved
+    // hit. 5xx (almost always a server bug) and 429 from another limiter
+    // give the hit back. 200 with a jwt resets the counter.
+    try {
+      if (!thrown && status === 200 && ctx.body && ctx.body.jwt) {
+        await coordinator.clear(key);
+      } else if (status >= 400 && status < 500 && status !== 429) {
+        if (reserved && reserved.hits >= maxFailed) {
+          await coordinator.block(key, Date.now() + WINDOW_MS);
+          log.warn(
+            `[LOCKOUT] Client locked for 15min after ${reserved.hits} failed login attempts`
+          );
+        }
+      } else if (reserved) {
+        await coordinator.release(key);
+      }
+    } catch (err) {
+      log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
+    }
+
+    if (thrown) throw thrown;
   });
 
   log.info('[SUCCESS] Failed-login lockout middleware mounted');
+}
+
+/**
+ * Returns the HTTP status Strapi's errors middleware will send for an error
+ * thrown by a downstream handler (@strapi/core 5.61 `services/errors.js`):
+ * HttpErrors carry `status`; ApplicationErrors map by class name and default
+ * to 400; anything else becomes 500.
+ *
+ * @param {unknown} err
+ * @returns {number}
+ */
+function statusOfThrownError(err) {
+  const status = Number(err?.status ?? err?.statusCode);
+  if (Number.isInteger(status) && status >= 400 && status < 600) return status;
+  const byName = {
+    UnauthorizedError: 401,
+    ForbiddenError: 403,
+    NotFoundError: 404,
+    PayloadTooLargeError: 413,
+    RateLimitError: 429,
+    NotImplementedError: 501,
+    ApplicationError: 400,
+    ValidationError: 400,
+    YupValidationError: 400,
+    PaginationError: 400,
+    PolicyError: 403,
+  };
+  return byName[err?.name] || 500;
 }
 
 /**
@@ -1201,95 +1368,153 @@ async function ensureContentApiPermissions(strapi, log) {
   // installations pick up the new permissions on next boot. Storing a
   // version (not a boolean) also lets us back out a bad migration by
   // decrementing the stored value manually.
+  //
+  // The whole check-then-create runs in a cluster-wide critical section, so
+  // parallel bootstraps (pm2 workers, replicas) cannot create the same
+  // permission twice. Each process re-reads the state after entering it.
   try {
-    const pluginStore = strapi.store({ type: 'plugin', name: 'magic-sessionmanager' });
-    const storedVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
-
-    // Legacy rollout (boolean flag pre-v2) — treat as version 1.
-    if (storedVersion === undefined) {
-      const legacyFlag = await pluginStore.get({ key: 'contentApiPermissionsInitialized' });
-      if (legacyFlag === true) {
-        await pluginStore.set({ key: 'contentApiPermissionsVersion', value: 1 });
-      }
-    }
-
-    const effectiveVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
-    if (effectiveVersion >= CONTENT_API_PERMISSIONS_VERSION) {
-      log.debug('Content-API permissions already at current version (skipping auto-setup)');
-      return true;
-    }
-
-    const ROLE_UID = 'plugin::users-permissions.role';
-    const PERMISSION_UID = 'plugin::users-permissions.permission';
-
-    // Document Service replaces the deprecated entityService (Strapi v5).
-    // We still need the numeric `id` of the role for the permission's
-    // `role` relation because users-permissions Permission stores the
-    // foreign key by numeric id, not documentId.
-    const roles = await strapi.documents(ROLE_UID).findMany({
-      filters: { type: 'authenticated' },
-      fields: ['id'],
-      limit: 1,
-    });
-
-    const authenticatedRole = roles?.[0];
-
-    if (!authenticatedRole) {
-      log.warn('Authenticated role not found - skipping permission setup');
+    return await withPluginStoreKey(strapi, 'contentApiPermissionsVersion', (pluginStore) =>
+      ensureContentApiPermissionsLocked(strapi, log, pluginStore)
+    );
+  } catch (err) {
+    if (err instanceof LockTimeoutError) {
+      log.warn('Content-API permission setup is busy on another instance; will retry');
       return false;
     }
-
-    const requiredActions = [
-      'plugin::magic-sessionmanager.session.logout',
-      'plugin::magic-sessionmanager.session.logoutAll',
-      'plugin::magic-sessionmanager.session.logoutOthers',
-      'plugin::magic-sessionmanager.session.getOwnSessions',
-      'plugin::magic-sessionmanager.session.getUserSessions',
-      'plugin::magic-sessionmanager.session.getCurrentSession',
-      'plugin::magic-sessionmanager.session.terminateOwnSession',
-    ];
-
-    const existingPermissions = await strapi.documents(PERMISSION_UID).findMany({
-      filters: {
-        role: authenticatedRole.id,
-        action: { $in: requiredActions },
-      },
-      fields: ['action'],
-      limit: requiredActions.length,
-    });
-
-    const existingActions = existingPermissions.map((p) => p.action);
-    const missingActions = requiredActions.filter((action) => !existingActions.includes(action));
-
-    if (missingActions.length === 0) {
-      await pluginStore.set({
-        key: 'contentApiPermissionsVersion',
-        value: CONTENT_API_PERMISSIONS_VERSION,
-      });
-      log.debug('Content-API permissions already configured');
-      return true;
-    }
-
-    for (const action of missingActions) {
-      await strapi.documents(PERMISSION_UID).create({
-        data: { action, role: authenticatedRole.id },
-      });
-      log.info(`[PERMISSION] Enabled ${action} for authenticated users`);
-    }
-
-    await pluginStore.set({
-      key: 'contentApiPermissionsVersion',
-      value: CONTENT_API_PERMISSIONS_VERSION,
-    });
-    log.info('[SUCCESS] Content-API permissions configured for authenticated users');
-    return true;
-  } catch (err) {
     log.warn('Could not auto-configure permissions:', err?.name || 'Error');
     log.warn(
       'Please manually enable plugin permissions in Settings > Users & Permissions > Roles > Authenticated'
     );
     return false;
   }
+}
+
+/**
+ * Body of {@link ensureContentApiPermissions}; must run inside its lock.
+ *
+ * @param {object} strapi
+ * @param {object} log
+ * @param {object} pluginStore Scoped plugin store
+ * @returns {Promise<boolean>} Whether the permissions are configured
+ */
+async function ensureContentApiPermissionsLocked(strapi, log, pluginStore) {
+  const storedVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
+
+  // Legacy rollout (boolean flag pre-v2) — treat as version 1.
+  if (storedVersion === undefined || storedVersion === null) {
+    const legacyFlag = await pluginStore.get({ key: 'contentApiPermissionsInitialized' });
+    if (legacyFlag === true) {
+      await pluginStore.set({ key: 'contentApiPermissionsVersion', value: 1 });
+    }
+  }
+
+  const effectiveVersion = await pluginStore.get({ key: 'contentApiPermissionsVersion' });
+  if (effectiveVersion >= CONTENT_API_PERMISSIONS_VERSION) {
+    log.debug('Content-API permissions already at current version (skipping auto-setup)');
+    return true;
+  }
+
+  const ROLE_UID = 'plugin::users-permissions.role';
+  const PERMISSION_UID = 'plugin::users-permissions.permission';
+
+  // Document Service replaces the deprecated entityService (Strapi v5).
+  // We still need the numeric `id` of the role for the permission's
+  // `role` relation because users-permissions Permission stores the
+  // foreign key by numeric id, not documentId.
+  const roles = await strapi.documents(ROLE_UID).findMany({
+    filters: { type: 'authenticated' },
+    fields: ['id'],
+    limit: 1,
+  });
+
+  const authenticatedRole = roles?.[0];
+
+  if (!authenticatedRole) {
+    log.warn('Authenticated role not found - skipping permission setup');
+    return false;
+  }
+
+  const requiredActions = [
+    'plugin::magic-sessionmanager.session.logout',
+    'plugin::magic-sessionmanager.session.logoutAll',
+    'plugin::magic-sessionmanager.session.logoutOthers',
+    'plugin::magic-sessionmanager.session.getOwnSessions',
+    'plugin::magic-sessionmanager.session.getUserSessions',
+    'plugin::magic-sessionmanager.session.getCurrentSession',
+    'plugin::magic-sessionmanager.session.terminateOwnSession',
+  ];
+
+  const existingPermissions = await strapi.documents(PERMISSION_UID).findMany({
+    filters: {
+      role: authenticatedRole.id,
+      action: { $in: requiredActions },
+    },
+    fields: ['id', 'documentId', 'action'],
+    sort: { id: 'asc' },
+    limit: requiredActions.length * 10,
+  });
+
+  await removeDuplicatePermissions(strapi, log, PERMISSION_UID, existingPermissions);
+
+  const existingActions = existingPermissions.map((p) => p.action);
+  const missingActions = requiredActions.filter((action) => !existingActions.includes(action));
+
+  if (missingActions.length === 0) {
+    await pluginStore.set({
+      key: 'contentApiPermissionsVersion',
+      value: CONTENT_API_PERMISSIONS_VERSION,
+    });
+    log.debug('Content-API permissions already configured');
+    return true;
+  }
+
+  for (const action of missingActions) {
+    await strapi.documents(PERMISSION_UID).create({
+      data: { action, role: authenticatedRole.id },
+    });
+    log.info(`[PERMISSION] Enabled ${action} for authenticated users`);
+  }
+
+  await pluginStore.set({
+    key: 'contentApiPermissionsVersion',
+    value: CONTENT_API_PERMISSIONS_VERSION,
+  });
+  log.info('[SUCCESS] Content-API permissions configured for authenticated users');
+  return true;
+}
+
+/**
+ * Self-healing for installations where earlier versions created the same
+ * Authenticated-role permission several times during a parallel first boot.
+ * Keeps the row with the lowest id per action and deletes the others, so
+ * revoking the action in the admin UI removes it for real.
+ *
+ * @param {object} strapi
+ * @param {object} log
+ * @param {string} permissionUid
+ * @param {Array<{id: number, documentId: string, action: string}>} permissions Sorted by id
+ * @returns {Promise<number>} Number of removed duplicates
+ */
+async function removeDuplicatePermissions(strapi, log, permissionUid, permissions) {
+  const seen = new Set();
+  let removed = 0;
+  for (const permission of permissions || []) {
+    if (!seen.has(permission.action)) {
+      seen.add(permission.action);
+      continue;
+    }
+    if (!permission.documentId) continue;
+    try {
+      await strapi.documents(permissionUid).delete({ documentId: permission.documentId });
+      removed++;
+    } catch (err) {
+      log.debug('[PERMISSION] Could not remove a duplicate permission:', err?.name || 'Error');
+    }
+  }
+  if (removed > 0) {
+    log.warn(`[PERMISSION] Removed ${removed} duplicate Content-API permission row(s)`);
+  }
+  return removed;
 }
 
 /**
@@ -1346,57 +1571,18 @@ function mountDeferredContentApiPermissionRetry({
 
 /**
  * Creates composite DB indexes for access- and refresh-token session lookups.
- * Safe to call repeatedly — existing indexes are skipped.
+ * Safe to call repeatedly and from several processes at once: the work runs
+ * in a cluster-wide critical section, PostgreSQL and SQLite use
+ * `CREATE INDEX IF NOT EXISTS`, and MySQL keeps the metadata check.
  *
  * @param {object} strapi - Strapi instance
  * @param {object} log - Logger instance
  */
 async function ensureSessionLookupIndexes(strapi, log) {
   try {
-    const knex = strapi.db.connection;
-    const tableName = 'magic_sessions';
-    const definitions = [
-      { column: 'token_hash', name: 'idx_magic_sessions_token_hash' },
-      { column: 'refresh_token_hash', name: 'idx_magic_sessions_refresh_hash' },
-    ];
-
-    if (!(await knex.schema.hasTable(tableName))) return;
-
-    for (const definition of definitions) {
-      const dialect = strapi.db.dialect.client;
-      let hasIndex = false;
-
-      if (dialect === 'postgres') {
-        const result = await knex.raw(
-          'SELECT indexname FROM pg_indexes WHERE tablename = ? AND indexname = ?',
-          [tableName, definition.name]
-        );
-        hasIndex = result.rows.length > 0;
-      } else if (dialect === 'mysql' || dialect === 'mysql2') {
-        const result = await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [
-          tableName,
-          definition.name,
-        ]);
-        hasIndex = result[0].length > 0;
-      } else if (dialect === 'sqlite' || dialect === 'better-sqlite3') {
-        const result = await knex.raw(
-          "SELECT name FROM sqlite_master WHERE type='index' AND name = ?",
-          [definition.name]
-        );
-        hasIndex = result.length > 0;
-      }
-
-      if (hasIndex) {
-        log.debug(`[INDEX] ${definition.name} already exists`);
-        continue;
-      }
-
-      await knex.schema.alterTable(tableName, (table) => {
-        table.index([definition.column, 'is_active'], definition.name);
-      });
-
-      log.info(`[INDEX] Created ${definition.name}`);
-    }
+    await getCoordinator(strapi).withLock('schema:session-indexes', () =>
+      createSessionLookupIndexes(strapi, log)
+    );
   } catch (err) {
     log.debug(
       '[INDEX] Could not create session lookup indexes (will retry on next startup):',
@@ -1406,9 +1592,83 @@ async function ensureSessionLookupIndexes(strapi, log) {
 }
 
 /**
+ * Body of {@link ensureSessionLookupIndexes}.
+ *
+ * @param {object} strapi
+ * @param {object} log
+ * @returns {Promise<void>}
+ */
+async function createSessionLookupIndexes(strapi, log) {
+  const knex = strapi.db.connection;
+  const tableName = 'magic_sessions';
+  const definitions = [
+    { column: 'token_hash', name: 'idx_magic_sessions_token_hash' },
+    { column: 'refresh_token_hash', name: 'idx_magic_sessions_refresh_hash' },
+  ];
+
+  if (!(await knex.schema.hasTable(tableName))) return;
+
+  const dialect = strapi.db.dialect.client;
+  for (const definition of definitions) {
+    if (dialect === 'postgres' || dialect === 'sqlite' || dialect === 'better-sqlite3') {
+      const exists =
+        dialect === 'postgres'
+          ? (
+              await knex.raw('SELECT 1 FROM pg_indexes WHERE tablename = ? AND indexname = ?', [
+                tableName,
+                definition.name,
+              ])
+            ).rows.length > 0
+          : (
+              await knex.raw("SELECT name FROM sqlite_master WHERE type='index' AND name = ?", [
+                definition.name,
+              ])
+            ).length > 0;
+      if (exists) {
+        log.debug(`[INDEX] ${definition.name} already exists`);
+        continue;
+      }
+      await knex.raw('CREATE INDEX IF NOT EXISTS ?? ON ?? (??, ??)', [
+        definition.name,
+        tableName,
+        definition.column,
+        'is_active',
+      ]);
+      log.info(`[INDEX] Created ${definition.name}`);
+      continue;
+    }
+
+    let hasIndex = false;
+    if (dialect === 'mysql' || dialect === 'mysql2') {
+      const result = await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [
+        tableName,
+        definition.name,
+      ]);
+      hasIndex = result[0].length > 0;
+    }
+
+    if (hasIndex) {
+      log.debug(`[INDEX] ${definition.name} already exists`);
+      continue;
+    }
+
+    await knex.schema.alterTable(tableName, (table) => {
+      table.index([definition.column, 'is_active'], definition.name);
+    });
+
+    log.info(`[INDEX] Created ${definition.name}`);
+  }
+}
+
+/**
  * Error counter for the fail-open safety net. Resets after a short quiet period
  * and disables fail-open mode entirely once too many consecutive errors occur
  * to prevent flooding-based security bypass.
+ *
+ * The budget is per process on purpose: it only matters while the database
+ * (the shared store) is failing, so it cannot be shared through it. With N
+ * processes the cluster fails open for at most N x MAX_CONSECUTIVE_ERRORS
+ * requests per minute in relaxed mode. Strict mode never fails open.
  */
 const sessionCheckErrors = { count: 0, lastReset: Date.now() };
 const MAX_CONSECUTIVE_ERRORS = 10;
@@ -1671,8 +1931,10 @@ async function registerSessionAwareAuthStrategy(strapi) {
             strapi.log.info(
               `[magic-sessionmanager] [JWT-EXPIRED] Session exceeded max age of ${maxSessionAgeDays} days`
             );
-            await strapi.documents(SESSION_UID).update({
-              documentId: thisSession.documentId,
+            // Conditional: only an active row is relabelled, so a concurrent
+            // manual/blocked termination on another instance keeps its reason.
+            await strapi.db.query(SESSION_UID).updateMany({
+              where: { documentId: thisSession.documentId, isActive: true },
               data: {
                 isActive: false,
                 terminatedManually: false,
@@ -1696,8 +1958,8 @@ async function registerSessionAwareAuthStrategy(strapi) {
             strapi.log.info(
               `[magic-sessionmanager] [JWT-IDLE] Session too idle to reactivate (${Math.round(idleFor / 1000)}s > ${inactivityTimeout / 1000}s)`
             );
-            await strapi.documents(SESSION_UID).update({
-              documentId: thisSession.documentId,
+            await strapi.db.query(SESSION_UID).updateMany({
+              where: { documentId: thisSession.documentId, isActive: true },
               data: {
                 isActive: false,
                 terminatedManually: false,
@@ -1715,11 +1977,26 @@ async function registerSessionAwareAuthStrategy(strapi) {
           }
 
           // An inactive legacy row without a reason may be reactivated only
-          // while it is still inside the inactivity window.
-          await strapi.documents(SESSION_UID).update({
-            documentId: thisSession.documentId,
+          // while it is still inside the inactivity window. The update is a
+          // compare-and-set: if another instance terminated the session
+          // after our read (manual, blocked, logout), no row matches and the
+          // token is rejected instead of reviving the session.
+          const reactivated = await strapi.db.query(SESSION_UID).updateMany({
+            where: {
+              documentId: thisSession.documentId,
+              isActive: false,
+              terminationReason: { $null: true },
+              $or: [{ terminatedManually: false }, { terminatedManually: { $null: true } }],
+            },
             data: { isActive: true, lastActive: new Date() },
           });
+          if (Number(reactivated?.count) !== 1) {
+            strapi.log.info(
+              '[magic-sessionmanager] [JWT-REJECTED] Session was terminated concurrently'
+            );
+            setSessionRejectionReason(tokenHashValue, 'manual');
+            return null;
+          }
           strapi.log.info('[magic-sessionmanager] [JWT-REACTIVATED] Session reactivated');
           resetErrorCounter();
           return decoded;
@@ -1795,6 +2072,8 @@ async function registerSessionAwareAuthStrategy(strapi) {
 
 module.exports.__private = {
   registerSessionAwareAuthStrategy,
+  mountFailedLoginLockout,
+  ensureSessionLookupIndexes,
   mountPreLoginGeoGuard,
   mountLoginInterceptor,
   mountRefreshTokenInterceptor,

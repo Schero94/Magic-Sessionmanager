@@ -1,15 +1,18 @@
 'use strict';
 
 /**
- * In-memory per-caller rate limiter for session-manager Content-API endpoints.
+ * Per-caller rate limiter for session-manager Content-API endpoints.
  *
  * The primary purpose is to contain abuse of /logout and /logout-all from
  * a compromised JWT: while those endpoints are "soft" (they mark the DB
  * row) they still do a write per call and an attacker could otherwise
  * drown the DB by spamming them.
  *
- * Single-process only — see middlewares/last-seen.js comment for the
- * multi-instance trade-off and the preferred Redis-backed upgrade path.
+ * Counters are shared across processes through `utils/coordination.js`
+ * (database table by default, optional custom store such as Redis), so the
+ * configured limit holds for the whole cluster rather than per pm2 worker or
+ * replica. Without shared state (before bootstrap, or when the store fails)
+ * the limiter keeps per-process counters, as it did before.
  *
  * Route-level config shape (hard ceiling):
  *   { name: 'plugin::magic-sessionmanager.rate-limit',
@@ -26,14 +29,7 @@
  */
 
 const { getPluginSettings } = require('../utils/settings-loader');
-
-const buckets = new Map();
-
-const prune = (now) => {
-  for (const [key, entry] of buckets) {
-    if (entry.expiresAt <= now) buckets.delete(key);
-  }
-};
+const { getCoordinator, hashedKey, __resetMemoryForTests } = require('../utils/coordination');
 
 /**
  * Returns a stable key identifying the caller: user id when authenticated,
@@ -76,15 +72,6 @@ const routeKey = (ctx) => {
 };
 
 /**
- * Short TTL cache for the per-process effective limit so we don't re-read
- * settings on every request. Settings changes are picked up after the TTL.
- * Entries are keyed by profile and route ceiling so routes with different
- * hard limits never share a resolved value.
- */
-const RESOLVED_TTL_MS = 30_000;
-const resolvedCache = new Map();
-
-/**
  * Resolves the effective { max, windowMs } for a given profile by
  * combining the route-level ceiling with the admin-configurable settings.
  *
@@ -97,13 +84,9 @@ const resolvedCache = new Map();
  * @returns {Promise<{max: number, windowMs: number}>}
  */
 async function resolveLimits({ profile, routeMax, routeWindowMs, strapi }) {
-  const now = Date.now();
-  const cacheKey = `${profile}:${routeMax}:${routeWindowMs}`;
-  const cachedEntry = resolvedCache.get(cacheKey);
-  if (cachedEntry && now - cachedEntry.at < RESOLVED_TTL_MS) {
-    return { max: cachedEntry.max, windowMs: cachedEntry.windowMs };
-  }
-
+  // No separate cache here: getPluginSettings() is already cached and
+  // follows the shared settings revision, so a changed limit applies on
+  // every process within seconds.
   let settings;
   try {
     settings = await getPluginSettings(strapi);
@@ -136,7 +119,6 @@ async function resolveLimits({ profile, routeMax, routeWindowMs, strapi }) {
     resolved = { max: routeMax, windowMs: routeWindowMs };
   }
 
-  resolvedCache.set(cacheKey, { ...resolved, at: now });
   return resolved;
 }
 
@@ -153,21 +135,13 @@ const rateLimit = (cfg = {}, { strapi }) => {
       ? await resolveLimits({ profile, routeMax, routeWindowMs, strapi })
       : { max: routeMax, windowMs: routeWindowMs };
 
-    const key = `${routeKey(ctx)}::${callerKey(ctx)}`;
+    const key = hashedKey('rl', `${routeKey(ctx)}::${callerKey(ctx)}`);
     const now = Date.now();
+    const entry = await getCoordinator(strapi).hit(key, windowMs);
+    const expiresAt = entry.windowStart + windowMs;
 
-    if (buckets.size > 5000) prune(now);
-
-    let entry = buckets.get(key);
-    if (!entry || entry.expiresAt <= now) {
-      entry = { count: 0, expiresAt: now + windowMs };
-      buckets.set(key, entry);
-    }
-
-    entry.count += 1;
-
-    if (entry.count > max) {
-      const retryAfterSec = Math.ceil((entry.expiresAt - now) / 1000);
+    if (entry.hits > max) {
+      const retryAfterSec = Math.max(1, Math.ceil((expiresAt - now) / 1000));
       ctx.set('Retry-After', String(retryAfterSec));
       strapi.log.warn('[magic-sessionmanager] Content API rate limit exceeded');
       ctx.status = 429;
@@ -188,15 +162,14 @@ const rateLimit = (cfg = {}, { strapi }) => {
 };
 
 /**
- * Test-only access to the limiter internals. `reset` clears all buckets and
- * resolved limits so tests do not depend on execution order.
+ * Test-only access to the limiter internals. `reset` clears the process-local
+ * counters so tests do not depend on execution order.
  */
 rateLimit.__private = {
   resolveLimits,
   routeKey,
   reset() {
-    buckets.clear();
-    resolvedCache.clear();
+    __resetMemoryForTests();
   },
 };
 

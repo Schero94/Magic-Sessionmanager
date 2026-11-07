@@ -1,3 +1,34 @@
+## [Unreleased]
+
+Release type: minor (`feat` commits, no breaking change; API clients that send no settings `revision` behave as before).
+
+### Multi-instance deployments (pm2 cluster, Railway replicas)
+
+Every hazard from the multi-instance audit (SM-MI-01 to SM-MI-14) is addressed for several Node processes sharing one database:
+
+* **Failed-login lockout and Content API rate limits are cluster-wide.** Counters live in the new `magic_sm_counters` table (IP and caller keys stored as SHA-256 hashes) and are updated atomically. Before, each process counted on its own, so 8 processes allowed about 8x the configured attempts.
+* **Fix: the failed-login lockout never counted wrong passwords** in Strapi 5, because Users & Permissions throws a `ValidationError` and the counting code after `await next()` did not run. Thrown errors are now classified like Strapi's errors middleware does and re-thrown unchanged.
+* **Cleanup and retention run on one process per interval** via a job lease (`magic_sm_leases`). Retention now runs about 5 minutes after a start and then daily; before, the first run came 24 hours after a start, so frequent deploys could postpone it indefinitely.
+* **Permission setup, session-index creation and all plugin-store writes run in a cluster-wide critical section** (`pg_advisory_xact_lock` on PostgreSQL, lease row elsewhere). Duplicate Core Store rows and duplicate Authenticated-role permissions from parallel first boots are removed automatically.
+* **Conditional session updates.** Idle cleanup, the JWT check (idle, expired, legacy reactivation) and `lastActive` updates use compare-and-set `updateMany` calls, so a stale read can no longer revive a terminated session or overwrite a `manual` / `blocked` reason.
+* **Settings reach every process within about 2 seconds** through a shared revision. `GET /settings` and `PUT /settings` return `revision`; a `PUT` that sends a stale `revision` gets 409 (the admin shows a new message in five languages). Clients that send no revision behave as before.
+* **Shared ipapi.co cache and 429 back-off**, so 8 processes no longer use 8x the quota.
+* **Toggle-mode user blocking** is serialised per user; the admin already uses the explicit mode.
+* **Encryption key check:** instances with different `SESSION_ENCRYPTION_KEY` values log an error at startup (only an HMAC check value is compared).
+* GeoIP status reports `scope: "instance"` and a host fingerprint, because the MMDB file is local to each instance.
+* New README section "Running several instances (Railway replicas, pm2 cluster)" with exact configuration, a pm2 ecosystem file, an optional Redis counter store and the Strapi core first-boot caveat.
+* New `npm run test:concurrency` (8 processes on SQLite and PostgreSQL) and a CI job with a PostgreSQL 16 service.
+* **Fix (found by the 4-process HTTP proof): a parallel burst bypassed the lockout.** The attempt was counted only after the password check, so every request of a burst passed the "is this IP locked?" check first (10 of 48 parallel wrong passwords reached the check with `maxFailedLogins: 5`, limited only by Strapi's own per-process limiter). The attempt is now reserved before the check: at most `maxFailedLogins` failed or still-running attempts per IP reach the password check, cluster-wide. Behaviour change: when more than `maxFailedLogins` login requests from one IP are in flight at the same moment, the extra ones get HTTP 429 with `Retry-After: 1` and the message "Too many login attempts at once. Please try again." They do not lock the IP; only completed failures do. A login that ends with a 5xx gives its reserved attempt back.
+* **Fix: shared counters reported a count that included later concurrent hits,** so under a burst the Content API rate limit let fewer requests through than configured (2 of 48 parallel `logout-others` calls with a limit of 10). Counters now return the value written by the request itself (`UPDATE ... RETURNING` on PostgreSQL and SQLite, UPDATE + `SELECT ... FOR UPDATE` in one transaction on MySQL). The same applies to settings revisions.
+* **Fix: a shortened cleanup interval could wait for the old job lease.** The idle-cleanup lease lasts one interval; a lease taken under the 30-minute default (for example by the process that ran before a restart) kept blocking the cleanup for up to 30 minutes after the interval was set to 5. A lease that ends more than 60 seconds later than a fresh one would may now be taken over. After a restart without a settings change the job keeps its schedule, so the first run on the new process can come up to one interval after the last run on the old one.
+* **Fix: parallel "log out other devices" calls could answer 500.** Two requests (on one or several instances) revoked the same native session; the one that lost the race treated "already revoked" as a failure. A native revoke that is not confirmed now succeeds when the session is no longer active, and still fails when it is.
+
+### Migration
+
+* On start the plugin creates three tables: `magic_sm_counters`, `magic_sm_leases`, `magic_sm_cache`. The database user needs the `CREATE` privilege once. Strapi's schema sync does not touch these tables.
+* New optional config `coordination: { enabled, counterStore }`. `enabled: false` restores per-process state.
+* Lockout counters start empty after the upgrade.
+
 ## [4.9.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.9.0...v4.9.1) (2026-11-07)
 
 
@@ -27,13 +58,11 @@
 * **admin:** apply session information architecture to every screen ([9a4c30d](https://github.com/Schero94/Magic-Sessionmanager/commit/9a4c30dd2af47e4559d5c3521f7ee9d6938e39a9))
 * **admin:** rebuild UI on shared Design System blocks and fix review findings ([187dbac](https://github.com/Schero94/Magic-Sessionmanager/commit/187dbacac505abc747e1f761d913f8dc74874bc6))
 
-## [Unreleased]
-
-Branch `claude/sessionmanager-ui-redesign`. Not yet accepted: see `GATES.md` and `gates/ui-redesign.md`. Whoever cuts the next release must fold this section into the generated release entry, so it does not stay behind as a second `[Unreleased]` block.
+The following notes for 4.9.0 were moved here on 2026-11-07 from a stale `[Unreleased]` block (branch `claude/sessionmanager-ui-redesign`, released as 4.9.0).
 
 ### Known issues in 4.8.0
 
-4.8.0 was released before its acceptance gates closed, although its release-readiness audit said not to publish. It is not accepted. Known defects in 4.8.0, fixed on this branch:
+4.8.0 was released before its acceptance gates closed, although its release-readiness audit said not to publish. It is not accepted. Known defects in 4.8.0, fixed in 4.9.0:
 
 * The Session Details dialog has no accessible name, and focus can land on the page body after Escape.
 * Settings field hints, including the GeoIP privacy disclosure, never render.

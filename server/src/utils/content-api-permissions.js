@@ -1,7 +1,8 @@
 'use strict';
 
+const { withPluginStoreKey } = require('./plugin-store');
+
 const CONTENT_API_PERMISSIONS_VERSION = 2;
-const MAGIC_SESSIONMANAGER_STORE = 'magic-sessionmanager';
 const CONTENT_API_PERMISSIONS_VERSION_KEY = 'contentApiPermissionsVersion';
 const AUTHENTICATED_ROLE_UID = 'plugin::users-permissions.role';
 
@@ -17,15 +18,18 @@ const AUTHENTICATED_ROLE_UID = 'plugin::users-permissions.role';
 async function preserveAuthenticatedRolePermissionChoice(strapi, role) {
   if (role?.type !== 'authenticated') return false;
 
-  const pluginStore = strapi.store({ type: 'plugin', name: MAGIC_SESSIONMANAGER_STORE });
-  const storedVersion = await pluginStore.get({ key: CONTENT_API_PERMISSIONS_VERSION_KEY });
-  if (Number(storedVersion) >= CONTENT_API_PERMISSIONS_VERSION) return false;
+  // Same critical section as the bootstrap permission setup, so a role save
+  // and a parallel first boot on another instance cannot interleave.
+  return withPluginStoreKey(strapi, CONTENT_API_PERMISSIONS_VERSION_KEY, async (pluginStore) => {
+    const storedVersion = await pluginStore.get({ key: CONTENT_API_PERMISSIONS_VERSION_KEY });
+    if (Number(storedVersion) >= CONTENT_API_PERMISSIONS_VERSION) return false;
 
-  await pluginStore.set({
-    key: CONTENT_API_PERMISSIONS_VERSION_KEY,
-    value: CONTENT_API_PERMISSIONS_VERSION,
+    await pluginStore.set({
+      key: CONTENT_API_PERMISSIONS_VERSION_KEY,
+      value: CONTENT_API_PERMISSIONS_VERSION,
+    });
+    return true;
   });
-  return true;
 }
 
 /**

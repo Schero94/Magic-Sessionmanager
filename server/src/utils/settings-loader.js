@@ -9,18 +9,28 @@
  * (milliseconds).
  *
  * The merged settings are cached in-memory for a short TTL to avoid DB reads
- * on every request. Admin-side updates call `invalidateSettingsCache()` to
- * force an immediate reload.
+ * on every request. Admin-side updates call `notifySettingsChanged()`, which
+ * reloads this process immediately and bumps a shared settings revision.
+ * Every other process compares that revision at most every
+ * REVISION_CHECK_MS (one primary-key read) and reloads when it changed, so a
+ * saved policy reaches every pm2 worker and replica within about 2 seconds
+ * instead of waiting for the 30-second TTL.
  */
+
+const { getCoordinator } = require('./coordination');
 
 const PLUGIN_ID = 'magic-sessionmanager';
 const SETTINGS_KEY = 'settings';
 const CACHE_TTL_MS = 30 * 1000;
+const REVISION_CHECK_MS = 2 * 1000;
+const SETTINGS_REVISION = 'settings';
 const GEO_IP_PROVIDERS = new Set(['auto', 'local-mmdb', 'ipapi', 'disabled']);
 const GEO_LOOKUP_FAILURE_MODES = new Set(['auto', 'allow', 'block']);
 
 let cached = null;
 let cachedAt = 0;
+let cachedRevision = null;
+let revisionCheckedAt = 0;
 
 /**
  * Safely coerces a value to a positive integer within bounds.
@@ -197,8 +207,25 @@ function normalizeStoredSettings(stored) {
  */
 async function getPluginSettings(strapi) {
   const now = Date.now();
+  const coordinator = getCoordinator(strapi);
+
   if (cached && now - cachedAt < CACHE_TTL_MS) {
-    return cached;
+    if (now - revisionCheckedAt < REVISION_CHECK_MS) return cached;
+    revisionCheckedAt = now;
+    let revision;
+    try {
+      revision = await coordinator.getRevision(SETTINGS_REVISION);
+    } catch {
+      return cached;
+    }
+    if (revision === cachedRevision) return cached;
+  }
+
+  let revision;
+  try {
+    revision = await coordinator.getRevision(SETTINGS_REVISION);
+  } catch {
+    revision = null;
   }
 
   const staticConfig = strapi.config.get(`plugin::${PLUGIN_ID}`) || {};
@@ -223,6 +250,8 @@ async function getPluginSettings(strapi) {
 
   cached = merged;
   cachedAt = now;
+  cachedRevision = revision;
+  revisionCheckedAt = now;
   return merged;
 }
 
@@ -244,12 +273,48 @@ function getPluginSettingsSync(strapi) {
 function invalidateSettingsCache() {
   cached = null;
   cachedAt = 0;
+  cachedRevision = null;
+  revisionCheckedAt = 0;
+}
+
+/**
+ * Returns the shared settings revision. It increases on every settings save
+ * on any process and is used for optimistic concurrency on PUT /settings.
+ *
+ * @param {object} strapi
+ * @returns {Promise<number>}
+ */
+async function getSettingsRevision(strapi) {
+  return getCoordinator(strapi).getRevision(SETTINGS_REVISION);
+}
+
+/**
+ * Records a settings change for every process: bumps the shared revision and
+ * drops this process's cache.
+ *
+ * @param {object} strapi
+ * @returns {Promise<number|null>} The new revision, or null when the bump failed
+ * @sideeffect Writes the shared revision counter
+ */
+async function notifySettingsChanged(strapi) {
+  invalidateSettingsCache();
+  try {
+    return await getCoordinator(strapi).bumpRevision(SETTINGS_REVISION);
+  } catch (err) {
+    strapi?.log?.warn?.(
+      `[${PLUGIN_ID}] settings-loader: could not publish the settings revision:`,
+      err?.name || 'Error'
+    );
+    return null;
+  }
 }
 
 module.exports = {
   getPluginSettings,
   getPluginSettingsSync,
   invalidateSettingsCache,
+  notifySettingsChanged,
+  getSettingsRevision,
   normalizeStoredSettings,
   normalizeRetentionDays,
   getSessionCreationGraceMs,
