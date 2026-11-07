@@ -31,6 +31,29 @@
 
 Branch `claude/sessionmanager-ui-redesign`. Not yet accepted: see `GATES.md` and `gates/ui-redesign.md`. Whoever cuts the next release must fold this section into the generated release entry, so it does not stay behind as a second `[Unreleased]` block.
 
+### Multi-instance deployments (pm2 cluster, Railway replicas)
+
+Branch `feat/multi-instance`. Every hazard from the multi-instance audit (SM-MI-01 to SM-MI-14) is addressed for several Node processes sharing one database:
+
+* **Failed-login lockout and Content API rate limits are cluster-wide.** Counters live in the new `magic_sm_counters` table (IP and caller keys stored as SHA-256 hashes) and are updated atomically. Before, each process counted on its own, so 8 processes allowed about 8x the configured attempts.
+* **Fix: the failed-login lockout never counted wrong passwords** in Strapi 5, because Users & Permissions throws a `ValidationError` and the counting code after `await next()` did not run. Thrown errors are now classified like Strapi's errors middleware does and re-thrown unchanged.
+* **Cleanup and retention run on one process per interval** via a job lease (`magic_sm_leases`). Retention now runs about 5 minutes after a start and then daily; before, the first run came 24 hours after a start, so frequent deploys could postpone it indefinitely.
+* **Permission setup, session-index creation and all plugin-store writes run in a cluster-wide critical section** (`pg_advisory_xact_lock` on PostgreSQL, lease row elsewhere). Duplicate Core Store rows and duplicate Authenticated-role permissions from parallel first boots are removed automatically.
+* **Conditional session updates.** Idle cleanup, the JWT check (idle, expired, legacy reactivation) and `lastActive` updates use compare-and-set `updateMany` calls, so a stale read can no longer revive a terminated session or overwrite a `manual` / `blocked` reason.
+* **Settings reach every process within about 2 seconds** through a shared revision. `GET /settings` and `PUT /settings` return `revision`; a `PUT` that sends a stale `revision` gets 409 (the admin shows a new message in five languages). Clients that send no revision behave as before.
+* **Shared ipapi.co cache and 429 back-off**, so 8 processes no longer use 8x the quota.
+* **Toggle-mode user blocking** is serialised per user; the admin already uses the explicit mode.
+* **Encryption key check:** instances with different `SESSION_ENCRYPTION_KEY` values log an error at startup (only an HMAC check value is compared).
+* GeoIP status reports `scope: "instance"` and a host fingerprint, because the MMDB file is local to each instance.
+* New README section "Running several instances (Railway replicas, pm2 cluster)" with exact configuration, a pm2 ecosystem file, an optional Redis counter store and the Strapi core first-boot caveat.
+* New `npm run test:concurrency` (8 processes on SQLite and PostgreSQL) and a CI job with a PostgreSQL 16 service.
+
+Migration notes:
+
+* On start the plugin creates three tables: `magic_sm_counters`, `magic_sm_leases`, `magic_sm_cache`. The database user needs the `CREATE` privilege once. Strapi's schema sync does not touch these tables.
+* New optional config `coordination: { enabled, counterStore }`. `enabled: false` restores per-process state.
+* Lockout counters start empty after the upgrade.
+
 ### Known issues in 4.8.0
 
 4.8.0 was released before its acceptance gates closed, although its release-readiness audit said not to publish. It is not accepted. Known defects in 4.8.0, fixed on this branch:
