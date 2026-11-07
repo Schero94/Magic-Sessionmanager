@@ -11,7 +11,6 @@ process.env.SESSION_ENCRYPTION_KEY =
 const rateLimit = require('../server/src/middlewares/rate-limit');
 const settingsController = require('../server/src/controllers/settings');
 const sessionController = require('../server/src/controllers/session');
-const createLicenseController = require('../server/src/controllers/license');
 const createGeoipController = require('../server/src/controllers/geoip');
 const createSessionService = require('../server/src/services/session');
 const register = require('../server/src/register');
@@ -393,84 +392,7 @@ test('API-7: settings store failures return 500 with a safe message', async () =
   });
 });
 
-// ---------------------------------------------------------------- API-7 / API-8 (license, GeoIP)
-
-function createLicenseHarness({
-  createResult = { licenseKey: 'synthetic-license-key' },
-  failStore = false,
-} = {}) {
-  const calls = [];
-  const guard = {
-    createLicense: async (input) => {
-      calls.push(['createLicense', input]);
-      return createResult;
-    },
-    verifyLicense: async (key) => {
-      calls.push(['verifyLicense', key]);
-      return { valid: true, data: {} };
-    },
-    getLicenseByKey: async (key) => {
-      calls.push(['getLicenseByKey', key]);
-      return null;
-    },
-    storeLicenseKey: async (key) => {
-      calls.push(['storeLicenseKey', key]);
-    },
-  };
-  const strapi = {
-    plugin: () => ({ service: () => guard }),
-    store: () => ({
-      get: async () => {
-        if (failStore) throw new Error('synthetic-store-detail');
-        return 'synthetic-license-key';
-      },
-    }),
-    log: silentLog,
-  };
-  return { controller: createLicenseController({ strapi }), calls };
-}
-
-test('API-7: an unreachable license provider returns 503, internal failures 500', async () => {
-  const unreachable = createLicenseHarness({ createResult: null });
-  const ctx = createCtx({ state: { user: { email: 'admin@example.invalid' } } });
-  await unreachable.controller.autoCreate(ctx);
-  assert.equal(ctx.status, 503);
-
-  const manual = createCtx({
-    body: { email: 'owner@example.invalid', firstName: 'Test', lastName: 'Owner' },
-  });
-  await unreachable.controller.createAndActivate(manual);
-  assert.equal(manual.status, 503);
-
-  const broken = createLicenseHarness({ failStore: true });
-  for (const action of ['getStatus', 'ping']) {
-    const failing = createCtx();
-    await broken.controller[action](failing);
-    assert.equal(failing.status, 500, action);
-    assert.equal(JSON.stringify(failing.body).includes('synthetic-store-detail'), false);
-  }
-});
-
-test('API-8: store-key rejects non-string keys and emails before calling the provider', async () => {
-  for (const [body, message] of [
-    [{ licenseKey: 12345 }, 'License key is required'],
-    [{ licenseKey: { value: 'x' } }, 'License key is required'],
-    [{ licenseKey: '   ' }, 'License key is required'],
-    [{ licenseKey: 'synthetic-key', email: 42 }, 'Email must be a valid email address'],
-    [{ licenseKey: 'synthetic-key', email: 'not-an-email' }, 'Email must be a valid email address'],
-  ]) {
-    const { controller, calls } = createLicenseHarness();
-    const ctx = createCtx({ body });
-    await controller.storeKey(ctx);
-    assert.equal(ctx.status, 400, JSON.stringify(body));
-    assert.equal(ctx.body.error.message, message);
-    assert.deepEqual(calls, [], 'the provider must not be called');
-  }
-  const { controller } = createLicenseHarness();
-  const ok = createCtx({ body: { licenseKey: 'synthetic-key', email: '' } });
-  await controller.storeKey(ok);
-  assert.equal(ok.status, 200, 'an empty optional email remains accepted');
-});
+// ---------------------------------------------------------------- API-7 (GeoIP)
 
 test('API-7: GeoIP store failures return 500 and updater failures 502', async () => {
   const detail = 'synthetic-geoip-detail';

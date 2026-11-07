@@ -19,7 +19,6 @@ const alertSources = [
   ['HomePage', homePageSource],
   ['Settings', settingsSource],
   ['Analytics', readFileSync(new URL('../admin/src/pages/Analytics.jsx', import.meta.url), 'utf8')],
-  ['Activation', readFileSync(new URL('../admin/src/pages/License.jsx', import.meta.url), 'utf8')],
   [
     'Session details',
     readFileSync(

@@ -31,7 +31,7 @@ const {
   initCoordination,
   LockTimeoutError,
 } = require('./utils/coordination');
-const { withPluginStoreKey } = require('./utils/plugin-store');
+const { removeLegacyLicenseData, withPluginStoreKey } = require('./utils/plugin-store');
 const {
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,
@@ -72,6 +72,28 @@ async function getRequestSettings(strapi, ctx) {
   return settings;
 }
 
+/**
+ * Removes the license key, validation time and device hash that the license
+ * feature of earlier versions stored. The plugin makes no license or
+ * telemetry calls, so this data has no use any more. A failure is logged and
+ * does not stop the boot; the next start tries again.
+ *
+ * @param {object} strapi
+ * @param {{info: Function, warn: Function}} log
+ * @returns {Promise<void>}
+ * @sideeffect Deletes plugin rows from `strapi_core_store_settings`.
+ */
+async function removeLegacyLicenseRows(strapi, log) {
+  try {
+    const removed = await removeLegacyLicenseData(strapi);
+    if (removed > 0) {
+      log.info(`[CLEANUP] Removed ${removed} stored value(s) of the former license feature`);
+    }
+  } catch (err) {
+    log.warn('[CLEANUP] Could not remove former license data:', err?.name || 'Error');
+  }
+}
+
 module.exports = async ({ strapi }) => {
   const log = createLogger(strapi);
 
@@ -98,9 +120,7 @@ module.exports = async ({ strapi }) => {
 
     await registerSessionAwareAuthStrategy(strapi);
 
-    const licenseGuardService = strapi.plugin('magic-sessionmanager').service('license-guard');
-    await licenseGuardService.initialize();
-    log.info('[SUCCESS] Session Manager active - all features are available without a license key');
+    await removeLegacyLicenseRows(strapi, log);
 
     const sessionService = strapi.plugin('magic-sessionmanager').service('session');
 

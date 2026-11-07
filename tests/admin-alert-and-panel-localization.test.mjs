@@ -22,7 +22,6 @@ test('persistent notices use the shared non-dismissible Strapi alert', () => {
   for (const path of [
     'pages/HomePage.jsx',
     'pages/Analytics.jsx',
-    'pages/License.jsx',
     'pages/Settings.jsx',
     'components/OnlineUsersWidget.jsx',
     'components/SessionInfoPanel.jsx',

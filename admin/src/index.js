@@ -59,16 +59,6 @@ export default {
           Component: () => import('./pages/Analytics'),
           permissions: pluginPermissions,
         },
-        {
-          intlLabel: {
-            id: `${pluginId}.settings.link.license`,
-            defaultMessage: 'License',
-          },
-          id: 'license',
-          to: `${pluginId}/license`,
-          Component: () => import('./pages/License'),
-          permissions: pluginPermissions,
-        },
       ]
     );
 

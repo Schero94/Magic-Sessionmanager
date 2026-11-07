@@ -103,7 +103,6 @@ test('explanatory copy across plugin surfaces opts into shared readable text', (
     'pages/HomePage.jsx',
     'pages/Settings.jsx',
     'pages/Analytics.jsx',
-    'pages/License.jsx',
     'components/SessionInfoPanel.jsx',
     'components/SessionDetailModal.jsx',
     'components/OnlineUsersWidget.jsx',

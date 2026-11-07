@@ -52,24 +52,24 @@ test('the extractor finds the ids of every call shape used in admin/src', () => 
     "t('homepage.title', 'Session Manager')",
     "header('homepage.table.user', 'User')",
     "loadDefaultAction('html', 'settings.email.templates.html.loadDefault', 'Load Default')",
-    "['license.features.alerts', 'Email alerts']",
+    "['analytics.features.alerts', 'Email alerts']",
     "{ messageId: 'common.status.idle', defaultMessage: 'Idle' }",
     "intlLabel: { id: `${pluginId}.plugin.name`, defaultMessage: 'Session Manager' }",
-    "t(show ? 'license.key.hide' : 'license.key.show', show ? 'Hide key' : 'Show key')",
+    "t(show ? 'settings.key.hide' : 'settings.key.show', show ? 'Hide key' : 'Show key')",
     "logSafeAdminError('settings.load', err)",
   ].join('\n');
   const ids = extractFromSource(sample)
     .usages.map((usage) => `${usage.id}=${usage.defaultMessage}`)
     .sort();
   assert.deepEqual(ids, [
+    'analytics.features.alerts=Email alerts',
     'common.status.idle=Idle',
     'homepage.table.user=User',
     'homepage.title=Session Manager',
-    'license.features.alerts=Email alerts',
-    'license.key.hide=Hide key',
-    'license.key.show=Show key',
     'plugin.name=Session Manager',
     'settings.email.templates.html.loadDefault=Load Default',
+    'settings.key.hide=Hide key',
+    'settings.key.show=Show key',
   ]);
   assert.ok(report.ids.length > 300, `expected the whole admin UI, found ${report.ids.length} ids`);
 });

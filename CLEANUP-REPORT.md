@@ -138,15 +138,12 @@ server/jsconfig.json
 
 ### **Admin (Frontend):**
 
-- ✅ `admin/src/components/LicenseGuard.jsx` - License-System
 - ✅ `admin/src/components/OnlineUsersWidget.jsx` - Dashboard Widget
 - ✅ `admin/src/components/SessionDetailModal.jsx` - Session-Details
 - ✅ `admin/src/components/SessionInfoPanel.jsx` - Sidebar Panel
-- ✅ `admin/src/hooks/useLicense.js` - License-Hook
 - ✅ `admin/src/pages/HomePage.jsx` - Haupt-Session-Liste
 - ✅ `admin/src/pages/Analytics.jsx` - Analytics Dashboard
 - ✅ `admin/src/pages/Settings.jsx` - Settings Page
-- ✅ `admin/src/pages/License.jsx` - License Page
 - ✅ `admin/src/utils/parseUserAgent.js` - UA Parsing
 
 ### **Server (Backend):**
@@ -155,10 +152,8 @@ server/jsconfig.json
 - ✅ `server/src/register.js` - Plugin-Registrierung
 - ✅ `server/src/destroy.js` - Cleanup
 - ✅ `server/src/controllers/session.js` - Session-Controller
-- ✅ `server/src/controllers/license.js` - License-Controller
 - ✅ `server/src/services/session.js` - Session-Service
 - ✅ `server/src/services/geolocation.js` - IP Geolocation
-- ✅ `server/src/services/license-guard.js` - License-System
 - ✅ `server/src/services/notifications.js` - Email/Webhooks
 - ✅ `server/src/middlewares/last-seen.js` - Activity Tracking
 - ✅ `server/src/routes/admin.js` - Admin-Routes

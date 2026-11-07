@@ -135,53 +135,6 @@ const baseRoutes = [
     },
   },
 
-  // ============================ LICENSE ============================
-  {
-    method: 'GET',
-    path: '/license/status',
-    handler: 'license.getStatus',
-    config: {
-      policies: adminPolicy(),
-      description: 'Get license status (admin)',
-    },
-  },
-  {
-    method: 'POST',
-    path: '/license/auto-create',
-    handler: 'license.autoCreate',
-    config: {
-      policies: adminPolicy(),
-      description: 'Auto-create license for current admin (admin)',
-    },
-  },
-  {
-    method: 'POST',
-    path: '/license/create',
-    handler: 'license.createAndActivate',
-    config: {
-      policies: adminPolicy(),
-      description: 'Create and activate a new license (admin)',
-    },
-  },
-  {
-    method: 'POST',
-    path: '/license/ping',
-    handler: 'license.ping',
-    config: {
-      policies: adminPolicy(),
-      description: 'Ping the license server (admin)',
-    },
-  },
-  {
-    method: 'POST',
-    path: '/license/store-key',
-    handler: 'license.storeKey',
-    config: {
-      policies: adminPolicy(),
-      description: 'Store a license key (admin)',
-    },
-  },
-
   // ============================ GEOLOCATION ============================
   {
     method: 'GET',

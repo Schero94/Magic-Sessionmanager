@@ -4,7 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const session = require('../server/src/controllers/session');
 const settings = require('../server/src/controllers/settings');
-const createLicense = require('../server/src/controllers/license');
 const createGeoip = require('../server/src/controllers/geoip');
 
 const privateDetail = 'synthetic-internal-detail-must-not-escape';
@@ -111,7 +110,7 @@ test('invalid geolocation input is rejected before dependencies are accessed', a
   }
 });
 
-test('settings, license and GeoIP dependency failures return sanitized errors', async () => {
+test('settings and GeoIP dependency failures return sanitized errors', async () => {
   const previous = global.strapi;
   const fake = {
     config: { get: (_key, fallback) => fallback },
@@ -124,10 +123,6 @@ test('settings, license and GeoIP dependency failures return sanitized errors', 
   try {
     for (const [controller, actions] of [
       [settings, ['getSettings', 'updateSettings']],
-      [
-        createLicense({ strapi: fake }),
-        ['getStatus', 'autoCreate', 'createAndActivate', 'ping', 'storeKey'],
-      ],
       [createGeoip({ strapi: fake }), ['getStatus', 'storeCredentials', 'updateDatabase']],
     ]) {
       for (const action of actions) {
