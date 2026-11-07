@@ -51,6 +51,7 @@ const TABLES = Object.freeze({
 const PG_LOCK_NAMESPACE = 0x4d534d; // "MSM"
 const NEVER_EXPIRES = 8_000_000_000_000_000; // < 2^63, > any realistic epoch ms
 const MAX_KEY_LENGTH = 191;
+const COUNTER_COLUMNS = Object.freeze(['hits', 'window_start', 'blocked_until']);
 
 let instanceIdCache = null;
 
@@ -183,6 +184,11 @@ function createMemoryBackend() {
 
     async clear(key) {
       counters.delete(key);
+    },
+
+    async release(key) {
+      const entry = counters.get(key);
+      if (entry && entry.hits > 0) entry.hits -= 1;
     },
 
     async getRevision(name) {
@@ -350,6 +356,42 @@ function createDatabaseBackend({ knex, dialect }) {
       .onConflict('k')
       .ignore();
 
+  const supportsReturning = kind === 'postgres' || kind === 'sqlite';
+
+  const toCounter = (row) =>
+    row
+      ? {
+          hits: toNumber(row.hits),
+          windowStart: toNumber(row.window_start),
+          blockedUntil: toNumber(row.blocked_until),
+        }
+      : null;
+
+  /**
+   * Runs a single-row counter UPDATE and returns the row as written by it,
+   * or null when no row matched.
+   *
+   * @param {string} key
+   * @param {(qb: import('knex').Knex.QueryBuilder) => Promise<object[]>} withReturning
+   * @param {(trx: import('knex').Knex.Transaction) => Promise<number>} withoutReturning
+   * @returns {Promise<{hits: number, windowStart: number, blockedUntil: number}|null>}
+   */
+  const updateCounterReturning = async (key, withReturning, withoutReturning) => {
+    if (supportsReturning) {
+      const rows = await withReturning(knex(TABLES.counters).where({ k: key }));
+      return Array.isArray(rows) && rows.length > 0 ? toCounter(rows[0]) : null;
+    }
+    return knex.transaction(async (trx) => {
+      if (toNumber(await withoutReturning(trx)) === 0) return null;
+      const row = await trx(TABLES.counters)
+        .select(...COUNTER_COLUMNS)
+        .where({ k: key })
+        .forUpdate()
+        .first();
+      return toCounter(row);
+    });
+  };
+
   const tryAcquireLease = async (name, ttlMs, owner, now = Date.now()) => {
     await knex(TABLES.leases)
       .insert({ name, owner: '', lease_until: 0 })
@@ -373,34 +415,58 @@ function createDatabaseBackend({ knex, dialect }) {
     dialect: kind,
 
     /**
-     * Increments a fixed-window counter in one atomic UPDATE. The CASE
-     * expressions only read `window_start`, which is assigned last, so the
-     * result is the same under MySQL's left-to-right SET evaluation and the
-     * all-old-values semantics of PostgreSQL and SQLite.
+     * Increments a fixed-window counter in one atomic UPDATE and returns the
+     * value written by THIS update. The CASE expressions only read
+     * `window_start`, which is assigned last, so the result is the same under
+     * MySQL's left-to-right SET evaluation and the all-old-values semantics
+     * of PostgreSQL and SQLite.
+     *
+     * Reading the row in a separate statement after the UPDATE would return
+     * the count after later concurrent increments as well, so under a burst
+     * most callers would see a number above the limit and be rejected
+     * (measured: 2 of 48 parallel requests allowed with a limit of 10).
+     * PostgreSQL and SQLite therefore use `UPDATE ... RETURNING` (knex
+     * `returning`, SQLite >= 3.35); other dialects run UPDATE and SELECT in
+     * one transaction, where the row lock taken by the UPDATE keeps other
+     * writers out until the read is done.
      */
     async hit(key, windowMs, now = Date.now()) {
       const cutoff = now - windowMs;
+      const data = {
+        hits: knex.raw('CASE WHEN window_start <= ? THEN 1 ELSE hits + 1 END', [cutoff]),
+        expires_at: knex.raw('CASE WHEN expires_at < ? THEN ? ELSE expires_at END', [
+          now + windowMs,
+          now + windowMs,
+        ]),
+        window_start: knex.raw('CASE WHEN window_start <= ? THEN ? ELSE window_start END', [
+          cutoff,
+          now,
+        ]),
+      };
       const update = () =>
-        knex(TABLES.counters)
-          .where({ k: key })
-          .update({
-            hits: knex.raw('CASE WHEN window_start <= ? THEN 1 ELSE hits + 1 END', [cutoff]),
-            expires_at: knex.raw('CASE WHEN expires_at < ? THEN ? ELSE expires_at END', [
-              now + windowMs,
-              now + windowMs,
-            ]),
-            window_start: knex.raw('CASE WHEN window_start <= ? THEN ? ELSE window_start END', [
-              cutoff,
-              now,
-            ]),
-          });
+        updateCounterReturning(
+          key,
+          (qb) => qb.update(data, [...COUNTER_COLUMNS]),
+          (trx) => trx(TABLES.counters).where({ k: key }).update(data)
+        );
 
-      if (toNumber(await update()) === 0) {
+      let row = await update();
+      if (!row) {
         await ensureCounterRow(key, now + windowMs);
-        await update();
+        row = await update();
       }
-      const row = await readCounter(key);
-      return row || { hits: 1, windowStart: now, blockedUntil: 0 };
+      return row || (await readCounter(key)) || { hits: 1, windowStart: now, blockedUntil: 0 };
+    },
+
+    /**
+     * Gives back one attempt counted by `hit` (for example when the request
+     * ended with a server error and must not count as a failed login).
+     */
+    async release(key) {
+      await knex(TABLES.counters)
+        .where({ k: key })
+        .andWhere('hits', '>', 0)
+        .update({ hits: knex.raw('hits - 1') });
     },
 
     peek: readCounter,
@@ -434,10 +500,13 @@ function createDatabaseBackend({ knex, dialect }) {
     async bumpRevision(name) {
       const key = `rev:${name}`;
       await ensureCounterRow(key, NEVER_EXPIRES);
-      await knex(TABLES.counters)
-        .where({ k: key })
-        .update({ hits: knex.raw('hits + 1'), expires_at: NEVER_EXPIRES });
-      return this.getRevision(name);
+      const data = { hits: knex.raw('hits + 1'), expires_at: NEVER_EXPIRES };
+      const row = await updateCounterReturning(
+        key,
+        (qb) => qb.update(data, [...COUNTER_COLUMNS]),
+        (trx) => trx(TABLES.counters).where({ k: key }).update(data)
+      );
+      return row ? row.hits : this.getRevision(name);
     },
 
     tryAcquireLease,
@@ -624,6 +693,16 @@ function createCoordinator({
     clear(key) {
       assertKey(key);
       return counterCall('counter clear', 'clear', [key]);
+    },
+
+    /**
+     * Gives back one hit of counter `key`. Optional for a custom
+     * `counterStore`: a store without `release` keeps the hit.
+     */
+    async release(key) {
+      assertKey(key);
+      if (counterStore && typeof counterStore.release !== 'function') return;
+      return counterCall('counter release', 'release', [key]);
     },
 
     getRevision(name) {

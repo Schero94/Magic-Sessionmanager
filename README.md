@@ -356,12 +356,12 @@ The updater checks MaxMind's `Last-Modified` header and skips the download when 
 
 Configuration › Login protection checks **new sign-ins only**. Existing sessions are not affected, and refused sign-ins are not recorded.
 
-| Rule                          | Response                            | Notes                                                                                                                                                                                 |
-| ----------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Temporary IP lockout          | 429 with `Retry-After`              | After `maxFailedLogins` failed sign-ins from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Shared by all server processes. |
-| Reject suspicious sign-ins    | 403                                 | VPN, proxy or known threat address, or, with security scoring on, a score below 50.                                                                                                   |
-| Country rules                 | 403                                 | Allow only listed countries, or reject listed countries. With "Allow only listed countries", an empty list allows every country.                                                      |
-| Location cannot be determined | 403 "Login temporarily unavailable" | When `geoLookupFailureMode` says reject (`auto` rejects only when "Reject suspicious sign-ins" is on).                                                                                |
+| Rule                          | Response                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Temporary IP lockout          | 429 with `Retry-After`              | After `maxFailedLogins` failed sign-ins from one IP address within 15 minutes, that address is refused for 15 minutes. User accounts are not blocked. Shared by all server processes. Each attempt is counted before the password check, so a parallel burst cannot exceed the limit; when more attempts from one address are running at once than the limit, the extra ones get 429 with `Retry-After: 1` and no lock. |
+| Reject suspicious sign-ins    | 403                                 | VPN, proxy or known threat address, or, with security scoring on, a score below 50.                                                                                                                                                                                                                                                                                                                                     |
+| Country rules                 | 403                                 | Allow only listed countries, or reject listed countries. With "Allow only listed countries", an empty list allows every country.                                                                                                                                                                                                                                                                                        |
+| Location cannot be determined | 403 "Login temporarily unavailable" | When `geoLookupFailureMode` says reject (`auto` rejects only when "Reject suspicious sign-ins" is on).                                                                                                                                                                                                                                                                                                                  |
 
 Requests with an ended session get **401** with the header `X-Session-Terminated-Reason` (`logout`, `manual`, `idle`, `expired` or `blocked`).
 
@@ -593,7 +593,7 @@ module.exports = () => ({
 });
 ```
 
-The database store needs nothing else. If you already run Redis and want the counters there, pass an object with four async methods. Example with [node-redis](https://github.com/redis/node-redis) (`npm i redis`); when Redis fails, the plugin falls back to the database for that call:
+The database store needs nothing else. If you already run Redis and want the counters there, pass an object with four async methods (`hit` must return the count written by that call, as the Lua script below does) and an optional `release`. Example with [node-redis](https://github.com/redis/node-redis) (`npm i redis`); when Redis fails, the plugin falls back to the database for that call:
 
 ```js
 // config/plugins.js
@@ -638,6 +638,11 @@ module.exports = () => ({
           clear: async (key) => {
             await redis.del(`msm:${key}`);
           },
+          // Optional: gives back one hit (a login that ended with a 5xx or
+          // was turned away as over the limit). Without it the hit stays.
+          release: async (key) => {
+            await redis.hIncrBy(`msm:${key}`, 'h', -1);
+          },
         },
       },
     },
@@ -647,7 +652,7 @@ module.exports = () => ({
 
 ### Verifying
 
-`npm run test:concurrency` starts 8 Node processes against one database and checks exact shared counts, a single job-lease winner, lock-protected read-modify-write, no duplicate check-then-create rows, exact revision bumps and a cluster-wide lockout. It runs on SQLite by default and also on PostgreSQL with `MSM_TEST_PG_URL=postgres://user@host:5432/db`. A control step does the same check-then-create without the lock and reports the duplicates that Strapi's Core Store produces in that case.
+`npm run test:concurrency` starts 8 Node processes against one database and checks exact shared counts (every hit also reports its own count), a single job-lease winner, lock-protected read-modify-write, no duplicate check-then-create rows, exact revision bumps and a cluster-wide lockout. It runs on SQLite by default and also on PostgreSQL with `MSM_TEST_PG_URL=postgres://user@host:5432/db`. A control step does the same check-then-create without the lock and reports the duplicates that Strapi's Core Store produces in that case.
 
 ---
 
@@ -670,15 +675,15 @@ module.exports = () => ({
 
 ## Troubleshooting
 
-| Problem                                                               | Fix                                                                                                                                                      |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin". |
-| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                        |
-| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                            |
-| 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                   |
-| 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client.    |
-| Location is always "—"                                                | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data.                               |
-| Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                          |
+| Problem                                                               | Fix                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin".                                                                                                                       |
+| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                                                                                                                                              |
+| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                                                                                                                                                  |
+| 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                                                                                                                                         |
+| 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client. With `Retry-After: 1`: more sign-ins from one address were running at once than `maxFailedLogins`; retry after a second. |
+| Location is always "—"                                                | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data.                                                                                                                                                     |
+| Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                                                                                                                                                |
 
 The plugin stores sessions in the `magic_sessions` table and revocations in its own revoked-token table.
 

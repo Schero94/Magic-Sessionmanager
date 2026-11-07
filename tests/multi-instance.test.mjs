@@ -709,3 +709,170 @@ test('a wrong password thrown as ValidationError counts as a failed login', asyn
     coordination.__resetMemoryForTests();
   }
 });
+
+test(
+  'a parallel burst of wrong passwords reaches the password check at most maxFailedLogins times',
+  { skip: !sqliteAvailable && 'better-sqlite3 not available' },
+  async () => {
+    const shared = await createSharedSqlite();
+    settingsLoader.invalidateSettingsCache();
+    try {
+      const mount = (knex) => {
+        const middlewares = [];
+        const strapi = {
+          log: silentLog,
+          config: { get: (key) => (key === 'plugin::magic-sessionmanager' ? {} : undefined) },
+          store: () => ({ get: async () => ({ maxFailedLogins: 3 }) }),
+          server: { use: (fn) => middlewares.push(fn) },
+        };
+        getCoordinator(strapi).attachDatabase(
+          createDatabaseBackend({ knex, dialect: 'better-sqlite3' })
+        );
+        bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
+        return middlewares[0];
+      };
+      const processes = [mount(shared.a), mount(shared.b)];
+      let checks = 0;
+      const attempt = async (index) => {
+        const ctx = {
+          path: '/api/auth/local',
+          method: 'POST',
+          request: { ip: '198.51.100.77', headers: {} },
+          state: {},
+          set() {},
+          status: 404,
+          body: null,
+        };
+        try {
+          await processes[index % 2](ctx, async () => {
+            checks++;
+            await sleep(20);
+            const error = new Error('Invalid identifier or password');
+            error.name = 'ValidationError';
+            throw error;
+          });
+        } catch (err) {
+          assert.equal(err.name, 'ValidationError');
+          return 400;
+        }
+        return ctx.status;
+      };
+      const statuses = await Promise.all(Array.from({ length: 20 }, (_, i) => attempt(i)));
+      assert.equal(checks, 3, 'only the reserved attempts reach the handler');
+      assert.equal(statuses.filter((s) => s === 400).length, 3);
+      assert.equal(statuses.filter((s) => s === 429).length, 17);
+    } finally {
+      settingsLoader.invalidateSettingsCache();
+      await shared.close();
+    }
+  }
+);
+
+test('parallel correct logins from one address are throttled briefly but never lock it', async () => {
+  coordination.__resetMemoryForTests();
+  settingsLoader.invalidateSettingsCache();
+  const middlewares = [];
+  const strapi = {
+    log: silentLog,
+    config: { get: (key) => (key === 'plugin::magic-sessionmanager' ? {} : undefined) },
+    store: () => ({ get: async () => ({ maxFailedLogins: 3 }) }),
+    server: { use: (fn) => middlewares.push(fn) },
+  };
+  bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
+  const [middleware] = middlewares;
+  const login = async (delay) => {
+    const ctx = {
+      path: '/api/auth/local',
+      method: 'POST',
+      request: { ip: '203.0.113.97', headers: {} },
+      state: {},
+      set() {},
+      status: 404,
+      body: null,
+    };
+    await middleware(ctx, async () => {
+      await sleep(delay);
+      ctx.status = 200;
+      ctx.body = { jwt: 'x' };
+    });
+    return ctx.status;
+  };
+  try {
+    const statuses = await Promise.all(Array.from({ length: 6 }, () => login(20)));
+    assert.equal(statuses.filter((s) => s === 200).length, 3);
+    assert.equal(statuses.filter((s) => s === 429).length, 3);
+    assert.equal(await login(0), 200, 'the address is not locked afterwards');
+    const entry = await getCoordinator(strapi).peek(hashedKey('lf', '203.0.113.97'));
+    assert.ok(!entry || entry.blockedUntil === 0, 'no block was written');
+  } finally {
+    settingsLoader.invalidateSettingsCache();
+    coordination.__resetMemoryForTests();
+  }
+});
+
+test('a login that fails with a server error gives its reserved attempt back', async () => {
+  coordination.__resetMemoryForTests();
+  settingsLoader.invalidateSettingsCache();
+  const middlewares = [];
+  const strapi = {
+    log: silentLog,
+    config: { get: (key) => (key === 'plugin::magic-sessionmanager' ? {} : undefined) },
+    store: () => ({ get: async () => ({ maxFailedLogins: 2 }) }),
+    server: { use: (fn) => middlewares.push(fn) },
+  };
+  bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
+  const [middleware] = middlewares;
+  const ctxFor = () => ({
+    path: '/api/auth/local',
+    method: 'POST',
+    request: { ip: '203.0.113.98', headers: {} },
+    state: {},
+    set() {},
+    status: 404,
+    body: null,
+  });
+  try {
+    for (let i = 0; i < 5; i++) {
+      const ctx = ctxFor();
+      await middleware(ctx, async () => {
+        ctx.status = 500;
+      });
+      assert.equal(ctx.status, 500, 'server errors never lock the client');
+    }
+    const entry = await getCoordinator(strapi).peek(hashedKey('lf', '203.0.113.98'));
+    assert.equal(entry.hits, 0);
+  } finally {
+    settingsLoader.invalidateSettingsCache();
+    coordination.__resetMemoryForTests();
+  }
+});
+
+test(
+  'database counter: parallel hits each report their own count',
+  { skip: !sqliteAvailable && 'better-sqlite3 not available' },
+  async () => {
+    const shared = await createSharedSqlite();
+    try {
+      const values = await Promise.all(
+        Array.from({ length: 30 }, (_, i) =>
+          (i % 2 ? shared.processA : shared.processB).hit('test:exact', 60_000)
+        )
+      );
+      assert.deepEqual(
+        values.map((v) => v.hits).sort((a, b) => a - b),
+        Array.from({ length: 30 }, (_, i) => i + 1)
+      );
+      const revisions = await Promise.all(
+        Array.from({ length: 10 }, (_, i) =>
+          (i % 2 ? shared.processA : shared.processB).bumpRevision('exact')
+        )
+      );
+      assert.deepEqual(
+        revisions.sort((a, b) => a - b),
+        Array.from({ length: 10 }, (_, i) => i + 1)
+      );
+    } finally {
+      await shared.close();
+    }
+  }
+);

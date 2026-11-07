@@ -77,8 +77,11 @@ async function main() {
 
     // 1. Shared fixed-window counter: every hit must be counted once.
     await barrier('counter');
+    // Every hit must also report the value IT wrote (no two hits may see
+    // the same count), or limits reject callers too early under a burst.
+    results.hitValues = [];
     for (let i = 0; i < config.hitsPerWorker; i++) {
-      await coordinator.hit('test:counter', 60_000);
+      results.hitValues.push((await coordinator.hit('test:counter', 60_000)).hits);
     }
     results.counter = true;
 
@@ -121,19 +124,28 @@ async function main() {
 
     // 5. Settings revision bumps.
     await barrier('revision');
+    results.revisionValues = [];
     for (let i = 0; i < config.revisionBumps; i++) {
-      await coordinator.bumpRevision('test');
+      results.revisionValues.push(await coordinator.bumpRevision('test'));
     }
     results.revision = true;
 
     // 6. Lockout: the shared counter blocks after `maxFailed` hits in total.
     await barrier('lockout');
+    // Same order as the login middleware: peek for a block, reserve the
+    // attempt with hit(), and only an attempt within the limit reaches the
+    // (simulated) password check.
     let attempts = 0;
     for (let i = 0; i < config.lockoutAttemptsPerWorker; i++) {
       const state = await coordinator.peek('lf:test');
       if (state && state.blockedUntil > Date.now()) break;
-      attempts++;
       const entry = await coordinator.hit('lf:test', 15 * 60_000);
+      if (entry.hits > config.maxFailed) {
+        await coordinator.release('lf:test');
+        continue;
+      }
+      attempts++;
+      await sleep(1);
       if (entry.hits >= config.maxFailed) {
         await coordinator.block('lf:test', Date.now() + 15 * 60_000);
       }

@@ -218,6 +218,8 @@ module.exports = ({ strapi }) => {
     if (!(await nativeManager.isSessionActive(nativeSessionId))) return false;
     const revoked = await nativeManager.revokeSessionById(userId, nativeSessionId);
     if (!revoked) {
+      // Revoked concurrently by another request or instance: already done.
+      if (!(await nativeManager.isSessionActive(nativeSessionId))) return false;
       throw new Error(
         'Native session revocation was not confirmed; Magic session data was left unchanged.'
       );
@@ -269,7 +271,11 @@ module.exports = ({ strapi }) => {
 
     if (!(await nativeManager.isSessionActive(parsed.nativeSessionId))) return false;
     const revoked = await nativeManager.revokeSessionById(userId, parsed.nativeSessionId);
-    if (!revoked) throw new Error('Native session revocation was not confirmed.');
+    if (!revoked) {
+      // Revoked concurrently by another request or instance: already done.
+      if (!(await nativeManager.isSessionActive(parsed.nativeSessionId))) return false;
+      throw new Error('Native session revocation was not confirmed.');
+    }
     return true;
   }
 
@@ -454,6 +460,10 @@ module.exports = ({ strapi }) => {
       if (!(await nativeManager.isSessionActive(nativeSessionId))) continue;
       const revoked = await nativeManager.revokeSessionById(userId, nativeSessionId);
       if (!revoked) {
+        // A concurrent request (on this or another instance) may have revoked
+        // it between the check and the revoke. The goal is reached then; only
+        // a session that is still active is a failure.
+        if (!(await nativeManager.isSessionActive(nativeSessionId))) continue;
         throw new Error(
           'Native session revocation was not confirmed; Magic session data was left unchanged.'
         );

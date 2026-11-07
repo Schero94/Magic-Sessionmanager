@@ -171,6 +171,19 @@ async function runWorkers(target) {
   return results;
 }
 
+/**
+ * True when `values` is exactly 1..n in some order.
+ *
+ * @param {number[]} values
+ * @param {number} n
+ * @returns {boolean}
+ */
+function exactSequence(values, n) {
+  if (values.length !== n) return false;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted.every((value, index) => value === index + 1);
+}
+
 function check(label, condition, detail) {
   const status = condition ? 'ok  ' : 'FAIL';
   console.log(`  ${status} ${label}${detail ? ` (${detail})` : ''}`);
@@ -193,6 +206,22 @@ async function runTarget(target) {
       state.counter === WORKERS * HITS_PER_WORKER,
       `${state.counter}/${WORKERS * HITS_PER_WORKER}`
     ),
+    check(
+      'every hit reports its own count (1..N, no duplicates)',
+      exactSequence(
+        results.flatMap((r) => r.hitValues || []),
+        WORKERS * HITS_PER_WORKER
+      ),
+      'returned values'
+    ),
+    check(
+      'every revision bump reports its own revision (1..N, no duplicates)',
+      exactSequence(
+        results.flatMap((r) => r.revisionValues || []),
+        WORKERS * REVISION_BUMPS
+      ),
+      'returned values'
+    ),
     check('exactly one process wins the job lease', winners === 1, `${winners} winners`),
     check(
       'locked read-modify-write loses no update',
@@ -211,7 +240,7 @@ async function runTarget(target) {
     ),
     check(
       'failed-login lockout is cluster-wide',
-      lockoutAttempts <= MAX_FAILED + WORKERS - 1,
+      lockoutAttempts === MAX_FAILED,
       `${lockoutAttempts} attempts, per-process limit would allow ${MAX_FAILED * WORKERS}`
     ),
   ];

@@ -635,8 +635,7 @@ function mountFailedLoginLockout({ strapi, log }) {
     } catch (err) {
       log.debug('[LOCKOUT] Counter read failed:', err?.name || 'Error');
     }
-    if (existing && existing.blockedUntil > now) {
-      const retrySec = Math.ceil((existing.blockedUntil - now) / 1000);
+    const rejectLocked = (retrySec) => {
       ctx.set('Retry-After', String(retrySec));
       log.warn(`[LOCKOUT] Rejected login from locked client (${retrySec}s remaining)`);
       ctx.status = 429;
@@ -646,6 +645,46 @@ function mountFailedLoginLockout({ strapi, log }) {
           name: 'TooManyRequestsError',
           message: 'Too many failed login attempts. Please try again later.',
           details: { retryAfter: retrySec },
+        },
+      };
+    };
+    if (existing && existing.blockedUntil > now) {
+      rejectLocked(Math.ceil((existing.blockedUntil - now) / 1000));
+      return;
+    }
+
+    // Reserve the attempt BEFORE the password check. Counting only after
+    // the handler returned let every request of a parallel burst pass the
+    // `peek` above before the first failure was recorded (measured: 10 of 48
+    // parallel wrong passwords reached the check with a limit of 5). The
+    // shared counter returns the value written by this request, so at most
+    // `maxFailed` attempts that are failed or still running reach the
+    // password check per window, cluster-wide.
+    //
+    // A request over that number is turned away with a short Retry-After
+    // and gives its reservation back. It does NOT lock the client: it may be
+    // one of several correct logins arriving at once from one address (for
+    // example an office behind NAT). Only completed failures lock.
+    let reserved = null;
+    try {
+      reserved = await coordinator.hit(key, WINDOW_MS);
+    } catch (err) {
+      log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
+    }
+    if (reserved && reserved.hits > maxFailed) {
+      try {
+        await coordinator.release(key);
+      } catch (err) {
+        log.debug('[LOCKOUT] Counter release failed:', err?.name || 'Error');
+      }
+      ctx.set('Retry-After', '1');
+      ctx.status = 429;
+      ctx.body = {
+        error: {
+          status: 429,
+          name: 'TooManyRequestsError',
+          message: 'Too many login attempts at once. Please try again.',
+          details: { retryAfter: 1 },
         },
       };
       return;
@@ -663,18 +702,21 @@ function mountFailedLoginLockout({ strapi, log }) {
     }
     const status = thrown ? statusOfThrownError(thrown) : ctx.status;
 
-    // Count every 4xx from a login endpoint as a failure. 5xx is almost
-    // always a server bug and we don't want to punish the user for it.
-    // 200 with a jwt resets the counter.
+    // Every 4xx from a login endpoint is a failure and keeps its reserved
+    // hit. 5xx (almost always a server bug) and 429 from another limiter
+    // give the hit back. 200 with a jwt resets the counter.
     try {
       if (!thrown && status === 200 && ctx.body && ctx.body.jwt) {
-        if (existing) await coordinator.clear(key);
+        await coordinator.clear(key);
       } else if (status >= 400 && status < 500 && status !== 429) {
-        const entry = await coordinator.hit(key, WINDOW_MS);
-        if (entry.hits >= maxFailed) {
+        if (reserved && reserved.hits >= maxFailed) {
           await coordinator.block(key, Date.now() + WINDOW_MS);
-          log.warn(`[LOCKOUT] Client locked for 15min after ${entry.hits} failed login attempts`);
+          log.warn(
+            `[LOCKOUT] Client locked for 15min after ${reserved.hits} failed login attempts`
+          );
         }
+      } else if (reserved) {
+        await coordinator.release(key);
       }
     } catch (err) {
       log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
