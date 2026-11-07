@@ -1,3 +1,10 @@
+## [4.9.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.9.0...v4.9.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **admin:** keep the console free of handled request failures ([d5b55ca](https://github.com/Schero94/Magic-Sessionmanager/commit/d5b55ca4efc5d3412c63ee81ad2d9bba21244277))
+
 # [4.9.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.8.0...v4.9.0) (2026-11-07)
 
 
