@@ -1,22 +1,26 @@
 # Magic Session Manager
 
-**See who is signed in to your Strapi app, and control their sessions.**
+**See who is signed in to your Strapi 5 app, end any session in one click, and stop password guessing before it reaches your users.**
 
-Session Manager records every sign-in of your app's users (Users & Permissions) as a session and lets admins see, end and analyse them. Strapi admin accounts are not managed here.
+Magic Session Manager records every sign-in through Users & Permissions as a session. Admins see who is online, end single sessions or all sessions of a user, block accounts and review sign-in history. Your app gets logout routes, a "my devices" list for users, failed-login lockout and optional country rules. It works with Strapi's native refresh-token sessions and with several server processes on one database.
 
-Free and open under the MIT license. All features are available without a paid license or activation key.
+Free and open source under the MIT license. Every feature works without an account, key or activation, and the plugin sends nothing to its author.
 
-[![NPM](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
+[![npm downloads](https://img.shields.io/npm/dm/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
+[![Tests](https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml/badge.svg)](https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Project site](https://schero94.github.io/Magic-Sessionmanager/) · [npm](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager) · [Issues](https://github.com/Schero94/Magic-Sessionmanager/issues) · [Changelog](CHANGELOG.md)
+Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.github.io/Magic-Sessionmanager/) · [npm](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose) · [Discussions](https://github.com/Schero94/Magic-Sessionmanager/discussions)
 
-> **Release status.** The admin UI shown here is the redesign on the branch `claude/sessionmanager-ui-redesign`, which carries the fixes for the next release. Version 4.8.0 on npm was published before its acceptance gates closed and is **not accepted**; see [Maintenance status](#maintenance-status).
+![Sessions dashboard with four stat cards (Active, Idle, Ended, All), search, status filter and a table of sessions with state badges](pics/dashboard.png)
 
 ---
 
 ## Contents
 
+- [Features](#features)
+- [Quick start (1 minute)](#quick-start-1-minute)
 - [Screenshots](#screenshots)
 - [Core concepts](#core-concepts)
 - [Screens](#screens)
@@ -28,15 +32,62 @@ Free and open under the MIT license. All features are available without a paid l
 - [Login protection](#login-protection)
 - [Alerts](#alerts)
 - [Content API](#content-api)
+- [Examples](#examples)
 - [Optional route policy: `session-required`](#optional-route-policy-session-required)
 - [Admin API and permissions](#admin-api-and-permissions)
 - [Running several instances (Railway replicas, pm2 cluster)](#running-several-instances-railway-replicas-pm2-cluster)
+- [Performance](#performance)
 - [Security and privacy](#security-and-privacy)
 - [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [Migration and upgrading](#migration-and-upgrading)
 - [Development and tests](#development-and-tests)
+- [Contributing](#contributing)
 - [Maintenance status](#maintenance-status)
 - [Languages](#languages)
 - [License](#license)
+
+---
+
+## Features
+
+| Area                   | What you get                                                                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overview               | A sessions dashboard with Active, Idle and Ended counts, search, filters, CSV and JSON export, and a details dialog per session (device, browser, IP address, location, security score). |
+| Control                | End one session, end all sessions of a user, delete a record, or block a user. Ended sessions are rejected on the next request with 401 and a reason header.                             |
+| Your users             | Content API routes for "my sessions", "current session", log out, log out everywhere and log out other devices. Each user only ever sees their own sessions.                             |
+| Login protection       | Temporary IP lockout after failed sign-ins, Content API rate limits, optional rejection of VPN, proxy or low-score sign-ins, and country allow or block lists.                           |
+| Location               | IP location from a local MaxMind GeoLite2 database (no third party in the sign-in path) or from ipapi.co, or turned off.                                                                 |
+| Alerts                 | Security emails to the user through Strapi's Email plugin and sign-in notifications to Discord or Slack.                                                                                 |
+| Admin integration      | A Sessions panel next to each user in the Content Manager and an Online users widget on the Strapi homepage.                                                                             |
+| Native Strapi sessions | Works with `jwtManagement: 'refresh'` (Strapi's own sessions and refresh tokens) and with `'legacy-support'`.                                                                            |
+| Several processes      | Lockout, rate limits, jobs and settings stay consistent across pm2 workers and Railway replicas that share one database.                                                                 |
+| Privacy                | Stored tokens are encrypted (AES-256-GCM) and never returned. Retention deletes old history automatically. No telemetry.                                                                 |
+
+---
+
+## Quick start (1 minute)
+
+```bash
+npm install strapi-plugin-magic-sessionmanager
+```
+
+```typescript
+// config/plugins.ts
+export default () => ({
+  'magic-sessionmanager': { enabled: true },
+});
+```
+
+```bash
+# a stable key for token encryption (startup fails without it in production)
+echo "SESSION_ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")" >> .env
+npm run build && npm run develop
+```
+
+Sign in to your app as an end user (`POST /api/auth/local`), open **Session Manager** in the admin menu and the new session is listed as **Active**. End it, and the same token gets 401 on its next request.
+
+Yarn and pnpm work the same way (`yarn add strapi-plugin-magic-sessionmanager`, `pnpm add strapi-plugin-magic-sessionmanager`).
 
 ---
 
@@ -44,11 +95,7 @@ Free and open under the MIT license. All features are available without a paid l
 
 All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61.
 
-### Sessions dashboard
-
-![Sessions dashboard with four stat cards (Active, Idle, Ended, All), search, status filter and a table of sessions with state badges](pics/dashboard.png)
-
-Dark mode:
+### Sessions dashboard in dark mode
 
 ![Sessions dashboard in the Strapi dark theme](pics/dashboard-dark.png)
 
@@ -126,7 +173,6 @@ Dark mode:
 | Strapi homepage                 | **Online users** widget                     | Who is online right now?                                  |
 | Settings › Session Manager      | **Configuration**                           | How should sessions and sign-ins behave?                  |
 | Settings › Session Manager      | **Analytics**                               | How are sessions used over time and by device?            |
-| Settings › Session Manager      | **License**                                 | Is a license key stored, and is it valid?                 |
 
 ### Sessions dashboard
 
@@ -163,7 +209,7 @@ Strapi 5.13 and later. Four tiles: **Online users** (of all registered users), *
 
 ### Settings › Session Manager
 
-Three links: **Configuration**, **Analytics** and **License**.
+Two links: **Configuration** and **Analytics**.
 
 **Configuration** has five tabs, deep-linkable with `?tab=sessions|login-protection|location-data|alerts|data-retention`:
 
@@ -179,19 +225,20 @@ Three links: **Configuration**, **Analytics** and **License**.
 
 **Analytics** shows All sessions, Active sessions, Sign-ins in the last 24 hours and in the last 7 days (rolling windows), sessions by device and by browser, and the average session length, all from the latest loaded sessions.
 
-**License** shows whether an optional license key is stored and whether it is valid. It is read-only. All features are available with or without a key.
-
 ---
 
 ## Compatibility
 
-| Item                    | Supported                                                                                                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Strapi                  | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.61.0.                                                                                                     |
-| Node.js                 | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                    |
-| Users & Permissions     | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                             |
-| Homepage widget         | Strapi 5.13 and later (older versions have no widgets API; the rest works)                                                                                                    |
-| Admin peer dependencies | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react` / `react-dom` `^18.3.1`, `react-intl` `^6.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0` |
+| Item                | Supported                                                                                                                                                                                                       |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strapi              | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.61.0.                                                                                                                                       |
+| Node.js             | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                                                      |
+| Users & Permissions | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                                                               |
+| Homepage widget     | Strapi 5.13 and later (older versions have no widgets API; the rest works)                                                                                                                                      |
+| Required peers      | `@strapi/strapi` `^5.0.0`, `@strapi/plugin-users-permissions` `^5.0.0`, `react` / `react-dom` `^18.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0`. A new Strapi 5 app already has all of them. |
+| Optional peers      | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react-intl` `^6.0.0`. Strapi's admin brings them; they are marked optional so npm, Yarn and pnpm do not warn.                                      |
+| Package managers    | npm, Yarn 1 and pnpm. Installing into a fresh Strapi 5.61 app prints no warning about this plugin.                                                                                                              |
+| Databases           | PostgreSQL, MySQL, SQLite (several processes need PostgreSQL or MySQL, see [Running several instances](#running-several-instances-railway-replicas-pm2-cluster)).                                               |
 
 ---
 
@@ -278,14 +325,14 @@ Static defaults from `server/src/config/index.js`; admin units and ranges from t
 
 | Key                                                                 | Default                                       | Admin unit and range                                              | Configuration tab             | Meaning                                                                                                                                                                                     |
 | ------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inactivityTimeout`                                                 | 15 min (`900000` ms)                          | min, 1–1440                                                       | Sessions                      | Unused this long, a session becomes idle and then ends as "Timed out". Also decides who counts as online.                                                                                   |
-| `maxSessionAgeDays`                                                 | 30                                            | days, 1–365                                                       | Sessions                      | Maximum age from sign-in, regardless of activity. Applied on the session's next request.                                                                                                    |
-| `lastSeenRateLimit`                                                 | 30 s (`30000` ms)                             | s, 5–300                                                          | Sessions › Advanced           | Minimum interval between "Last active" updates.                                                                                                                                             |
-| `cleanupInterval`                                                   | 30 min (`1800000` ms)                         | min, 5–1440                                                       | Sessions › Advanced           | How often the idle check runs. It ends idle sessions and deletes nothing. It also runs at server start; with several instances only one runs it per interval.                               |
+| `inactivityTimeout`                                                 | 15 min (`900000` ms)                          | min, 1 to 1440                                                    | Sessions                      | Unused this long, a session becomes idle and then ends as "Timed out". Also decides who counts as online.                                                                                   |
+| `maxSessionAgeDays`                                                 | 30                                            | days, 1 to 365                                                    | Sessions                      | Maximum age from sign-in, regardless of activity. Applied on the session's next request.                                                                                                    |
+| `lastSeenRateLimit`                                                 | 30 s (`30000` ms)                             | s, 5 to 300                                                       | Sessions › Advanced           | Minimum interval between "Last active" updates.                                                                                                                                             |
+| `cleanupInterval`                                                   | 30 min (`1800000` ms)                         | min, 5 to 1440                                                    | Sessions › Advanced           | How often the idle check runs. It ends idle sessions and deletes nothing. It also runs at server start; with several instances only one runs it per interval.                               |
 | `cleanupUseDbDirect`                                                | `false`                                       | boolean                                                           | Sessions › Advanced           | Idle check with one SQL update instead of the Document Service (skips lifecycle hooks).                                                                                                     |
 | `strictSessionEnforcement`                                          | `false` (Relaxed)                             | boolean                                                           | Sessions                      | Strict rejects tokens without a session record and requests where the check itself fails. Ended, expired and revoked sessions and blocked users are rejected in both modes.                 |
-| `sessionCreationGraceMs`                                            | `5000`                                        | ms, 0–30000 (shown in seconds)                                    | Sessions › Advanced           | Window after sign-in in which a token is accepted while its record is being created.                                                                                                        |
-| `maxFailedLogins`                                                   | 5                                             | 0–100, 0 = off                                                    | Login protection              | Temporary IP lockout threshold (failed sign-ins from one IP within 15 minutes).                                                                                                             |
+| `sessionCreationGraceMs`                                            | `5000`                                        | ms, 0 to 30000 (shown in seconds)                                 | Sessions › Advanced           | Window after sign-in in which a token is accepted while its record is being created.                                                                                                        |
+| `maxFailedLogins`                                                   | 5                                             | 0 to 100, 0 = off                                                 | Login protection              | Temporary IP lockout threshold (failed sign-ins from one IP within 15 minutes).                                                                                                             |
 | `trustedProxies`                                                    | off                                           | boolean                                                           | Login protection              | Read the client IP from proxy headers. Only behind a proxy you control.                                                                                                                     |
 | `blockSuspiciousSessions`                                           | `false`                                       | boolean                                                           | Login protection              | Reject suspicious sign-ins.                                                                                                                                                                 |
 | `geoLookupFailureMode`                                              | `'auto'`                                      | auto, allow, block                                                | Login protection              | What happens when the location cannot be determined.                                                                                                                                        |
@@ -299,8 +346,8 @@ Static defaults from `server/src/config/index.js`; admin units and ranges from t
 | `alertOnSuspiciousLogin` / `alertOnNewLocation` / `alertOnVpnProxy` | `true`                                        | boolean                                                           | Alerts                        | Which events send an email.                                                                                                                                                                 |
 | `enableWebhooks`                                                    | `false`                                       | boolean                                                           | Alerts                        | Team notifications.                                                                                                                                                                         |
 | `discordWebhookUrl` / `slackWebhookUrl`                             | `''`                                          | https URL on discord.com / discordapp.com, or hooks.slack.com     | Alerts                        | Any other host is rejected.                                                                                                                                                                 |
-| `retentionDays`                                                     | 90                                            | days, 1–365 or -1 (forever)                                       | Data and retention            | How long records of ended sessions are kept. Checked once a day across all instances, the first time about 5 minutes after the server starts. Open sessions are never deleted by retention. |
-| `rateLimitWriteMax` / `rateLimitReadMax` / `rateLimitWindowSeconds` | 10 / 120 / 60                                 | 1–1000 / 1–10000 / 10–3600                                        | not shown                     | Content API rate limits. Not editable in the UI; Save keeps the stored values. The write limit can only be made stricter than the route floor.                                              |
+| `retentionDays`                                                     | 90                                            | days, 1 to 365 or -1 (forever)                                    | Data and retention            | How long records of ended sessions are kept. Checked once a day across all instances, the first time about 5 minutes after the server starts. Open sessions are never deleted by retention. |
+| `rateLimitWriteMax` / `rateLimitReadMax` / `rateLimitWindowSeconds` | 10 / 120 / 60                                 | 1 to 1000 / 1 to 10000 / 10 to 3600                               | not shown                     | Content API rate limits. Not editable in the UI; Save keeps the stored values. The write limit can only be made stricter than the route floor.                                              |
 | `emailTemplates`                                                    | empty                                         | subject ≤ 200, HTML ≤ 10,000 (sanitised), text ≤ 5,000 characters | Alerts › Edit email templates | As soon as any template has content, only stored templates are used. Fill in all three, or none.                                                                                            |
 
 ### Environment variables
@@ -445,6 +492,64 @@ Example:
 
 ---
 
+## Examples
+
+All examples use a synthetic host `https://api.example.test` and a placeholder token.
+
+**A "Your devices" list in your app.** Load the caller's sessions; the current one comes first.
+
+```js
+const res = await fetch('https://api.example.test/api/magic-sessionmanager/my-sessions', {
+  headers: { Authorization: `Bearer ${jwt}` },
+});
+const { data, meta } = await res.json();
+// data[0].isCurrentSession === true, meta.active = number of open sessions
+```
+
+**Sign out one other device** (not the current one):
+
+```bash
+curl -X DELETE https://api.example.test/api/magic-sessionmanager/my-sessions/k2v8m1x0q9w7e5r3t1y6u4i2 \
+  -H "Authorization: Bearer <JWT>"
+# {"message":"...","success":true,"alreadyTerminated":false}
+```
+
+**Sign out everywhere except here** (for example after a password change):
+
+```bash
+curl -X POST https://api.example.test/api/magic-sessionmanager/logout-others \
+  -H "Authorization: Bearer <JWT>"
+# {"message":"2 other session(s) terminated","terminatedCount":2,"currentSessionPreserved":true}
+```
+
+**React to an ended session in the client.** A request with an ended session gets 401 and the header `X-Session-Terminated-Reason`. Browsers only let cross-origin JavaScript read that header when CORS exposes it:
+
+```js
+// config/middlewares.js
+module.exports = [
+  // ...
+  { name: 'strapi::cors', config: { expose: ['X-Session-Terminated-Reason'] } },
+  // ...
+];
+```
+
+```js
+async function api(path, jwt) {
+  const res = await fetch(`https://api.example.test${path}`, {
+    headers: { Authorization: `Bearer ${jwt}` },
+  });
+  if (res.status === 401) {
+    const reason = res.headers.get('X-Session-Terminated-Reason'); // logout, manual, idle, expired, blocked
+    if (reason === 'blocked') showMessage('This account is blocked.');
+    else if (reason) showMessage('You were signed out. Please sign in again.');
+    redirectToLogin();
+  }
+  return res.json();
+}
+```
+
+---
+
 ## Optional route policy: `session-required`
 
 You do **not** need this policy for session revocation. The plugin wraps the Users & Permissions JWT check for every Content API request, so an ended, expired or revoked session is rejected on all routes without configuration. No plugin route attaches the policy.
@@ -480,29 +585,27 @@ module.exports = factories.createCoreRouter('api::order.order', {
 
 Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authenticated Strapi admin **and** the permission `plugin::magic-sessionmanager.access` ("Access the Session Manager plugin"). The same permission controls the menu link, the settings links, the widget and the user panel. Admin responses never contain tokens or the internal `sessionId`.
 
-| Method   | Path                                                                             | Admin UI action                                                                                             |
-| -------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| GET      | `/sessions`                                                                      | Sessions dashboard, widget, Analytics (latest 1,000; `meta.truncated` when more exist)                      |
-| GET      | `/sessions/active`                                                               | Open sessions only                                                                                          |
-| GET      | `/user/:userId/sessions`                                                         | Sessions panel                                                                                              |
-| POST     | `/sessions/:sessionId/terminate`                                                 | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays)    |
-| DELETE   | `/sessions/:sessionId`                                                           | **Delete record** (record removed, token stays revoked; an open session also ends)                          |
-| POST     | `/sessions/clean-inactive`                                                       | **Delete ended sessions** (all users; open and idle sessions are not affected; does not run the idle check) |
-| POST     | `/user/:userId/terminate-all`                                                    | **End all sessions** (reason `manual`)                                                                      |
-| POST     | `/user/:userId/toggle-block`                                                     | **Block user** / **Unblock user**                                                                           |
-| GET      | `/users/stats`                                                                   | Widget totals (`totalUsers`, `blockedUsers`)                                                                |
-| GET      | `/geolocation/:ipAddress`                                                        | **Look up location**                                                                                        |
-| GET      | `/geoip/status`                                                                  | GeoIP database status                                                                                       |
-| PUT      | `/geoip/credentials`                                                             | Save or remove (`{ "clear": true }`) MaxMind credentials                                                    |
-| POST     | `/geoip/update`                                                                  | Update database / Force download                                                                            |
-| GET, PUT | `/settings`                                                                      | Configuration (PUT validates every field and returns `error.details.errors` on invalid input)               |
-| GET      | `/license/status`                                                                | License page                                                                                                |
-| POST     | `/license/auto-create`, `/license/create`, `/license/ping`, `/license/store-key` | License service routes (no admin UI)                                                                        |
-| POST     | `/sessions/:sessionId/simulate-timeout`                                          | Development only; removed when `NODE_ENV` is `production` or `staging`                                      |
+| Method   | Path                                    | Admin UI action                                                                                             |
+| -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| GET      | `/sessions`                             | Sessions dashboard, widget, Analytics (latest 1,000; `meta.truncated` when more exist)                      |
+| GET      | `/sessions/active`                      | Open sessions only                                                                                          |
+| GET      | `/user/:userId/sessions`                | Sessions panel                                                                                              |
+| POST     | `/sessions/:sessionId/terminate`        | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays)    |
+| DELETE   | `/sessions/:sessionId`                  | **Delete record** (record removed, token stays revoked; an open session also ends)                          |
+| POST     | `/sessions/clean-inactive`              | **Delete ended sessions** (all users; open and idle sessions are not affected; does not run the idle check) |
+| POST     | `/user/:userId/terminate-all`           | **End all sessions** (reason `manual`)                                                                      |
+| POST     | `/user/:userId/toggle-block`            | **Block user** / **Unblock user**                                                                           |
+| GET      | `/users/stats`                          | Widget totals (`totalUsers`, `blockedUsers`)                                                                |
+| GET      | `/geolocation/:ipAddress`               | **Look up location**                                                                                        |
+| GET      | `/geoip/status`                         | GeoIP database status                                                                                       |
+| PUT      | `/geoip/credentials`                    | Save or remove (`{ "clear": true }`) MaxMind credentials                                                    |
+| POST     | `/geoip/update`                         | Update database / Force download                                                                            |
+| GET, PUT | `/settings`                             | Configuration (PUT validates every field and returns `error.details.errors` on invalid input)               |
+| POST     | `/sessions/:sessionId/simulate-timeout` | Development only; removed when `NODE_ENV` is `production` or `staging`                                      |
 
 **Block / unblock** (`toggle-block`): send `{ "blocked": true }` or `{ "blocked": false }`. This sets the state, is safe to retry and is what the admin UI sends. A request without a body still toggles, but is deprecated, because a retry after a lost response can reverse the intended state. A non-boolean `blocked` returns 400. The response contains `blocked` and `mode` (`explicit` or `toggle`). Blocking ends all open sessions with the reason `blocked`; if that fails, the response is 500 and the request can be retried.
 
-Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404 for unknown IDs, 500 for server-side failures (502 for a failed MaxMind download, 503 when the license server is unreachable).
+Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404 for unknown IDs, 500 for server-side failures, 502 for a failed MaxMind download, 409 for a settings save based on an outdated `revision`.
 
 ---
 
@@ -512,17 +615,17 @@ The plugin works with several Strapi processes that share one database, for exam
 
 ### What is shared and how
 
-| State                                                                                              | How it stays consistent across processes                                                                                                                                                                                                                |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session validity (end, block, revoke, idle, expiry)                                                | Read from `magic_sessions` on every request. State changes are conditional updates (`UPDATE … WHERE isActive = …`), so a stale read on one process can never revive a terminated session or overwrite a `manual` / `blocked` reason set by another one. |
-| Failed-login lockout (`maxFailedLogins`)                                                           | One counter per client IP (stored as a SHA-256 hash) in `magic_sm_counters`, updated with a single atomic `UPDATE`. A lock or a successful sign-in applies on every process at once and survives restarts.                                              |
-| Content API rate limits                                                                            | Same shared counters, keyed by route template and caller. The configured limit is the limit for the whole cluster, not per process.                                                                                                                     |
-| Idle cleanup, retention                                                                            | A job lease in `magic_sm_leases`: every process keeps its timer, but only the process that takes the lease runs the job. Cleanup runs about once per `cleanupInterval`, retention once per day (first run about 5 minutes after a start).               |
-| Permission setup, session indexes, plugin-store writes (settings, GeoIP credentials, license data) | A cluster-wide critical section: `pg_advisory_xact_lock` on PostgreSQL, a lease row on SQLite and MySQL. Duplicate Core Store rows and duplicate Authenticated-role permissions left by older versions are removed automatically.                       |
-| Settings cache                                                                                     | Each save bumps a shared revision. Every process checks it at most every 2 seconds and reloads when it changed, so a new policy applies everywhere within about 2 seconds.                                                                              |
-| Concurrent settings saves                                                                          | The admin sends the revision it loaded. If another administrator saved in between, the save is refused with 409 and nothing is overwritten. API clients that send no `revision` keep the previous behaviour.                                            |
-| ipapi.co results and back-off                                                                      | Shared through `magic_sm_cache` (IP stored only as a hash), so one lookup or one HTTP 429 serves all processes.                                                                                                                                         |
-| `SESSION_ENCRYPTION_KEY`                                                                           | Each process compares an HMAC check value of its key (never the key) at start and logs an error when instances use different keys.                                                                                                                      |
+| State                                                                                | How it stays consistent across processes                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session validity (end, block, revoke, idle, expiry)                                  | Read from `magic_sessions` on every request. State changes are conditional updates (`UPDATE … WHERE isActive = …`), so a stale read on one process can never revive a terminated session or overwrite a `manual` / `blocked` reason set by another one. |
+| Failed-login lockout (`maxFailedLogins`)                                             | One counter per client IP (stored as a SHA-256 hash) in `magic_sm_counters`, updated with a single atomic `UPDATE`. A lock or a successful sign-in applies on every process at once and survives restarts.                                              |
+| Content API rate limits                                                              | Same shared counters, keyed by route template and caller. The configured limit is the limit for the whole cluster, not per process.                                                                                                                     |
+| Idle cleanup, retention                                                              | A job lease in `magic_sm_leases`: every process keeps its timer, but only the process that takes the lease runs the job. Cleanup runs about once per `cleanupInterval`, retention once per day (first run about 5 minutes after a start).               |
+| Permission setup, session indexes, plugin-store writes (settings, GeoIP credentials) | A cluster-wide critical section: `pg_advisory_xact_lock` on PostgreSQL, a lease row on SQLite and MySQL. Duplicate Core Store rows and duplicate Authenticated-role permissions left by older versions are removed automatically.                       |
+| Settings cache                                                                       | Each save bumps a shared revision. Every process checks it at most every 2 seconds and reloads when it changed, so a new policy applies everywhere within about 2 seconds.                                                                              |
+| Concurrent settings saves                                                            | The admin sends the revision it loaded. If another administrator saved in between, the save is refused with 409 and nothing is overwritten. API clients that send no `revision` keep the previous behaviour.                                            |
+| ipapi.co results and back-off                                                        | Shared through `magic_sm_cache` (IP stored only as a hash), so one lookup or one HTTP 429 serves all processes.                                                                                                                                         |
+| `SESSION_ENCRYPTION_KEY`                                                             | Each process compares an HMAC check value of its key (never the key) at start and logs an error when instances use different keys.                                                                                                                      |
 
 The three `magic_sm_*` tables are created at startup with portable statements (PostgreSQL, MySQL, SQLite 3.24+). The database user needs the `CREATE` privilege once. Strapi leaves tables it does not manage untouched.
 
@@ -658,6 +761,23 @@ Measured over HTTP on an isolated Strapi 5.61 host with one PostgreSQL 16 databa
 
 ---
 
+## Performance
+
+The plugin sits in the request path of every authenticated Content API call, so it keeps that path short:
+
+| Work                      | How it is kept cheap                                                                                                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Session check per request | One lookup by token hash. Startup creates the indexes `idx_magic_sessions_token_hash` and `idx_magic_sessions_refresh_hash` if they are missing.                                                 |
+| "Last active" updates     | At most one write per session per `lastSeenRateLimit` (30 seconds by default), as a conditional update.                                                                                          |
+| Settings                  | Cached for 30 seconds per process; a shared revision is checked at most every 2 seconds (one primary-key read).                                                                                  |
+| User lookups              | Resolving a user's `documentId` is cached for 5 minutes per process.                                                                                                                             |
+| ipapi.co lookups          | Results are cached for 24 hours (failures for 5 minutes) and shared across processes, with the IP stored only as a hash. A local MaxMind database avoids the network call entirely.              |
+| Admin lists               | The dashboard and Analytics load at most the latest 1,000 sessions and say so when more exist. `GET /my-sessions` returns at most 200.                                                           |
+| Idle cleanup              | Runs on one process per interval (job lease). In `legacy-support` mode, `cleanupUseDbDirect: true` ends idle sessions with a single SQL update instead of one Document Service call per session. |
+| Old history               | Retention deletes ended sessions older than `retentionDays` (90 by default) once a day, so the table does not grow without bound.                                                                |
+
+---
+
 ## Security and privacy
 
 - **Encryption key.** Stored tokens are encrypted with AES-256-GCM using `SESSION_ENCRYPTION_KEY`. In production, startup fails without it. Outside production a derived development key is used with a warning. Changing the key makes existing encrypted tokens unreadable, so keep it stable. Generate one in **Configuration › Sessions › Advanced** ("Copy for .env" copies `SESSION_ENCRYPTION_KEY="…"`; nothing is saved in Strapi) or with:
@@ -670,6 +790,8 @@ Measured over HTTP on an isolated Strapi 5.61 host with one PostgreSQL 16 databa
 - **Revocation.** Ended, expired and revoked sessions and blocked users are rejected on every Content API request, in both token check modes. Tokens of deleted records stay on a revocation list.
 - **Password reset.** A successful password reset ends every older session of the user in both JWT modes.
 - **Privacy.** Session records contain IP addresses, user agents and location data. With the `auto` or `ipapi` provider, IP addresses can be sent to ipapi.co; use `local-mmdb` or turn off IP location lookup to avoid that. The details dialog never looks up a location unless you click **Look up location**. Set **Keep ended sessions for** to match your retention policy, and use **Delete ended sessions** or **Delete record** to remove history.
+- **What leaves your server.** Only what you turn on: IP lookups at ipapi.co (provider `auto` without a local database, or `ipapi`), Discord or Slack webhooks (Team notifications), emails through your own Email provider (Security emails) and the MaxMind database download when you click **Update database** or run the updater. There is no telemetry, no install ping and no license check.
+- **Reporting a vulnerability.** Please do not post exploit details in a public issue. Open an issue that asks for a private contact, or use the email address on the maintainer's GitHub profile, and you will get a reply before anything is published.
 - **Secrets.** MaxMind license keys are never returned to the browser. Webhook URLs grant posting rights to your channel; treat them as secrets. Exports never contain tokens.
 - **Admin sessions** of Strapi administrators are out of scope.
 
@@ -688,6 +810,59 @@ Measured over HTTP on an isolated Strapi 5.61 host with one PostgreSQL 16 databa
 | Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                                                                                                                                                |
 
 The plugin stores sessions in the `magic_sessions` table and revocations in its own revoked-token table.
+
+---
+
+## FAQ
+
+**Does it manage Strapi admin accounts?**
+No. It manages end users of Users & Permissions (`plugin::users-permissions.user`). Strapi administrator sessions are out of scope.
+
+**Do I need a license key, account or activation?**
+No. Everything is free under MIT, and the plugin does not contact any license or telemetry server. The only key you may add is your own MaxMind key for the GeoLite2 database.
+
+**Do I have to add the `session-required` policy to my routes?**
+No. Revocation works on every Content API route without configuration. The policy is an optional, explicit per-route check.
+
+**Does it work with `jwtManagement: 'refresh'`?**
+Yes. Strapi issues, rotates and revokes its own sessions; the plugin adds device, IP address, location and history, and ends the native session when you end it in the admin.
+
+**Can I run it on Railway with several replicas, or with pm2 in cluster mode?**
+Yes, with PostgreSQL or MySQL shared by all processes. See [Running several instances](#running-several-instances-railway-replicas-pm2-cluster). No sticky sessions or Redis are needed.
+
+**Does it send my users' IP addresses anywhere?**
+Only if location lookup uses ipapi.co: provider `ipapi`, or `auto` without a local database. Choose `local-mmdb` with a MaxMind database, or `disabled`, to keep IP addresses on your server.
+
+**Why do my sign-ins get 429?**
+The temporary IP lockout counts failed sign-ins per IP address. Behind a proxy, turn on Koa's proxy mode or **Trust proxy headers**, otherwise all users share the proxy's address. See [Troubleshooting](#troubleshooting).
+
+**What happens to my data when I uninstall?**
+Session history lives in the content-type tables `magic_sessions` and `magic_session_revocations`, which Strapi's schema sync manages. The three coordination tables `magic_sm_counters`, `magic_sm_leases` and `magic_sm_cache` are not managed by Strapi and stay until you drop them.
+
+---
+
+## Migration and upgrading
+
+### To the next release (license removal, from 4.10.x)
+
+Nothing to do for most apps.
+
+1. The Settings › Session Manager › License page is gone; Settings shows **Configuration** and **Analytics**. Bookmarks to `/admin/settings/magic-sessionmanager/license` open an empty settings page, as any unknown settings route does in Strapi 5.61.
+2. The admin routes `GET /magic-sessionmanager/license/status` and `POST /magic-sessionmanager/license/{auto-create,create,ping,store-key}` are removed. Only the plugin's own License page called them. If you scripted them with an admin token, remove those calls.
+3. On first start the plugin deletes its stored `licenseKey`, `lastValidated` and `deviceId` values from the Core Store. Your MaxMind credentials and all settings stay.
+4. The environment variables `MAGIC_LICENSE_SERVER_URL` and `MAGIC_LICENSE_TIMEOUT_MS` are no longer read; you can delete them.
+5. `@strapi/utils` moved from `peerDependencies` to `dependencies`, and `@strapi/design-system`, `@strapi/icons` and `react-intl` are now optional peers. Package managers stop warning about them; no change in your `package.json` is needed.
+
+### From 4.8.x or older 4.x
+
+Upgrade to the latest 4.x directly. Notable changes on the way:
+
+- 4.9.0: `POST /magic-sessionmanager/user/:userId/toggle-block` should get `{ "blocked": true }` or `{ "blocked": false }`; a bodyless toggle still works but is deprecated. Settings reject out-of-range values with field errors instead of clamping them.
+- 4.10.0: three tables (`magic_sm_counters`, `magic_sm_leases`, `magic_sm_cache`) are created at startup; the database user needs the `CREATE` privilege once. Lockout counters start empty after the upgrade. `coordination: { enabled: false }` restores per-process state.
+
+### From 3.x (Strapi 4) to 4.x (Strapi 5)
+
+Version 4.0.0 moved to Strapi 5 and its Document Service API. Upgrade Strapi itself first with the [official Strapi 5 upgrade guide](https://docs.strapi.io/cms/migration/v4-to-v5/introduction-and-faq), then install the latest 4.x of this plugin, rebuild the admin (`npm run build`) and restart. Sessions are addressed by `documentId` in 4.x; clients that stored numeric session ids must switch to `documentId`.
 
 ---
 
@@ -712,14 +887,23 @@ Releases use Conventional Commits and semantic-release on Node.js 22 with npm Tr
 
 ---
 
+## Contributing
+
+Issues and pull requests are welcome.
+
+- Bugs and feature ideas: [open an issue](https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose) (templates included). Questions: [Discussions](https://github.com/Schero94/Magic-Sessionmanager/discussions).
+- Pull requests: branch from `main`, write a failing test first, and use Conventional Commits (`fix:`, `feat:`, `docs:`; a breaking change needs a `BREAKING CHANGE:` footer). Before you push, run `npm run lint`, `npm run format:check`, `npm test`, both type checks and `npm run build && npm run verify`.
+- Use synthetic data only in tests, screenshots and issues: `*.example.test` addresses and IP addresses from `203.0.113.0/24`. Never paste real tokens.
+
+---
+
 ## Maintenance status
 
-As of 2026-11-06:
+Actively maintained for the Strapi 5 line. Releases are cut by semantic-release from `main` using Conventional Commits and published to npm with npm Trusted Publishing (GitHub OIDC). Dependabot proposes weekly dependency updates; patch and minor updates are merged only after lint, tests, both type checks, build and `verify` pass.
 
-- **4.8.0 is not accepted.** It was released before its acceptance gates closed. Known defects in 4.8.0, fixed on the redesign branch: the Session details dialog had no accessible name; Settings field hints, including the GeoIP privacy note, did not render; three Settings alerts had unnamed close buttons and country chips could not be removed with the keyboard; in `legacy-support` mode a password reset left older sessions usable; a failed block followed by a retry of the bodyless toggle unblocked the user; the Content API rate limiter could be bypassed by varying the path. See [CHANGELOG.md](CHANGELOG.md).
-- **Accepted on the redesign branch:** clean install, 749 of 749 tests, both type checks, build, `verify` and `verify:runtime`, `npm pack --dry-run`; desktop and mobile browser passes for every screen on an isolated Strapi 5.61.0 host with synthetic data; the strict source symmetry contract (no `window.confirm`, emoji, colour literals, px font sizes or custom media queries).
-- **Still open before the next release:** full keyboard and screen-reader walks in five locales, dark-mode contrast, the complete state matrix, measured layout symmetry at every breakpoint, a fresh-database host boot, and a consent decision for the `auto` provider's ipapi.co default.
-- **Dependency advisories:** the recorded high-severity findings come through the Strapi 5 core dependency chain (`braces` GHSA-vfj7-8cjw-p6xm, Zod GHSA-mrhx-c7xc-m3w5 via `@strapi/utils` 5.61.0). No compatible fix exists; the forced npm fix downgrades to Strapi 4, so none was applied.
+Dependency advisories: the remaining high-severity findings come through the Strapi 5 core dependency chain (`braces` GHSA-vfj7-8cjw-p6xm, Zod GHSA-mrhx-c7xc-m3w5 via `@strapi/utils` 5.61.0). The plugin cannot fix them; the forced npm fix would downgrade to Strapi 4, so it is not applied.
+
+Version 4.8.0 was published before its acceptance gates closed and has known defects that 4.9.0 fixed (see the [CHANGELOG](CHANGELOG.md)). Use 4.9.0 or later.
 
 Report bugs at https://github.com/Schero94/Magic-Sessionmanager/issues.
 
@@ -734,5 +918,3 @@ The admin interface is available in English, German (formal "Sie"), French, Span
 ## License
 
 MIT License. Copyright © 2025 Schero D. See [LICENSE](./LICENSE).
-
-**License page.** Settings › Session Manager › License shows whether an optional license key is stored and valid. The key is used for install tracking and support context only; it does not unlock or restrict any feature.

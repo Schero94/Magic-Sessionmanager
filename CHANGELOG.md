@@ -1,3 +1,35 @@
+## [Unreleased]
+
+Release type: minor. `feat:` removes the license feature; `fix:` corrects the package metadata. No `BREAKING CHANGE` footer, see "Version decision" below.
+
+### Removed
+
+* **The License page and the license feature.** Settings › Session Manager now has two links, **Configuration** and **Analytics**. The License page, its settings link, the pass-through `LicenseGuard` wrapper and the 42 `license.*` messages in each of the five admin languages are gone.
+* **All calls to the license server** (`magicapi.fitlex.me`). The plugin makes no install, license or telemetry request of any kind. The only outbound requests are the ones you turn on: ipapi.co lookups, Discord or Slack webhooks, emails through your Email provider and the MaxMind database download.
+* **Admin routes** `GET /magic-sessionmanager/license/status` and `POST /magic-sessionmanager/license/auto-create`, `/license/create`, `/license/ping`, `/license/store-key`, with their controller and the `license-guard` service.
+* **Environment variables** `MAGIC_LICENSE_SERVER_URL` and `MAGIC_LICENSE_TIMEOUT_MS` (no longer read).
+
+### Changed
+
+* **Stored license data is deleted at startup.** The plugin store keys `licenseKey`, `lastValidated` and `deviceId` (a hash of the server's MAC addresses and host name) are removed with one `deleteMany` statement. It is idempotent and safe when several instances start at once; a failure is logged by error name and retried on the next start. MaxMind GeoIP credentials and all settings are kept.
+* **No install warnings from the plugin.** `@strapi/utils` (used by the server code) moved from `peerDependencies` to `dependencies`. `@strapi/design-system`, `@strapi/icons` and `react-intl`, which a Strapi app gets through `@strapi/strapi`, are optional peers (`peerDependenciesMeta`). `@strapi/plugin-users-permissions ^5.0.0` is now a declared peer, because sessions relate to its user type. `react` and `react-dom` peers are `^18.0.0`, as in the Strapi 5 app template.
+* **Package metadata:** plain description, `homepage` is the project site (https://schero94.github.io/Magic-Sessionmanager/), `repository.url` uses the `git+https` form that `npm pkg fix` expects, and the keywords describe what the plugin does.
+* **README and project site** rewritten: features, a one-minute quick start, examples, performance notes, FAQ and migration notes.
+
+### Fixed
+
+* A unit test for revocation expiry read the clock twice and failed when a second boundary passed in between.
+
+### Version decision
+
+Minor, not major. The removed routes were admin routes (admin JWT plus `plugin::magic-sessionmanager.access`) that only the plugin's own License page called, and that page ships in the same package and is removed with them. No feature was ever gated by a key, and the Content API, permissions, settings and session data are unchanged. Anyone who scripted the license routes with an admin token gets 404 or 405 now; see Migration.
+
+### Migration
+
+1. Nothing to do for most apps. Rebuild the admin (`npm run build`) after upgrading, as for every release.
+2. Remove scripts that call `/magic-sessionmanager/license/*`, and the variables `MAGIC_LICENSE_SERVER_URL` and `MAGIC_LICENSE_TIMEOUT_MS` if you set them.
+3. Bookmarks to `/admin/settings/magic-sessionmanager/license` open an empty settings page, as any unknown settings route does in Strapi 5.61; use Configuration or Analytics.
+
 # [4.10.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.9.1...v4.10.0) (2026-11-07)
 
 
@@ -12,11 +44,9 @@
 * **admin:** send the settings revision and explain a concurrent save ([ef4e08a](https://github.com/Schero94/Magic-Sessionmanager/commit/ef4e08a19ac853e37c0affda27c54d1024879ab1))
 * **server:** keep lockout, rate limits, jobs and settings consistent across instances ([976fa67](https://github.com/Schero94/Magic-Sessionmanager/commit/976fa67e5299fcb3d02f1852645fecd85bb4419c))
 
-## [Unreleased]
+### Release notes: multi-instance deployments (pm2 cluster, Railway replicas)
 
-Release type: minor (`feat` commits, no breaking change; API clients that send no settings `revision` behave as before).
-
-### Multi-instance deployments (pm2 cluster, Railway replicas)
+These notes were written as `[Unreleased]` on the branch and shipped in 4.10.0 (minor: `feat` commits, no breaking change; API clients that send no settings `revision` behave as before).
 
 Every hazard from the multi-instance audit (SM-MI-01 to SM-MI-14) is addressed for several Node processes sharing one database:
 
@@ -37,7 +67,7 @@ Every hazard from the multi-instance audit (SM-MI-01 to SM-MI-14) is addressed f
 * **Fix: a shortened cleanup interval could wait for the old job lease.** The idle-cleanup lease lasts one interval; a lease taken under the 30-minute default (for example by the process that ran before a restart) kept blocking the cleanup for up to 30 minutes after the interval was set to 5. A lease that ends more than 60 seconds later than a fresh one would may now be taken over. After a restart without a settings change the job keeps its schedule, so the first run on the new process can come up to one interval after the last run on the old one.
 * **Fix: parallel "log out other devices" calls could answer 500.** Two requests (on one or several instances) revoked the same native session; the one that lost the race treated "already revoked" as a failure. A native revoke that is not confirmed now succeeds when the session is no longer active, and still fails when it is.
 
-### Migration
+### Migration to 4.10.0
 
 * On start the plugin creates three tables: `magic_sm_counters`, `magic_sm_leases`, `magic_sm_cache`. The database user needs the `CREATE` privilege once. Strapi's schema sync does not touch these tables.
 * New optional config `coordination: { enabled, counterStore }`. `enabled: false` restores per-process state.
