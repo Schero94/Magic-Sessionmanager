@@ -1,3 +1,17 @@
+# [4.10.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.9.1...v4.10.0) (2026-11-07)
+
+
+### Bug Fixes
+
+* **server:** hold the lockout and rate limits exactly under parallel bursts ([7fd9a1a](https://github.com/Schero94/Magic-Sessionmanager/commit/7fd9a1aed8d3959027a46791ad6603489812f6eb))
+* **server:** let a shortened job interval take over an over-long lease ([618f564](https://github.com/Schero94/Magic-Sessionmanager/commit/618f5643ba83ea6a4ee175d65068dad089626d64))
+
+
+### Features
+
+* **admin:** send the settings revision and explain a concurrent save ([ef4e08a](https://github.com/Schero94/Magic-Sessionmanager/commit/ef4e08a19ac853e37c0affda27c54d1024879ab1))
+* **server:** keep lockout, rate limits, jobs and settings consistent across instances ([976fa67](https://github.com/Schero94/Magic-Sessionmanager/commit/976fa67e5299fcb3d02f1852645fecd85bb4419c))
+
 ## [Unreleased]
 
 Release type: minor (`feat` commits, no breaking change; API clients that send no settings `revision` behave as before).
