@@ -33,6 +33,7 @@
   "homepage.stats.ended": "Sessões encerradas",
   "homepage.stats.endedBreakdown": "{loggedOut, number} desconectadas · {timedOut, number} tempo esgotado · {other, number} outros motivos",
   "homepage.export.csv": "{count, plural, one {Exportar # sessão como CSV} other {Exportar # sessões como CSV}}",
+  "homepage.export.capped": "A exportação contém as {limit, number} sessões mais recentes. Restrinja o filtro para exportar o restante.",
   "homepage.export.json": "{count, plural, one {Exportar # sessão como JSON} other {Exportar # sessões como JSON}}",
   "homepage.export.label": "Exportar",
   "homepage.loading": "Carregando sessões",
@@ -200,8 +201,6 @@
   "notifications.success.recordDeleted": "Registro da sessão excluído. O token continua revogado.",
   "notifications.error.deleteRecord": "Não foi possível excluir o registro. Tente novamente.",
   "notifications.error.exportFailed": "Não foi possível criar a exportação.",
-  "homepage.export.csvTruncated": "{count, plural, one {Exportar # sessão como CSV} other {Exportar # sessões como CSV}} (apenas as {limit, number} sessões mais recentes)",
-  "homepage.export.jsonTruncated": "{count, plural, one {Exportar # sessão como JSON} other {Exportar # sessões como JSON}} (apenas as {limit, number} sessões mais recentes)",
   "homepage.export.disabledHint": "Nenhuma sessão corresponde ao filtro atual.",
   "homepage.links.analytics": "Análises",
   "homepage.links.settings": "Configurações",
@@ -210,7 +209,6 @@
   "homepage.filter.allReasons": "Todos os motivos",
   "homepage.lastUpdated": "Última atualização {time}",
   "common.tryAgain": "Tentar novamente",
-  "homepage.truncated.body": "Apenas as {limit, number} sessões mais recentes são carregadas. Contagens, filtros e exportações abrangem apenas essas sessões.",
   "homepage.stats.usersOnline": "{count, plural, one {# usuário online} other {# usuários online}}",
   "homepage.list.heading": "Lista de sessões",
   "homepage.caption": "{from, number}–{to, number} de {total, plural, one {# sessão} other {# sessões}}",
@@ -496,5 +494,6 @@
   "panel.sessions.openTitle": "Sessões abertas",
   "panel.sessions.more": "{count, plural, one {+# outra} other {+# outras}}",
   "panel.sessions.showAllLink": "Mostrar todas as sessões",
-  "panel.empty.noOpenSessions": "Nenhuma sessão aberta. {user} não está conectado em nenhum dispositivo."
+  "panel.empty.noOpenSessions": "Nenhuma sessão aberta. {user} não está conectado em nenhum dispositivo.",
+  "homepage.nativeOnly.body": "{count, plural, one {# sessão aberta do Strapi não tem} other {# sessões abertas do Strapi não têm}} detalhes de sessão deste plugin. Elas aparecem no painel de sessões de cada usuário, não nesta lista."
 }

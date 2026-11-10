@@ -127,11 +127,11 @@ test('dashboard action bar sits above the list it filters, labelled and responsi
   const source = readAdminFile('pages/HomePage.jsx');
   const search = readAdminFile('pages/Dashboard/SessionSearch.jsx');
 
-  // IA D1 order: header, truncation alert, "How sessions work", stat cards,
+  // IA D1 order: header, native-only notice, "How sessions work", stat cards,
   // then the action bar (search left; Status, End reason and Refresh right),
   // "Last updated", the caption and the list. Page size lives in the footer.
   const order = [
-    'homepage.truncated.body',
+    'homepage.nativeOnly.body',
     '<HowSessionsWork />',
     '<StatGrid',
     '{toolbar}',

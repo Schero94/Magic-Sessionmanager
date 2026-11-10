@@ -73,6 +73,8 @@ test('session endpoint dependency failures return sanitized errors', async () =>
       'getUserStatsAdmin',
       'getAllSessionsAdmin',
       'getActiveSessions',
+      'getSessionStatsAdmin',
+      'exportSessionsAdmin',
       'getOwnSessions',
       'getUserSessions',
       'logout',

@@ -22,18 +22,21 @@ test('dashboard hides statistics, rows and exports until the first load succeeds
   assert.match(dashboard, /const showSessionData = !loading && hasData/);
   assert.match(dashboard, /setHasData\(true\)/);
   // Export stays in the header but is disabled without loaded, matching rows.
-  assert.match(dashboard, /const canExport = showSessionData && filteredSessions\.length > 0/);
+  assert.match(
+    dashboard,
+    /const canExport = showSessionData && pageResult\.total > 0 && !exporting/
+  );
   assert.match(dashboard, /<SimpleMenu\b[\s\S]{0,200}?disabled=\{!canExport\}/);
   assert.match(
     dashboard,
     /\{showSessionData && \(\s*<Flex[^>]*>\s*<VisuallyHidden>[\s\S]*?<StatGrid\b/
   );
-  assert.match(dashboard, /\{showSessionData && sessions\.length > 0/);
-  assert.match(dashboard, /\{showSessionData && sessions\.length === 0/);
+  assert.match(dashboard, /\{showSessionData && stats\.total > 0/);
+  assert.match(dashboard, /\{showSessionData && stats\.total === 0/);
   // The error alert sits above the last data and offers Try again.
   assert.match(dashboard, /\{!loading && loadError \? \(\s*<Alert\b[\s\S]*?common\.tryAgain/);
   // Search and filters are only offered for loaded sessions.
-  assert.match(dashboard, /const showToolbar = showSessionData && sessions\.length > 0/);
+  assert.match(dashboard, /const showToolbar = showSessionData && stats\.total > 0/);
 });
 
 test('GeoIP error message is translated in all supported locales', () => {

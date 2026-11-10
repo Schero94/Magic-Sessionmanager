@@ -29,8 +29,24 @@ export const CSV_HEADERS = Object.freeze([
   'End Reason',
 ]);
 
-/** Quotes one CSV field and escapes embedded double quotes. */
-const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+/**
+ * Cells that spreadsheet apps would run as a formula (`=`, `+`, `-`, `@`,
+ * tab, carriage return) get a leading apostrophe (OWASP CSV injection).
+ */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+/**
+ * Quotes one CSV field, escapes embedded double quotes and neutralises
+ * formula-like text from user-controlled values (user agent, user name).
+ *
+ * @param {unknown} value Cell value.
+ * @returns {string} Quoted CSV cell.
+ */
+export const escapeCsvValue = (value) => {
+  const text = String(value ?? '');
+  const safe = typeof value === 'string' && FORMULA_START.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+};
 
 /**
  * Converts a timestamp to ISO 8601, or '' when it is missing or invalid.

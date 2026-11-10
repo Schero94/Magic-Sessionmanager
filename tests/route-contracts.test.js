@@ -41,6 +41,8 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
   const expected = [
     ['GET', '/sessions', 'session.getAllSessionsAdmin'],
     ['GET', '/sessions/active', 'session.getActiveSessions'],
+    ['GET', '/sessions/stats', 'session.getSessionStatsAdmin'],
+    ['GET', '/sessions/export', 'session.exportSessionsAdmin'],
     ['GET', '/user/:userId/sessions', 'session.getUserSessions'],
     ['POST', '/sessions/:sessionId/terminate', 'session.terminateSingleSession'],
     ['DELETE', '/sessions/:sessionId', 'session.deleteSession'],
@@ -140,6 +142,8 @@ test('admin session routes retain their paths, methods, handlers and Magic permi
   const expected = [
     ['GET', '/sessions', 'session.getAllSessionsAdmin'],
     ['GET', '/sessions/active', 'session.getActiveSessions'],
+    ['GET', '/sessions/stats', 'session.getSessionStatsAdmin'],
+    ['GET', '/sessions/export', 'session.exportSessionsAdmin'],
     ['GET', '/user/:userId/sessions', 'session.getUserSessions'],
     ['POST', '/sessions/:sessionId/terminate', 'session.terminateSingleSession'],
     ['DELETE', '/sessions/:sessionId', 'session.deleteSession'],
@@ -174,5 +178,31 @@ test('admin session routes retain their paths, methods, handlers and Magic permi
         config: { actions: ['plugin::magic-sessionmanager.access'] },
       },
     ]);
+  }
+});
+
+test('admin session list, statistics, export and user totals are read-rate-limited', () => {
+  const limited = [
+    '/sessions',
+    '/sessions/active',
+    '/sessions/stats',
+    '/sessions/export',
+    '/users/stats',
+  ];
+  for (const path of limited) {
+    const route = adminRoutes.find(
+      (candidate) => candidate.method === 'GET' && candidate.path === path
+    );
+    assert.ok(route, path);
+    assert.deepEqual(
+      route.config.middlewares,
+      [
+        {
+          name: 'plugin::magic-sessionmanager.rate-limit',
+          config: { profile: 'read', max: 120, window: 60_000 },
+        },
+      ],
+      `${path} uses the read rate limit`
+    );
   }
 });

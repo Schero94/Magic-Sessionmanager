@@ -44,3 +44,27 @@ export function computeWidgetStats(sessions) {
     sessionCount: rows.length,
   };
 }
+
+/**
+ * Maps the count-only `GET /sessions/stats` payload to the widget tiles.
+ * The server counts every session (no list is loaded), so the numbers are
+ * exact for any number of sessions.
+ *
+ * @param {unknown} payload Response body `{ data: { total, active, idle, usersOnline } }`.
+ * @returns {{onlineUsers: number, activeSessions: number, idleSessions: number, sessionCount: number}}
+ * @throws {Error} When the payload is not a stats object.
+ */
+export function widgetStatsFromCounts(payload) {
+  const data = /** @type {any} */ (payload)?.data;
+  const read = (value) => (Number.isFinite(value) && value >= 0 ? Math.floor(value) : NaN);
+  const stats = {
+    onlineUsers: read(data?.usersOnline),
+    activeSessions: read(data?.active),
+    idleSessions: read(data?.idle),
+    sessionCount: read(data?.total),
+  };
+  if (Object.values(stats).some((value) => Number.isNaN(value))) {
+    throw new Error('Invalid session statistics response');
+  }
+  return stats;
+}

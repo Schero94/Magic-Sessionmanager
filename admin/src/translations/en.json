@@ -33,6 +33,7 @@
   "homepage.stats.ended": "Ended sessions",
   "homepage.stats.endedBreakdown": "{loggedOut, number} logged out · {timedOut, number} timed out · {other, number} other reasons",
   "homepage.export.csv": "{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}}",
+  "homepage.export.capped": "The export contains the newest {limit, number} sessions. Narrow the filter to export the rest.",
   "homepage.export.json": "{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}}",
   "homepage.export.label": "Export",
   "homepage.loading": "Loading sessions",
@@ -200,8 +201,6 @@
   "notifications.success.recordDeleted": "Session record deleted. Its token stays revoked.",
   "notifications.error.deleteRecord": "The record could not be deleted. Please try again.",
   "notifications.error.exportFailed": "The export could not be created.",
-  "homepage.export.csvTruncated": "{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}} (latest {limit, number} sessions only)",
-  "homepage.export.jsonTruncated": "{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}} (latest {limit, number} sessions only)",
   "homepage.export.disabledHint": "No sessions match the current filter.",
   "homepage.links.analytics": "Analytics",
   "homepage.links.settings": "Settings",
@@ -210,7 +209,6 @@
   "homepage.filter.allReasons": "All reasons",
   "homepage.lastUpdated": "Last updated {time}",
   "common.tryAgain": "Try again",
-  "homepage.truncated.body": "Only the latest {limit, number} sessions are loaded. Counts, filters and exports cover these sessions only.",
   "homepage.stats.usersOnline": "{count, plural, one {# user online} other {# users online}}",
   "homepage.list.heading": "Session list",
   "homepage.caption": "{from, number}–{to, number} of {total, plural, one {# session} other {# sessions}}",
@@ -496,5 +494,6 @@
   "panel.sessions.openTitle": "Open sessions",
   "panel.sessions.more": "{count, plural, other {+# more}}",
   "panel.sessions.showAllLink": "Show all sessions",
-  "panel.empty.noOpenSessions": "No open sessions. {user} is not signed in on any device."
+  "panel.empty.noOpenSessions": "No open sessions. {user} is not signed in on any device.",
+  "homepage.nativeOnly.body": "{count, plural, one {# open Strapi session has} other {# open Strapi sessions have}} no session details from this plugin. They are listed on each user’s session panel, not in this list."
 }

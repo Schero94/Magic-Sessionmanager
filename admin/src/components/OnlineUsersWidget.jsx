@@ -8,9 +8,8 @@ import { useFetchClient } from '@strapi/strapi/admin';
 import ReadableText from './ReadableText';
 import { MissingValue } from './ui';
 import { getTranslation } from '../utils/getTranslation';
-import { requireSessionList } from '../utils/adminResponse.mjs';
 import { normalizeUserCounts } from '../utils/onlineStats.mjs';
-import { computeWidgetStats } from '../utils/widgetStats.mjs';
+import { widgetStatsFromCounts } from '../utils/widgetStats.mjs';
 import { isCancelledRequest, logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
 const REFRESH_INTERVAL_MS = 30000;
@@ -225,7 +224,8 @@ const OnlineUsersWidget = () => {
   const requestInProgress = useRef(false);
 
   /**
-   * Loads the sessions and the count-only user totals in parallel. A failed
+   * Loads the count-only session statistics and user totals in parallel
+   * (two aggregate requests; no session rows are loaded). A failed
    * refresh keeps the last values; a failed first session load shows the
    * error state. When only the user totals fail, the session tiles still show.
    *
@@ -242,11 +242,11 @@ const OnlineUsersWidget = () => {
 
       try {
         const [sessionResult, countResult] = await Promise.allSettled([
-          get('/magic-sessionmanager/sessions'),
+          get('/magic-sessionmanager/sessions/stats'),
           get('/magic-sessionmanager/users/stats'),
         ]);
         if (sessionResult.status === 'rejected') throw sessionResult.reason;
-        setStats(computeWidgetStats(requireSessionList(sessionResult.value?.data)));
+        setStats(widgetStatsFromCounts(sessionResult.value?.data));
         setLoadError(false);
 
         const counts =
