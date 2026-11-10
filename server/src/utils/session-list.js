@@ -322,6 +322,172 @@ async function getSessionStats(strapi, { inactivityTimeout }) {
   return value;
 }
 
+/** How long one process reuses the Analytics aggregates. */
+const ANALYTICS_CACHE_MS = 30000;
+
+/** Distinct device/browser values returned at most (largest groups first). */
+const MAX_GROUPS = 200;
+
+/**
+ * Counts sessions per stored value of one column (GROUP BY, largest first).
+ *
+ * @param {object} strapi
+ * @param {string} attribute Session attribute name (whitelisted by callers).
+ * @returns {Promise<Array<{value: string|null, count: number}>>}
+ */
+async function countByColumn(strapi, attribute) {
+  const meta = strapi.db.metadata.get(SESSION_UID);
+  const column = meta.attributes[attribute]?.columnName || attribute;
+  const rows = await strapi.db
+    .connection(meta.tableName)
+    .select({ value: column })
+    .count({ count: '*' })
+    .groupBy(column)
+    .orderBy('count', 'desc')
+    .limit(MAX_GROUPS);
+  return rows.map((row) => ({ value: row.value ?? null, count: Number(row.count) || 0 }));
+}
+
+/**
+ * Average session length in whole minutes, as the Analytics page defined it:
+ * login to last activity for open sessions, login to logout (or last
+ * activity) for ended ones; rows without an end are left out. PostgreSQL and
+ * MySQL compute it in SQL; other databases read the four time columns in
+ * keyset batches.
+ *
+ * @param {object} strapi
+ * @param {Date} now
+ * @returns {Promise<number>}
+ */
+async function averageSessionMinutes(strapi, now) {
+  const meta = strapi.db.metadata.get(SESSION_UID);
+  const col = (attribute) => meta.attributes[attribute]?.columnName || attribute;
+  const knex = strapi.db.connection;
+  const client = strapi.db.dialect?.client || '';
+  const end = `CASE WHEN ?? THEN COALESCE(??, ?) ELSE COALESCE(??, ??) END`;
+  const endBindings = [
+    col('isActive'),
+    col('lastActive'),
+    now,
+    col('logoutTime'),
+    col('lastActive'),
+  ];
+
+  if (client === 'postgres') {
+    const row = await knex(meta.tableName)
+      .select(
+        knex.raw(`AVG(GREATEST(0, FLOOR(EXTRACT(EPOCH FROM ((${end}) - ??)) / 60))) AS avg`, [
+          ...endBindings,
+          col('loginTime'),
+        ])
+      )
+      .first();
+    return Math.floor(Number(row?.avg) || 0);
+  }
+  if (client === 'mysql' || client === 'mysql2') {
+    const row = await knex(meta.tableName)
+      .select(
+        knex.raw(`AVG(GREATEST(0, FLOOR(TIMESTAMPDIFF(SECOND, ??, (${end})) / 60))) AS avg`, [
+          col('loginTime'),
+          ...endBindings,
+        ])
+      )
+      .first();
+    return Math.floor(Number(row?.avg) || 0);
+  }
+
+  let sum = 0;
+  let count = 0;
+  let lastId = 0;
+  const nowMs = now.getTime();
+  for (;;) {
+    const rows = await strapi.db.query(SESSION_UID).findMany({
+      select: ['id', 'loginTime', 'lastActive', 'logoutTime', 'isActive'],
+      where: { id: { $gt: lastId } },
+      orderBy: [{ id: 'asc' }],
+      limit: 5000,
+    });
+    for (const row of rows) {
+      const start = Date.parse(row.loginTime);
+      if (!Number.isFinite(start)) continue;
+      const lastActive = row.lastActive ? Date.parse(row.lastActive) : Number.NaN;
+      const logout = row.logoutTime ? Date.parse(row.logoutTime) : Number.NaN;
+      let stop;
+      if (row.isActive) stop = Number.isFinite(lastActive) ? lastActive : nowMs;
+      else stop = Number.isFinite(logout) ? logout : lastActive;
+      if (!Number.isFinite(stop)) continue;
+      sum += Math.max(0, Math.floor((stop - start) / 60000));
+      count += 1;
+    }
+    if (rows.length < 5000) break;
+    lastId = rows[rows.length - 1].id;
+  }
+  return count > 0 ? Math.floor(sum / count) : 0;
+}
+
+/**
+ * Counts distinct users that have any session.
+ *
+ * @param {object} strapi
+ * @returns {Promise<number>}
+ */
+async function countUsersWithSessions(strapi) {
+  const meta = strapi.db.metadata.get(SESSION_UID);
+  const joinTable = meta.attributes.user?.joinTable;
+  if (!joinTable?.name || !joinTable.inverseJoinColumn?.name) return 0;
+  const row = await strapi.db
+    .connection(joinTable.name)
+    .countDistinct({ count: joinTable.inverseJoinColumn.name })
+    .first();
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * Aggregates for the Analytics page over every session (no row cap):
+ * counts, sign-ins in the last 24 hours and 7 days, sessions per stored
+ * device type and browser value, distinct users and the average length.
+ * Cached per process for 30 seconds.
+ *
+ * @param {object} strapi
+ * @param {{inactivityTimeout: number}} options
+ * @returns {Promise<object>} Counts and grouped counts only.
+ */
+async function getSessionAnalytics(strapi, { inactivityTimeout }) {
+  const key = `analytics:${inactivityTimeout}`;
+  const cache = cacheFor(strapi);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const now = new Date();
+  const sessions = strapi.db.query(SESSION_UID);
+  const since = (ms) => sessions.count({ where: { loginTime: { $gt: new Date(now - ms) } } });
+  const [stats, signIns24h, signIns7d, devices, browsers, uniqueUsers, avgSessionDuration] =
+    await Promise.all([
+      getSessionStats(strapi, { inactivityTimeout }),
+      since(24 * 60 * 60 * 1000),
+      since(7 * 24 * 60 * 60 * 1000),
+      countByColumn(strapi, 'deviceType'),
+      countByColumn(strapi, 'browserName'),
+      countUsersWithSessions(strapi),
+      averageSessionMinutes(strapi, now),
+    ]);
+
+  const value = {
+    totalSessions: stats.total,
+    activeSessions: stats.active,
+    idleSessions: stats.idle,
+    endedSessions: stats.ended,
+    signInsLast24Hours: Number(signIns24h),
+    signInsLast7Days: Number(signIns7d),
+    devices,
+    browsers,
+    uniqueUsers,
+    avgSessionDuration,
+  };
+  cache.set(key, { value, expiresAt: Date.now() + ANALYTICS_CACHE_MS });
+  return value;
+}
+
 /**
  * Reads one export batch, newest first, with a keyset cursor (no OFFSET).
  * Geolocation is not looked up; stored values are exported as they are.
@@ -362,8 +528,10 @@ async function exportSessionBatch(strapi, query, cursor, { inactivityTimeout }) 
 
 module.exports = {
   STATS_CACHE_MS,
+  ANALYTICS_CACHE_MS,
   listSessionPage,
   getSessionStats,
+  getSessionAnalytics,
   exportSessionBatch,
   countUsersOnline,
   countNativeOnlySessions,

@@ -99,6 +99,16 @@ const baseRoutes = [
   },
   {
     method: 'GET',
+    path: '/sessions/analytics',
+    handler: 'session.getSessionAnalyticsAdmin',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+      description: 'Get count-only analytics over all sessions (admin)',
+    },
+  },
+  {
+    method: 'GET',
     path: '/sessions/export',
     handler: 'session.exportSessionsAdmin',
     config: {

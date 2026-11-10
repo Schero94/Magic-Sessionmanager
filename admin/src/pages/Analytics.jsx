@@ -16,11 +16,10 @@ import { EmptyDocuments } from '@strapi/icons/symbols';
 import pluginId from '../pluginId';
 import {
   ANALYTICS_UNKNOWN_KEY,
-  computeSessionAnalytics,
+  analyticsFromServer,
   getAnalyticsBarRows,
 } from '../utils/sessionAnalytics.mjs';
 import { getDeviceTypeMessage } from '../utils/devicePresentation.mjs';
-import { requireSessionList } from '../utils/adminResponse.mjs';
 import { useSessionFormatters } from '../utils/useSessionFormatters';
 import { PageShell, SectionCard, StatGrid, StatCard, EqualGrid } from '../components/ui';
 import Alert from '../components/PersistentAlert';
@@ -157,14 +156,14 @@ const AnalyticsPage = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analytics, setAnalytics] = useState(null);
-  const [truncated, setTruncated] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const requestPendingRef = useRef(false);
 
   /**
-   * Loads the session collection and derives analytics locally. Only the first
+   * Loads the aggregates over every session (computed on the server, no row
+   * cap). Only the first
    * load shows the page loader; a refresh keeps the page, its focus and scroll
    * position mounted. A failed refresh keeps the last data and shows the error
    * above it. Failures are logged without response data. `get` is stable, so
@@ -176,10 +175,8 @@ const AnalyticsPage = () => {
     if (requestPendingRef.current) return;
     requestPendingRef.current = true;
     try {
-      const { data } = await get(`/${pluginId}/sessions`);
-      const sessions = requireSessionList(data);
-      setAnalytics(computeSessionAnalytics(sessions));
-      setTruncated(data?.meta?.truncated === true);
+      const { data } = await get(`/${pluginId}/sessions/analytics`);
+      setAnalytics(analyticsFromServer(data));
       setUpdatedAt(Date.now());
       setLoadError(false);
     } catch (err) {
@@ -227,7 +224,7 @@ const AnalyticsPage = () => {
     <Typography variant="epsilon" textColor="neutral600" tag="p">
       {t(
         'analytics.subtitle',
-        '{count, plural, =0 {No sessions are loaded yet.} one {Based on the latest # loaded session.} other {Based on the latest # loaded sessions.}}',
+        '{count, plural, =0 {No sessions yet.} one {Based on all # session.} other {Based on all # sessions.}}',
         { count: totalSessions }
       )}
       {updatedAt ? (
@@ -307,18 +304,6 @@ const AnalyticsPage = () => {
       primaryAction={headerActions}
     >
       {errorAlert}
-
-      {truncated ? (
-        <Alert variant="default" closeLabel={t('common.close', 'Close')}>
-          <ReadableText variant="omega" textColor="neutral800" tag="span">
-            {t(
-              'analytics.truncated',
-              'Only the latest {count, number} sessions are loaded. Counts, filters and exports cover these sessions only.',
-              { count: totalSessions }
-            )}
-          </ReadableText>
-        </Alert>
-      ) : null}
 
       {hasSessions ? (
         <>

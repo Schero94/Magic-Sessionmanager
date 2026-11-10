@@ -71,10 +71,7 @@ test('German analytics copy uses the formal Sie', () => {
 });
 
 test('German copy uses the IA wording for shared sentences (IA D1, D6, D7)', () => {
-  assert.equal(
-    catalogs.de['analytics.truncated'],
-    'Es werden nur die neuesten {count, number} Sitzungen geladen. Zahlen, Filter und Exporte beziehen sich nur auf diese Sitzungen.'
-  );
+  assert.equal(catalogs.de['analytics.truncated'], undefined, 'no 1000-row cap any more');
   assert.equal(catalogs.de['analytics.title'], 'Auswertung');
   for (const id of messages.keys()) {
     const value = catalogs.de[id];

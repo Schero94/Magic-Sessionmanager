@@ -42,6 +42,7 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['GET', '/sessions', 'session.getAllSessionsAdmin'],
     ['GET', '/sessions/active', 'session.getActiveSessions'],
     ['GET', '/sessions/stats', 'session.getSessionStatsAdmin'],
+    ['GET', '/sessions/analytics', 'session.getSessionAnalyticsAdmin'],
     ['GET', '/sessions/export', 'session.exportSessionsAdmin'],
     ['GET', '/user/:userId/sessions', 'session.getUserSessions'],
     ['POST', '/sessions/:sessionId/terminate', 'session.terminateSingleSession'],
@@ -143,6 +144,7 @@ test('admin session routes retain their paths, methods, handlers and Magic permi
     ['GET', '/sessions', 'session.getAllSessionsAdmin'],
     ['GET', '/sessions/active', 'session.getActiveSessions'],
     ['GET', '/sessions/stats', 'session.getSessionStatsAdmin'],
+    ['GET', '/sessions/analytics', 'session.getSessionAnalyticsAdmin'],
     ['GET', '/sessions/export', 'session.exportSessionsAdmin'],
     ['GET', '/user/:userId/sessions', 'session.getUserSessions'],
     ['POST', '/sessions/:sessionId/terminate', 'session.terminateSingleSession'],
@@ -186,6 +188,7 @@ test('admin session list, statistics, export and user totals are read-rate-limit
     '/sessions',
     '/sessions/active',
     '/sessions/stats',
+    '/sessions/analytics',
     '/sessions/export',
     '/users/stats',
   ];

@@ -123,7 +123,7 @@ test('no hour-of-day timeline: hidden analytics stay deferred (I.1-26, decision 
 test('header: subtitle names the loaded sessions, Refresh keeps the page mounted, link back to the sessions (IA D6)', () => {
   assert.match(
     code,
-    /'analytics\.subtitle',\s*'\{count, plural,[^']*Based on the latest # loaded sessions\.\}\}'/
+    /'analytics\.subtitle',\s*'\{count, plural,[^']*Based on all # sessions\.\}\}'/
   );
   assert.match(code, /<LinkButton\b[^>]*tag=\{NavLink\}[^>]*to=\{SESSION_MANAGER_PATH\}/);
   assert.match(code, /analytics\.openSessionManager/);
@@ -141,14 +141,10 @@ test('header: subtitle names the loaded sessions, Refresh keeps the page mounted
   assert.match(code, /const handleRefresh = \(\) => \{[\s\S]*?setRefreshing\(true\);/);
 });
 
-test('truncation alert appears only when the API reports meta.truncated (IA D1, D6)', () => {
-  assert.match(code, /data\?\.meta\?\.truncated === true/);
-  const alert = code.match(/\{truncated \? \([\s\S]*?\) : null\}/)?.[0] || '';
-  assert.match(alert, /analytics\.truncated/);
-  assert.match(
-    alert,
-    /Only the latest \{count, number\} sessions are loaded\. Counts, filters and exports cover these sessions only\./
-  );
+test('analytics come from server aggregates over every session, without a row cap (IA D1, D6)', () => {
+  assert.match(code, /get\(`\/\$\{pluginId\}\/sessions\/analytics`\)/);
+  assert.match(code, /setAnalytics\(analyticsFromServer\(data\)\)/);
+  assert.doesNotMatch(code, /computeSessionAnalytics\(|analytics\.truncated|meta\?\.truncated/);
 });
 
 test('loading, empty, error and no-permission states follow IA G', () => {

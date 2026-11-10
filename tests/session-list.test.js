@@ -377,3 +377,101 @@ test('export batches use a keyset cursor (no OFFSET) and stop when a batch is sh
   );
   assert.equal(short.nextCursor, null);
 });
+
+test('analytics aggregate every session; SQLite averages the session length in keyset batches', async () => {
+  clearSessionStatsCache();
+  const { getSessionAnalytics } = require('../server/src/utils/session-list');
+  const now = Date.now();
+  const timeRows = [
+    {
+      id: 1,
+      isActive: false,
+      loginTime: new Date(now - 60 * 60_000),
+      logoutTime: new Date(now - 30 * 60_000),
+    },
+    {
+      id: 2,
+      isActive: true,
+      loginTime: new Date(now - 20 * 60_000),
+      lastActive: new Date(now - 10 * 60_000),
+    },
+    { id: 3, isActive: false, loginTime: new Date(now - 5 * 60_000) },
+  ];
+  const findManyCalls = [];
+  const grouped = {
+    device_type: [
+      { value: 'desktop', count: '2' },
+      { value: null, count: '1' },
+    ],
+    browser_name: [{ value: 'Chrome 120', count: '3' }],
+  };
+  const knex = (table) => {
+    const builder = {
+      _column: null,
+      select(spec) {
+        builder._column = spec.value;
+        return builder;
+      },
+      count: () => builder,
+      groupBy: () => builder,
+      orderBy: () => builder,
+      limit: async () => grouped[builder._column] || [],
+      countDistinct: () => builder,
+      first: async () => ({ count: table === 'magic_sessions_user_lnk' ? '2' : '0' }),
+      join: () => builder,
+      where: () => builder,
+      andWhere: () => builder,
+    };
+    return builder;
+  };
+  const strapi = {
+    config: { get: (_key, fallback) => fallback },
+    contentTypes: {},
+    db: {
+      dialect: { client: 'sqlite' },
+      connection: knex,
+      metadata: {
+        get: () => ({
+          tableName: 'magic_sessions',
+          attributes: {
+            deviceType: { columnName: 'device_type' },
+            browserName: { columnName: 'browser_name' },
+            user: {
+              joinTable: {
+                name: 'magic_sessions_user_lnk',
+                joinColumn: { name: 'session_id' },
+                inverseJoinColumn: { name: 'user_id' },
+              },
+            },
+          },
+        }),
+      },
+      query: () => ({
+        count: async () => 3,
+        findMany: async (args) => {
+          findManyCalls.push(args);
+          return timeRows.filter((row) => row.id > args.where.id.$gt);
+        },
+      }),
+    },
+  };
+
+  const analytics = await getSessionAnalytics(strapi, { inactivityTimeout: 15 * 60_000 });
+  assert.equal(analytics.totalSessions, 3);
+  assert.equal(analytics.uniqueUsers, 2);
+  assert.deepEqual(analytics.devices, [
+    { value: 'desktop', count: 2 },
+    { value: null, count: 1 },
+  ]);
+  // (30 + 10) / 2 rows with an end; the third row has neither logout nor lastActive.
+  assert.equal(analytics.avgSessionDuration, 20);
+  assert.deepEqual(findManyCalls[0].select, [
+    'id',
+    'loginTime',
+    'lastActive',
+    'logoutTime',
+    'isActive',
+  ]);
+  assert.deepEqual(findManyCalls[0].orderBy, [{ id: 'asc' }]);
+  assert.equal(findManyCalls[0].limit, 5000);
+});

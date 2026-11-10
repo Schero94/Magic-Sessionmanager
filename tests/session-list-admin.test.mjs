@@ -74,3 +74,42 @@ test('CSV cells that start like a formula are neutralised (CSV injection)', () =
   assert.equal(escapeCsvValue(-5), '"-5"', 'numbers are data, not formulas');
   assert.equal(escapeCsvValue(null), '""');
 });
+
+test('analytics from the server merge raw device and browser groups into the display buckets', async () => {
+  const { analyticsFromServer } = await import('../admin/src/utils/sessionAnalytics.mjs');
+  const result = analyticsFromServer({
+    data: {
+      totalSessions: 60_000,
+      activeSessions: 10,
+      idleSessions: 5,
+      endedSessions: 59_985,
+      signInsLast24Hours: 3,
+      signInsLast7Days: 9,
+      uniqueUsers: 12_000,
+      avgSessionDuration: 42,
+      devices: [
+        { value: 'desktop', count: 40_000 },
+        { value: 'Mobile', count: 15_000 },
+        { value: null, count: 5_000 },
+      ],
+      browsers: [
+        { value: 'Chrome 120', count: 30_000 },
+        { value: 'Chrome 121', count: 10_000 },
+        { value: 'Safari 17', count: 15_000 },
+        { value: null, count: 5_000 },
+      ],
+    },
+  });
+  assert.equal(result.totalSessions, 60_000);
+  assert.equal(result.browsers.Chrome, 40_000, 'versions merge into one browser bucket');
+  assert.equal(result.browsers.unknown, 5_000);
+  assert.equal(result.devices.unknown, 5_000);
+  assert.equal(
+    Object.values(result.devices).reduce((sum, value) => sum + value, 0),
+    60_000
+  );
+  assert.throws(
+    () => analyticsFromServer({ data: { totalSessions: '1' } }),
+    /Invalid session analytics/
+  );
+});

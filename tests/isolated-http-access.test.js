@@ -261,7 +261,7 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 18);
+        assert.equal(routes.length, 19);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)

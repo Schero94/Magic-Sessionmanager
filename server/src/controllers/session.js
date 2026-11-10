@@ -402,6 +402,30 @@ module.exports = {
   },
 
   /**
+   * Aggregates for the Analytics page over every session: counts, grouped
+   * counts per device type and browser, distinct users, average length. No
+   * rows and no personal data.
+   *
+   * @route GET /magic-sessionmanager/sessions/analytics
+   * @param {object} ctx Koa context
+   * @returns {Promise<void>}
+   */
+  async getSessionAnalyticsAdmin(ctx) {
+    const parsed = parseQuery(statsQuerySchema, ctx.query);
+    if (!parsed.ok) return ctx.badRequest('Invalid query', { errors: parsed.errors });
+    try {
+      const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+      return ctx.send({ data: await sessionService.getSessionAnalytics() });
+    } catch (err) {
+      strapi.log.error(
+        '[magic-sessionmanager] getSessionAnalyticsAdmin failed:',
+        err?.name || 'Error'
+      );
+      return ctx.internalServerError('Unable to load session analytics');
+    }
+  },
+
+  /**
    * One batch of the session export (newest first, keyset cursor). The admin
    * client follows `meta.nextCursor` until it is null or its row limit is
    * reached.

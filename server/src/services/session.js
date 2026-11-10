@@ -13,6 +13,7 @@ const {
 const { getNativeSessionManager } = require('../utils/native-session-manager');
 const {
   exportSessionBatch,
+  getSessionAnalytics: getSessionAnalyticsFromDb,
   getSessionStats: getSessionStatsFromDb,
   listSessionPage,
 } = require('../utils/session-list');
@@ -992,6 +993,17 @@ module.exports = ({ strapi }) => {
     async getSessionStats() {
       const { inactivityTimeout } = await getEnhanceOpts();
       return getSessionStatsFromDb(strapi, { inactivityTimeout });
+    },
+
+    /**
+     * Aggregates for the Analytics page over every session (cached 30 s
+     * per process).
+     *
+     * @returns {Promise<object>}
+     */
+    async getSessionAnalytics() {
+      const { inactivityTimeout } = await getEnhanceOpts();
+      return getSessionAnalyticsFromDb(strapi, { inactivityTimeout });
     },
 
     /**

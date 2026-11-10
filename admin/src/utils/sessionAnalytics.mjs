@@ -206,3 +206,64 @@ export function computeSessionAnalytics(sessions = [], { now = Date.now() } = {}
         : 0,
   };
 }
+
+/**
+ * Merges server-side grouped counts (`[{ value, count }]`) into display
+ * buckets, using the same bucketing as the per-session functions.
+ *
+ * @param {Array<{value: string|null, count: number}>} groups Raw groups.
+ * @param {(value: string|null) => string} bucket Bucket of one raw value.
+ * @returns {Record<string, number>}
+ */
+function mergeGroups(groups, bucket) {
+  const out = {};
+  for (const group of Array.isArray(groups) ? groups : []) {
+    const count = Number(group?.count);
+    if (!Number.isInteger(count) || count <= 0) continue;
+    const key = bucket(group?.value ?? null);
+    out[key] = (out[key] || 0) + count;
+  }
+  return out;
+}
+
+/**
+ * Reads the `GET /sessions/analytics` payload (aggregates over every
+ * session, computed on the server) into the shape the Analytics page uses.
+ *
+ * @param {unknown} payload `{ data: { totalSessions, ..., devices: [{value, count}], browsers: [...] } }`
+ * @returns {ReturnType<typeof computeSessionAnalytics>}
+ * @throws {Error} When a count is missing or not a non-negative integer.
+ */
+export function analyticsFromServer(payload) {
+  const data = /** @type {any} */ (payload)?.data;
+  const counts = [
+    'totalSessions',
+    'activeSessions',
+    'idleSessions',
+    'endedSessions',
+    'signInsLast24Hours',
+    'signInsLast7Days',
+    'uniqueUsers',
+    'avgSessionDuration',
+  ];
+  for (const key of counts) {
+    if (!Number.isInteger(data?.[key]) || data[key] < 0) {
+      throw new Error('Invalid session analytics response');
+    }
+  }
+  if (!Array.isArray(data.devices) || !Array.isArray(data.browsers)) {
+    throw new Error('Invalid session analytics response');
+  }
+  return {
+    totalSessions: data.totalSessions,
+    activeSessions: data.activeSessions,
+    idleSessions: data.idleSessions,
+    endedSessions: data.endedSessions,
+    signInsLast24Hours: data.signInsLast24Hours,
+    signInsLast7Days: data.signInsLast7Days,
+    devices: mergeGroups(data.devices, (value) => getDeviceBucket({ deviceType: value })),
+    browsers: mergeGroups(data.browsers, (value) => getBrowserBucket({ browserName: value })),
+    uniqueUsers: data.uniqueUsers,
+    avgSessionDuration: data.avgSessionDuration,
+  };
+}
