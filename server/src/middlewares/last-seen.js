@@ -73,6 +73,14 @@ module.exports = ({ strapi, sessionService }) => {
       return;
     }
 
+    // Strapi admins (admin JWT or admin API token) have no end-user session.
+    // Plugin admin routes are not under /admin/, so skip them by the auth
+    // strategy instead of running a session lookup that cannot match.
+    const strategyName = ctx.state.auth?.strategy?.name;
+    if (strategyName === 'admin' || strategyName === 'admin-token') {
+      return;
+    }
+
     let userDocId = ctx.state.user.documentId;
     if (!userDocId && ctx.state.user.id) {
       try {
