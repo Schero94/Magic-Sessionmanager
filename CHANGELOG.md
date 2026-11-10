@@ -27,9 +27,12 @@ Measured on PostgreSQL 16 with 50,000 sessions over 10,000 users (Strapi 5.61, s
 
 | Request | 4.11.0 | This release |
 | --- | --- | --- |
-| Dashboard (`legacy-support` mode) | 30 ms, 1,000 rows (730 KB), counts capped at 1,000 | 10 ms for a page of 25 (18 KB), exact totals |
-| Dashboard (`refresh` mode) | 892 ms, 10,319 queries | 15 ms page plus counts, 19 queries |
-| Widget (`refresh` mode) | 814 ms, 10,328 queries | 11 ms, 16 queries, counts only |
+| Dashboard (`legacy-support` mode) | 30 ms, 1,000 rows (730 KB), counts capped at 1,000 | 7 ms for a page of 25 (18 KB); 12 ms page plus exact counts |
+| Dashboard (`refresh` mode) | 892 ms, 10,319 queries | 16 ms page plus counts, 13 queries |
+| Widget (`refresh` mode) | 814 ms, 10,328 queries | 10 ms, 10 queries, counts only |
+| Analytics | latest 1,000 sessions only | every session; 5 ms when cached (30 s) |
+
+Most remaining queries per request are Strapi's admin authentication, permission check and the rate limiter; the plugin's own list work is a COUNT, the page and one user lookup. Admin requests no longer run the end-user "last seen" lookup (three queries each).
 
 ### Migration
 
