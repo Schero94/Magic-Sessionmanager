@@ -1,3 +1,10 @@
+# [4.12.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.11.0...v4.12.0) (2026-11-10)
+
+
+### Features
+
+* **sessions:** page, filter and count sessions on the server ([#9](https://github.com/Schero94/Magic-Sessionmanager/issues/9)) ([c389614](https://github.com/Schero94/Magic-Sessionmanager/commit/c38961432d4415ded4b9c37c80414dbe787e518a))
+
 ## [Unreleased]
 
 Release type: minor (`feat`), no breaking change. Callers of `GET /sessions` without paging parameters get the same response as before.
