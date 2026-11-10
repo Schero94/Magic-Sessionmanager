@@ -1,3 +1,41 @@
+## [Unreleased]
+
+Release type: minor (`feat`), no breaking change. Callers of `GET /sessions` without paging parameters get the same response as before.
+
+### Changed
+
+* **No 1,000-session limit in the admin.** The dashboard used to load the latest 1,000 sessions and filter, search and page them in the browser, so counts, filters and exports stopped at 1,000 and every load read and enriched all of them. The list is now paged, filtered, searched and sorted on the server with exact totals; only the 25 to 100 rows on the screen are loaded and enriched.
+* **The homepage widget loads counts only** (`GET /sessions/stats`) instead of the whole session list every 30 seconds.
+* **Analytics covers every session** (`GET /sessions/analytics`): counts, sessions per device and browser, distinct users and the average length are computed in SQL and cached for 30 seconds.
+* **Export covers every matching session** up to 50,000 (newest first), read in batches of 1,000 with a cursor. A larger result says so.
+* **In `refresh` mode** the list reconciles the rows on the page with one query on Strapi's session table instead of listing the sessions of every user. Open Strapi sessions without session details from this plugin are counted in a notice; they stay listed on each user's sessions panel.
+
+### Added
+
+* `GET /sessions` and `GET /sessions/active` accept `page`, `pageSize` (1-100), `status`, `reason`, `search` (up to 100 characters) and `sort` (whitelisted values). Unknown or out-of-range parameters return 400; pages that start after the first 50,000 matching sessions return 400.
+* `GET /sessions/stats`, `GET /sessions/analytics` and `GET /sessions/export`, protected like every admin route (`plugin::magic-sessionmanager.access`).
+* Database indexes for the list, counts and export (`login_time`, `last_active`, `is_active` with `last_active`, `login_time` or `termination_reason`, and `native_session_id`), created at startup if missing.
+
+### Security
+
+* The list, statistics, analytics, export and `/users/stats` routes use the read rate limit (120 per minute per admin, raised with `rateLimitReadMax`).
+* CSV exports neutralise cells that start with `=`, `+`, `-`, `@`, a tab or a carriage return (spreadsheet formula injection).
+
+### Performance
+
+Measured on PostgreSQL 16 with 50,000 sessions over 10,000 users (Strapi 5.61, synthetic data):
+
+| Request | 4.11.0 | This release |
+| --- | --- | --- |
+| Dashboard (`legacy-support` mode) | 30 ms, 1,000 rows (730 KB), counts capped at 1,000 | 10 ms for a page of 25 (18 KB), exact totals |
+| Dashboard (`refresh` mode) | 892 ms, 10,319 queries | 15 ms page plus counts, 19 queries |
+| Widget (`refresh` mode) | 814 ms, 10,328 queries | 11 ms, 16 queries, counts only |
+
+### Migration
+
+1. Nothing to do. Rebuild the admin (`npm run build`) after upgrading.
+2. Scripts that call `GET /magic-sessionmanager/sessions` without `page` keep working unchanged; add `?page=1&pageSize=100` to page through every session.
+
 # [4.11.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.10.0...v4.11.0) (2026-11-07)
 
 
@@ -5,7 +43,7 @@
 
 * remove the license feature and every license server call ([#8](https://github.com/Schero94/Magic-Sessionmanager/issues/8)) ([c5ba2ef](https://github.com/Schero94/Magic-Sessionmanager/commit/c5ba2ef6b3e32f11cfadaed479a6d2e5688b3415))
 
-## [Unreleased]
+## 4.11.0 details (written before the release)
 
 Release type: minor. `feat:` removes the license feature; `fix:` corrects the package metadata. No `BREAKING CHANGE` footer, see "Version decision" below.
 

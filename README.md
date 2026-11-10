@@ -176,13 +176,14 @@ All screenshots use synthetic data: users `*.example.test`, IP addresses from th
 
 ### Sessions dashboard
 
-- **Header:** title "Sessions", the links **Analytics** and **Settings** (opens Configuration), and **Export** (CSV or JSON of the filtered list across all pages, with an "End reason" column and never any tokens).
+- **Header:** title "Sessions", the links **Analytics** and **Settings** (opens Configuration), and **Export** (CSV or JSON of every session that matches the filter, up to 50,000 newest, with an "End reason" column and never any tokens).
 - **How sessions work:** a collapsed legend of the three states.
 - **Four stat cards** that set the status filter: **Active** ("{n} users online"), **Idle**, **Ended** ("{a} logged out · {b} timed out · {c} other reasons") and **All**.
 - **Action bar:** search by user, email, IP or device; **Status** filter (All sessions, Open, Active, Idle, Ended); an **End reason** filter when Ended is selected; Refresh. "Last updated" shows when the list was loaded; it also refreshes every 10 minutes.
 - **Table:** Status (badge and a second line, for example "Ended manually · {date}"), User, Device, IP address, Signed in, Last active and the row actions **View details**, **End session** (disabled on ended rows) and **More actions › Delete record**. Clicking a row opens the details.
 - Filters, search, page and page size are kept in the URL, so `?search=<email>` is a shareable link.
-- When more than 1,000 sessions exist, an alert says that counts, filters and exports cover the latest 1,000 only.
+- Search, filters, sorting and paging run on the server, so the list, the counts and the page numbers cover every session, however many there are. Only the 25 to 100 rows on the screen are loaded.
+- In `refresh` mode, open Strapi sessions that have no session details from this plugin (for example sign-ins from before it was installed) are counted in a notice and listed on each user's sessions panel.
 - Below the large breakpoint the IP address and Signed in columns are hidden; below the medium breakpoint the table becomes a card list.
 
 ### Session details
@@ -223,7 +224,7 @@ Two links: **Configuration** and **Analytics**.
 
 **Save** applies the whole form; **Discard changes** re-loads the stored values (it does not restore defaults). Leaving with unsaved changes asks first. Settings are saved in the database; other server processes apply them within 30 seconds.
 
-**Analytics** shows All sessions, Active sessions, Sign-ins in the last 24 hours and in the last 7 days (rolling windows), sessions by device and by browser, and the average session length, all from the latest loaded sessions.
+**Analytics** shows All sessions, Active sessions, Sign-ins in the last 24 hours and in the last 7 days (rolling windows), sessions by device and by browser, and the average session length, computed on the server over every session (cached for 30 seconds).
 
 ---
 
@@ -587,8 +588,11 @@ Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authe
 
 | Method   | Path                                    | Admin UI action                                                                                             |
 | -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| GET      | `/sessions`                             | Sessions dashboard, widget, Analytics (latest 1,000; `meta.truncated` when more exist)                      |
-| GET      | `/sessions/active`                      | Open sessions only                                                                                          |
+| GET      | `/sessions`                             | Sessions dashboard: `?page=&pageSize=` (1-100), `status`, `reason`, `search`, `sort`; see below             |
+| GET      | `/sessions/active`                      | Active sessions only; same paging parameters                                                                |
+| GET      | `/sessions/stats`                       | Dashboard cards and widget: counts only, cached 5 seconds per process                                       |
+| GET      | `/sessions/analytics`                   | Analytics page: counts and grouped counts over every session, cached 30 seconds                             |
+| GET      | `/sessions/export`                      | Export batches of up to 1,000 rows, newest first; follow `meta.nextCursor`                                  |
 | GET      | `/user/:userId/sessions`                | Sessions panel                                                                                              |
 | POST     | `/sessions/:sessionId/terminate`        | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays)    |
 | DELETE   | `/sessions/:sessionId`                  | **Delete record** (record removed, token stays revoked; an open session also ends)                          |
@@ -602,6 +606,10 @@ Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authe
 | POST     | `/geoip/update`                         | Update database / Force download                                                                            |
 | GET, PUT | `/settings`                             | Configuration (PUT validates every field and returns `error.details.errors` on invalid input)               |
 | POST     | `/sessions/:sessionId/simulate-timeout` | Development only; removed when `NODE_ENV` is `production` or `staging`                                      |
+
+**Session list parameters.** `page` (from 1), `pageSize` (1-100), `status` (`all`, `open`, `active`, `idle`, `ended`), `reason` (with `status=ended`: `logout`, `idle`, `expired`, `manual`, `blocked`, `unrecorded`), `search` (up to 100 characters; matches email, username, IP address, browser, operating system and device type) and `sort` (`loginTime:desc`, `loginTime:asc`, `lastActive:desc`, `lastActive:asc`). The response is `{ data, meta: { pagination: { page, pageSize, total, pageCount } } }` with exact totals. Unknown or out-of-range parameters return 400. Pages that start after the first 50,000 matching sessions return 400; narrow the filter or use the export, which walks every row with a cursor. Without `page` and `pageSize`, `GET /sessions` keeps the 4.x response (latest 1,000 rows, `meta.truncated`) for existing scripts.
+
+The list, statistics, analytics, export and `/users/stats` routes share the read rate limit (120 requests per minute per admin, raise it with `rateLimitReadMax`).
 
 **Block / unblock** (`toggle-block`): send `{ "blocked": true }` or `{ "blocked": false }`. This sets the state, is safe to retry and is what the admin UI sends. A request without a body still toggles, but is deprecated, because a retry after a lost response can reverse the intended state. A non-boolean `blocked` returns 400. The response contains `blocked` and `mode` (`explicit` or `toggle`). Blocking ends all open sessions with the reason `blocked`; if that fails, the response is 500 and the request can be retried.
 
@@ -765,16 +773,17 @@ Measured over HTTP on an isolated Strapi 5.61 host with one PostgreSQL 16 databa
 
 The plugin sits in the request path of every authenticated Content API call, so it keeps that path short:
 
-| Work                      | How it is kept cheap                                                                                                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Session check per request | One lookup by token hash. Startup creates the indexes `idx_magic_sessions_token_hash` and `idx_magic_sessions_refresh_hash` if they are missing.                                                 |
-| "Last active" updates     | At most one write per session per `lastSeenRateLimit` (30 seconds by default), as a conditional update.                                                                                          |
-| Settings                  | Cached for 30 seconds per process; a shared revision is checked at most every 2 seconds (one primary-key read).                                                                                  |
-| User lookups              | Resolving a user's `documentId` is cached for 5 minutes per process.                                                                                                                             |
-| ipapi.co lookups          | Results are cached for 24 hours (failures for 5 minutes) and shared across processes, with the IP stored only as a hash. A local MaxMind database avoids the network call entirely.              |
-| Admin lists               | The dashboard and Analytics load at most the latest 1,000 sessions and say so when more exist. `GET /my-sessions` returns at most 200.                                                           |
-| Idle cleanup              | Runs on one process per interval (job lease). In `legacy-support` mode, `cleanupUseDbDirect: true` ends idle sessions with a single SQL update instead of one Document Service call per session. |
-| Old history               | Retention deletes ended sessions older than `retentionDays` (90 by default) once a day, so the table does not grow without bound.                                                                |
+| Work                      | How it is kept cheap                                                                                                                                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session check per request | One lookup by token hash. Startup creates the indexes `idx_magic_sessions_token_hash` and `idx_magic_sessions_refresh_hash` if they are missing.                                                                                                                             |
+| Admin list and counts     | Paged in SQL with exact `COUNT` totals; indexes on `login_time`, `last_active`, `is_active` combinations, `termination_reason` and `native_session_id`. Measured on PostgreSQL 16 with 50,000 sessions: a dashboard page in about 10 ms, page plus counts in about 15-19 ms. |
+| "Last active" updates     | At most one write per session per `lastSeenRateLimit` (30 seconds by default), as a conditional update.                                                                                                                                                                      |
+| Settings                  | Cached for 30 seconds per process; a shared revision is checked at most every 2 seconds (one primary-key read).                                                                                                                                                              |
+| User lookups              | Resolving a user's `documentId` is cached for 5 minutes per process.                                                                                                                                                                                                         |
+| ipapi.co lookups          | Results are cached for 24 hours (failures for 5 minutes) and shared across processes, with the IP stored only as a hash. A local MaxMind database avoids the network call entirely.                                                                                          |
+| Admin lists               | Only the visible page (25-100 rows) is loaded and enriched. Counts for the cards and the widget are cached 5 seconds per process, Analytics 30 seconds. `GET /my-sessions` returns at most 200.                                                                              |
+| Idle cleanup              | Runs on one process per interval (job lease). In `legacy-support` mode, `cleanupUseDbDirect: true` ends idle sessions with a single SQL update instead of one Document Service call per session.                                                                             |
+| Old history               | Retention deletes ended sessions older than `retentionDays` (90 by default) once a day, so the table does not grow without bound.                                                                                                                                            |
 
 ---
 
