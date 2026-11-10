@@ -7,8 +7,10 @@ const widgetSource = readFileSync(
   'utf8'
 );
 
-test('Online Users loads sessions and count-only user totals through the permission-protected plugin API only', () => {
-  assert.match(widgetSource, /get\(['"]\/magic-sessionmanager\/sessions['"]\)/);
+test('Online Users loads count-only session statistics and user totals through the permission-protected plugin API only', () => {
+  // Counts only: the widget never downloads the session list.
+  assert.match(widgetSource, /get\(['"]\/magic-sessionmanager\/sessions\/stats['"]\)/);
+  assert.doesNotMatch(widgetSource, /get\(['"]\/magic-sessionmanager\/sessions['"]\)/);
   assert.match(widgetSource, /get\(['"]\/magic-sessionmanager\/users\/stats['"]\)/);
   assert.match(
     widgetSource,
@@ -16,7 +18,8 @@ test('Online Users loads sessions and count-only user totals through the permiss
     'a failing user-totals request does not hide the session tiles'
   );
   assert.match(widgetSource, /normalizeUserCounts\(/);
-  assert.match(widgetSource, /requireSessionList\(/);
+  assert.match(widgetSource, /widgetStatsFromCounts\(/);
+  assert.doesNotMatch(widgetSource, /requireSessionList\(/);
   assert.doesNotMatch(
     widgetSource,
     /content-manager\/collection-types\/plugin::users-permissions\.user/

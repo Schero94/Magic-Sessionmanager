@@ -36,13 +36,15 @@ import { isCancelledRequest, logSafeAdminError } from '../utils/safeAdminLog.mjs
 import { getSessionStatus } from '../utils/sessionStatus.mjs';
 import { requireSessionList } from '../utils/adminResponse.mjs';
 import { restoreDialogFocus } from '../utils/restoreDialogFocus.mjs';
+import { END_REASON_FILTER_OPTIONS, SESSION_FILTER_OPTIONS } from '../utils/sessionFilters.mjs';
 import {
-  END_REASON_FILTER_OPTIONS,
-  SESSION_FILTER_OPTIONS,
-  filterSessionsBySearch,
-  filterSessionsByStatus,
-} from '../utils/sessionFilters.mjs';
-import { paginateSessions } from '../utils/sessionPagination.mjs';
+  EMPTY_SESSION_STATS,
+  MAX_EXPORT_ROWS,
+  buildListParams,
+  buildExportParams,
+  readSessionPage,
+  readSessionStats,
+} from '../utils/sessionListApi.mjs';
 import { buildSessionCsv, buildSessionJson } from '../utils/sessionExports.mjs';
 import { useSessionFormatters } from '../utils/useSessionFormatters';
 import { useBreakpoint } from '../utils/useBreakpoint';
@@ -62,15 +64,11 @@ import {
   encodeSearchQuery,
   getErrorStatus,
   getExportDeviceInfo,
-  getSessionStats,
   hasActiveFilters,
   parseDashboardQuery,
   pickFocusSessionId,
   shouldUseCompactTable,
 } from './Dashboard/dashboardModel.mjs';
-
-/** Rows the sessions API returns at most; named in the truncation alert and export labels. */
-const LOADED_SESSIONS_LIMIT = 1000;
 
 /** How often the "Last updated" relative time is re-rendered. */
 const CLOCK_TICK_MS = 30 * 1000;
@@ -142,7 +140,9 @@ const HomePage = () => {
   const dashboard = parseDashboardQuery(query);
 
   const [sessions, setSessions] = useState([]);
-  const [truncated, setTruncated] = useState(false);
+  const [pagination, setPagination] = useState({ total: 0, pageCount: 1 });
+  const [stats, setStats] = useState(EMPTY_SESSION_STATS);
+  const [exporting, setExporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -162,6 +162,16 @@ const HomePage = () => {
   const mutationSnapshotRef = useRef([]);
   const listHeadingId = `session-list-caption-${useId().replace(/:/g, '')}`;
   const mutationPending = Boolean(terminatingSessionId || deletingSessionId);
+  const listQuery = useMemo(
+    () => ({
+      page: dashboard.page,
+      pageSize: dashboard.pageSize,
+      status: dashboard.status,
+      reason: dashboard.reason,
+      search: dashboard.search,
+    }),
+    [dashboard.page, dashboard.pageSize, dashboard.status, dashboard.reason, dashboard.search]
+  );
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
@@ -169,8 +179,9 @@ const HomePage = () => {
   }, []);
 
   /**
-   * Loads the complete admin session collection for filtering, pagination,
-   * the detail dialog and exports. Only the first load shows the page loader;
+   * Loads the current page (filtered, searched, sorted and paginated on the
+   * server, exact totals) and the count-only statistics in parallel. Only
+   * the first load shows the page loader;
    * later loads (Refresh, auto refresh, after an action) keep the list
    * mounted so keyboard focus and scroll position survive (DUX-02, DASH-17).
    * A failed refresh keeps the last data and shows the error above it.
@@ -185,11 +196,16 @@ const HomePage = () => {
     else setLoading(true);
 
     try {
-      const { data } = await get(`/${pluginId}/sessions`);
-      const list = requireSessionList(data);
+      const [listResponse, statsResponse] = await Promise.all([
+        get(`/${pluginId}/sessions`, { params: buildListParams(listQuery) }),
+        get(`/${pluginId}/sessions/stats`),
+      ]);
+      const page = readSessionPage(listResponse.data);
+      const nextStats = readSessionStats(statsResponse.data);
       if (requestId !== requestIdRef.current) return;
-      setSessions(list);
-      setTruncated(data?.meta?.truncated === true);
+      setSessions(page.rows);
+      setPagination(page.pagination);
+      setStats(nextStats);
       setLoadError(false);
       setHasData(true);
       setLastUpdated(Date.now());
@@ -206,7 +222,7 @@ const HomePage = () => {
         setRefreshing(false);
       }
     }
-  }, [get]);
+  }, [get, listQuery]);
 
   useEffect(() => {
     // The first load: loading is already true and hasLoadedRef is false, so
@@ -322,18 +338,15 @@ const HomePage = () => {
     }
   };
 
-  // Filter the complete collection before deriving the visible page. Exports
-  // intentionally consume this full result set, not just the current page.
-  const filteredSessions = useMemo(
-    () =>
-      filterSessionsBySearch(
-        filterSessionsByStatus(sessions, dashboard.status, dashboard.reason),
-        dashboard.search,
-        formatters.deviceTypeLabel
-      ),
-    [sessions, dashboard.status, dashboard.reason, dashboard.search, formatters]
-  );
-  const pageResult = paginateSessions(filteredSessions, dashboard.page, dashboard.pageSize);
+  // The server filters and paginates; this is the visible page.
+  const pageSize = Number(dashboard.pageSize);
+  const pageResult = {
+    items: sessions,
+    total: pagination.total,
+    pageCount: pagination.pageCount,
+    startIndex: pagination.total > 0 ? (dashboard.page - 1) * pageSize + 1 : 0,
+    endIndex: pagination.total > 0 ? (dashboard.page - 1) * pageSize + sessions.length : 0,
+  };
   const visibleIds = pageResult.items.map((session) => String(session.id));
   // Handlers read the ids of the rows on screen after the latest commit.
   useLayoutEffect(() => {
@@ -341,54 +354,79 @@ const HomePage = () => {
   });
 
   /**
-   * Downloads CSV for every session matching the current filters, not only the
-   * rows visible on the current page. Columns and values are stable machine
-   * data (see sessionExports.mjs), independent of the admin language, and
-   * never contain tokens. The download itself is the feedback.
+   * Reads every session matching the current filters in batches of 1000
+   * (keyset cursor on the server), up to MAX_EXPORT_ROWS, newest first.
    *
-   * @returns {void}
+   * @returns {Promise<{rows: object[], capped: boolean}>}
    */
-  const handleExportCSV = () => {
-    try {
-      const csvContent = buildSessionCsv(filteredSessions, {
-        unavailableValue: '',
-        getDeviceInfo: getExportDeviceInfo,
-        getSessionStatus,
+  const fetchExportRows = async () => {
+    const rows = [];
+    let cursor = null;
+    do {
+      const { data } = await get(`/${pluginId}/sessions/export`, {
+        params: buildExportParams(listQuery, cursor),
       });
-      downloadFile(csvContent, 'text/csv;charset=utf-8;', 'csv');
-    } catch (err) {
-      logSafeAdminError('dashboard.exportCsv', err);
-      toggleNotification({
-        type: 'danger',
-        message: t('notifications.error.exportFailed', 'The export could not be created.'),
-      });
-    }
+      rows.push(...requireSessionList(data));
+      cursor = typeof data?.meta?.nextCursor === 'string' ? data.meta.nextCursor : null;
+    } while (cursor && rows.length < MAX_EXPORT_ROWS);
+    const capped =
+      rows.length > MAX_EXPORT_ROWS || (Boolean(cursor) && rows.length >= MAX_EXPORT_ROWS);
+    return { rows: rows.slice(0, MAX_EXPORT_ROWS), capped };
   };
 
   /**
-   * Downloads JSON for every session matching the current filters, not only
-   * the rows visible on the current page.
+   * Downloads CSV or JSON for every session matching the current filters,
+   * not only the rows on the current page. Columns and values are stable
+   * machine data (see sessionExports.mjs), independent of the admin
+   * language, and never contain tokens. The download itself is the feedback;
+   * an export that reached the row limit says so.
    *
-   * @returns {void}
+   * @param {'csv'|'json'} format Export format.
+   * @returns {Promise<void>}
    */
-  const handleExportJSON = () => {
+  const handleExport = async (format) => {
+    if (exporting) return;
+    setExporting(true);
     try {
-      const jsonContent = buildSessionJson(filteredSessions, {
-        filterStatus: dashboard.status,
-        totalSessions: sessions.length,
-        exportedAt: new Date().toISOString(),
-        unavailableValue: '',
-        getDeviceInfo: getExportDeviceInfo,
-        getSessionStatus,
-        truncated,
-      });
-      downloadFile(jsonContent, 'application/json', 'json');
+      const { rows, capped } = await fetchExportRows();
+      if (format === 'csv') {
+        const csvContent = buildSessionCsv(rows, {
+          unavailableValue: '',
+          getDeviceInfo: getExportDeviceInfo,
+          getSessionStatus,
+        });
+        downloadFile(csvContent, 'text/csv;charset=utf-8;', 'csv');
+      } else {
+        const jsonContent = buildSessionJson(rows, {
+          filterStatus: dashboard.status,
+          totalSessions: stats.total,
+          exportedAt: new Date().toISOString(),
+          unavailableValue: '',
+          getDeviceInfo: getExportDeviceInfo,
+          getSessionStatus,
+          truncated: capped,
+        });
+        downloadFile(jsonContent, 'application/json', 'json');
+      }
+      if (capped) {
+        toggleNotification({
+          type: 'warning',
+          message: t(
+            'homepage.export.capped',
+            'The export contains the newest {limit, number} sessions. Narrow the filter to export the rest.',
+            { limit: MAX_EXPORT_ROWS }
+          ),
+        });
+      }
     } catch (err) {
-      logSafeAdminError('dashboard.exportJson', err);
+      if (isCancelledRequest(err)) return;
+      logSafeAdminError(format === 'csv' ? 'dashboard.exportCsv' : 'dashboard.exportJson', err);
       toggleNotification({
         type: 'danger',
         message: t('notifications.error.exportFailed', 'The export could not be created.'),
       });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -439,10 +477,10 @@ const HomePage = () => {
 
   // Keep the URL page inside the result range after filtering or removals.
   useEffect(() => {
-    if (!loading && dashboard.page > pageResult.pageCount) {
+    if (!loading && !refreshing && dashboard.page > pageResult.pageCount) {
       setQuery({ page: String(pageResult.pageCount) }, 'push', true);
     }
-  }, [loading, dashboard.page, pageResult.pageCount, setQuery]);
+  }, [loading, refreshing, dashboard.page, pageResult.pageCount, setQuery]);
 
   const handleStatusChange = (value) => {
     const status = String(value);
@@ -466,12 +504,11 @@ const HomePage = () => {
     listHeadingRef.current?.focus();
   };
 
-  const stats = getSessionStats(sessions);
   const showSessionData = !loading && hasData;
-  const showToolbar = showSessionData && sessions.length > 0;
-  const canExport = showSessionData && filteredSessions.length > 0;
+  const showToolbar = showSessionData && stats.total > 0;
+  const canExport = showSessionData && pageResult.total > 0 && !exporting;
   const filtersActive = hasActiveFilters(dashboard);
-  const exportValues = { count: filteredSessions.length, limit: LOADED_SESSIONS_LIMIT };
+  const exportValues = { count: Math.min(pageResult.total, MAX_EXPORT_ROWS) };
 
   const exportMenu = (
     <SimpleMenu
@@ -480,31 +517,19 @@ const HomePage = () => {
       startIcon={<Download />}
       disabled={!canExport}
     >
-      <MenuItem onSelect={handleExportCSV}>
-        {truncated
-          ? t(
-              'homepage.export.csvTruncated',
-              '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}} (latest {limit, number} sessions only)',
-              exportValues
-            )
-          : t(
-              'homepage.export.csv',
-              '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}}',
-              exportValues
-            )}
+      <MenuItem onSelect={() => void handleExport('csv')}>
+        {t(
+          'homepage.export.csv',
+          '{count, plural, one {Export # session as CSV} other {Export # sessions as CSV}}',
+          exportValues
+        )}
       </MenuItem>
-      <MenuItem onSelect={handleExportJSON}>
-        {truncated
-          ? t(
-              'homepage.export.jsonTruncated',
-              '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}} (latest {limit, number} sessions only)',
-              exportValues
-            )
-          : t(
-              'homepage.export.json',
-              '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}}',
-              exportValues
-            )}
+      <MenuItem onSelect={() => void handleExport('json')}>
+        {t(
+          'homepage.export.json',
+          '{count, plural, one {Export # session as JSON} other {Export # sessions as JSON}}',
+          exportValues
+        )}
       </MenuItem>
     </SimpleMenu>
   );
@@ -695,13 +720,13 @@ const HomePage = () => {
           </Alert>
         ) : null}
 
-        {showSessionData && truncated ? (
+        {showSessionData && stats.nativeOnly > 0 ? (
           <Alert variant="default" closeLabel={t('common.close', 'Close')}>
             <ReadableText variant="pi" textColor="neutral700" tag="span">
               {t(
-                'homepage.truncated.body',
-                'Only the latest {limit, number} sessions are loaded. Counts, filters and exports cover these sessions only.',
-                { limit: LOADED_SESSIONS_LIMIT }
+                'homepage.nativeOnly.body',
+                '{count, plural, one {# open Strapi session has} other {# open Strapi sessions have}} no session details from this plugin. They are listed on each user’s session panel, not in this list.',
+                { count: stats.nativeOnly }
               )}
             </ReadableText>
           </Alert>
@@ -713,7 +738,7 @@ const HomePage = () => {
           </Flex>
         ) : null}
 
-        {showSessionData && sessions.length > 0 ? <HowSessionsWork /> : null}
+        {showSessionData && stats.total > 0 ? <HowSessionsWork /> : null}
 
         {showSessionData && (
           <Flex direction="column" alignItems="stretch" gap={2}>
@@ -802,7 +827,7 @@ const HomePage = () => {
               {lastUpdatedLine}
             </Flex>
 
-            {filteredSessions.length > 0 ? (
+            {pageResult.total > 0 ? (
               <>
                 {isBelowMedium ? (
                   <SessionCardList {...listProps} />
@@ -842,7 +867,7 @@ const HomePage = () => {
           </Flex>
         )}
 
-        {showSessionData && sessions.length === 0 && (
+        {showSessionData && stats.total === 0 && (
           <EmptyStateLayout
             icon={<EmptyDocuments width="16rem" height="8.8rem" aria-hidden="true" />}
             content={t(

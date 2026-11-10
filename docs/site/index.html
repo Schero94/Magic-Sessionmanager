@@ -637,7 +637,21 @@ npm run develop</code></pre>
                 <tr>
                   <td>GET</td>
                   <td><code>/sessions</code>, <code>/sessions/active</code></td>
-                  <td>Dashboard, widget, Analytics (latest 1,000 sessions)</td>
+                  <td>
+                    Dashboard list: paged on the server (<code>page</code>, <code>pageSize</code>,
+                    <code>status</code>, <code>reason</code>, <code>search</code>,
+                    <code>sort</code>) with exact totals
+                  </td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/sessions/stats</code>, <code>/sessions/analytics</code></td>
+                  <td>Dashboard cards, widget and Analytics: counts over every session</td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td><code>/sessions/export</code></td>
+                  <td>Export batches of up to 1,000 rows with a cursor</td>
                 </tr>
                 <tr>
                   <td>GET</td>
@@ -917,8 +931,9 @@ const { data, meta } = await res.json();
             <article class="card">
               <h3>Bounded work</h3>
               <p>
-                The admin loads at most the latest 1,000 sessions, <code>/my-sessions</code> returns
-                at most 200, and retention deletes ended sessions after 90 days by default.
+                The dashboard loads only the page on screen and counts every session in SQL, the
+                widget loads counts only, <code>/my-sessions</code> returns at most 200, and
+                retention deletes ended sessions after 90 days by default.
               </p>
             </article>
           </div>

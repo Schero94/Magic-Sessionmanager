@@ -198,3 +198,21 @@ test('last-seen does not fabricate a Magic session for a native-only session', a
   });
   assert.equal(touchCalls, 0);
 });
+
+test('admin requests to plugin routes skip the end-user session lookup', async () => {
+  for (const strategyName of ['admin', 'admin-token']) {
+    const queries = [];
+    const middleware = createLastSeenMiddleware({
+      strapi: createStrapi({ documentId: 'session-doc-id', isActive: true }, queries),
+      sessionService: {
+        touch: async () => {
+          throw new Error('admins must not touch end-user sessions');
+        },
+      },
+    });
+    const ctx = createCtx('/magic-sessionmanager/sessions/stats');
+    ctx.state.auth = { strategy: { name: strategyName } };
+    await middleware(ctx, async () => {});
+    assert.equal(queries.length, 0, strategyName);
+  }
+});

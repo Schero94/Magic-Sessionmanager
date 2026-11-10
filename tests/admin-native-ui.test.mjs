@@ -205,20 +205,23 @@ test('geofencing country controls wrap without fixed-width mobile overflow', () 
   assert.doesNotMatch(controls, /12rem|width: '180px'/);
 });
 
-test('dashboard paginates the full filtered result set and keeps both layouts aligned', () => {
+test('dashboard pages on the server and keeps both layouts aligned', () => {
   const source = readAdminFile('pages/HomePage.jsx');
   const table = readAdminFile('pages/Dashboard/SessionTable.jsx');
   const cards = readAdminFile('pages/Dashboard/SessionCardList.jsx');
   const tableHeader = table.match(/<Thead>([\s\S]*?)<\/Thead>/)?.[1];
   const exportHandlers = source.slice(
-    source.indexOf('const handleExportCSV'),
+    source.indexOf('const fetchExportRows'),
     source.indexOf('const handleSessionClick')
   );
 
-  assert.match(
+  // Filters, search and paging run on the server with exact totals; the
+  // browser never loads the whole collection.
+  assert.doesNotMatch(
     source,
-    /paginateSessions\(filteredSessions, dashboard\.page, dashboard\.pageSize\)/
+    /paginateSessions\(|filterSessionsByStatus\(|filterSessionsBySearch\(/
   );
+  assert.match(source, /setPagination\(page\.pagination\)/);
   // Table and cards render the same page of rows.
   assert.match(source, /sessions: pageResult\.items/);
   assert.match(table, /sessions\.map\(\(session\) =>/);
@@ -230,8 +233,9 @@ test('dashboard paginates the full filtered result set and keeps both layouts al
   assert.match(source, /homepage\.caption/);
   assert.ok(tableHeader, 'desktop session table has a header row');
   assert.equal((tableHeader.match(/homepage\.table\.status/g) || []).length, 1);
-  assert.match(exportHandlers, /buildSessionCsv\(filteredSessions/);
-  assert.match(exportHandlers, /buildSessionJson\(filteredSessions/);
+  // Exports read every matching row in batches, not the visible page.
+  assert.match(exportHandlers, /buildSessionCsv\(rows/);
+  assert.match(exportHandlers, /buildSessionJson\(rows/);
   assert.doesNotMatch(exportHandlers, /pageResult\.items/);
 });
 
@@ -239,8 +243,8 @@ test('changed non-trivial admin handlers include JSDoc contracts', () => {
   const documentedHandlers = [
     ['pages/HomePage.jsx', 'fetchSessions'],
     ['pages/HomePage.jsx', 'handleTerminateSession'],
-    ['pages/HomePage.jsx', 'handleExportCSV'],
-    ['pages/HomePage.jsx', 'handleExportJSON'],
+    ['pages/HomePage.jsx', 'fetchExportRows'],
+    ['pages/HomePage.jsx', 'handleExport'],
     ['pages/Settings/hooks/useSettingsForm.js', 'fetchSettings'],
     ['pages/Settings/hooks/useSettingsForm.js', 'handleChange'],
     ['pages/Settings/hooks/useSettingsForm.js', 'handleSave'],

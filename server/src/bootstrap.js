@@ -1595,7 +1595,8 @@ function mountDeferredContentApiPermissionRetry({
 }
 
 /**
- * Creates composite DB indexes for access- and refresh-token session lookups.
+ * Creates DB indexes for access- and refresh-token session lookups and for the
+ * paginated admin list, statistics and export.
  * Safe to call repeatedly and from several processes at once: the work runs
  * in a cluster-wide critical section, PostgreSQL and SQLite use
  * `CREATE INDEX IF NOT EXISTS`, and MySQL keeps the metadata check.
@@ -1626,9 +1627,18 @@ async function ensureSessionLookupIndexes(strapi, log) {
 async function createSessionLookupIndexes(strapi, log) {
   const knex = strapi.db.connection;
   const tableName = 'magic_sessions';
+  // Token lookups, plus the paginated admin list, statistics and export:
+  // ORDER BY login_time/last_active with an id tie-breaker, and the status
+  // filters on is_active + last activity / termination reason.
   const definitions = [
-    { column: 'token_hash', name: 'idx_magic_sessions_token_hash' },
-    { column: 'refresh_token_hash', name: 'idx_magic_sessions_refresh_hash' },
+    { columns: ['token_hash', 'is_active'], name: 'idx_magic_sessions_token_hash' },
+    { columns: ['refresh_token_hash', 'is_active'], name: 'idx_magic_sessions_refresh_hash' },
+    { columns: ['login_time', 'id'], name: 'idx_magic_sessions_login_time' },
+    { columns: ['last_active', 'id'], name: 'idx_magic_sessions_last_active' },
+    { columns: ['is_active', 'last_active'], name: 'idx_magic_sessions_active_last' },
+    { columns: ['is_active', 'login_time'], name: 'idx_magic_sessions_active_login' },
+    { columns: ['is_active', 'termination_reason'], name: 'idx_magic_sessions_active_reason' },
+    { columns: ['native_session_id'], name: 'idx_magic_sessions_native_id' },
   ];
 
   if (!(await knex.schema.hasTable(tableName))) return;
@@ -1653,11 +1663,11 @@ async function createSessionLookupIndexes(strapi, log) {
         log.debug(`[INDEX] ${definition.name} already exists`);
         continue;
       }
-      await knex.raw('CREATE INDEX IF NOT EXISTS ?? ON ?? (??, ??)', [
+      const placeholders = definition.columns.map(() => '??').join(', ');
+      await knex.raw(`CREATE INDEX IF NOT EXISTS ?? ON ?? (${placeholders})`, [
         definition.name,
         tableName,
-        definition.column,
-        'is_active',
+        ...definition.columns,
       ]);
       log.info(`[INDEX] Created ${definition.name}`);
       continue;
@@ -1678,7 +1688,7 @@ async function createSessionLookupIndexes(strapi, log) {
     }
 
     await knex.schema.alterTable(tableName, (table) => {
-      table.index([definition.column, 'is_active'], definition.name);
+      table.index(definition.columns, definition.name);
     });
 
     log.info(`[INDEX] Created ${definition.name}`);

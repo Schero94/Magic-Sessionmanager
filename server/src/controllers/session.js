@@ -13,6 +13,15 @@ const { parseNativeSessionKey } = require('../utils/native-session-view');
 const { runWithCallerRevocation } = require('../utils/block-revocation-scope');
 const { sendServerError } = require('../utils/http-errors');
 const { getCoordinator } = require('../utils/coordination');
+const { clearSessionStatsCache } = require('../utils/session-list');
+const {
+  decodeExportCursor,
+  exportQuerySchema,
+  isPaginatedListQuery,
+  listQuerySchema,
+  parseQuery,
+  statsQuerySchema,
+} = require('../utils/session-list-query');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const USER_UID = 'plugin::users-permissions.user';
@@ -20,6 +29,10 @@ const OWN_SESSIONS_LIMIT = 200;
 const NATIVE_SESSION_KEY_PREFIX = 'native_';
 const JWT_MANAGEMENT_CONFIG = 'plugin::users-permissions.jwtManagement';
 const LEGACY_JWT_MANAGEMENT = 'legacy-support';
+
+/** Per-process cache of the end-user counts shown by the homepage widget. */
+const USER_STATS_CACHE_MS = 5000;
+const userStatsCache = { owner: null, value: null, expiresAt: 0 };
 
 /**
  * Returns the standard unknown-location shape without invoking a GeoIP
@@ -202,6 +215,65 @@ function getTruncationMeta(sessions) {
 }
 
 /**
+ * Shared handler of the admin session lists. Paginated mode validates the
+ * query strictly; legacy mode (no paging parameters) keeps the 4.x shape.
+ *
+ * @param {object} ctx Koa context
+ * @param {{activeOnly: boolean}} options
+ * @returns {Promise<void>}
+ */
+async function listSessionsAdmin(ctx, { activeOnly }) {
+  if (isPaginatedListQuery(ctx.query)) {
+    const parsed = parseQuery(listQuerySchema, ctx.query);
+    if (!parsed.ok) return ctx.badRequest('Invalid query', { errors: parsed.errors });
+    const query = activeOnly ? { ...parsed.value, status: 'active', reason: 'all' } : parsed.value;
+    try {
+      const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+      const page = await sessionService.listSessionPage(query);
+      ctx.body = {
+        data: toPublicSessions(page.rows, { admin: true }),
+        meta: { pagination: page.pagination },
+      };
+      return undefined;
+    } catch (err) {
+      strapi.log.error('[magic-sessionmanager] listSessionPage failed:', err?.name || 'Error');
+      return ctx.internalServerError('Error fetching sessions');
+    }
+  }
+
+  try {
+    const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+    if (activeOnly) {
+      const sessions = await sessionService.getActiveSessions();
+      ctx.body = {
+        data: toPublicSessions(sessions, { admin: true }),
+        meta: { count: sessions.length, ...getTruncationMeta(sessions) },
+      };
+      return undefined;
+    }
+    const sessions = await sessionService.getAllSessions();
+    ctx.body = {
+      data: toPublicSessions(sessions, { admin: true }),
+      meta: {
+        count: sessions.length,
+        active: sessions.filter((s) => s.isTrulyActive).length,
+        inactive: sessions.filter((s) => !s.isTrulyActive).length,
+        ...getTruncationMeta(sessions),
+      },
+    };
+    return undefined;
+  } catch (err) {
+    strapi.log.error(
+      `[magic-sessionmanager] ${activeOnly ? 'getActiveSessions' : 'getAllSessionsAdmin'} failed:`,
+      err?.name || 'Error'
+    );
+    return ctx.internalServerError(
+      activeOnly ? 'Error fetching active sessions' : 'Error fetching sessions'
+    );
+  }
+}
+
+/**
  * Preserves the existing post-login pending response when a session record is
  * not yet visible in either the Magic history or native session view.
  *
@@ -255,14 +327,24 @@ module.exports = {
    */
   async getUserStatsAdmin(ctx) {
     try {
-      const [totalUsers, blockedUsers] = await Promise.all([
-        strapi.db.query(USER_UID).count(),
-        strapi.db.query(USER_UID).count({ where: { blocked: true } }),
-      ]);
+      if (
+        userStatsCache.owner !== strapi ||
+        !userStatsCache.value ||
+        userStatsCache.expiresAt <= Date.now()
+      ) {
+        userStatsCache.owner = null;
+        const [totalUsers, blockedUsers] = await Promise.all([
+          strapi.db.query(USER_UID).count(),
+          strapi.db.query(USER_UID).count({ where: { blocked: true } }),
+        ]);
+        userStatsCache.owner = strapi;
+        userStatsCache.value = { totalUsers, blockedUsers };
+        userStatsCache.expiresAt = Date.now() + USER_STATS_CACHE_MS;
+      }
 
       return ctx.send({
         success: true,
-        data: { totalUsers, blockedUsers },
+        data: { ...userStatsCache.value },
       });
     } catch (error) {
       strapi.log.error('[magic-sessionmanager] getUserStatsAdmin failed:', error?.name || 'Error');
@@ -271,45 +353,106 @@ module.exports = {
   },
 
   /**
-   * Lists all sessions (active + inactive) for admin overviews.
+   * Lists sessions for admin overviews.
+   *
+   * With `page` or `pageSize` the list is paginated in SQL and filtered by
+   * `status`, `reason`, `search` and `sort` (whitelisted values only), with
+   * exact totals. Without them the 4.x response (latest 1000 rows) is kept
+   * for existing callers.
+   *
    * @route GET /magic-sessionmanager/sessions
+   * @param {object} ctx Koa context
+   * @returns {Promise<void>}
    */
   async getAllSessionsAdmin(ctx) {
+    return listSessionsAdmin(ctx, { activeOnly: false });
+  },
+
+  /**
+   * Lists currently-active sessions only (paginated with `page`/`pageSize`,
+   * see getAllSessionsAdmin).
+   *
+   * @route GET /magic-sessionmanager/sessions/active
+   * @param {object} ctx Koa context
+   * @returns {Promise<void>}
+   */
+  async getActiveSessions(ctx) {
+    return listSessionsAdmin(ctx, { activeOnly: true });
+  },
+
+  /**
+   * Count-only session statistics for the dashboard cards and the homepage
+   * widget. No rows, no personal data.
+   *
+   * @route GET /magic-sessionmanager/sessions/stats
+   * @param {object} ctx Koa context
+   * @returns {Promise<void>}
+   */
+  async getSessionStatsAdmin(ctx) {
+    const parsed = parseQuery(statsQuerySchema, ctx.query);
+    if (!parsed.ok) return ctx.badRequest('Invalid query', { errors: parsed.errors });
     try {
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
-      const sessions = await sessionService.getAllSessions();
-
-      ctx.body = {
-        data: toPublicSessions(sessions, { admin: true }),
-        meta: {
-          count: sessions.length,
-          active: sessions.filter((s) => s.isTrulyActive).length,
-          inactive: sessions.filter((s) => !s.isTrulyActive).length,
-          ...getTruncationMeta(sessions),
-        },
-      };
+      const stats = await sessionService.getSessionStats();
+      return ctx.send({ data: stats });
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] getAllSessionsAdmin failed:', err?.name || 'Error');
-      return ctx.internalServerError('Error fetching sessions');
+      strapi.log.error('[magic-sessionmanager] getSessionStatsAdmin failed:', err?.name || 'Error');
+      return ctx.internalServerError('Unable to load session statistics');
     }
   },
 
   /**
-   * Lists currently-active sessions only.
-   * @route GET /magic-sessionmanager/sessions/active
+   * Aggregates for the Analytics page over every session: counts, grouped
+   * counts per device type and browser, distinct users, average length. No
+   * rows and no personal data.
+   *
+   * @route GET /magic-sessionmanager/sessions/analytics
+   * @param {object} ctx Koa context
+   * @returns {Promise<void>}
    */
-  async getActiveSessions(ctx) {
+  async getSessionAnalyticsAdmin(ctx) {
+    const parsed = parseQuery(statsQuerySchema, ctx.query);
+    if (!parsed.ok) return ctx.badRequest('Invalid query', { errors: parsed.errors });
     try {
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
-      const sessions = await sessionService.getActiveSessions();
-
-      ctx.body = {
-        data: toPublicSessions(sessions, { admin: true }),
-        meta: { count: sessions.length, ...getTruncationMeta(sessions) },
-      };
+      return ctx.send({ data: await sessionService.getSessionAnalytics() });
     } catch (err) {
-      strapi.log.error('[magic-sessionmanager] getActiveSessions failed:', err?.name || 'Error');
-      return ctx.internalServerError('Error fetching active sessions');
+      strapi.log.error(
+        '[magic-sessionmanager] getSessionAnalyticsAdmin failed:',
+        err?.name || 'Error'
+      );
+      return ctx.internalServerError('Unable to load session analytics');
+    }
+  },
+
+  /**
+   * One batch of the session export (newest first, keyset cursor). The admin
+   * client follows `meta.nextCursor` until it is null or its row limit is
+   * reached.
+   *
+   * @route GET /magic-sessionmanager/sessions/export
+   * @param {object} ctx Koa context
+   * @returns {Promise<void>}
+   */
+  async exportSessionsAdmin(ctx) {
+    const parsed = parseQuery(exportQuerySchema, ctx.query);
+    if (!parsed.ok) return ctx.badRequest('Invalid query', { errors: parsed.errors });
+    const cursor = decodeExportCursor(parsed.value.cursor);
+    if (cursor === false) {
+      return ctx.badRequest('Invalid query', {
+        errors: [{ path: 'cursor', message: 'Invalid cursor' }],
+      });
+    }
+    try {
+      const sessionService = strapi.plugin('magic-sessionmanager').service('session');
+      const batch = await sessionService.exportSessionBatch(parsed.value, cursor);
+      return ctx.send({
+        data: toPublicSessions(batch.rows, { admin: true }),
+        meta: { count: batch.rows.length, nextCursor: batch.nextCursor },
+      });
+    } catch (err) {
+      strapi.log.error('[magic-sessionmanager] exportSessionsAdmin failed:', err?.name || 'Error');
+      return ctx.internalServerError('Unable to export sessions');
     }
   },
 
@@ -958,6 +1101,7 @@ module.exports = {
    * A missing target returns 404; existing native-only rows remain supported.
    */
   async terminateSingleSession(ctx) {
+    clearSessionStatsCache();
     try {
       const { sessionId } = ctx.params;
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
@@ -988,6 +1132,7 @@ module.exports = {
    * Unknown numeric IDs and document IDs return 404 before revocation.
    */
   async terminateAllUserSessions(ctx) {
+    clearSessionStatsCache();
     try {
       const { userId } = ctx.params;
       const numericId = /^\d+$/.test(userId) ? Number(userId) : null;
@@ -1082,6 +1227,7 @@ module.exports = {
    *   any unexpired JWT expires
    */
   async deleteSession(ctx) {
+    clearSessionStatsCache();
     try {
       const { sessionId } = ctx.params;
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
@@ -1109,6 +1255,7 @@ module.exports = {
    *   could not be removed
    */
   async cleanInactiveSessions(ctx) {
+    clearSessionStatsCache();
     try {
       const sessionService = strapi.plugin('magic-sessionmanager').service('session');
       const deletedCount = await sessionService.deleteInactiveSessions();
@@ -1157,6 +1304,8 @@ module.exports = {
    * can leave the user blocked with partially active sessions.
    */
   async toggleUserBlock(ctx) {
+    clearSessionStatsCache();
+    userStatsCache.expiresAt = 0;
     try {
       const { userId } = ctx.params;
       const body = ctx.request?.body;

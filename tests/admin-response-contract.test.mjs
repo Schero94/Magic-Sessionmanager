@@ -26,13 +26,13 @@ test('mutation responses only accept an explicit successful envelope', () => {
 
 test('dashboard, analytics, panel and GeoIP handlers validate their response envelopes', () => {
   const read = (path) => readFileSync(new URL(`../admin/src/${path}`, import.meta.url), 'utf8');
-  for (const path of [
-    'pages/HomePage.jsx',
-    'pages/Analytics.jsx',
-    'components/SessionInfoPanel.jsx',
-  ]) {
+  for (const path of ['pages/HomePage.jsx', 'components/SessionInfoPanel.jsx']) {
     assert.match(read(path), /requireSessionList\(data\)/, path);
   }
+  // Server-side pages, statistics and analytics are validated before use.
+  assert.match(read('pages/HomePage.jsx'), /readSessionPage\(listResponse\.data\)/);
+  assert.match(read('pages/HomePage.jsx'), /readSessionStats\(statsResponse\.data\)/);
+  assert.match(read('pages/Analytics.jsx'), /analyticsFromServer\(data\)/);
   // Settings: save credentials, remove credentials, update database. Panel: end all, block/unblock.
   for (const [path, count] of [
     ['pages/Settings.jsx', 3],

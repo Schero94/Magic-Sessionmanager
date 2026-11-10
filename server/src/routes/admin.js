@@ -46,6 +46,20 @@ const adminPolicy = () => [
   },
 ];
 
+/**
+ * Read rate limit for the session lists, statistics and export batches. Same
+ * limiter and `read` profile as the Content API listings: the admin can raise
+ * the floor via `rateLimitReadMax`. The key is per admin user.
+ *
+ * @returns {Array<object>}
+ */
+const adminReadRateLimit = () => [
+  {
+    name: 'plugin::magic-sessionmanager.rate-limit',
+    config: { profile: 'read', max: 120, window: 60_000 },
+  },
+];
+
 const isDevEnvironment = (() => {
   const env = (process.env.NODE_ENV || 'development').toLowerCase();
   return env !== 'production' && env !== 'staging';
@@ -59,7 +73,8 @@ const baseRoutes = [
     handler: 'session.getAllSessionsAdmin',
     config: {
       policies: adminPolicy(),
-      description: 'Get all sessions - active and inactive (admin)',
+      middlewares: adminReadRateLimit(),
+      description: 'List sessions (admin); paginated with page/pageSize, filters and sort',
     },
   },
   {
@@ -68,7 +83,38 @@ const baseRoutes = [
     handler: 'session.getActiveSessions',
     config: {
       policies: adminPolicy(),
-      description: 'Get only active sessions (admin)',
+      middlewares: adminReadRateLimit(),
+      description: 'Get only active sessions (admin); paginated with page/pageSize',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/sessions/stats',
+    handler: 'session.getSessionStatsAdmin',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+      description: 'Get count-only session statistics (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/sessions/analytics',
+    handler: 'session.getSessionAnalyticsAdmin',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+      description: 'Get count-only analytics over all sessions (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/sessions/export',
+    handler: 'session.exportSessionsAdmin',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+      description: 'Get one export batch of sessions with a keyset cursor (admin)',
     },
   },
   {
@@ -131,6 +177,7 @@ const baseRoutes = [
     handler: 'session.getUserStatsAdmin',
     config: {
       policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
       description: 'Get aggregate end-user counts only (admin)',
     },
   },

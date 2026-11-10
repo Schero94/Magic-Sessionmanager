@@ -198,7 +198,14 @@ test('refresh keeps the list mounted, keeps data on a refresh error, and restore
     fetchHandler,
     /if \(hasLoadedRef\.current\) setRefreshing\(true\);\s*else setLoading\(true\);/
   );
-  assert.match(fetchHandler, /setTruncated\(data\?\.meta\?\.truncated === true\)/);
+  // Server-side page and count-only statistics, loaded in parallel.
+  assert.match(
+    fetchHandler,
+    /get\(`\/\$\{pluginId\}\/sessions`, \{ params: buildListParams\(listQuery\) \}\)/
+  );
+  assert.match(fetchHandler, /get\(`\/\$\{pluginId\}\/sessions\/stats`\)/);
+  assert.match(fetchHandler, /setPagination\(page\.pagination\)/);
+  assert.match(fetchHandler, /setStats\(nextStats\)/);
   assert.match(fetchHandler, /setLastUpdated\(Date\.now\(\)\)/);
   assert.doesNotMatch(
     fetchHandler.slice(fetchHandler.indexOf('catch')),
@@ -238,7 +245,7 @@ test('query state lives in the URL: search, status, end reason, page and page si
   );
   assert.match(
     source,
-    /<SimpleMenu\b[\s\S]*?<MenuItem onSelect=\{handleExportCSV\}>[\s\S]*?<MenuItem onSelect=\{handleExportJSON\}>/
+    /<SimpleMenu\b[\s\S]*?<MenuItem onSelect=\{\(\) => void handleExport\('csv'\)\}>[\s\S]*?<MenuItem onSelect=\{\(\) => void handleExport\('json'\)\}>/
   );
 });
 
@@ -274,15 +281,22 @@ test('header: Sessions title, end-user subtitle, Export menu and Analytics/Setti
     unwrapSource(source),
     /homepage\.export\.csv', '\{count, plural, one \{Export # session as CSV\} other \{Export # sessions as CSV\}\}'/
   );
-  assert.match(source, /homepage\.export\.csvTruncated'/);
+  assert.doesNotMatch(
+    source,
+    /homepage\.export\.csvTruncated'/,
+    'exports are no longer capped at 1000'
+  );
+  assert.match(source, /homepage\.export\.capped'/);
   assert.match(source, /homepage\.export\.disabledHint', 'No sessions match the current filter\.'/);
 });
 
-test('truncation alert, Last updated line and polite caption (IA D1.2, D1.5, D1.6, I.1 item 11)', () => {
-  assert.match(source, /\{showSessionData && truncated \? \(\s*<Alert variant="default"/);
+test('native-only notice, Last updated line and polite caption (IA D1.2, D1.5, D1.6, I.1 item 11)', () => {
+  // No 1000-row cap: the old truncation alert is gone.
+  assert.doesNotMatch(source, /Only the latest \{limit, number\} sessions are loaded/);
+  assert.doesNotMatch(source, /LOADED_SESSIONS_LIMIT/);
   assert.match(
     source,
-    /'Only the latest \{limit, number\} sessions are loaded\. Counts, filters and exports cover these sessions only\.'/
+    /\{showSessionData && stats\.nativeOnly > 0 \? \(\s*<Alert variant="default"/
   );
   assert.match(source, /homepage\.lastUpdated', 'Last updated \{time\}'/);
   assert.match(source, /aria-live="polite"\s+data-session-caption=""/);
@@ -370,21 +384,25 @@ test('four clickable KPI cards set the status filter (IA D1.4, I.1 item 6)', () 
   assert.match(source, /<Typography variant="delta" tag="h2">\s*\{t\('homepage\.list\.heading'/);
 });
 
-test('exports cover the filtered list, add the truncation flag and report failures (IA E.1)', () => {
+test('exports read every filtered row in keyset batches, flag a capped export and report failures (IA E.1)', () => {
   const exportHandlers = source.slice(
-    source.indexOf('const handleExportCSV'),
+    source.indexOf('const fetchExportRows'),
     source.indexOf('const handleSessionClick')
   );
-  assert.match(exportHandlers, /buildSessionCsv\(filteredSessions/);
-  assert.match(exportHandlers, /buildSessionJson\(filteredSessions/);
-  assert.match(exportHandlers, /truncated,/);
+  assert.match(exportHandlers, /get\(`\/\$\{pluginId\}\/sessions\/export`/);
+  assert.match(exportHandlers, /buildExportParams\(listQuery, cursor\)/);
+  assert.match(exportHandlers, /while \(cursor && rows\.length < MAX_EXPORT_ROWS\)/);
+  assert.match(exportHandlers, /buildSessionCsv\(rows/);
+  assert.match(exportHandlers, /buildSessionJson\(rows/);
+  assert.match(exportHandlers, /truncated: capped,/);
+  assert.match(exportHandlers, /homepage\.export\.capped'/);
   assert.equal(
     (
       exportHandlers.match(
         /notifications\.error\.exportFailed', 'The export could not be created\.'/g
       ) || []
     ).length,
-    2
+    1
   );
   assert.doesNotMatch(
     exportHandlers,

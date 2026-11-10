@@ -12,6 +12,12 @@ const {
 } = require('../utils/session-revocation');
 const { getNativeSessionManager } = require('../utils/native-session-manager');
 const {
+  exportSessionBatch,
+  getSessionAnalytics: getSessionAnalyticsFromDb,
+  getSessionStats: getSessionStatsFromDb,
+  listSessionPage,
+} = require('../utils/session-list');
+const {
   NATIVE_SESSION_PREFIX,
   mapNativeSessionToView,
   markSessionsTruncated,
@@ -969,7 +975,54 @@ module.exports = ({ strapi }) => {
     },
 
     /**
+     * One page of sessions with exact totals for the admin dashboard. Only
+     * the rows on the page are enriched; filters and sort run in SQL.
+     *
+     * @param {{page: number, pageSize: number, status: string, reason: string, search: string, sort: string}} query Validated list query
+     * @returns {Promise<{rows: object[], pagination: object}>}
+     */
+    async listSessionPage(query) {
+      return listSessionPage(strapi, query, await getEnhanceOpts());
+    },
+
+    /**
+     * Count-only session statistics (cached a few seconds per process).
+     *
+     * @returns {Promise<object>}
+     */
+    async getSessionStats() {
+      const { inactivityTimeout } = await getEnhanceOpts();
+      return getSessionStatsFromDb(strapi, { inactivityTimeout });
+    },
+
+    /**
+     * Aggregates for the Analytics page over every session (cached 30 s
+     * per process).
+     *
+     * @returns {Promise<object>}
+     */
+    async getSessionAnalytics() {
+      const { inactivityTimeout } = await getEnhanceOpts();
+      return getSessionAnalyticsFromDb(strapi, { inactivityTimeout });
+    },
+
+    /**
+     * One export batch (keyset cursor, newest first).
+     *
+     * @param {{limit: number, status: string, reason: string, search: string}} query Validated export query
+     * @param {{loginTime: Date|null, id: number}|null} cursor Decoded cursor
+     * @returns {Promise<{rows: object[], nextCursor: string|null}>}
+     */
+    async exportSessionBatch(query, cursor) {
+      const { inactivityTimeout } = await getEnhanceOpts();
+      return exportSessionBatch(strapi, query, cursor, { inactivityTimeout });
+    },
+
+    /**
      * Get ALL sessions (active + inactive) with enhanced display fields.
+     * Kept for callers of `GET /sessions` without paging parameters; capped
+     * at the latest 1000 rows. The admin dashboard uses `listSessionPage`.
+     *
      * @returns {Promise<Array>}
      */
     async getAllSessions() {
