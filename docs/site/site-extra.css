@@ -328,3 +328,10 @@ details.faq p {
   margin: 0.5rem 0 0;
   color: var(--muted);
 }
+
+.brand-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+}

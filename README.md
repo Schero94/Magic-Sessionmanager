@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Schero94/Magic-Sessionmanager/main/docs/site/img/icon.svg" alt="Magic Session Manager icon" width="96" height="96" />
+</p>
+
 # Magic Session Manager
 
 **See who is signed in to your Strapi 5 app, end any session in one click, and stop password guessing before it reaches your users.**
