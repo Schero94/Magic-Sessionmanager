@@ -296,7 +296,7 @@ test('native-only notice, Last updated line and polite caption (IA D1.2, D1.5, D
   assert.doesNotMatch(source, /LOADED_SESSIONS_LIMIT/);
   assert.match(
     source,
-    /\{showSessionData && stats\.nativeOnly > 0 \? \(\s*<Alert variant="default"/
+    /\{showSessionData && stats\.nativeOnly > 0 \? \(\s*<UntrackedSessionsNotice/
   );
   assert.match(source, /homepage\.lastUpdated', 'Last updated \{time\}'/);
   assert.match(source, /aria-live="polite"\s+data-session-caption=""/);

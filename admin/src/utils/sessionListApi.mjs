@@ -22,7 +22,13 @@ export const EMPTY_SESSION_STATS = Object.freeze({
   otherReasons: 0,
   usersOnline: 0,
   nativeOnly: 0,
+  nativeOnlyAfterTracking: null,
 });
+
+/** Statistics that must be whole, non-negative counts. */
+const COUNT_KEYS = Object.freeze(
+  Object.keys(EMPTY_SESSION_STATS).filter((key) => key !== 'nativeOnlyAfterTracking')
+);
 
 /**
  * Filter parameters shared by the list and the export. Defaults are left
@@ -106,9 +112,13 @@ export function readSessionPage(payload) {
 export function readSessionStats(payload) {
   const data = /** @type {any} */ (payload)?.data;
   const stats = { ...EMPTY_SESSION_STATS };
-  for (const key of Object.keys(EMPTY_SESSION_STATS)) {
+  for (const key of COUNT_KEYS) {
     if (!isCount(data?.[key])) throw new Error('Invalid session statistics response');
     stats[key] = data[key];
   }
+  // Unknown (null) when the server has no tracking start date, or on 4.x servers.
+  stats.nativeOnlyAfterTracking = isCount(data?.nativeOnlyAfterTracking)
+    ? data.nativeOnlyAfterTracking
+    : null;
   return stats;
 }

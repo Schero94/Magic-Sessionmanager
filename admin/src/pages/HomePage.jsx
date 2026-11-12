@@ -57,6 +57,7 @@ import SessionTable from './Dashboard/SessionTable';
 import SessionCardList from './Dashboard/SessionCardList';
 import SessionSearch from './Dashboard/SessionSearch';
 import HowSessionsWork from './Dashboard/HowSessionsWork';
+import UntrackedSessionsNotice from './Dashboard/UntrackedSessionsNotice';
 import {
   AUTO_REFRESH_INTERVAL_MS,
   DEFAULT_PAGE_SIZE,
@@ -721,15 +722,11 @@ const HomePage = () => {
         ) : null}
 
         {showSessionData && stats.nativeOnly > 0 ? (
-          <Alert variant="default" closeLabel={t('common.close', 'Close')}>
-            <ReadableText variant="pi" textColor="neutral700" tag="span">
-              {t(
-                'homepage.nativeOnly.body',
-                '{count, plural, one {# open Strapi session has} other {# open Strapi sessions have}} no session details from this plugin. They are listed on each user’s session panel, not in this list.',
-                { count: stats.nativeOnly }
-              )}
-            </ReadableText>
-          </Alert>
+          <UntrackedSessionsNotice
+            stats={stats}
+            onChanged={fetchSessions}
+            fallbackFocusRef={dashboardRef}
+          />
         ) : null}
 
         {loading ? (
