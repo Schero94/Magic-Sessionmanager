@@ -1,3 +1,10 @@
+# [4.13.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.12.0...v4.13.0) (2026-11-12)
+
+
+### Features
+
+* explain and diagnose untracked Strapi sessions, link sign-ins outside intercepted routes ([#15](https://github.com/Schero94/Magic-Sessionmanager/issues/15)) ([0a8d584](https://github.com/Schero94/Magic-Sessionmanager/commit/0a8d584c1c802c61b412f581c8317a64a77fb336))
+
 ## [Unreleased]
 
 Release type: minor (`feat` and `fix`), no breaking change. No migration needed; existing routes and responses are unchanged, `GET /sessions/stats` gains one field.
