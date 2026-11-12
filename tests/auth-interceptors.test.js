@@ -31,6 +31,8 @@ function createStrapi({
   jwtManagement = 'legacy-support',
   nativeSessionManager,
   nativeOriginAvailable = true,
+  apiPrefix,
+  linkedNativeIds = [],
 } = {}) {
   invalidateSettingsCache();
   const middleware = [];
@@ -63,6 +65,7 @@ function createStrapi({
         }
         if (key === 'plugin::users-permissions.jwtManagement') return jwtManagement;
         if (key === 'plugin::magic-sessionmanager') return settings;
+        if (key === 'api.rest.prefix' && apiPrefix) return apiPrefix;
         return fallback;
       },
     },
@@ -88,6 +91,11 @@ function createStrapi({
     documents: () => ({
       findFirst: async (query) => findSession?.(query) || null,
     }),
+    db: {
+      query: () => ({
+        findMany: async () => linkedNativeIds.map((nativeSessionId) => ({ nativeSessionId })),
+      }),
+    },
     log,
   };
 }
@@ -1213,4 +1221,238 @@ test('GA-04: ordinary logins do not end the user’s other sessions', async () =
 
   assert.equal(ctx.status, 200);
   assert.equal(terminated, false);
+});
+
+// ---------------------------------------------------------------------------
+// Sessions Strapi creates outside the intercepted routes (capture gaps).
+// ---------------------------------------------------------------------------
+
+const { CREATED_STATE_KEY } = require('../server/src/utils/native-session-capture');
+
+/** Simulates the admin::session lifecycle hook recording a created session. */
+function recordCreated(ctx, sessionId, userId = '42') {
+  ctx.state[CREATED_STATE_KEY] = [...(ctx.state[CREATED_STATE_KEY] || []), { sessionId, userId }];
+}
+
+const accessTokenManager = (sessions) => ({
+  validateAccessToken: (token) =>
+    sessions[token]
+      ? { isValid: true, payload: { userId: '42', sessionId: sessions[token], type: 'access' } }
+      : { isValid: false, payload: null },
+  isSessionActive: async () => true,
+});
+
+test('native login links by access token when the response has no refresh token (jwt.issue path)', async () => {
+  let created;
+  const sessionService = {
+    createSession: async (data) => {
+      created = data;
+      return { documentId: 'sidecar-access-only' };
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    jwtManagement: 'refresh',
+    nativeSessionManager: accessTokenManager({ 'access-only': 'native-access-only' }),
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/magic-link/login',
+    body: { jwt: 'access-only', user: { id: 42, documentId: 'user-42' } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(ctx.status, 200);
+  assert.equal(created.nativeSessionId, 'native-access-only');
+  assert.equal(created.token, 'access-only');
+  assert.equal(created.refreshToken, null);
+});
+
+test('native login resolves an unawaited jwt.issue() Promise before linking', async () => {
+  let created;
+  const sessionService = {
+    createSession: async (data) => {
+      created = data;
+      return { documentId: 'sidecar-promise' };
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    jwtManagement: 'refresh',
+    nativeSessionManager: accessTokenManager({ 'promised-access': 'native-promised' }),
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: { jwt: Promise.resolve('promised-access'), user: { id: 42, documentId: 'user-42' } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(ctx.body.jwt, 'promised-access', 'the client receives the token, not {}');
+  assert.equal(created.nativeSessionId, 'native-promised');
+});
+
+test('a custom REST prefix is intercepted like /api', async () => {
+  let created;
+  const sessionService = {
+    createSession: async (data) => {
+      created = data;
+      return { documentId: 'sidecar-prefix' };
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    jwtManagement: 'refresh',
+    apiPrefix: '/v1',
+    nativeSessionManager: {
+      validateRefreshToken: async () => ({ isValid: true, userId: '42', sessionId: 'native-v1' }),
+    },
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/v1/auth/local',
+    body: { jwt: 'v1-access', refreshToken: 'v1-refresh', user: { id: 42, documentId: 'user-42' } },
+  });
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+  assert.equal(created.nativeSessionId, 'native-v1');
+});
+
+test('a session created by an unintercepted route is linked when its token is in the response', async () => {
+  const createdRows = [];
+  const sessionService = {
+    createSession: async (data) => {
+      createdRows.push(data);
+      return { documentId: `sidecar-${createdRows.length}` };
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    jwtManagement: 'refresh',
+    nativeSessionManager: accessTokenManager({ 'gql-access': 'native-graphql' }),
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const responseBody = JSON.stringify({ data: { login: { jwt: 'gql-access' } } });
+  const ctx = createContext({ path: '/graphql', body: responseBody });
+  await strapi.middleware[0](ctx, async () => {
+    recordCreated(ctx, 'native-graphql');
+    await ctx.downstream();
+  });
+
+  assert.equal(ctx.body, responseBody, 'the response is not changed');
+  assert.equal(createdRows.length, 1);
+  assert.equal(createdRows[0].nativeSessionId, 'native-graphql');
+  assert.equal(createdRows[0].userId, 'user-42');
+  assert.equal(createdRows[0].token, 'gql-access');
+});
+
+test('an unintercepted session whose token is not in the response is left alone', async () => {
+  let createCalls = 0;
+  const revocations = [];
+  const sessionService = {
+    createSession: async () => {
+      createCalls++;
+      return { documentId: 'never' };
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    jwtManagement: 'refresh',
+    nativeSessionManager: {
+      ...accessTokenManager({ 'other-access': 'native-other' }),
+      revokeSessionById: async (...args) => revocations.push(args),
+    },
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({ path: '/api/custom/send-login-mail', body: { sent: true } });
+  await strapi.middleware[0](ctx, async () => {
+    recordCreated(ctx, 'native-out-of-band');
+    await ctx.downstream();
+  });
+  assert.deepEqual(ctx.body, { sent: true });
+  assert.equal(createCalls, 0);
+  assert.deepEqual(revocations, [], 'a session the plugin does not own is never revoked');
+
+  // A token for a session from another request is not linked either.
+  const ctx2 = createContext({ path: '/api/custom/login', body: { jwt: 'other-access' } });
+  await strapi.middleware[0](ctx2, async () => {
+    recordCreated(ctx2, 'native-this-request');
+    await ctx2.downstream();
+  });
+  assert.equal(createCalls, 0);
+});
+
+test('an unintercepted session that is already linked is not linked twice', async () => {
+  let createCalls = 0;
+  const sessionService = {
+    createSession: async () => {
+      createCalls++;
+      return { documentId: 'dup' };
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    jwtManagement: 'refresh',
+    linkedNativeIds: ['native-linked'],
+    nativeSessionManager: accessTokenManager({ 'linked-access': 'native-linked' }),
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({ path: '/api/custom/login', body: { jwt: 'linked-access' } });
+  await strapi.middleware[0](ctx, async () => {
+    recordCreated(ctx, 'native-linked');
+    await ctx.downstream();
+  });
+  assert.equal(createCalls, 0);
+});
+
+test('a login that fails closed before its session was resolved revokes the sessions it created', async () => {
+  const revocations = [];
+  const sessionService = { createSession: async () => ({ documentId: 'never' }) };
+  const strapi = createStrapi({
+    sessionService,
+    jwtManagement: 'refresh',
+    nativeSessionManager: {
+      validateRefreshToken: async () => ({ isValid: false }),
+      revokeSessionById: async (...args) => {
+        revocations.push(args);
+        return true;
+      },
+    },
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: { jwt: 'bad-access', refreshToken: 'unverifiable', user: { id: 42 } },
+  });
+  await strapi.middleware[0](ctx, async () => {
+    recordCreated(ctx, 'native-leaked');
+    await ctx.downstream();
+  });
+
+  assert.equal(ctx.status, 503);
+  assert.deepEqual(revocations, [['42', 'native-leaked']]);
+});
+
+test('legacy mode never links or revokes recorded sessions on other routes', async () => {
+  let createCalls = 0;
+  const sessionService = {
+    createSession: async () => {
+      createCalls++;
+      return { documentId: 'never' };
+    },
+  };
+  const strapi = createStrapi({ sessionService });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+  const ctx = createContext({ path: '/api/custom/login', body: { jwt: 'legacy' } });
+  await strapi.middleware[0](ctx, async () => {
+    recordCreated(ctx, 'native-x');
+    await ctx.downstream();
+  });
+  assert.equal(createCalls, 0);
 });

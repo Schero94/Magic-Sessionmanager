@@ -131,7 +131,7 @@ test('dashboard action bar sits above the list it filters, labelled and responsi
   // then the action bar (search left; Status, End reason and Refresh right),
   // "Last updated", the caption and the list. Page size lives in the footer.
   const order = [
-    'homepage.nativeOnly.body',
+    '<UntrackedSessionsNotice',
     '<HowSessionsWork />',
     '<StatGrid',
     '{toolbar}',

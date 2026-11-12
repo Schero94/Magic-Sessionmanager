@@ -314,13 +314,16 @@ test('stats are counts only, computed with COUNT queries and cached per process 
     'idle',
     'loggedOut',
     'nativeOnly',
+    'nativeOnlyAfterTracking',
     'open',
     'otherReasons',
     'timedOut',
     'total',
     'usersOnline',
   ]);
-  assert.ok(Object.values(first).every((value) => Number.isInteger(value)));
+  const { nativeOnlyAfterTracking, ...counts } = first;
+  assert.ok(Object.values(counts).every((value) => Number.isInteger(value)));
+  assert.equal(nativeOnlyAfterTracking, null, 'unknown without native refresh mode');
   assert.equal(first.usersOnline, 3);
   assert.equal(calls.findMany.length, 0, 'no session rows are read');
   const countsAfterFirst = calls.count.length;

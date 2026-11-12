@@ -10,7 +10,11 @@ const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
-const HOST_SUITES = ['isolated-fallback-logout-http.test.js', 'isolated-http-access.test.js'];
+const HOST_SUITES = [
+  'isolated-fallback-logout-http.test.js',
+  'isolated-http-access.test.js',
+  'isolated-native-capture-http.test.js',
+];
 const missingModules = path.join(
   os.tmpdir(),
   `sessionmanager-no-host-${process.pid}`,

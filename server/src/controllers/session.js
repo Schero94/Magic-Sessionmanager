@@ -15,6 +15,12 @@ const { sendServerError } = require('../utils/http-errors');
 const { getCoordinator } = require('../utils/coordination');
 const { clearSessionStatsCache } = require('../utils/session-list');
 const {
+  getNativeOnlySummary,
+  endNativeOnlySessions,
+  END_MAX_ROWS,
+} = require('../utils/native-only-insight');
+const { LockTimeoutError } = require('../utils/coordination');
+const {
   decodeExportCursor,
   exportQuerySchema,
   isPaginatedListQuery,
@@ -398,6 +404,83 @@ module.exports = {
     } catch (err) {
       strapi.log.error('[magic-sessionmanager] getSessionStatsAdmin failed:', err?.name || 'Error');
       return ctx.internalServerError('Unable to load session statistics');
+    }
+  },
+
+  /**
+   * Count-only diagnostics of untracked Strapi sessions: Users & Permissions
+   * sessions that Strapi still accepts (unexpired refresh tokens) but that
+   * have no Magic session row. Splits them by creation before or after the
+   * plugin started linking sessions, creation month, how Strapi created
+   * them, device class and upcoming expiry. Read-only; no session IDs, user
+   * data or IP addresses.
+   *
+   * @route GET /magic-sessionmanager/sessions/native-only/summary
+   * @auth admin JWT or admin API token
+   * @access plugin::magic-sessionmanager.access
+   * @param {object} ctx Koa context; no query parameters are accepted.
+   * @returns {Promise<void>} `{ data: summary }`, 400 on query parameters, 500 on a database error.
+   */
+  async getNativeOnlySummaryAdmin(ctx) {
+    const parsed = parseQuery(statsQuerySchema, ctx.query);
+    if (!parsed.ok) return ctx.badRequest('Invalid query', { errors: parsed.errors });
+    try {
+      return ctx.send({ data: await getNativeOnlySummary(strapi) });
+    } catch (err) {
+      strapi.log.error(
+        '[magic-sessionmanager] getNativeOnlySummaryAdmin failed:',
+        err?.name || 'Error'
+      );
+      return ctx.internalServerError('Unable to load the untracked session summary');
+    }
+  },
+
+  /**
+   * Ends untracked Users & Permissions sessions: deletes the Strapi session
+   * rows that have no Magic session row, so their refresh tokens stop
+   * working. Admin-panel sessions (origin `admin`) and linked sessions are
+   * never touched. Bounded to `END_MAX_ROWS` rows per request; the response
+   * says how many remain. Runs one at a time across instances.
+   *
+   * Requires a signed-in administrator (admin session strategy): an admin API
+   * token cannot run this bulk sign-out.
+   *
+   * @route POST /magic-sessionmanager/sessions/native-only/end
+   * @auth admin JWT (admin API tokens are refused)
+   * @access plugin::magic-sessionmanager.access
+   * @param {object} ctx Koa context; the body must be empty or `{}`.
+   * @returns {Promise<void>} `{ data: { ended, remaining, limit } }`; 400, 403, 409 or 500.
+   * @sideeffect Deletes rows from Strapi's `admin::session` table and writes an audit log line with counts only.
+   */
+  async endNativeOnlySessionsAdmin(ctx) {
+    if (ctx.state?.auth?.strategy?.name !== 'admin') {
+      return ctx.forbidden('Only a signed-in administrator can end these sessions');
+    }
+    const body = ctx.request?.body;
+    const emptyBody =
+      body === undefined ||
+      body === null ||
+      (typeof body === 'object' && !Array.isArray(body) && Object.keys(body).length === 0);
+    if (!emptyBody) return ctx.badRequest('This endpoint takes no request body');
+
+    try {
+      const result = await getCoordinator(strapi).withLock('native-only-end', () =>
+        endNativeOnlySessions(strapi)
+      );
+      clearSessionStatsCache();
+      strapi.log.info(
+        `[magic-sessionmanager] [AUDIT] Untracked Users & Permissions sessions ended by an administrator: ended=${result.ended} remaining=${result.remaining}`
+      );
+      return ctx.send({ data: { ...result, limit: END_MAX_ROWS } });
+    } catch (err) {
+      if (err instanceof LockTimeoutError || err?.name === 'LockTimeoutError') {
+        return ctx.conflict('Another clean-up is running. Try again in a moment.');
+      }
+      strapi.log.error(
+        '[magic-sessionmanager] endNativeOnlySessionsAdmin failed:',
+        err?.name || 'Error'
+      );
+      return ctx.internalServerError('Unable to end the untracked sessions');
     }
   },
 

@@ -118,6 +118,12 @@ const HowSessionsWork = () => {
                 'Ended sessions stay in the history until they are deleted.'
               )}
             </Typography>
+            <Typography variant="pi" textColor="neutral600">
+              {t(
+                'homepage.howItWorks.untracked',
+                'Strapi also keeps its own list of sign-ins (refresh tokens). A sign-in that has no session details here, for example one from before this plugin tracked sessions, is not in this list and is never counted as active or online. A notice above the cards shows how many there are and why.'
+              )}
+            </Typography>
           </Flex>
         ) : null}
       </Box>

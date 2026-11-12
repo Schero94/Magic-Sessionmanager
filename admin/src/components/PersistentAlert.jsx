@@ -3,12 +3,18 @@ import { Box, Flex, Typography } from '@strapi/design-system';
 import { CheckCircle, Information, WarningCircle } from '@strapi/icons';
 import styled from 'styled-components';
 
-/** DS colour family per alert variant, the same mapping the DS Alert uses. */
+/**
+ * Surface, border and icon tokens per variant. The coloured variants use the
+ * same mapping as the DS Alert. `neutral` is an informational notice with no
+ * status colour: the card surface and a neutral border, so it does not read
+ * as success, warning or error.
+ */
 const TONES = {
-  danger: 'danger',
-  success: 'success',
-  warning: 'warning',
-  default: 'primary',
+  danger: { background: 'danger100', border: 'danger200', icon: 'danger700' },
+  success: { background: 'success100', border: 'success200', icon: 'success700' },
+  warning: { background: 'warning100', border: 'warning200', icon: 'warning700' },
+  default: { background: 'primary100', border: 'primary200', icon: 'primary700' },
+  neutral: { background: 'neutral0', border: 'neutral200', icon: 'neutral600' },
 };
 
 /**
@@ -39,13 +45,16 @@ const AlertBody = styled(Typography)`
  * component composes the same look (tone background and border, filter
  * shadow, variant icon, bold title, body, optional action) from public DS
  * props only, so it has no close button and depends on no DS internals
- * (SET-17). `closeLabel` and `onClose` are accepted and ignored so call sites
+ * (SET-17). With `stacked`, the title, body and action sit in one column
+ * instead of flowing side by side, for notices with a long body.
+ * `closeLabel` and `onClose` are accepted and ignored so call sites
  * written for the DS Alert keep working.
  *
  * @param {{
- *   variant?: 'default'|'success'|'warning'|'danger',
+ *   variant?: 'default'|'neutral'|'success'|'warning'|'danger',
  *   title?: import('react').ReactNode,
  *   titleAs?: string,
+ *   stacked?: boolean,
  *   action?: import('react').ReactNode,
  *   closeLabel?: string,
  *   onClose?: () => void,
@@ -60,6 +69,7 @@ const PersistentAlert = forwardRef(function PersistentAlert(
     variant = 'default',
     title,
     titleAs = 'p',
+    stacked = false,
     action,
     closeLabel: _closeLabel,
     onClose: _onClose,
@@ -80,8 +90,8 @@ const PersistentAlert = forwardRef(function PersistentAlert(
     <Flex
       ref={ref}
       alignItems="flex-start"
-      background={`${tone}100`}
-      borderColor={`${tone}200`}
+      background={tone.background}
+      borderColor={tone.border}
       shadow="filterShadow"
       gap={3}
       hasRadius
@@ -91,12 +101,13 @@ const PersistentAlert = forwardRef(function PersistentAlert(
       {...rest}
     >
       <Flex shrink={0} width="2rem" height="2rem">
-        <Icon aria-hidden focusable="false" width="2rem" height="2rem" fill={`${tone}700`} />
+        <Icon aria-hidden focusable="false" width="2rem" height="2rem" fill={tone.icon} />
       </Flex>
       <Flex
-        alignItems="start"
-        gap={action ? 2 : 1}
-        wrap="wrap"
+        direction={stacked ? 'column' : 'row'}
+        alignItems={stacked ? 'stretch' : 'start'}
+        gap={action || stacked ? 2 : 1}
+        wrap={stacked ? 'nowrap' : 'wrap'}
         role={variant === 'danger' ? 'alert' : 'status'}
         width="100%"
         minWidth={0}

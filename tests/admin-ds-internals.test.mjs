@@ -48,9 +48,26 @@ test('Settings and the shared blocks it uses do not style DS internals (SET-17)'
 test('the persistent notice is composed from public DS props, not by hiding the DS close button', () => {
   const alert = read('components/PersistentAlert.jsx');
   assert.doesNotMatch(alert, /import \{[^}]*\bAlert\b[^}]*\} from '@strapi\/design-system'/);
-  assert.match(alert, /background=\{`\$\{tone\}100`\}/);
-  assert.match(alert, /borderColor=\{`\$\{tone\}200`\}/);
-  assert.match(alert, /fill=\{`\$\{tone\}700`\}/);
+  assert.match(alert, /background=\{tone\.background\}/);
+  assert.match(alert, /borderColor=\{tone\.border\}/);
+  assert.match(alert, /fill=\{tone\.icon\}/);
+  // Coloured variants keep the DS Alert mapping; `neutral` uses the card surface.
+  for (const tone of ['danger', 'success', 'warning']) {
+    assert.match(
+      alert,
+      new RegExp(
+        `${tone}: \\{ background: '${tone}100', border: '${tone}200', icon: '${tone}700' \\}`
+      )
+    );
+  }
+  assert.match(
+    alert,
+    /default: \{ background: 'primary100', border: 'primary200', icon: 'primary700' \}/
+  );
+  assert.match(
+    alert,
+    /neutral: \{ background: 'neutral0', border: 'neutral200', icon: 'neutral600' \}/
+  );
 });
 
 test('the legacy static palette module is gone (DUX-11)', () => {

@@ -18,6 +18,11 @@
 const { enhanceSessions } = require('./enhance-session');
 const { getNativeSessionManager } = require('./native-session-manager');
 const {
+  canInspectNativeSessions,
+  countNativeOnly,
+  getNativeTrackingSince,
+} = require('./native-only-insight');
+const {
   LIST_FIELDS,
   LIST_USER_FIELDS,
   MAX_EXPORT_BATCH,
@@ -144,36 +149,29 @@ async function reconcileNativeRows(strapi, rows) {
 }
 
 /**
- * Counts active native sessions that have no Magic session row. They are
- * listed per user (user panel), not in the paginated list.
+ * Counts native sessions that Strapi still accepts and that have no Magic
+ * session row (see `native-only-insight.js`). They are listed per user
+ * (user panel), not in the paginated list.
  *
  * @param {object} strapi
  * @returns {Promise<number>}
  */
 async function countNativeOnlySessions(strapi) {
-  if (!getNativeSessionManager(strapi) || !hasNativeSessionTable(strapi)) return 0;
-  const knex = strapi.db.connection;
-  const nativeMeta = strapi.db.metadata.get(NATIVE_SESSION_UID);
-  const sessionMeta = strapi.db.metadata.get(SESSION_UID);
-  const column = (meta, attribute) => meta.attributes[attribute]?.columnName || attribute;
+  const { total } = await countNativeOnly(strapi);
+  return total;
+}
 
-  const nativeTable = nativeMeta.tableName;
-  const sessionTable = sessionMeta.tableName;
-  const nativeIdColumn = column(nativeMeta, 'sessionId');
-  const linkedColumn = column(sessionMeta, 'nativeSessionId');
-
-  const result = await knex(nativeTable)
-    .where(column(nativeMeta, 'origin'), NATIVE_ORIGIN)
-    .andWhere(column(nativeMeta, 'status'), 'active')
-    .andWhere(column(nativeMeta, 'expiresAt'), '>', new Date())
-    .whereNotExists(function linked() {
-      this.select(knex.raw('1'))
-        .from(sessionTable)
-        .whereRaw('??.?? = ??.??', [sessionTable, linkedColumn, nativeTable, nativeIdColumn]);
-    })
-    .count({ count: '*' })
-    .first();
-  return Number(result?.count ?? 0);
+/**
+ * Untracked native sessions split by creation before or after the plugin
+ * started linking them. `afterTracking` is null when no start date is stored.
+ *
+ * @param {object} strapi
+ * @returns {Promise<{total: number, afterTracking: number|null}>}
+ */
+async function countNativeOnlySplit(strapi) {
+  if (!canInspectNativeSessions(strapi)) return { total: 0, afterTracking: null };
+  const trackingSince = await getNativeTrackingSince(strapi);
+  return countNativeOnly(strapi, { trackingSince });
 }
 
 /**
@@ -301,7 +299,7 @@ async function getSessionStats(strapi, { inactivityTimeout }) {
     count({ status: 'ended', reason: 'logout' }),
     count({ status: 'ended', reason: 'idle' }),
     countUsersOnline(strapi, cutoff),
-    countNativeOnlySessions(strapi),
+    countNativeOnlySplit(strapi),
   ]);
 
   const ended = Math.max(0, Number(total) - Number(open));
@@ -315,7 +313,8 @@ async function getSessionStats(strapi, { inactivityTimeout }) {
     timedOut: Number(timedOut),
     otherReasons: Math.max(0, ended - Number(loggedOut) - Number(timedOut)),
     usersOnline: Number(usersOnline),
-    nativeOnly: Number(nativeOnly),
+    nativeOnly: nativeOnly.total,
+    nativeOnlyAfterTracking: nativeOnly.afterTracking,
   };
   cache.set(key, { value, expiresAt: Date.now() + STATS_CACHE_MS });
   if (cache.size > 20) cache.delete(cache.keys().next().value);

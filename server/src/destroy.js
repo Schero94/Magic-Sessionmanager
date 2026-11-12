@@ -28,5 +28,16 @@ module.exports = async ({ strapi }) => {
     strapi.sessionManagerIntervals = {};
   }
 
+  if (Array.isArray(strapi.sessionManagerUnsubscribers)) {
+    for (const unsubscribe of strapi.sessionManagerUnsubscribers) {
+      try {
+        if (typeof unsubscribe === 'function') unsubscribe();
+      } catch (err) {
+        log.warn('Failed to remove a database subscriber:', err?.name || 'Error');
+      }
+    }
+    strapi.sessionManagerUnsubscribers = [];
+  }
+
   log.info('[SUCCESS] Plugin cleanup completed');
 };

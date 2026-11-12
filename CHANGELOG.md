@@ -1,3 +1,31 @@
+## [Unreleased]
+
+Release type: minor (`feat` and `fix`), no breaking change. No migration needed; existing routes and responses are unchanged, `GET /sessions/stats` gains one field.
+
+### Fixed
+
+* **Strapi sessions created outside Strapi's own REST auth routes are now linked** (`jwtManagement: 'refresh'`). They used to stay without session details and showed up in the "open Strapi sessions" notice:
+  * hosts with a custom REST prefix (`api.rest.prefix`, for example `/v1`): no login, refresh, password change or logout was tracked;
+  * the GraphQL `login`, `register` and `emailConfirmation` mutations;
+  * custom login routes and other plugins that create a session with `strapi.sessionManager('users-permissions')` or the refresh-mode `jwt.issue()` and return the token in the response;
+  * intercepted routes whose response carries only an access token (refresh-mode `jwt.issue()`); they no longer fail closed, and an unawaited `jwt.issue()` Promise is resolved so the client gets a real token instead of `{}`.
+* A sign-in that the plugin failed closed (503) before its Strapi session was resolved no longer leaves that Strapi session open.
+* The untracked-session count no longer includes sessions past their absolute expiry (`absoluteExpiresAt`), which Strapi already rejects.
+
+### Added
+
+* `GET /magic-sessionmanager/sessions/native-only/summary` (admin, `plugin::magic-sessionmanager.access`, read rate limit): count-only diagnostics of untracked Strapi sessions. Created before or after this plugin started tracking, per creation month, by how Strapi created them (sign-in with device details, password change or reset, token only), by device class (from Strapi's device label, first 2,000 rows) and expiring within 7 and 30 days. No session IDs, user data or IP addresses.
+* `POST /magic-sessionmanager/sessions/native-only/end` (admin, `plugin::magic-sessionmanager.access`, signed-in administrators only, 5 requests per minute): ends untracked Users & Permissions sessions in batches of 200, at most 5,000 per request, and reports how many remain. Strapi administrator sessions, sessions listed in the plugin and sessions younger than two minutes are never touched. Logged with counts only.
+* `GET /sessions/stats` returns `nativeOnlyAfterTracking`: untracked sessions created after the tracking start, or `null` when unknown. The tracking start is stored once at startup in refresh mode (plugin store key `nativeTracking`): the login time of the oldest linked session, or the first start of this version.
+
+### Changed
+
+* **Untracked-session notice on the dashboard.** The blue notice "N open Strapi sessions have no session details" is replaced. It now says these are still-valid Strapi sign-ins (refresh tokens) that are not in the list and are not active or online sessions. It is neutral when every one predates tracking (legacy, expires on its own) and a warning, "possible tracking gap", when any was created afterwards. "Why?" opens the summary; "End these sessions" ends them after a confirmation. "How sessions work" explains untracked sign-ins. All five languages.
+
+### Known limits
+
+* A session whose token never appears in the response that created it (a token sent by email or another channel, stored server-side, created by a background job) cannot be linked. It stays untracked and counts as "created after tracking". Return Strapi's `{ jwt, refreshToken }` from custom login code, or end such sessions from the dashboard.
+
 # [4.12.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.11.0...v4.12.0) (2026-11-10)
 
 
@@ -5,9 +33,9 @@
 
 * **sessions:** page, filter and count sessions on the server ([#9](https://github.com/Schero94/Magic-Sessionmanager/issues/9)) ([c389614](https://github.com/Schero94/Magic-Sessionmanager/commit/c38961432d4415ded4b9c37c80414dbe787e518a))
 
-## [Unreleased]
+### 4.12.0 details
 
-Release type: minor (`feat`), no breaking change. Callers of `GET /sessions` without paging parameters get the same response as before.
+No breaking change. Callers of `GET /sessions` without paging parameters get the same response as before.
 
 ### Changed
 

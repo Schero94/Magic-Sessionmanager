@@ -13,6 +13,7 @@
 const { resolveUserDocumentId } = require('../utils/resolve-user');
 const { extractBearerToken } = require('../utils/extract-token');
 const { hashToken } = require('../utils/encryption');
+const { toCanonicalApiPath } = require('../utils/auth-routes');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 
@@ -57,7 +58,10 @@ function isSelfTerminatingEndpoint(path) {
  */
 module.exports = ({ strapi, sessionService }) => {
   return async (ctx, next) => {
-    if (isAuthEndpoint(ctx.path)) {
+    // Route tables use the default `/api` prefix; map a custom prefix to it.
+    const apiPath =
+      toCanonicalApiPath(ctx.path, strapi.config?.get?.('api.rest.prefix', '/api')) ?? ctx.path;
+    if (isAuthEndpoint(apiPath)) {
       return next();
     }
 
@@ -65,7 +69,7 @@ module.exports = ({ strapi, sessionService }) => {
     // before that route, so ctx.state.user only becomes available after next().
     await next();
 
-    if (isSelfTerminatingEndpoint(ctx.path) || (ctx.status || 200) >= 400) {
+    if (isSelfTerminatingEndpoint(apiPath) || (ctx.status || 200) >= 400) {
       return;
     }
 

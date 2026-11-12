@@ -125,6 +125,14 @@ All screenshots use synthetic data: users `*.example.test`, IP addresses from th
 
 ![Analytics page with four KPIs, Devices and Browsers bar cards and the average session length](pics/analytics.png)
 
+### Untracked Strapi sign-ins (refresh mode)
+
+![Neutral notice: 37 older Strapi sign-ins are not tracked, with Why? and End these sessions](pics/untracked-notice-neutral.webp)
+
+![Warning notice "Possible tracking gap" with the opened Why? summary: before/after tracking, how Strapi created them, expiry, per month and devices](pics/untracked-disclosure-warning.webp)
+
+![End untracked Strapi sign-ins confirmation dialog](pics/untracked-confirm-dialog.webp)
+
 ### Mobile (390 px)
 
 <p>
@@ -187,7 +195,7 @@ All screenshots use synthetic data: users `*.example.test`, IP addresses from th
 - **Table:** Status (badge and a second line, for example "Ended manually · {date}"), User, Device, IP address, Signed in, Last active and the row actions **View details**, **End session** (disabled on ended rows) and **More actions › Delete record**. Clicking a row opens the details.
 - Filters, search, page and page size are kept in the URL, so `?search=<email>` is a shareable link.
 - Search, filters, sorting and paging run on the server, so the list, the counts and the page numbers cover every session, however many there are. Only the 25 to 100 rows on the screen are loaded.
-- In `refresh` mode, open Strapi sessions that have no session details from this plugin (for example sign-ins from before it was installed) are counted in a notice and listed on each user's sessions panel.
+- In `refresh` mode, a notice above the cards counts **untracked Strapi sign-ins**: refresh tokens Strapi still accepts that have no session details from this plugin. They are not in the list and are not active or online sessions; each user's sessions panel lists them. The notice is neutral when all of them were created before this plugin started tracking, and a warning ("Possible tracking gap") when any was created afterwards. **Why?** opens a count-only summary; **End these sessions** ends them after a confirmation. See [Untracked Strapi sessions](#untracked-strapi-sessions).
 - Below the large breakpoint the IP address and Signed in columns are hidden; below the medium breakpoint the table becomes a card list.
 
 ### Session details
@@ -289,6 +297,31 @@ Session Manager supports Users & Permissions end-user sessions in both the nativ
 ```
 
 In this mode Strapi issues, rotates and revokes native sessions. Session Manager uses that state for end-user sessions and keeps its own metadata and history (device, IP address, location, security score). It does not issue or rotate a second token family. Rows created natively without a Session Manager record can appear with a `native_` ID; the admin marks them as "Strapi session", and their device, IP address and location are shown as "—" ("Not recorded").
+
+### Untracked Strapi sessions
+
+Strapi keeps its own session table (`admin::session`). The plugin links each Users & Permissions session it sees to a session record. A session without a record is **untracked**: its refresh token still works until it expires (Strapi defaults: 14 days idle, 30 days at most), but it is not in the dashboard list and never counts as active or online. The dashboard notice shows how many there are; the number counts unexpired refresh tokens, not people.
+
+Which sign-ins are linked (tested with Strapi 5.61 on SQLite and PostgreSQL, `/api` and a custom `api.rest.prefix`):
+
+| How the session is created                                                                                                                                               | Linked                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `POST /auth/local`, `/auth/local/register`, `GET /auth/:provider/callback`, `POST /auth/refresh` (the rotated session), `/auth/change-password`, `/auth/reset-password`  | Yes, under any REST prefix                                               |
+| `GET /auth/email-confirmation`                                                                                                                                           | Creates no session (redirects)                                           |
+| GraphQL `login`, `register`, `emailConfirmation` mutations                                                                                                               | Yes                                                                      |
+| Custom routes or other plugins that call `strapi.sessionManager('users-permissions')` or the refresh-mode `jwt.issue()` and **return the token in the response** (`jwt`) | Yes, from the access token in the response                               |
+| Code that **does not return the token** in the response that created it (token sent by email or another channel, stored server-side, created by a cron job or script)    | **No.** The plugin cannot see which client holds it. It stays untracked. |
+| Sessions created before this plugin started linking sessions                                                                                                             | No; they expire on their own                                             |
+
+For the last two rows: return Strapi's `{ jwt, refreshToken }` (or the refresh cookie) from custom login code so the plugin can link it, or end untracked sessions from the dashboard.
+
+**Reading the summary** (`GET /magic-sessionmanager/sessions/native-only/summary`, also behind **Why?**):
+
+- `beforeTracking` / `afterTracking`: created before or after `trackingSince`, the date from which the plugin links sessions (stored once at startup as the login time of the oldest linked session, or the first start of this version). Only `beforeTracking` > 0: legacy rows, nothing to do; they disappear within the refresh-token lifetime. `afterTracking` > 0 and growing: a sign-in path the plugin does not see.
+- `bySource`: `signIn` rows carry Strapi's sign-in details (local, register, provider callback, GraphQL login), `passwordChange` rows come from a password change or reset, `tokenOnly` rows from `jwt.issue()` or custom code. A growing `afterTracking` with `tokenOnly` points at custom code or another plugin; with `signIn`, at a login route on a path the plugin does not intercept that does not return the token.
+- `byMonth`, `earlier`, `byDevice` (desktop, mobile, unknown, from Strapi's device label over at most 2,000 rows), `expiring.within7Days` / `within30Days`.
+
+**Ending them** (`POST /magic-sessionmanager/sessions/native-only/end`, **End these sessions**) deletes untracked Users & Permissions rows from Strapi's session table, so their refresh tokens stop working; access tokens already issued run out within Strapi's access-token lifetime (10 minutes by default). Strapi administrator sessions, sessions listed in the plugin and sessions younger than two minutes are never touched. At most 5,000 per request; the response says how many remain.
 
 ### `legacy-support` mode
 
@@ -595,6 +628,8 @@ Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authe
 | GET      | `/sessions`                             | Sessions dashboard: `?page=&pageSize=` (1-100), `status`, `reason`, `search`, `sort`; see below             |
 | GET      | `/sessions/active`                      | Active sessions only; same paging parameters                                                                |
 | GET      | `/sessions/stats`                       | Dashboard cards and widget: counts only, cached 5 seconds per process                                       |
+| GET      | `/sessions/native-only/summary`         | **Why?** on the untracked-session notice: counts only, no query parameters (400 otherwise)                  |
+| POST     | `/sessions/native-only/end`             | **End these sessions**: empty body; signed-in administrators only (admin API tokens get 403); 5 per minute  |
 | GET      | `/sessions/analytics`                   | Analytics page: counts and grouped counts over every session, cached 30 seconds                             |
 | GET      | `/sessions/export`                      | Export batches of up to 1,000 rows, newest first; follow `meta.nextCursor`                                  |
 | GET      | `/user/:userId/sessions`                | Sessions panel                                                                                              |
@@ -613,7 +648,9 @@ Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authe
 
 **Session list parameters.** `page` (from 1), `pageSize` (1-100), `status` (`all`, `open`, `active`, `idle`, `ended`), `reason` (with `status=ended`: `logout`, `idle`, `expired`, `manual`, `blocked`, `unrecorded`), `search` (up to 100 characters; matches email, username, IP address, browser, operating system and device type) and `sort` (`loginTime:desc`, `loginTime:asc`, `lastActive:desc`, `lastActive:asc`). The response is `{ data, meta: { pagination: { page, pageSize, total, pageCount } } }` with exact totals. Unknown or out-of-range parameters return 400. Pages that start after the first 50,000 matching sessions return 400; narrow the filter or use the export, which walks every row with a cursor. Without `page` and `pageSize`, `GET /sessions` keeps the 4.x response (latest 1,000 rows, `meta.truncated`) for existing scripts.
 
-The list, statistics, analytics, export and `/users/stats` routes share the read rate limit (120 requests per minute per admin, raise it with `rateLimitReadMax`).
+Both untracked-session routes use the same `plugin::magic-sessionmanager.access` permission as **End session**; the plugin has no separate read-only permission. `POST /sessions/native-only/end` returns `{ data: { ended, remaining, limit } }` and writes one log line with the counts only, 409 while another clean-up runs.
+
+The list, statistics, analytics, export, untracked-session summary and `/users/stats` routes share the read rate limit (120 requests per minute per admin, raise it with `rateLimitReadMax`).
 
 **Block / unblock** (`toggle-block`): send `{ "blocked": true }` or `{ "blocked": false }`. This sets the state, is safe to retry and is what the admin UI sends. A request without a body still toggles, but is deprecated, because a retry after a lost response can reverse the intended state. A non-boolean `blocked` returns 400. The response contains `blocked` and `mode` (`explicit` or `toggle`). Blocking ends all open sessions with the reason `blocked`; if that fails, the response is 500 and the request can be retried.
 
@@ -812,15 +849,16 @@ The plugin sits in the request path of every authenticated Content API call, so 
 
 ## Troubleshooting
 
-| Problem                                                               | Fix                                                                                                                                                                                                                                                                            |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin".                                                                                                                       |
-| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                                                                                                                                              |
-| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                                                                                                                                                  |
-| 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                                                                                                                                         |
-| 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client. With `Retry-After: 1`: more sign-ins from one address were running at once than `maxFailedLogins`; retry after a second. |
-| Location is always "—"                                                | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data.                                                                                                                                                     |
-| Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                                                                                                                                                |
+| Problem                                                               | Fix                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin".                                                                                                                                                            |
+| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                                                                                                                                                                                   |
+| Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                                                                                                                                                                                       |
+| 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                                                                                                                                                                              |
+| 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client. With `Retry-After: 1`: more sign-ins from one address were running at once than `maxFailedLogins`; retry after a second.                                      |
+| Location is always "—"                                                | IP location lookup is off, the provider is `disabled`, or `local-mmdb` has no database. See Configuration › Location data.                                                                                                                                                                                          |
+| Notice "Strapi sign-ins are not tracked"                              | These are unexpired Strapi refresh tokens without session details, not online users. Open **Why?**: only "Before tracking" means legacy rows that expire on their own; a growing "After tracking" means a sign-in path that does not return its token. See [Untracked Strapi sessions](#untracked-strapi-sessions). |
+| Numbers differ from 4.x                                               | The widget and Analytics now count Active and Idle by the configured inactivity timeout; "Online now" is now "Active sessions".                                                                                                                                                                                     |
 
 The plugin stores sessions in the `magic_sessions` table and revocations in its own revoked-token table.
 
