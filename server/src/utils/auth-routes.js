@@ -76,7 +76,53 @@ function isFailedLoginTrackedPath(path, method) {
   return FAILED_LOGIN_ROUTES.has(requestKey(path, method)) || isMagicLinkLogin(path, method);
 }
 
+const DEFAULT_API_PREFIX = '/api';
+
+/**
+ * Normalises a configured REST prefix (`api.rest.prefix`) to a leading slash
+ * and no trailing slash. An empty or invalid value falls back to `/api`,
+ * Strapi's default.
+ *
+ * @param {unknown} prefix Configured prefix.
+ * @returns {string} Normalised prefix, e.g. `/api` or `/v1`.
+ */
+function normalizeApiPrefix(prefix) {
+  if (typeof prefix !== 'string') return DEFAULT_API_PREFIX;
+  const trimmed = prefix.trim().replace(/\/+$/, '');
+  if (!trimmed) return DEFAULT_API_PREFIX;
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+/**
+ * Maps a request path served under the configured REST prefix to the same
+ * path under `/api`, the form every route table in this module uses. Strapi
+ * mounts Content API routes at `${api.rest.prefix}/...`, so with a custom
+ * prefix such as `/v1` a login arrives as `/v1/auth/local`; without this
+ * mapping none of the interceptors matched it and every session created on
+ * such a host stayed untracked.
+ *
+ * Paths outside the prefix are returned unchanged when the prefix is `/api`,
+ * and as `null` otherwise, so a stray `/api/...` path on a host whose API
+ * lives elsewhere never matches a route table.
+ *
+ * @param {string} path Request path (`ctx.path`).
+ * @param {unknown} prefix Configured `api.rest.prefix`.
+ * @returns {string|null} Canonical `/api/...` path, or null outside the API.
+ */
+function toCanonicalApiPath(path, prefix) {
+  if (typeof path !== 'string') return null;
+  const normalized = normalizeApiPrefix(prefix);
+  if (normalized === DEFAULT_API_PREFIX) return path;
+  if (path === normalized) return DEFAULT_API_PREFIX;
+  if (path.startsWith(`${normalized}/`)) {
+    return `${DEFAULT_API_PREFIX}${path.slice(normalized.length)}`;
+  }
+  return null;
+}
+
 module.exports = {
+  normalizeApiPrefix,
+  toCanonicalApiPath,
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,
   isPasswordResetRequest,

@@ -33,6 +33,8 @@ const {
 } = require('./utils/coordination');
 const { removeLegacyLicenseData, withPluginStoreKey } = require('./utils/plugin-store');
 const {
+  normalizeApiPrefix,
+  toCanonicalApiPath,
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,
   isPasswordResetRequest,
@@ -44,6 +46,13 @@ const {
   getOutgoingRefreshToken,
   stripAuthTokensFromResponse,
 } = require('./utils/refresh-token');
+const {
+  subscribeNativeSessionCreation,
+  getCreatedNativeSessions,
+  findAccessTokenCandidates,
+  revokeCreatedNativeSessions,
+  isThenable,
+} = require('./utils/native-session-capture');
 const { ensureNativeTrackingSince } = require('./utils/native-only-insight');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
@@ -122,6 +131,14 @@ module.exports = async ({ strapi }) => {
     await registerSessionAwareAuthStrategy(strapi);
 
     await removeLegacyLicenseRows(strapi, log);
+
+    // Records every Users & Permissions session Strapi creates during a
+    // request, so sessions from custom routes, GraphQL or other plugins can
+    // be linked (see utils/native-session-capture.js).
+    strapi.sessionManagerUnsubscribers = [
+      ...(strapi.sessionManagerUnsubscribers || []),
+      subscribeNativeSessionCreation(strapi),
+    ];
 
     if (usesNativeRefreshSessions(strapi)) {
       try {
@@ -344,7 +361,7 @@ async function checkEncryptionKeyConsistency(strapi, log) {
  */
 function mountPreLoginGeoGuard({ strapi, log }) {
   strapi.server.use(async (ctx, next) => {
-    if (!shouldRunPreAuthGeoGuard(ctx.path, ctx.method)) {
+    if (!shouldRunPreAuthGeoGuard(apiPathOf(strapi, ctx), ctx.method)) {
       return next();
     }
 
@@ -420,7 +437,8 @@ function mountPreLoginGeoGuard({ strapi, log }) {
  * @param {{strapi: object, log: object, sessionService: object}} deps
  */
 function mountLogoutRoute({ strapi, log, sessionService }) {
-  if (hasRegisteredRoute(strapi, 'POST', '/api/auth/logout')) {
+  const logoutPath = `${normalizeApiPrefix(strapi.config.get('api.rest.prefix', '/api'))}/auth/logout`;
+  if (hasRegisteredRoute(strapi, 'POST', logoutPath)) {
     log.debug('[LOGOUT] Using the users-permissions logout route');
     return;
   }
@@ -435,7 +453,7 @@ function mountLogoutRoute({ strapi, log, sessionService }) {
   strapi.server.routes([
     {
       method: 'POST',
-      path: '/api/auth/logout',
+      path: logoutPath,
       handler: async (ctx) => {
         try {
           const token = extractBearerToken(ctx);
@@ -521,6 +539,19 @@ function mountLogoutRoute({ strapi, log, sessionService }) {
   log.info('[SUCCESS] /api/auth/logout route registered (auth-verified)');
 }
 
+/**
+ * The request path mapped to Strapi's default `/api` REST prefix, so the
+ * route tables in `utils/auth-routes.js` also match hosts that configure
+ * another `api.rest.prefix`. Returns null for paths outside the REST API.
+ *
+ * @param {object} strapi
+ * @param {{path: string}} ctx Koa context.
+ * @returns {string|null}
+ */
+function apiPathOf(strapi, ctx) {
+  return toCanonicalApiPath(ctx.path, strapi.config.get('api.rest.prefix', '/api'));
+}
+
 function hasRegisteredRoute(strapi, method, path) {
   try {
     const apiPrefix = strapi.config.get('api.rest.prefix', '/api');
@@ -571,19 +602,56 @@ function usesNativeRefreshSessions(strapi) {
 }
 
 /**
- * Validates a newly issued refresh token and resolves its canonical owner and
- * native session ID before Magic writes a metadata sidecar.
+ * Resolves the native session of an access token that was issued without a
+ * refresh token in the response. Strapi's refresh-mode `jwt.issue()` creates
+ * a native session but returns only the access token (GraphQL
+ * `emailConfirmation`, custom login code, other plugins). The access token
+ * carries the `sessionId`; the session must still be active.
  *
- * @param {{strapi: object, nativeSessionManager: object, refreshToken: string, user?: object}} params
+ * @param {object} nativeSessionManager Checked Users & Permissions session facade.
+ * @param {string} accessToken Access token from the response.
+ * @returns {Promise<{userId: string, sessionId: string}>}
+ * @throws {Error} If the token is invalid or its session is not active.
+ */
+async function resolveNativeAccessSession(nativeSessionManager, accessToken) {
+  const validation = await nativeSessionManager.validateAccessToken(accessToken);
+  const payload = validation?.isValid ? validation.payload : null;
+  if (!payload?.userId || !payload?.sessionId) {
+    throw new Error('native access token could not be validated');
+  }
+  const sessionId = String(payload.sessionId);
+  if (!(await nativeSessionManager.isSessionActive(sessionId))) {
+    throw new Error('native access token belongs to no active session');
+  }
+  return { userId: String(payload.userId), sessionId };
+}
+
+/**
+ * Validates a newly issued refresh token and resolves its canonical owner and
+ * native session ID before Magic writes a metadata sidecar. When the response
+ * carries no refresh token, the access token identifies the session instead.
+ *
+ * @param {{strapi: object, nativeSessionManager: object, refreshToken?: string|null, accessToken?: string|null, user?: object}} params
  * @returns {Promise<{userId: string, userDocumentId: string, sessionId: string}>}
  * @throws {Error} If the token, owner, or native session cannot be resolved.
  */
-async function resolveNativeRefreshSession({ strapi, nativeSessionManager, refreshToken, user }) {
-  if (!refreshToken) throw new Error('native auth response contains no refresh token');
-
-  const validation = await nativeSessionManager.validateRefreshToken(refreshToken);
-  if (!validation?.isValid || !validation.userId || !validation.sessionId) {
-    throw new Error('new native refresh token could not be validated');
+async function resolveNativeRefreshSession({
+  strapi,
+  nativeSessionManager,
+  refreshToken,
+  accessToken = null,
+  user,
+}) {
+  let validation;
+  if (refreshToken) {
+    validation = await nativeSessionManager.validateRefreshToken(refreshToken);
+    if (!validation?.isValid || !validation.userId || !validation.sessionId) {
+      throw new Error('new native refresh token could not be validated');
+    }
+  } else if (typeof accessToken === 'string' && accessToken) {
+    validation = await resolveNativeAccessSession(nativeSessionManager, accessToken);
+  } else {
+    throw new Error('native auth response contains no refresh token');
   }
 
   const userId = String(validation.userId);
@@ -647,7 +715,7 @@ function mountFailedLoginLockout({ strapi, log }) {
   const keyFor = (ip) => hashedKey('lf', ip);
 
   strapi.server.use(async (ctx, next) => {
-    if (!isFailedLoginTrackedPath(ctx.path, ctx.method)) return next();
+    if (!isFailedLoginTrackedPath(apiPathOf(strapi, ctx), ctx.method)) return next();
 
     const settings = await getRequestSettings(strapi, ctx);
     const maxFailed = Number(settings.maxFailedLogins) || 0;
@@ -797,14 +865,39 @@ function statusOfThrownError(err) {
  */
 function mountLoginInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
-    const requestType = classifyJwtIssuingRequest(ctx.path, ctx.method);
+    const apiPath = apiPathOf(strapi, ctx);
+    const requestType = classifyJwtIssuingRequest(apiPath, ctx.method);
     const previousAccessToken = requestType === 'rotate-current' ? extractBearerToken(ctx) : null;
     const nativeMode = usesNativeRefreshSessions(strapi);
     await next();
 
+    if (nativeMode && requestType === null) {
+      await linkCreatedNativeSessions({ strapi, ctx, log, sessionService });
+      return;
+    }
     if (requestType !== 'new-session' && requestType !== 'rotate-current') return;
     if (ctx.status < 200 || ctx.status >= 300) return;
     if (!ctx.body || !ctx.body.jwt) return;
+
+    // Refresh-mode `jwt.issue()` returns a Promise. Code that puts it into the
+    // body unawaited would send `{}` as the token; resolve it so the client
+    // gets the token and the session can be linked.
+    if (nativeMode && isThenable(ctx.body.jwt)) {
+      try {
+        ctx.body.jwt = await ctx.body.jwt;
+      } catch (err) {
+        await compensateCreatedNativeSessions({ strapi, ctx, log });
+        failClosedAuthResponse({
+          ctx,
+          strapi,
+          log,
+          operation: 'access token could not be issued',
+          error: err,
+        });
+        return;
+      }
+      if (typeof ctx.body.jwt !== 'string' || !ctx.body.jwt) return;
+    }
 
     const refreshCookieName = getRefreshCookieName(strapi);
 
@@ -820,6 +913,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
             strapi,
             nativeSessionManager,
             refreshToken: newRefreshToken,
+            accessToken: ctx.body.jwt,
             user: ctx.body.user || ctx.state?.user,
           });
 
@@ -858,6 +952,12 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
           if (nativeSessionManager && nativeSession) {
             await compensateNativeSession({ nativeSessionManager, nativeSession, log });
           }
+          await compensateCreatedNativeSessions({
+            strapi,
+            ctx,
+            log,
+            except: nativeSession?.sessionId,
+          });
           failClosedAuthResponse({
             ctx,
             strapi,
@@ -919,6 +1019,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
           strapi,
           nativeSessionManager,
           refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
+          accessToken: ctx.body.jwt,
           user,
         });
         userDocId = nativeSession.userDocumentId;
@@ -953,7 +1054,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
       // user, including legacy JWTs that stay cryptographically valid. The
       // new session is excluded. A failure fails closed so the client never
       // receives the new token while old ones remain usable (GA-04).
-      if (isPasswordResetRequest(ctx.path, ctx.method)) {
+      if (isPasswordResetRequest(apiPath, ctx.method)) {
         await sessionService.terminateSession({
           userId: userDocId,
           exceptSessionId: newSession.documentId,
@@ -1127,6 +1228,16 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
       if (nativeSessionManager && nativeSession) {
         await compensateNativeSession({ nativeSessionManager, nativeSession, log });
       }
+      // A failure before the session was resolved left Strapi's new session
+      // without a sidecar; revoke it so the failed login leaves nothing open.
+      if (nativeMode) {
+        await compensateCreatedNativeSessions({
+          strapi,
+          ctx,
+          log,
+          except: nativeSession?.sessionId,
+        });
+      }
       failClosedAuthResponse({
         ctx,
         strapi,
@@ -1141,6 +1252,107 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 }
 
 /**
+ * Revokes every native session Strapi created during this request (except
+ * `except`), after the plugin failed the request closed.
+ *
+ * @param {{strapi: object, ctx: object, log: object, except?: string|null}} params
+ * @returns {Promise<void>}
+ * @sideeffect Deletes native sessions created by this request.
+ */
+async function compensateCreatedNativeSessions({ strapi, ctx, log, except = null }) {
+  if (getCreatedNativeSessions(ctx).length === 0) return;
+  try {
+    const nativeSessionManager = getNativeSessionManager(strapi);
+    if (!nativeSessionManager) return;
+    await revokeCreatedNativeSessions({ ctx, nativeSessionManager, log, except });
+  } catch (err) {
+    log.error('[AUTH-COMPENSATION] Native session revocation failed:', err?.name || 'Error');
+  }
+}
+
+/**
+ * Links Users & Permissions sessions that Strapi created during a request
+ * outside the auth routes this plugin intercepts (custom auth routes, the
+ * GraphQL auth mutations, other plugins). A session is linked only when the
+ * response carries its access token, so the new Magic session row matches
+ * the token the client uses. Best effort: a failure is logged and never
+ * changes the response, because the route is not owned by this plugin.
+ *
+ * Sessions whose token does not appear in the response (sent by email,
+ * stored server-side, created by a background job) cannot be linked and
+ * stay untracked; they show up in the untracked-session summary.
+ *
+ * @param {{strapi: object, ctx: object, log: object, sessionService: object}} params
+ * @returns {Promise<number>} Number of sessions linked.
+ * @sideeffect Creates Magic session rows.
+ */
+async function linkCreatedNativeSessions({ strapi, ctx, log, sessionService }) {
+  const created = getCreatedNativeSessions(ctx);
+  if (created.length === 0) return 0;
+  if (ctx.status < 200 || ctx.status >= 300) return 0;
+
+  let linked = 0;
+  try {
+    const nativeSessionManager = getNativeSessionManager(strapi);
+    if (!nativeSessionManager) return 0;
+
+    const ids = [...new Set(created.map((entry) => entry.sessionId))];
+    const existing = await strapi.db.query(SESSION_UID).findMany({
+      where: { nativeSessionId: { $in: ids } },
+      select: ['nativeSessionId'],
+    });
+    const alreadyLinked = new Set((existing || []).map((row) => String(row.nativeSessionId)));
+    const pending = new Map(
+      created
+        .filter((entry) => !alreadyLinked.has(entry.sessionId))
+        .map((entry) => [entry.sessionId, entry])
+    );
+    if (pending.size === 0) return 0;
+
+    for (const candidate of findAccessTokenCandidates(ctx.body)) {
+      if (pending.size === 0) break;
+      let session;
+      try {
+        session = await resolveNativeAccessSession(nativeSessionManager, candidate);
+      } catch {
+        continue;
+      }
+      const entry = pending.get(session.sessionId);
+      if (!entry || entry.userId !== session.userId) continue;
+
+      const userDocumentId = await resolveUserDocumentId(strapi, session.userId);
+      if (!userDocumentId) continue;
+
+      const headers = ctx.request?.headers || ctx.request?.header || {};
+      const createdSidecar = await sessionService.createSession({
+        userId: userDocumentId,
+        ip: getClientIp(ctx),
+        userAgent: headers['user-agent'] || 'unknown',
+        token: candidate,
+        geoData: ctx.state?.__magicSessionGeoData || null,
+        nativeSessionId: session.sessionId,
+      });
+      if (createdSidecar?.documentId) {
+        pending.delete(session.sessionId);
+        linked += 1;
+      }
+    }
+
+    if (linked > 0) {
+      log.info(`[CAPTURE] Linked ${linked} session(s) created outside the intercepted auth routes`);
+    }
+    if (pending.size > 0) {
+      log.debug(
+        `[CAPTURE] ${pending.size} session(s) created without their token in the response; not tracked`
+      );
+    }
+  } catch (err) {
+    log.warn('[CAPTURE] Linking a session created elsewhere failed:', err?.name || 'Error');
+  }
+  return linked;
+}
+
+/**
  * Synchronizes successful refreshes with Magic metadata without taking
  * ownership of Strapi's native token rotation. Legacy mode requires an active
  * Magic sidecar; native mode lets Strapi validate pre-existing sessions even
@@ -1150,7 +1362,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
  */
 function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
-    const isRefreshToken = ctx.path === '/api/auth/refresh' && ctx.method === 'POST';
+    const isRefreshToken = apiPathOf(strapi, ctx) === '/api/auth/refresh' && ctx.method === 'POST';
     if (!isRefreshToken) return next();
 
     const cookieName = getRefreshCookieName(strapi);
@@ -1263,6 +1475,12 @@ function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
           if (nativeSession) {
             await compensateNativeSession({ nativeSessionManager, nativeSession, log });
           }
+          await compensateCreatedNativeSessions({
+            strapi,
+            ctx,
+            log,
+            except: nativeSession?.sessionId,
+          });
           failClosedAuthResponse({
             ctx,
             strapi,
@@ -1311,7 +1529,7 @@ function mountRefreshTokenInterceptor({ strapi, log, sessionService }) {
  */
 function mountLogoutInterceptor({ strapi, log, sessionService }) {
   strapi.server.use(async (ctx, next) => {
-    if (ctx.path !== '/api/auth/logout' || ctx.method !== 'POST') return next();
+    if (apiPathOf(strapi, ctx) !== '/api/auth/logout' || ctx.method !== 'POST') return next();
 
     const refreshToken = getIncomingRefreshToken(ctx, getRefreshCookieName(strapi));
     const accessToken = extractBearerToken(ctx);
