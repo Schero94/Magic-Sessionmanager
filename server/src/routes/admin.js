@@ -99,6 +99,31 @@ const baseRoutes = [
   },
   {
     method: 'GET',
+    path: '/sessions/native-only/summary',
+    handler: 'session.getNativeOnlySummaryAdmin',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+      description: 'Get count-only diagnostics of untracked Strapi sessions (admin)',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/sessions/native-only/end',
+    handler: 'session.endNativeOnlySessionsAdmin',
+    config: {
+      policies: adminPolicy(),
+      middlewares: [
+        {
+          name: 'plugin::magic-sessionmanager.rate-limit',
+          config: { profile: 'write', max: 5, window: 60_000 },
+        },
+      ],
+      description: 'End untracked Users & Permissions sessions, bounded per request (admin)',
+    },
+  },
+  {
+    method: 'GET',
     path: '/sessions/analytics',
     handler: 'session.getSessionAnalyticsAdmin',
     config: {

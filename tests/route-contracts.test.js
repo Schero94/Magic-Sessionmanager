@@ -42,6 +42,8 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['GET', '/sessions', 'session.getAllSessionsAdmin'],
     ['GET', '/sessions/active', 'session.getActiveSessions'],
     ['GET', '/sessions/stats', 'session.getSessionStatsAdmin'],
+    ['GET', '/sessions/native-only/summary', 'session.getNativeOnlySummaryAdmin'],
+    ['POST', '/sessions/native-only/end', 'session.endNativeOnlySessionsAdmin'],
     ['GET', '/sessions/analytics', 'session.getSessionAnalyticsAdmin'],
     ['GET', '/sessions/export', 'session.exportSessionsAdmin'],
     ['GET', '/user/:userId/sessions', 'session.getUserSessions'],
@@ -144,6 +146,8 @@ test('admin session routes retain their paths, methods, handlers and Magic permi
     ['GET', '/sessions', 'session.getAllSessionsAdmin'],
     ['GET', '/sessions/active', 'session.getActiveSessions'],
     ['GET', '/sessions/stats', 'session.getSessionStatsAdmin'],
+    ['GET', '/sessions/native-only/summary', 'session.getNativeOnlySummaryAdmin'],
+    ['POST', '/sessions/native-only/end', 'session.endNativeOnlySessionsAdmin'],
     ['GET', '/sessions/analytics', 'session.getSessionAnalyticsAdmin'],
     ['GET', '/sessions/export', 'session.exportSessionsAdmin'],
     ['GET', '/user/:userId/sessions', 'session.getUserSessions'],
@@ -188,6 +192,7 @@ test('admin session list, statistics, export and user totals are read-rate-limit
     '/sessions',
     '/sessions/active',
     '/sessions/stats',
+    '/sessions/native-only/summary',
     '/sessions/analytics',
     '/sessions/export',
     '/users/stats',
@@ -208,4 +213,17 @@ test('admin session list, statistics, export and user totals are read-rate-limit
       `${path} uses the read rate limit`
     );
   }
+});
+
+test('ending untracked sessions is write-rate-limited to five requests a minute', () => {
+  const route = adminRoutes.find(
+    (candidate) => candidate.method === 'POST' && candidate.path === '/sessions/native-only/end'
+  );
+  assert.ok(route);
+  assert.deepEqual(route.config.middlewares, [
+    {
+      name: 'plugin::magic-sessionmanager.rate-limit',
+      config: { profile: 'write', max: 5, window: 60_000 },
+    },
+  ]);
 });

@@ -44,6 +44,7 @@ const {
   getOutgoingRefreshToken,
   stripAuthTokensFromResponse,
 } = require('./utils/refresh-token');
+const { ensureNativeTrackingSince } = require('./utils/native-only-insight');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -121,6 +122,14 @@ module.exports = async ({ strapi }) => {
     await registerSessionAwareAuthStrategy(strapi);
 
     await removeLegacyLicenseRows(strapi, log);
+
+    if (usesNativeRefreshSessions(strapi)) {
+      try {
+        await ensureNativeTrackingSince(strapi);
+      } catch (err) {
+        log.warn('[NATIVE] Tracking start date could not be stored:', err?.name || 'Error');
+      }
+    }
 
     const sessionService = strapi.plugin('magic-sessionmanager').service('session');
 
