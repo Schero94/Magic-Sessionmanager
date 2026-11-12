@@ -311,6 +311,28 @@ npm run develop</code></pre>
               /></a>
               <figcaption>Dashboard in dark mode</figcaption>
             </figure>
+            <figure class="shot shot-wide">
+              <a href="./img/untracked-disclosure-warning.webp"
+                ><img
+                  src="./img/untracked-disclosure-warning.webp"
+                  width="1304"
+                  height="674"
+                  loading="lazy"
+                  alt="Warning notice Possible tracking gap: 43 Strapi sign-ins are not tracked, with the opened Why? summary: created before or after tracking, how Strapi created them, expiry, per month and devices."
+              /></a>
+              <figcaption>Untracked Strapi sign-ins: notice and Why? summary</figcaption>
+            </figure>
+            <figure class="shot">
+              <a href="./img/untracked-confirm-dialog.webp"
+                ><img
+                  src="./img/untracked-confirm-dialog.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="Confirmation dialog End 43 untracked Strapi sign-ins? that explains that refresh tokens stop working and administrator sessions are not affected."
+              /></a>
+              <figcaption>Ending untracked sign-ins</figcaption>
+            </figure>
             <figure class="shot">
               <a href="./img/dashboardsessionmodal.webp"
                 ><img
@@ -1022,6 +1044,17 @@ const { data, meta } = await res.json();
             <p>
               Yes. Strapi issues, rotates and revokes its own sessions; the plugin adds device, IP
               address, location and history, and ends the native session when you end it.
+            </p>
+          </details>
+          <details class="faq">
+            <summary>What are "untracked Strapi sign-ins" on the dashboard?</summary>
+            <p>
+              Refresh tokens that Strapi still accepts but that have no session details from this
+              plugin, for example sign-ins from before it started tracking, or tokens that custom
+              code created without returning them. They are not in the list and are not active or
+              online sessions. <strong>Why?</strong> shows a count-only summary (before or after
+              tracking, how Strapi created them, expiry); <strong>End these sessions</strong> ends
+              them. The README lists which sign-in paths are linked.
             </p>
           </details>
           <details class="faq">
