@@ -244,7 +244,7 @@ Two links: **Configuration** and **Analytics**.
 
 | Item                | Supported                                                                                                                                                                                                       |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Strapi              | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.61.0.                                                                                                                                       |
+| Strapi              | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.62.0.                                                                                                                                       |
 | Node.js             | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                                                      |
 | Users & Permissions | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                                                               |
 | Homepage widget     | Strapi 5.13 and later (older versions have no widgets API; the rest works)                                                                                                                                      |
@@ -952,7 +952,7 @@ Issues and pull requests are welcome.
 
 Actively maintained for the Strapi 5 line. Releases are cut by semantic-release from `main` using Conventional Commits and published to npm with npm Trusted Publishing (GitHub OIDC). Dependabot proposes weekly dependency updates; patch and minor updates are merged only after lint, tests, both type checks, build and `verify` pass.
 
-Dependency advisories: the remaining high-severity findings come through the Strapi 5 core dependency chain (`braces` GHSA-vfj7-8cjw-p6xm, Zod GHSA-mrhx-c7xc-m3w5 via `@strapi/utils` 5.61.0). The plugin cannot fix them; the forced npm fix would downgrade to Strapi 4, so it is not applied.
+Dependency advisories: with the Strapi 5.62.0 dev baseline, `npm audit --omit=dev` on the plugin lockfile reports 0 vulnerabilities (checked 2026-11-16). Findings that come through the Strapi 5 core dependency chain cannot be fixed by the plugin; the forced npm fix would downgrade to Strapi 4, so it is not applied.
 
 Version 4.8.0 was published before its acceptance gates closed and has known defects that 4.9.0 fixed (see the [CHANGELOG](CHANGELOG.md)). Use 4.9.0 or later.
 
