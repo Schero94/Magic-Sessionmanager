@@ -100,7 +100,7 @@ Yarn and pnpm work the same way (`yarn add strapi-plugin-magic-sessionmanager`, 
 
 ## Screenshots
 
-All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61. The [full gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) on the project site also shows dark mode, every settings tab, the untracked sign-in dialogs and more mobile views.
+All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61. The [full gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) on the project site also shows Analytics, dark mode, every settings tab, the untracked sign-in dialogs and more mobile views.
 
 ### Session details
 
@@ -118,30 +118,15 @@ All screenshots use synthetic data: users `*.example.test`, IP addresses from th
 
 ![Configuration page, Sessions tab, with Session lifetime and Token check cards](https://schero94.github.io/Magic-Sessionmanager/img/settings1.webp)
 
-### Analytics
-
-![Analytics page with four KPIs, Devices and Browsers bar cards and the average session length](https://schero94.github.io/Magic-Sessionmanager/img/analytics.webp)
-
 ### Untracked Strapi sign-ins (refresh mode)
 
 ![Neutral notice: 37 older Strapi sign-ins are not tracked, with Why? and End these sessions](https://schero94.github.io/Magic-Sessionmanager/img/untracked-notice-neutral.webp)
 
 ### Admin panel sessions
 
-Strapi 5.62, synthetic admins `*.example.test`.
+Strapi 5.62, synthetic admins `*.example.test`. The [gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) also shows the sessions dialog, the sign-out confirmation, what the signed-out admin sees, dark mode and the phone layout.
 
-![Admin panel sessions: view switch App users / Admin panel, cards Signed-in admins, Not signed in and All admins, an explanation of how signing out works, search, a sign-in status filter and a table of admins with roles, status and last activity](https://raw.githubusercontent.com/Schero94/Magic-Sessionmanager/main/pics/admin-panel.webp)
-
-![Sessions of one admin: every signed-in browser with device, signed in, last active, latest end, Sign out per browser, Sign out everywhere and Manage in Settings](https://raw.githubusercontent.com/Schero94/Magic-Sessionmanager/main/pics/admin-panel-sessions.webp)
-
-![Confirmation: Sign Clara Muster out of this browser? The admin is signed out on their next click and can sign in again with their password](https://raw.githubusercontent.com/Schero94/Magic-Sessionmanager/main/pics/admin-panel-confirm.webp)
-
-![What the signed-out admin sees on their next click: the Strapi login page](https://raw.githubusercontent.com/Schero94/Magic-Sessionmanager/main/pics/admin-panel-signed-out.webp)
-
-<p>
-  <img src="https://raw.githubusercontent.com/Schero94/Magic-Sessionmanager/main/pics/admin-panel-dark.webp" width="560" alt="Admin panel sessions in the Strapi dark theme">
-  <img src="https://raw.githubusercontent.com/Schero94/Magic-Sessionmanager/main/pics/admin-panel-mobile.webp" width="260" alt="Admin panel sessions at 390 px: the table becomes a card list with View sessions and Sign out everywhere buttons">
-</p>
+![Admin panel sessions: view switch App users / Admin panel, cards Signed-in admins, Not signed in and All admins, an explanation of how signing out works, search, a sign-in status filter and a table of admins with roles, status and last activity](https://schero94.github.io/Magic-Sessionmanager/img/admin-panel.webp)
 
 ### Mobile (390 px)
 
