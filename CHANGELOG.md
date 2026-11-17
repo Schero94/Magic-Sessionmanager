@@ -1,3 +1,28 @@
+## [Unreleased]
+
+Release type: minor (`feat`), no breaking change. Existing routes, responses, numbers, widgets, settings and Content API features are unchanged. No migration needed.
+
+### Added
+
+* **Admin panel sessions.** A new **Admin panel** view on the Session Manager page (`/admin/plugins/magic-sessionmanager/admin-panel`), next to the app-user dashboard, shows who can use the Strapi admin panel and who is signed in: every admin with roles, status (Signed in, Not signed in, Deactivated, Invited), last activity and the signed-in browsers (Strapi's device label, signed in, last active, latest end, "This browser", "Remember me"). Search, a sign-in status filter and pagination run on the server. All five languages.
+* **Sign admins out.** **Sign out** (one browser) and **Sign out everywhere**, each confirmed. Strapi 5.62 checks the admin session on every admin request, so the admin is signed out on their next click and lands on the login page; there is no waiting for the access token to expire. The plugin deletes every Strapi session record of the browser, so older access tokens of rotated records stop working too. Signing yourself out of the current browser shows a warning. **Manage in Settings** links to Strapi's Settings › Users to deactivate an account.
+* Admin routes `GET /magic-sessionmanager/admin-sessions/admins`, `GET /magic-sessionmanager/admin-sessions/admins/:adminId/sessions`, `POST /magic-sessionmanager/admin-sessions/admins/:adminId/sessions/:sessionId/sign-out` and `POST /magic-sessionmanager/admin-sessions/admins/:adminId/sign-out-everywhere` (contracts in the README).
+* RBAC actions `plugin::magic-sessionmanager.admin-sessions.read` ("Read admin panel sessions") and `plugin::magic-sessionmanager.admin-sessions.revoke` ("Sign out admins"), granted to Super Admin only by default.
+
+### Security
+
+* Sign-outs need a signed-in administrator (admin API tokens get 403), are limited to 10 per minute per admin, and write one info log line with admin ids and counts only (`[magic-sessionmanager] Admin sign-out: actor=… target=… scope=one|all ended=…`), plus the Strapi event `magic-sessionmanager.admin-sessions.signed-out`.
+* An admin without the Super Admin role cannot sign out a Super Admin (403 `super-admin-protected`), so the last active Super Admin can never be signed out by someone else.
+* A session id that is not a live session of the given admin answers 404, like an unknown id. Responses never contain tokens, device ids or password fields. The plugin stores nothing about admins; Strapi records no IP address for admin sessions.
+
+### Changed
+
+* Admin session rows (`origin = 'admin'`) stay out of every app-user number; regression tests now cover the dashboard statistics, the untracked-session count and the widget totals with admin sessions present.
+
+### Tests
+
+* Real-HTTP suite `tests/isolated-admin-sessions-http.test.js` on SQLite and PostgreSQL: admins sign in through `POST /admin/login`; listing, sign-out of one browser and everywhere, self sign-out, Super Admin guard, RBAC denials, rate limit, rejected next request and refresh. New CI job runs it, plus the existing HTTP access suite in both JWT modes, against the Strapi 5.62 devDependencies (`@strapi/plugin-users-permissions` is now a devDependency).
+
 ## [4.13.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.13.0...v4.13.1) (2026-11-17)
 
 
