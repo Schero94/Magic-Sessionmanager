@@ -10,6 +10,7 @@ import {
 } from '@strapi/strapi/admin';
 import {
   Button,
+  Dialog,
   EmptyStateLayout,
   Flex,
   IconButton,
@@ -346,9 +347,8 @@ const AdminPanelPage = () => {
           : t('adminPanel.confirm.all.title', 'Sign {name} out everywhere?', { name: admin.name }),
       body: (
         <Flex direction="column" alignItems="stretch" gap={3}>
-          <ReadableText variant="omega" textColor="neutral800" tag="p">
-            {body}
-          </ReadableText>
+          {/* A node body needs its own Dialog.Description (accessible description). */}
+          <Dialog.Description>{body}</Dialog.Description>
           {includesThisBrowser ? (
             <Alert variant="warning">
               {t(

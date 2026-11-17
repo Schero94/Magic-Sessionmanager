@@ -16,7 +16,7 @@ import { useSessionFormatters } from '../../utils/useSessionFormatters';
 import { PropertyList } from '../../components/ui';
 import Alert from '../../components/PersistentAlert';
 import { LastActive } from '../Dashboard/SessionTable';
-import { AdminRoles, AdminStatus } from './AdminList';
+import { AdminRoles, AdminStatus, HIGHLIGHT_BADGE } from './AdminList';
 
 /**
  * Translation helper bound to the plugin prefix.
@@ -76,7 +76,7 @@ const SessionCard = ({ session, admin, canSignOut, onSignOut }) => {
               {device}
             </Typography>
             {session.current ? (
-              <Badge variant="primary">{t('adminPanel.session.current', 'This browser')}</Badge>
+              <Badge {...HIGHLIGHT_BADGE}>{t('adminPanel.session.current', 'This browser')}</Badge>
             ) : null}
             {session.rememberMe ? (
               <Badge>{t('adminPanel.session.rememberMe', 'Remember me')}</Badge>

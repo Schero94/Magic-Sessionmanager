@@ -17,6 +17,13 @@ import {
 } from '@strapi/design-system';
 import { Eye, SignOut } from '@strapi/icons';
 import { getTranslation } from '../../utils/getTranslation';
+
+/**
+ * "You" and "This browser" badges. The DS primary variant measured 2.43:1 in
+ * the dark theme, so the primary surface keeps neutral800 text (high contrast
+ * in both themes, like the Idle badge).
+ */
+export const HIGHLIGHT_BADGE = { backgroundColor: 'primary100', textColor: 'neutral800' };
 import { getBadgeColors } from '../../components/ui/StatusBadge';
 import { LastActive } from '../Dashboard/SessionTable';
 import { getAdminStatusPresentation } from './adminPanelModel.mjs';
@@ -59,7 +66,7 @@ export const AdminIdentity = ({ admin }) => {
           {admin.name}
         </Typography>
         {admin.self ? (
-          <Badge variant="primary" shrink={0}>
+          <Badge {...HIGHLIGHT_BADGE} shrink={0}>
             {t('adminPanel.you', 'You')}
           </Badge>
         ) : null}
