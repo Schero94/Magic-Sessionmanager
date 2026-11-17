@@ -87,7 +87,7 @@
             >
           </div>
           <ul class="badges" aria-label="Package details">
-            <li class="badge">Strapi 5, tested on 5.61</li>
+            <li class="badge">Strapi 5, tested on 5.62</li>
             <li class="badge">Node.js 22.22.2+ or 24.15.0+</li>
             <li class="badge">5 admin languages</li>
             <li class="badge">MIT, free, no telemetry</li>
@@ -973,7 +973,7 @@ const { data, meta } = await res.json();
               <tbody>
                 <tr>
                   <th scope="row">Strapi</th>
-                  <td>5 (<code>@strapi/strapi ^5.0.0</code>); acceptance host Strapi 5.61.0</td>
+                  <td>5 (<code>@strapi/strapi ^5.0.0</code>); acceptance host Strapi 5.62.0</td>
                 </tr>
                 <tr>
                   <th scope="row">Node.js</th>
@@ -1130,9 +1130,9 @@ const { data, meta } = await res.json();
               <h3>Known issues outside the plugin</h3>
               <ul>
                 <li>
-                  The recorded high-severity advisories come through the Strapi 5 core dependency
-                  chain: <code>braces</code> (GHSA-vfj7-8cjw-p6xm) and Zod via
-                  <code>@strapi/utils</code> 5.61.0 (GHSA-mrhx-c7xc-m3w5).
+                  The recorded high-severity advisory comes through the Strapi 5 core dependency
+                  chain: picomatch (GHSA-fc5q-39xc-vjpf) via <code>@strapi/utils</code> 5.62.0,
+                  checked 2026-11-17.
                 </li>
                 <li>
                   No compatible fix exists; the forced npm fix downgrades to Strapi 4, so none was
