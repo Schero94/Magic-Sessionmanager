@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.13.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.13.0...v4.13.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **readme:** make images and links work on the Strapi marketplace ([#18](https://github.com/Schero94/Magic-Sessionmanager/issues/18)) ([825507a](https://github.com/Schero94/Magic-Sessionmanager/commit/825507a74d3a87761495462561339895414d00be))
+
 
 ### Fixed
 
