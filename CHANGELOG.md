@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### Fixed
+
+* README screenshots and links now work on the Strapi marketplace and on npm. Both render the packaged README relative to their own pages, so the relative `pics/...`, `LICENSE` and `CHANGELOG.md` references in 4.13.0 returned 404. Images now load from the project site and links point to GitHub. The README shows eight key screenshots and links the full gallery on the project site. A test fails on any relative image or link URL.
+* The README dependency-advisory note now names the current Strapi core advisory (picomatch GHSA-fc5q-39xc-vjpf through `@strapi/utils`) instead of claiming 0 findings.
+
+### Changed
+
+* The npm package no longer ships the `pics/` folder (about 0.5 MB smaller); the README loads its images from the project site.
+
 # [4.13.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.12.0...v4.13.0) (2026-11-12)
 
 
