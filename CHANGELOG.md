@@ -5,7 +5,7 @@
 
 * explain and diagnose untracked Strapi sessions, link sign-ins outside intercepted routes ([#15](https://github.com/Schero94/Magic-Sessionmanager/issues/15)) ([0a8d584](https://github.com/Schero94/Magic-Sessionmanager/commit/0a8d584c1c802c61b412f581c8317a64a77fb336))
 
-## [Unreleased]
+## 4.13.0 details (written before the release)
 
 Release type: minor (`feat` and `fix`), no breaking change. No migration needed; existing routes and responses are unchanged, `GET /sessions/stats` gains one field.
 
