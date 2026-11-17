@@ -533,7 +533,12 @@ const AdminPanelPage = () => {
                 />
               </Flex>
               <Flex gap={2} alignItems="center" shrink={0}>
-                <Flex flex={isBelowMedium ? '1 1 auto' : undefined} minWidth={0} direction="column">
+                <Flex
+                  flex={isBelowMedium ? '1 1 auto' : undefined}
+                  minWidth={0}
+                  direction="column"
+                  alignItems="stretch"
+                >
                   <SingleSelect
                     size="S"
                     aria-label={t('adminPanel.filter.label', 'Sign-in status')}
