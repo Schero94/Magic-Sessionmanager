@@ -53,6 +53,7 @@ import { PageShell, StatCard, StatGrid } from '../components/ui';
 import SessionDetailModal from '../components/SessionDetailModal';
 import Alert from '../components/PersistentAlert';
 import ReadableText from '../components/ReadableText';
+import SessionViewNav from '../components/SessionViewNav';
 import SessionTable from './Dashboard/SessionTable';
 import SessionCardList from './Dashboard/SessionCardList';
 import SessionSearch from './Dashboard/SessionSearch';
@@ -705,6 +706,8 @@ const HomePage = () => {
         gap={6}
         minWidth={0}
       >
+        <SessionViewNav current="users" />
+
         {!loading && loadError ? (
           <Alert
             variant="danger"

@@ -259,11 +259,11 @@ test('the search is always visible with a placeholder, never an icon-only button
   assert.match(search, /<SearchForm\b/);
   assert.match(
     search,
-    /<Searchbar\b[\s\S]*?placeholder=\{t\('homepage\.search\.placeholder', 'Search user, email, IP or device'\)\}/
+    /<Searchbar\b[\s\S]*?placeholder=\{\s*placeholder \?\? t\('homepage\.search\.placeholder', 'Search user, email, IP or device'\)\s*\}/
   );
   assert.match(
     search,
-    /\{t\('homepage\.search\.label', 'Search sessions'\)\}\s*<\/Searchbar>/,
+    /\{label \?\? t\('homepage\.search\.label', 'Search sessions'\)\}\s*<\/Searchbar>/,
     'the search has a label'
   );
 });

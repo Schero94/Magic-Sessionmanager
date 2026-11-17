@@ -319,7 +319,12 @@ test(
         assert.equal(meta.supported, true);
         assert.equal(meta.pagination.total, 7);
         // Registration signs Ada in once, plus her two logins: 8 browsers in total.
-        assert.deepEqual(meta.stats, { signedInAdmins: 5, activeSessions: 8, activeAccounts: 5 });
+        assert.deepEqual(meta.stats, {
+          signedInAdmins: 5,
+          activeSessions: 8,
+          activeAccounts: 5,
+          totalAdmins: 7,
+        });
         assert.equal(meta.policy.accessTokenLifespan, 1800);
         const byEmail = Object.fromEntries(data.map((row) => [row.email, row]));
         assert.equal(byEmail['ada.owner@example.test'].self, true);

@@ -41,6 +41,8 @@ export const NAMESPACES = [
   'analytics',
   'settings',
   'notifications',
+  'adminPanel',
+  'views',
 ];
 const ID = String.raw`(?:${NAMESPACES.join('|')})(?:\.[A-Za-z0-9_-]+)+`;
 

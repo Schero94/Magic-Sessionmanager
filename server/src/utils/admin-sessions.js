@@ -458,9 +458,10 @@ async function listAdmins(strapi, query, actor) {
   }
   const where = conditions.length ? { $and: conditions } : {};
 
-  const [total, activeAccounts, pageRows] = await Promise.all([
+  const [total, activeAccounts, totalAdmins, pageRows] = await Promise.all([
     users.count({ where }),
     users.count({ where: activeAccountWhere }),
+    users.count({}),
     users.findMany({
       where,
       select: ['id', 'firstname', 'lastname', 'username', 'email', 'isActive', 'blocked'],
@@ -508,6 +509,7 @@ async function listAdmins(strapi, query, actor) {
         signedInAdmins: signedInIds.length,
         activeSessions,
         activeAccounts: Number(activeAccounts) || 0,
+        totalAdmins: Number(totalAdmins) || 0,
       },
       policy,
       truncated,
