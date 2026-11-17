@@ -12,10 +12,10 @@ Free and open source under the MIT license. Every feature works without an accou
 
 [![npm version](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![npm downloads](https://img.shields.io/npm/dm/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
-[![CI](https://img.shields.io/github/actions/workflow/status/Schero94/Magic-Sessionmanager/test.yml?branch=main&label=CI&logo=github)](https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml?query=branch%3Amain)
+[![CI build status](https://img.shields.io/github/actions/workflow/status/Schero94/Magic-Sessionmanager/test.yml?branch=main&label=CI&logo=github)](https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Schero94/Magic-Sessionmanager/blob/main/LICENSE)
 [![Strapi 5.0+](https://img.shields.io/badge/Strapi-5.0%2B-4945FF.svg)](https://github.com/Schero94/Magic-Sessionmanager#compatibility)
-[![Docs](https://img.shields.io/badge/docs-project%20site-6d4aff.svg)](https://schero94.github.io/Magic-Sessionmanager/)
+[![Documentation site](https://img.shields.io/badge/docs-project%20site-6d4aff.svg)](https://schero94.github.io/Magic-Sessionmanager/)
 
 Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.github.io/Magic-Sessionmanager/) · [npm](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager) · [Changelog](https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md) · [Report a bug](https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose) · [Discussions](https://github.com/Schero94/Magic-Sessionmanager/discussions)
 
