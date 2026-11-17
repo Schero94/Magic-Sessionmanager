@@ -97,7 +97,7 @@ Yarn and pnpm work the same way (`yarn add strapi-plugin-magic-sessionmanager`, 
 
 ## Screenshots
 
-All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.62. The [full gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) on the project site also shows dark mode, every settings tab, the untracked sign-in dialogs and more mobile views.
+All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61. The [full gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) on the project site also shows dark mode, every settings tab, the untracked sign-in dialogs and more mobile views.
 
 ### Session details
 
