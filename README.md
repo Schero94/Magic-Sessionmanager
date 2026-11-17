@@ -13,11 +13,11 @@ Free and open source under the MIT license. Every feature works without an accou
 [![npm version](https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![npm downloads](https://img.shields.io/npm/dm/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![Tests](https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml/badge.svg)](https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Schero94/Magic-Sessionmanager/blob/main/LICENSE)
 
-Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.github.io/Magic-Sessionmanager/) · [npm](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose) · [Discussions](https://github.com/Schero94/Magic-Sessionmanager/discussions)
+Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.github.io/Magic-Sessionmanager/) · [npm](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager) · [Changelog](https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md) · [Report a bug](https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose) · [Discussions](https://github.com/Schero94/Magic-Sessionmanager/discussions)
 
-![Sessions dashboard with four stat cards (Active, Idle, Ended, All), search, status filter and a table of sessions with state badges](pics/dashboard.png)
+![Sessions dashboard with four stat cards (Active, Idle, Ended, All), search, status filter and a table of sessions with state badges](https://schero94.github.io/Magic-Sessionmanager/img/dashboard.webp)
 
 ---
 
@@ -97,48 +97,35 @@ Yarn and pnpm work the same way (`yarn add strapi-plugin-magic-sessionmanager`, 
 
 ## Screenshots
 
-All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61.
-
-### Sessions dashboard in dark mode
-
-![Sessions dashboard in the Strapi dark theme](pics/dashboard-dark.png)
+All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61. The [full gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) on the project site also shows dark mode, every settings tab, the untracked sign-in dialogs and more mobile views.
 
 ### Session details
 
-![Session details dialog with the state sentence, user, session, device, location and security sections and an End session button](pics/dashboardsessionmodal.png)
+![Session details dialog with the state sentence, user, session, device, location and security sections and an End session button](https://schero94.github.io/Magic-Sessionmanager/img/dashboardsessionmodal.webp)
 
 ### Sessions panel in the Content Manager
 
-![Sessions panel next to a user in the Content Manager, showing Online, two open sessions, End all sessions and Block user](pics/sessioninfopanel.png)
+![Sessions panel next to a user in the Content Manager, showing Online, two open sessions, End all sessions and Block user](https://schero94.github.io/Magic-Sessionmanager/img/sessioninfopanel.webp)
 
 ### Homepage widget
 
-![Online users widget with the tiles Online users, Active sessions, Idle sessions and Blocked users](pics/widget.png)
+![Online users widget with the tiles Online users, Active sessions, Idle sessions and Blocked users](https://schero94.github.io/Magic-Sessionmanager/img/widget.webp)
 
 ### Configuration
 
-![Configuration page, Sessions tab, with Session lifetime and Token check cards](pics/settings1.png)
-
-![Configuration page, Login protection tab, with Failed sign-ins and Client IP address cards](pics/settings2.png)
+![Configuration page, Sessions tab, with Session lifetime and Token check cards](https://schero94.github.io/Magic-Sessionmanager/img/settings1.webp)
 
 ### Analytics
 
-![Analytics page with four KPIs, Devices and Browsers bar cards and the average session length](pics/analytics.png)
+![Analytics page with four KPIs, Devices and Browsers bar cards and the average session length](https://schero94.github.io/Magic-Sessionmanager/img/analytics.webp)
 
 ### Untracked Strapi sign-ins (refresh mode)
 
-![Neutral notice: 37 older Strapi sign-ins are not tracked, with Why? and End these sessions](pics/untracked-notice-neutral.webp)
-
-![Warning notice "Possible tracking gap" with the opened Why? summary: before/after tracking, how Strapi created them, expiry, per month and devices](pics/untracked-disclosure-warning.webp)
-
-![End untracked Strapi sign-ins confirmation dialog](pics/untracked-confirm-dialog.webp)
+![Neutral notice: 37 older Strapi sign-ins are not tracked, with Why? and End these sessions](https://schero94.github.io/Magic-Sessionmanager/img/untracked-notice-neutral.webp)
 
 ### Mobile (390 px)
 
-<p>
-  <img src="pics/mobile-dashboard.png" width="300" alt="Sessions dashboard at 390 px: the table becomes a card list with Details, End session and More buttons">
-  <img src="pics/mobile-session.png" width="300" alt="Session details dialog at 390 px in one column with Close and End session in the footer">
-</p>
+<img src="https://schero94.github.io/Magic-Sessionmanager/img/mobile-dashboard.webp" width="300" alt="Sessions dashboard at 390 px: the table becomes a card list with Details, End session and More buttons">
 
 ---
 
@@ -952,9 +939,9 @@ Issues and pull requests are welcome.
 
 Actively maintained for the Strapi 5 line. Releases are cut by semantic-release from `main` using Conventional Commits and published to npm with npm Trusted Publishing (GitHub OIDC). Dependabot proposes weekly dependency updates; patch and minor updates are merged only after lint, tests, both type checks, build and `verify` pass.
 
-Dependency advisories: with the Strapi 5.62.0 dev baseline, `npm audit --omit=dev` on the plugin lockfile reports 0 vulnerabilities (checked 2026-11-16). Findings that come through the Strapi 5 core dependency chain cannot be fixed by the plugin; the forced npm fix would downgrade to Strapi 4, so it is not applied.
+Dependency advisories (checked 2026-11-17, Strapi 5.62.0 dev baseline): `npm audit --omit=dev` on the plugin lockfile reports 5 high findings. All of them are one advisory in the Strapi 5 core dependency chain, picomatch [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) through `@strapi/utils` > `preferred-pm` > `find-yarn-workspace-root2` > `micromatch`. The plugin cannot fix findings in that chain; the forced npm fix would downgrade to Strapi 4, so it is not applied. They clear when Strapi ships an updated `@strapi/utils`.
 
-Version 4.8.0 was published before its acceptance gates closed and has known defects that 4.9.0 fixed (see the [CHANGELOG](CHANGELOG.md)). Use 4.9.0 or later.
+Version 4.8.0 was published before its acceptance gates closed and has known defects that 4.9.0 fixed (see the [CHANGELOG](https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md)). Use 4.9.0 or later.
 
 Report bugs at https://github.com/Schero94/Magic-Sessionmanager/issues.
 
@@ -968,4 +955,4 @@ The admin interface is available in English, German (formal "Sie"), French, Span
 
 ## License
 
-MIT License. Copyright © 2025 Schero D. See [LICENSE](./LICENSE).
+MIT License. Copyright © 2025 Schero D. See [LICENSE](https://github.com/Schero94/Magic-Sessionmanager/blob/main/LICENSE).

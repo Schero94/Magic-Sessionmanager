@@ -41,8 +41,7 @@
     "scripts/update-geoip-db.mjs",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md",
-    "pics"
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": "^22.22.2 || >=24.15.0",
