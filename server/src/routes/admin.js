@@ -17,7 +17,11 @@
  *        "Editor" or "Author" without explicit plugin access) could
  *        bypass the hidden UI menu and call this API directly via curl.
  *
- * The `access` permission is registered in `server/src/register.js`.
+ * The Strapi admin panel session routes (`/admin-sessions/...`) also require
+ * `admin-sessions.read`, and the sign-out routes `admin-sessions.revoke`
+ * (`adminSessionsPolicy()`); `hasPermissions` needs ALL listed actions.
+ *
+ * The permissions are registered in `server/src/register.js`.
  * By Strapi convention:
  *   - the Super-Admin role owns every plugin permission automatically,
  *   - other admin roles only receive it when a Super-Admin explicitly
@@ -29,6 +33,8 @@
  */
 
 const PLUGIN_ACCESS_ACTION = 'plugin::magic-sessionmanager.access';
+const ADMIN_SESSIONS_READ_ACTION = 'plugin::magic-sessionmanager.admin-sessions.read';
+const ADMIN_SESSIONS_REVOKE_ACTION = 'plugin::magic-sessionmanager.admin-sessions.revoke';
 
 /**
  * Returns the policy chain that every admin route in this plugin must use.
@@ -53,6 +59,35 @@ const adminPolicy = () => [
  *
  * @returns {Array<object>}
  */
+/**
+ * Policy chain of the Strapi admin panel session routes. `hasPermissions`
+ * requires ALL listed actions, so a role needs plugin access plus the
+ * admin-session action(s). Only Super Admin has them by default.
+ *
+ * @param {string[]} actions Additional admin-session actions.
+ * @returns {Array<string|object>}
+ */
+const adminSessionsPolicy = (actions) => [
+  'admin::isAuthenticatedAdmin',
+  {
+    name: 'admin::hasPermissions',
+    config: { actions: [PLUGIN_ACCESS_ACTION, ...actions] },
+  },
+];
+
+/**
+ * Write rate limit for signing admins out: 10 per minute per admin user (the
+ * write profile can only be tightened in the settings).
+ *
+ * @returns {Array<object>}
+ */
+const adminSignOutRateLimit = () => [
+  {
+    name: 'plugin::magic-sessionmanager.rate-limit',
+    config: { profile: 'write', max: 10, window: 60_000 },
+  },
+];
+
 const adminReadRateLimit = () => [
   {
     name: 'plugin::magic-sessionmanager.rate-limit',
@@ -204,6 +239,48 @@ const baseRoutes = [
       policies: adminPolicy(),
       middlewares: adminReadRateLimit(),
       description: 'Get aggregate end-user counts only (admin)',
+    },
+  },
+
+  // ===================== STRAPI ADMIN PANEL SESSIONS =====================
+  {
+    method: 'GET',
+    path: '/admin-sessions/admins',
+    handler: 'admin-sessions.listAdmins',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'List Strapi admins with their admin panel sessions (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/admin-sessions/admins/:adminId/sessions',
+    handler: 'admin-sessions.listAdminSessions',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'List the admin panel sessions of one Strapi admin (admin)',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/admin-sessions/admins/:adminId/sessions/:sessionId/sign-out',
+    handler: 'admin-sessions.signOutSession',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_SESSIONS_REVOKE_ACTION]),
+      middlewares: adminSignOutRateLimit(),
+      description: 'Sign a Strapi admin out of one browser (admin)',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/admin-sessions/admins/:adminId/sign-out-everywhere',
+    handler: 'admin-sessions.signOutEverywhere',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_SESSIONS_REVOKE_ACTION]),
+      middlewares: adminSignOutRateLimit(),
+      description: 'Sign a Strapi admin out of every browser (admin)',
     },
   },
 
