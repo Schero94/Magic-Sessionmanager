@@ -49,13 +49,7 @@ export default defineConfig([
 
   // Server, Strapi entry files and legacy CommonJS scripts (Node, CommonJS)
   {
-    files: [
-      'server/**/*.js',
-      'strapi-admin.js',
-      'strapi-server.js',
-      'test-session-manager.js',
-      'scripts/**/*.{js,cjs}',
-    ],
+    files: ['server/**/*.js', 'strapi-admin.js', 'strapi-server.js', 'scripts/**/*.{js,cjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'commonjs',
