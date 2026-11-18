@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.14.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.13.1...v4.14.0) (2026-11-18)
+
+
+### Features
+
+* see and sign out Strapi admin panel sessions ([#22](https://github.com/Schero94/Magic-Sessionmanager/issues/22)) ([a088b03](https://github.com/Schero94/Magic-Sessionmanager/commit/a088b039968c6679676e0df9cb0d34fc440b047b))
+
 
 Release type: minor (`feat`), no breaking change. Existing routes, responses, numbers, widgets, settings and Content API features are unchanged. No migration needed.
 
