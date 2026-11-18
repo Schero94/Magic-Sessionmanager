@@ -14,7 +14,7 @@ Free and open source under the MIT license. Every feature works without an accou
 [![npm downloads](https://img.shields.io/npm/dm/strapi-plugin-magic-sessionmanager.svg)](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
 [![CI build status](https://img.shields.io/github/actions/workflow/status/Schero94/Magic-Sessionmanager/test.yml?branch=main&label=CI&logo=github)](https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Schero94/Magic-Sessionmanager/blob/main/LICENSE)
-[![Strapi 5.0+](https://img.shields.io/badge/Strapi-5.0%2B-4945FF.svg)](https://github.com/Schero94/Magic-Sessionmanager#compatibility)
+[![Strapi 5.50+](https://img.shields.io/badge/Strapi-5.50%2B-4945FF.svg)](https://github.com/Schero94/Magic-Sessionmanager#compatibility)
 [![Documentation site](https://img.shields.io/badge/docs-project%20site-6d4aff.svg)](https://schero94.github.io/Magic-Sessionmanager/)
 
 Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.github.io/Magic-Sessionmanager/) · [npm](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager) · [Changelog](https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md) · [Report a bug](https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose) · [Discussions](https://github.com/Schero94/Magic-Sessionmanager/discussions)
@@ -224,7 +224,7 @@ Shown on the edit view of a Users & Permissions user only.
 
 ### Online users widget
 
-Strapi 5.13 and later. Four tiles: **Online users** (of all registered users), **Active sessions**, **Idle sessions** and **Blocked users**, plus a link **Open Session Manager**. The widget refreshes every 30 seconds.
+Part of every supported Strapi version (the widgets API exists since Strapi 5.13). Four tiles: **Online users** (of all registered users), **Active sessions**, **Idle sessions** and **Blocked users**, plus a link **Open Session Manager**. The widget refreshes every 30 seconds.
 
 ### Settings › Session Manager
 
@@ -248,17 +248,17 @@ Two links: **Configuration** and **Analytics**.
 
 ## Compatibility
 
-| Item                 | Supported                                                                                                                                                                                                       |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Strapi               | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.62.0.                                                                                                                                       |
-| Node.js              | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                                                      |
-| Users & Permissions  | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                                                               |
-| Homepage widget      | Strapi 5.13 and later (older versions have no widgets API; the rest works)                                                                                                                                      |
-| Admin panel sessions | Strapi 5 with Strapi's session manager (`strapi.sessionManager`, admin origin); tested with 5.62.0. Without it the view says it is not available and the sign-out routes return 503.                            |
-| Required peers       | `@strapi/strapi` `^5.0.0`, `@strapi/plugin-users-permissions` `^5.0.0`, `react` / `react-dom` `^18.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0`. A new Strapi 5 app already has all of them. |
-| Optional peers       | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react-intl` `^6.0.0`. Strapi's admin brings them; they are marked optional so npm, Yarn and pnpm do not warn.                                      |
-| Package managers     | npm, Yarn 1 and pnpm. Installing into a fresh Strapi 5.61 app prints no warning about this plugin.                                                                                                              |
-| Databases            | PostgreSQL, MySQL, SQLite (several processes need PostgreSQL or MySQL, see [Running several instances](#running-several-instances-railway-replicas-pm2-cluster)).                                               |
+| Item                 | Supported                                                                                                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strapi               | 5.50.0 and later 5.x (`@strapi/strapi` peer range `^5.50.0`). Tested in CI on 5.50.0 (floor) and 5.62.0 (acceptance host). Strapi 5.0 to 5.49 are not supported, see [Upgrading › Strapi older than 5.50](#strapi-older-than-550). |
+| Node.js              | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                                                                         |
+| Users & Permissions  | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                                                                                  |
+| Homepage widget      | Included (Strapi's widgets API exists since 5.13).                                                                                                                                                                                 |
+| Admin panel sessions | Uses Strapi's session manager (`strapi.sessionManager('admin')`) and the device label in `admin::session` metadata, both available from Strapi 5.50.0; tested on 5.50.0 and 5.62.0.                                                |
+| Required peers       | `@strapi/strapi` `^5.50.0`, `@strapi/plugin-users-permissions` `^5.50.0`, `react` / `react-dom` `^18.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0`. A new Strapi 5 app already has all of them.                  |
+| Optional peers       | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react-intl` `^6.0.0`. Strapi's admin brings them; they are marked optional so npm, Yarn and pnpm do not warn.                                                         |
+| Package managers     | npm, Yarn 1 and pnpm. Installing into a fresh Strapi 5.61 app prints no warning about this plugin.                                                                                                                                 |
+| Databases            | PostgreSQL, MySQL, SQLite (several processes need PostgreSQL or MySQL, see [Running several instances](#running-several-instances-railway-replicas-pm2-cluster)).                                                                  |
 
 ---
 
@@ -920,6 +920,18 @@ Session history lives in the content-type tables `magic_sessions` and `magic_ses
 
 ## Migration and upgrading
 
+### Strapi older than 5.50
+
+Earlier releases said "Strapi 5.0+" (`^5.0.0`) without testing older versions. The real floor is **Strapi 5.50.0**: the plugin calls `listSessions` and `revokeSessionById` on Strapi's session manager and reads the device label in `admin::session` metadata, which Strapi added in 5.50.0 ([strapi/strapi#26628](https://github.com/strapi/strapi/pull/26628)). Measured with this repository's real-HTTP suites:
+
+| Strapi           | Result                                                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5.0.0 to 5.23.x  | No session manager and no `admin::session` table (added in 5.24.0). 5.0.0 to 5.0.3 also declare Node.js 20 or older, outside this plugin's `engines`.                                       |
+| 5.24.0 to 5.49.x | With `jwtManagement: 'refresh'`, sign-in fails closed with 503 and session routes fail; the Admin panel view returns 500 in both modes.                                                     |
+| 5.50.0, 5.62.0   | All suites pass (both JWT modes, the fallback logout, admin panel sessions, native session capture); the packed plugin installs without peer warnings and the admin panel builds on 5.50.0. |
+
+On Strapi below 5.50.0 the plugin logs one error at start-up (`Strapi 5.x.y is not supported: Magic Session Manager requires Strapi 5.50.0 or later …`). Upgrade Strapi to 5.50.0 or later ([Strapi upgrade tool](https://docs.strapi.io/cms/upgrade-tool)), rebuild the admin and restart. If you cannot upgrade Strapi yet, stay on your current plugin version; it never worked fully on those versions either.
+
 ### To the next release (license removal, from 4.10.x)
 
 Nothing to do for most apps.
@@ -962,6 +974,8 @@ HTTP integration tests need Strapi host dependencies: set `SESSION_HTTP_STRAPI_N
 SESSION_HTTP_REQUIRED=1 SESSION_HTTP_STRAPI_NODE_MODULES=$PWD/node_modules node --test tests/isolated-admin-sessions-http.test.js
 # PostgreSQL: add SESSION_HTTP_DB=postgres MSM_TEST_PG_URL=postgres://user:pass@127.0.0.1:5432/db
 ```
+
+CI runs the same suites a second time against Strapi 5.50.0, the peer floor, installed into a separate directory (`SESSION_HTTP_STRAPI_NODE_MODULES=<dir>/node_modules`), so the floor stays tested.
 
 The admin panel suite signs synthetic admins in through `POST /admin/login` and checks listing, signing out one browser and everywhere, self sign-out, the Super Admin guard, RBAC denials, the rate limit, that the next request and the refresh are rejected, and that admin sessions never reach the app-user numbers.
 

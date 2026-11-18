@@ -1,3 +1,24 @@
+## [Unreleased]
+
+Release type: patch (`fix`). This corrects an untested compatibility claim; it is not a breaking change, because the plugin never worked fully on the Strapi versions now excluded.
+
+### Fixed
+
+* **Strapi peer floor corrected from `^5.0.0` to `^5.50.0`** (`@strapi/strapi` and `@strapi/plugin-users-permissions`). The old range was never tested. Strapi 5.50.0 added the session-manager methods the plugin calls (`listSessions`, `revokeSessionById`) and the `metadata` column of `admin::session` ([strapi/strapi#26628](https://github.com/strapi/strapi/pull/26628)). Measured with the real-HTTP suites on isolated hosts: on 5.24.0, 5.30.0, 5.40.0, 5.45.0 and 5.49.0, sign-in with `jwtManagement: 'refresh'` fails closed with 503, session list and revoke routes fail, and the Admin panel sessions routes return 500 in both JWT modes; 5.0.4 and 5.23.6 have no session manager or `admin::session` at all; 5.0.0 to 5.0.3 declare Node.js 20 or older, outside this plugin's `engines`. On 5.50.0 and 5.62.0 every suite passes.
+* The plugin logs one clear error at start-up on Strapi older than 5.50.0 (`Strapi 5.x.y is not supported: Magic Session Manager requires Strapi 5.50.0 or later …`) instead of failing later on single requests.
+* README badge, Compatibility table and project site now say Strapi 5.50+.
+
+### Upgrade note
+
+* Strapi 5.50.0 or later: nothing to do.
+* Strapi older than 5.50.0: upgrade Strapi first (`npx @strapi/upgrade minor`), rebuild the admin and restart. npm 7+ refuses to install this release next to an older Strapi because of the peer range; until you upgrade Strapi, stay on your current plugin version.
+
+### Tests
+
+* New CI job `strapi-floor` installs Strapi 5.50.0 and Users & Permissions 5.50.0 into a separate directory and runs the HTTP access suite (legacy, refresh, fallback logout), the admin panel sessions suite and the native session capture suite against it.
+* `tests/strapi-version-floor.test.js` checks the floor constant, the start-up error, that the peers and the CI job name the same floor.
+* The native capture suite's provider-callback case now also sends the provider token in the query string, which Strapi 5.50 reads (5.62 reads the grant session), so it runs on both versions.
+
 # [4.14.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.13.1...v4.14.0) (2026-11-18)
 
 

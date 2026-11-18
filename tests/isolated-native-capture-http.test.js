@@ -395,7 +395,13 @@ test(
     });
 
     await t.test('provider callback is linked', async () => {
-      const result = await request('GET', api('/auth/synthetic/callback'));
+      // Strapi 5.62 reads the grant response from the session (injected above);
+      // Strapi 5.50 reads the provider token from the query string. Send both so
+      // the suite runs on the peer floor and on the current release.
+      const result = await request(
+        'GET',
+        api('/auth/synthetic/callback?access_token=synthetic-provider-token')
+      );
       assert.equal(result.status, 200, JSON.stringify(result.body?.error || null));
       await assertLinked(await sessionOfRefresh(result.body.refreshToken), 'provider callback');
     });
