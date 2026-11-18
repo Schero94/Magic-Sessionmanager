@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.14.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.1...v4.14.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **admin:** keep loads working when a component mounts again ([#24](https://github.com/Schero94/Magic-Sessionmanager/issues/24)) ([4a18a47](https://github.com/Schero94/Magic-Sessionmanager/commit/4a18a473c21aeb4ae0a5671f55456ce2b0abefcc))
+
 
 ### Fixed
 
