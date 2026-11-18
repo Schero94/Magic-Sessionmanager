@@ -50,6 +50,7 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "test": "node --test tests/*.test.js tests/*.test.mjs",
+    "test:admin": "node --import ./tests/admin/harness/setup.mjs --test \"tests/admin/*.test.jsx\"",
     "test:concurrency": "node scripts/concurrency/run.mjs",
     "test:ts:front": "tsc --noEmit --allowJs --jsx react-jsx --moduleResolution bundler --module esnext -p admin/jsconfig.json",
     "test:ts:back": "tsc --noEmit --allowJs --moduleResolution node --module commonjs -p server/jsconfig.json",
@@ -89,6 +90,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",
+    "jsdom": "^31.0.1",
     "pg": "^8.23.1",
     "prettier": "^3.9.10",
     "react": "^18.3.1",

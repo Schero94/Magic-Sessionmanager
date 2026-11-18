@@ -1,3 +1,13 @@
+## [Unreleased]
+
+### Fixed
+
+* The Online users widget, the Analytics page and the Configuration page no longer show "could not be loaded" after the component is mounted a second time. `useFetchClient` aborts the requests of an unmounted component; the widget and the Analytics page then skipped their next load because the aborted one still counted as running, and the Configuration page set the error of the aborted load after the next load had started. React StrictMode mounts every component twice in development, and React 19 and a future StrictMode admin do the same. Each load now belongs to one mount: an aborted or outdated load sets no state.
+
+### Tests
+
+* `npm run test:admin`: StrictMode tests for every admin entry point (no duplicate requests, no leaked timers, listeners, connections or observers after unmount, no console errors or warnings), also run against React 19 in an informational CI job.
+
 ## [4.14.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.0...v4.14.1) (2026-11-18)
 
 

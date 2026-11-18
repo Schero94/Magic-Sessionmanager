@@ -3,7 +3,7 @@ import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import pluginId from '../../../pluginId';
 import { areSettingsEqual } from '../../../utils/settingsEquality.mjs';
 import { requireSuccessfulMutation } from '../../../utils/adminResponse.mjs';
-import { logSafeAdminError } from '../../../utils/safeAdminLog.mjs';
+import { isCancelledRequest, logSafeAdminError } from '../../../utils/safeAdminLog.mjs';
 import { copyText } from '../../../utils/copyText.mjs';
 import { formatSessionDate } from '../../../utils/sessionDates.mjs';
 import {
@@ -87,6 +87,8 @@ export function useSettingsForm() {
   // Server settings revision the draft is based on. Sent with every save so
   // the server rejects it (409) when another administrator saved in between.
   const revisionRef = useRef(null);
+  // Number of the latest settings load; older loads set no state.
+  const loadRequestRef = useRef(0);
   useLayoutEffect(() => {
     settingsRef.current = settings;
     savedSettingsRef.current = savedSettings;
@@ -151,13 +153,21 @@ export function useSettingsForm() {
    * failed response shows the retry state instead of an editable default
    * draft (IA G).
    *
+   * Only the latest load sets state, and a request aborted on unmount is not
+   * a failure. React StrictMode mounts, unmounts and mounts again: before
+   * this, the aborted first load set the error after the second load had
+   * started, and the page stayed on "Settings could not be loaded."
+   *
    * @returns {Promise<void>}
    */
   const fetchSettings = useCallback(async () => {
+    const request = loadRequestRef.current + 1;
+    loadRequestRef.current = request;
     setLoading(true);
     setLoadError(false);
     try {
       const response = await get(`/${pluginId}/settings`);
+      if (request !== loadRequestRef.current) return;
       if (
         !response?.data?.settings ||
         typeof response.data.settings !== 'object' ||
@@ -173,10 +183,11 @@ export function useSettingsForm() {
       setSavedSettings(nextSettings);
       await fetchGeoIpStatus();
     } catch (err) {
+      if (request !== loadRequestRef.current || isCancelledRequest(err)) return;
       logSafeAdminError('settings.load', err);
       setLoadError(true);
     } finally {
-      setLoading(false);
+      if (request === loadRequestRef.current) setLoading(false);
     }
   }, [get, fetchGeoIpStatus]);
 
