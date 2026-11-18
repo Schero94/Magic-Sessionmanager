@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.14.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.0...v4.14.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* set the Strapi peer floor to 5.50.0, the first version the plugin works on ([#23](https://github.com/Schero94/Magic-Sessionmanager/issues/23)) ([a9f522f](https://github.com/Schero94/Magic-Sessionmanager/commit/a9f522fc1b4fc694b6d1cfdf3c682db25c6ee363))
+
 
 Release type: patch (`fix`). This corrects an untested compatibility claim; it is not a breaking change, because the plugin never worked fully on the Strapi versions now excluded.
 
