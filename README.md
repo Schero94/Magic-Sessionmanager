@@ -960,6 +960,7 @@ Version 4.0.0 moved to Strapi 5 and its Document Service API. Upgrade Strapi its
 ```bash
 npm ci --legacy-peer-deps
 npm test                  # node --test tests/*.test.js tests/*.test.mjs
+npm run test:admin        # admin entry points in React.StrictMode (jsdom, fake network)
 npm run test:concurrency  # 8 processes on one database (SQLite; PostgreSQL with MSM_TEST_PG_URL)
 npm run test:ts:front
 npm run test:ts:back
@@ -967,6 +968,8 @@ npm run build
 npm run verify
 npm run verify:runtime
 ```
+
+`npm run test:admin` renders every admin entry point (the session dashboard and the admin panel sessions view with their dialogs, the Configuration and Analytics settings pages, the Online users widget and the Content Manager side panel) inside `React.StrictMode` with the providers of the Strapi admin, in jsdom with a fake network. It fails on a mutation sent twice, a read repeated without aborting the first one, an interval, listener, connection or observer left after unmount, and any console error or warning. A separate CI job runs the same tests against React 19 for information only: the plugin's peer range is React 18, like the Strapi 5 admin.
 
 HTTP integration tests need Strapi host dependencies: set `SESSION_HTTP_STRAPI_NODE_MODULES` to the `node_modules` of a Strapi 5 host; without it they skip with a message. This repository's own `node_modules` works (its devDependencies include Strapi 5.62 and Users & Permissions), which is what CI uses:
 
@@ -990,7 +993,7 @@ Releases use Conventional Commits and semantic-release on Node.js 22 with npm Tr
 Issues and pull requests are welcome.
 
 - Bugs and feature ideas: [open an issue](https://github.com/Schero94/Magic-Sessionmanager/issues/new/choose) (templates included). Questions: [Discussions](https://github.com/Schero94/Magic-Sessionmanager/discussions).
-- Pull requests: branch from `main`, write a failing test first, and use Conventional Commits (`fix:`, `feat:`, `docs:`; a breaking change needs a `BREAKING CHANGE:` footer). Before you push, run `npm run lint`, `npm run format:check`, `npm test`, both type checks and `npm run build && npm run verify`.
+- Pull requests: branch from `main`, write a failing test first, and use Conventional Commits (`fix:`, `feat:`, `docs:`; a breaking change needs a `BREAKING CHANGE:` footer). Before you push, run `npm run lint`, `npm run format:check`, `npm test`, `npm run test:admin`, both type checks and `npm run build && npm run verify`.
 - Use synthetic data only in tests, screenshots and issues: `*.example.test` addresses and IP addresses from `203.0.113.0/24`. Never paste real tokens.
 
 ---

@@ -221,7 +221,8 @@ const OnlineUsersWidget = () => {
   const [userCounts, setUserCounts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const requestInProgress = useRef(false);
+  // The running load (an object per call) or null. One load at a time.
+  const requestInProgress = useRef(null);
 
   /**
    * Loads the count-only session statistics and user totals in parallel
@@ -232,19 +233,28 @@ const OnlineUsersWidget = () => {
    * The loading state starts as true and "Try again" sets it before calling,
    * so this function only clears it.
    *
+   * The effect cleanup forgets the running load (useFetchClient aborts its
+   * requests on unmount). A load that is no longer current sets no state, and
+   * the next mount starts its own load instead of waiting for the aborted one:
+   * React StrictMode mounts, unmounts and mounts again, and before this the
+   * widget stayed on "Online users could not be loaded." after that remount.
+   *
    * @param {{showLoading?: boolean}} [options] Whether this load owns the loading and error state.
    * @returns {Promise<void>}
    */
   const fetchStats = useCallback(
     async ({ showLoading = true } = {}) => {
       if (requestInProgress.current) return;
-      requestInProgress.current = true;
+      const request = {};
+      requestInProgress.current = request;
+      const isCurrent = () => requestInProgress.current === request;
 
       try {
         const [sessionResult, countResult] = await Promise.allSettled([
           get('/magic-sessionmanager/sessions/stats'),
           get('/magic-sessionmanager/users/stats'),
         ]);
+        if (!isCurrent()) return;
         if (sessionResult.status === 'rejected') throw sessionResult.reason;
         setStats(widgetStatsFromCounts(sessionResult.value?.data));
         setLoadError(false);
@@ -262,12 +272,14 @@ const OnlineUsersWidget = () => {
         }
       } catch (error) {
         // A request aborted because the widget unmounted is not a failure.
-        if (isCancelledRequest(error)) return;
+        if (!isCurrent() || isCancelledRequest(error)) return;
         logSafeAdminError('onlineUsers.loadSessions', error);
         if (showLoading) setLoadError(true);
       } finally {
-        if (showLoading) setLoading(false);
-        requestInProgress.current = false;
+        if (isCurrent()) {
+          if (showLoading) setLoading(false);
+          requestInProgress.current = null;
+        }
       }
     },
     [get]
@@ -279,7 +291,10 @@ const OnlineUsersWidget = () => {
     const interval = setInterval(() => {
       void fetchStats({ showLoading: false });
     }, REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      requestInProgress.current = null;
+    };
   }, [fetchStats]);
 
   if (loading) {

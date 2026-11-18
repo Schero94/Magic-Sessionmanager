@@ -25,7 +25,7 @@ import { PageShell, SectionCard, StatGrid, StatCard, EqualGrid } from '../compon
 import Alert from '../components/PersistentAlert';
 import ReadableText from '../components/ReadableText';
 import { getTranslation } from '../utils/getTranslation';
-import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
+import { isCancelledRequest, logSafeAdminError } from '../utils/safeAdminLog.mjs';
 
 // ================ BAR LIST ================
 // Label, track and count are three grid cells. The count never overlaps the
@@ -159,7 +159,8 @@ const AnalyticsPage = () => {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [forbidden, setForbidden] = useState(false);
-  const requestPendingRef = useRef(false);
+  // The running load (an object per call) or null. One load at a time.
+  const requestPendingRef = useRef(null);
 
   /**
    * Loads the aggregates over every session (computed on the server, no row
@@ -169,24 +170,36 @@ const AnalyticsPage = () => {
    * above it. Failures are logged without response data. `get` is stable, so
    * the callback is created once.
    *
+   * The effect cleanup forgets the running load (useFetchClient aborts its
+   * requests on unmount). A load that is no longer current sets no state, and
+   * the next mount starts its own load: React StrictMode mounts, unmounts and
+   * mounts again, and before this the page showed "Analytics could not be
+   * loaded." for the aborted first load and skipped the second.
+   *
    * @returns {Promise<void>}
    */
   const fetchAnalytics = useCallback(async () => {
     if (requestPendingRef.current) return;
-    requestPendingRef.current = true;
+    const request = {};
+    requestPendingRef.current = request;
+    const isCurrent = () => requestPendingRef.current === request;
     try {
       const { data } = await get(`/${pluginId}/sessions/analytics`);
+      if (!isCurrent()) return;
       setAnalytics(analyticsFromServer(data));
       setUpdatedAt(Date.now());
       setLoadError(false);
     } catch (err) {
+      if (!isCurrent() || isCancelledRequest(err)) return;
       logSafeAdminError('analytics.load', err);
       if (isForbidden(err)) setForbidden(true);
       setLoadError(true);
     } finally {
-      requestPendingRef.current = false;
-      setRefreshing(false);
-      setLoading(false);
+      if (isCurrent()) {
+        requestPendingRef.current = null;
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
   }, [get]);
 
@@ -204,6 +217,9 @@ const AnalyticsPage = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after await; the compiler cannot see through the callback
     void fetchAnalytics();
+    return () => {
+      requestPendingRef.current = null;
+    };
   }, [fetchAnalytics]);
 
   if (loading) {
