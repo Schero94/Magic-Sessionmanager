@@ -3,12 +3,15 @@
 const { createLogger } = require('./utils/logger');
 const { createContentApiPermissionsLifecycle } = require('./utils/content-api-permissions');
 const { isCallerRevocationScope } = require('./utils/block-revocation-scope');
+const { checkStrapiVersion } = require('./utils/strapi-version');
 
 const USER_UID = 'plugin::users-permissions.user';
 
 /**
  * Plugin register hook.
  *
+ * - Logs one error when the running Strapi is older than the supported floor
+ *   (`MIN_STRAPI_VERSION`, 5.50.0).
  * - Registers the `access` RBAC action for admin access control and the
  *   `admin-sessions.read` / `admin-sessions.revoke` actions for the Strapi
  *   admin panel sessions view.
@@ -24,6 +27,7 @@ module.exports = async ({ strapi }) => {
   const log = createLogger(strapi);
 
   log.info('[START] Plugin registration starting...');
+  checkStrapiVersion(strapi, log);
 
   strapi.admin.services.permission.actionProvider.registerMany([
     {
