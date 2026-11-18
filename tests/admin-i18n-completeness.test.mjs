@@ -168,6 +168,8 @@ const SAME_AS_ENGLISH = {
     'https://hooks.slack.com/services/XXXX/XXXX/XXXX',
     '{count} min',
     '{minutes} min',
+    // Strapi's own role name, shown untranslated in every admin language.
+    'Super Admin',
   ]),
   de: new Set([
     'Status',
@@ -199,7 +201,7 @@ const SAME_AS_ENGLISH = {
     '15 minutes',
     '{count, plural, one {# session} other {# sessions}}',
   ]),
-  es: new Set(['General', 'Error', 'Total', 'Bot']),
+  es: new Set(['General', 'Error', 'Total', 'Bot', 'Roles']),
   pt: new Set(['Status', 'Online', 'Offline', 'Tablet', 'Login', 'Logout', 'Total', 'Bot']),
 };
 

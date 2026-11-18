@@ -6,7 +6,7 @@
 
 **See who is signed in to your Strapi 5 app, end any session in one click, and stop password guessing before it reaches your users.**
 
-Magic Session Manager records every sign-in through Users & Permissions as a session. Admins see who is online, end single sessions or all sessions of a user, block accounts and review sign-in history. Your app gets logout routes, a "my devices" list for users, failed-login lockout and optional country rules. It works with Strapi's native refresh-token sessions and with several server processes on one database.
+Magic Session Manager records every sign-in through Users & Permissions as a session. Admins see who is online, end single sessions or all sessions of a user, block accounts and review sign-in history. Your app gets logout routes, a "my devices" list for users, failed-login lockout and optional country rules. It works with Strapi's native refresh-token sessions and with several server processes on one database. A separate **Admin panel** view shows who is signed in to the Strapi admin panel itself and signs an admin out of one browser or everywhere.
 
 Free and open source under the MIT license. Every feature works without an account, key or activation, and the plugin sends nothing to its author.
 
@@ -66,6 +66,7 @@ Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.g
 | Location               | IP location from a local MaxMind GeoLite2 database (no third party in the sign-in path) or from ipapi.co, or turned off.                                                                 |
 | Alerts                 | Security emails to the user through Strapi's Email plugin and sign-in notifications to Discord or Slack.                                                                                 |
 | Admin integration      | A Sessions panel next to each user in the Content Manager and an Online users widget on the Strapi homepage.                                                                             |
+| Admin panel sessions   | Who can use the Strapi admin panel, who is signed in, on which browser and since when. Sign an admin out of one browser or everywhere; it takes effect on their next click.              |
 | Native Strapi sessions | Works with `jwtManagement: 'refresh'` (Strapi's own sessions and refresh tokens) and with `'legacy-support'`.                                                                            |
 | Several processes      | Lockout, rate limits, jobs and settings stay consistent across pm2 workers and Railway replicas that share one database.                                                                 |
 | Privacy                | Stored tokens are encrypted (AES-256-GCM) and never returned. Retention deletes old history automatically. No telemetry.                                                                 |
@@ -99,7 +100,7 @@ Yarn and pnpm work the same way (`yarn add strapi-plugin-magic-sessionmanager`, 
 
 ## Screenshots
 
-All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61. The [full gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) on the project site also shows dark mode, every settings tab, the untracked sign-in dialogs and more mobile views.
+All screenshots use synthetic data: users `*.example.test`, IP addresses from the documentation range `203.0.113.0/24`, Strapi 5.61. The [full gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) on the project site also shows Analytics, dark mode, every settings tab, the untracked sign-in dialogs and more mobile views.
 
 ### Session details
 
@@ -117,13 +118,15 @@ All screenshots use synthetic data: users `*.example.test`, IP addresses from th
 
 ![Configuration page, Sessions tab, with Session lifetime and Token check cards](https://schero94.github.io/Magic-Sessionmanager/img/settings1.webp)
 
-### Analytics
-
-![Analytics page with four KPIs, Devices and Browsers bar cards and the average session length](https://schero94.github.io/Magic-Sessionmanager/img/analytics.webp)
-
 ### Untracked Strapi sign-ins (refresh mode)
 
 ![Neutral notice: 37 older Strapi sign-ins are not tracked, with Why? and End these sessions](https://schero94.github.io/Magic-Sessionmanager/img/untracked-notice-neutral.webp)
+
+### Admin panel sessions
+
+Strapi 5.62, synthetic admins `*.example.test`. The [gallery](https://schero94.github.io/Magic-Sessionmanager/#screenshots) also shows the sessions dialog, the sign-out confirmation, what the signed-out admin sees, dark mode and the phone layout.
+
+![Admin panel sessions: view switch App users / Admin panel, cards Signed-in admins, Not signed in and All admins, an explanation of how signing out works, search, a sign-in status filter and a table of admins with roles, status and last activity](https://schero94.github.io/Magic-Sessionmanager/img/admin-panel.webp)
 
 ### Mobile (390 px)
 
@@ -166,14 +169,15 @@ All screenshots use synthetic data: users `*.example.test`, IP addresses from th
 
 ## Screens
 
-| Where                           | Name                                        | Answers                                                   |
-| ------------------------------- | ------------------------------------------- | --------------------------------------------------------- |
-| Main menu                       | **Session Manager** (page title "Sessions") | Which sessions exist, and which need action?              |
-| Dialog on the dashboard         | **Session details**                         | What is this session, and why is it in this state?        |
-| Content Manager, User edit view | **Sessions** panel                          | What access does this user have, and how do I cut it off? |
-| Strapi homepage                 | **Online users** widget                     | Who is online right now?                                  |
-| Settings › Session Manager      | **Configuration**                           | How should sessions and sign-ins behave?                  |
-| Settings › Session Manager      | **Analytics**                               | How are sessions used over time and by device?            |
+| Where                           | Name                                        | Answers                                                              |
+| ------------------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
+| Main menu                       | **Session Manager** (page title "Sessions") | Which sessions exist, and which need action?                         |
+| Dialog on the dashboard         | **Session details**                         | What is this session, and why is it in this state?                   |
+| Content Manager, User edit view | **Sessions** panel                          | What access does this user have, and how do I cut it off?            |
+| Strapi homepage                 | **Online users** widget                     | Who is online right now?                                             |
+| Session Manager › Admin panel   | **Admin panel sessions**                    | Who is signed in to this admin panel, and how do I sign someone out? |
+| Settings › Session Manager      | **Configuration**                           | How should sessions and sign-ins behave?                             |
+| Settings › Session Manager      | **Analytics**                               | How are sessions used over time and by device?                       |
 
 ### Sessions dashboard
 
@@ -186,6 +190,19 @@ All screenshots use synthetic data: users `*.example.test`, IP addresses from th
 - Search, filters, sorting and paging run on the server, so the list, the counts and the page numbers cover every session, however many there are. Only the 25 to 100 rows on the screen are loaded.
 - In `refresh` mode, a notice above the cards counts **untracked Strapi sign-ins**: refresh tokens Strapi still accepts that have no session details from this plugin. They are not in the list and are not active or online sessions; each user's sessions panel lists them. The notice is neutral when all of them were created before this plugin started tracking, and a warning ("Possible tracking gap") when any was created afterwards. **Why?** opens a count-only summary; **End these sessions** ends them after a confirmation. See [Untracked Strapi sessions](#untracked-strapi-sessions).
 - Below the large breakpoint the IP address and Signed in columns are hidden; below the medium breakpoint the table becomes a card list.
+
+### Admin panel sessions
+
+Open **Session Manager** and switch to **Admin panel** (the switch below the title; shown only to roles with "Read admin panel sessions"). The view lists Strapi admin accounts, not your app's users, and none of its numbers appear on the App users dashboard, the widget or Analytics.
+
+- **Cards:** **Signed-in admins** (with the number of signed-in browsers), **Not signed in** (including deactivated and invited accounts) and **All admins** (with the number of active accounts). Each card filters the list.
+- **How signing out works:** signing out takes effect on the admin's next click, because Strapi checks the admin session on every admin request. The admin can sign in again with their password; to stop that, deactivate the account in Settings › Users (**Manage admins** in the header). The card also shows the idle timeouts your host runs with (`admin.auth.sessions`).
+- **Search and filter:** name or email; **All admins**, **Signed in**, **Not signed in**. Search, filter and paging run on the server and live in the URL.
+- **Table** (cards below 768 px): Admin (with a **You** badge), Roles, Status (**Signed in** · "{n} sessions", **Not signed in**, **Deactivated**, **Invited**), Last active, and the actions **View sessions** and **Sign out everywhere**.
+- **Sessions of an admin:** one entry per signed-in browser with Strapi's device label (for example "Chrome on macOS"), **This browser**, **Remember me**, Signed in, Last active and **Ends at the latest**. **Sign out** ends that browser, **Sign out everywhere** ends all of them, **Manage in Settings** opens the admin in Settings › Users.
+- **Confirmation:** every sign-out asks first. Signing yourself out of the browser you are using shows a warning; you are then taken to the login page.
+- **Protection:** an admin without the Super Admin role cannot sign out a Super Admin, so the last active Super Admin can never be signed out by someone else. The view explains this instead of showing a disabled button.
+- Strapi stores no IP address and no full user agent for admin sessions, so the view shows none. "Last active" is the last time the browser renewed its access token (Strapi's own signal), not every click.
 
 ### Session details
 
@@ -231,16 +248,17 @@ Two links: **Configuration** and **Analytics**.
 
 ## Compatibility
 
-| Item                | Supported                                                                                                                                                                                                       |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Strapi              | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.62.0.                                                                                                                                       |
-| Node.js             | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                                                      |
-| Users & Permissions | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                                                               |
-| Homepage widget     | Strapi 5.13 and later (older versions have no widgets API; the rest works)                                                                                                                                      |
-| Required peers      | `@strapi/strapi` `^5.0.0`, `@strapi/plugin-users-permissions` `^5.0.0`, `react` / `react-dom` `^18.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0`. A new Strapi 5 app already has all of them. |
-| Optional peers      | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react-intl` `^6.0.0`. Strapi's admin brings them; they are marked optional so npm, Yarn and pnpm do not warn.                                      |
-| Package managers    | npm, Yarn 1 and pnpm. Installing into a fresh Strapi 5.61 app prints no warning about this plugin.                                                                                                              |
-| Databases           | PostgreSQL, MySQL, SQLite (several processes need PostgreSQL or MySQL, see [Running several instances](#running-several-instances-railway-replicas-pm2-cluster)).                                               |
+| Item                 | Supported                                                                                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strapi               | 5 (`@strapi/strapi` peer range `^5.0.0`). Acceptance host: Strapi 5.62.0.                                                                                                                                       |
+| Node.js              | `^22.22.2 \|\| >=24.15.0` (`engines.node`)                                                                                                                                                                      |
+| Users & Permissions  | `jwtManagement: 'refresh'` and `'legacy-support'`                                                                                                                                                               |
+| Homepage widget      | Strapi 5.13 and later (older versions have no widgets API; the rest works)                                                                                                                                      |
+| Admin panel sessions | Strapi 5 with Strapi's session manager (`strapi.sessionManager`, admin origin); tested with 5.62.0. Without it the view says it is not available and the sign-out routes return 503.                            |
+| Required peers       | `@strapi/strapi` `^5.0.0`, `@strapi/plugin-users-permissions` `^5.0.0`, `react` / `react-dom` `^18.0.0`, `react-router-dom` `^6.0.0`, `styled-components` `^6.0.0`. A new Strapi 5 app already has all of them. |
+| Optional peers       | `@strapi/design-system` `^2.0.0`, `@strapi/icons` `^2.0.0`, `react-intl` `^6.0.0`. Strapi's admin brings them; they are marked optional so npm, Yarn and pnpm do not warn.                                      |
+| Package managers     | npm, Yarn 1 and pnpm. Installing into a fresh Strapi 5.61 app prints no warning about this plugin.                                                                                                              |
+| Databases            | PostgreSQL, MySQL, SQLite (several processes need PostgreSQL or MySQL, see [Running several instances](#running-several-instances-railway-replicas-pm2-cluster)).                                               |
 
 ---
 
@@ -610,30 +628,41 @@ module.exports = factories.createCoreRouter('api::order.order', {
 
 ## Admin API and permissions
 
-Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authenticated Strapi admin **and** the permission `plugin::magic-sessionmanager.access` ("Access the Session Manager plugin"). The same permission controls the menu link, the settings links, the widget and the user panel. Admin responses never contain tokens or the internal `sessionId`.
+Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authenticated Strapi admin **and** the permission `plugin::magic-sessionmanager.access` ("Access the Session Manager plugin"). The same permission controls the menu link, the settings links, the widget and the user panel. Admin responses never contain tokens or the internal `sessionId` of a Users & Permissions session.
 
-| Method   | Path                                    | Admin UI action                                                                                             |
-| -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| GET      | `/sessions`                             | Sessions dashboard: `?page=&pageSize=` (1-100), `status`, `reason`, `search`, `sort`; see below             |
-| GET      | `/sessions/active`                      | Active sessions only; same paging parameters                                                                |
-| GET      | `/sessions/stats`                       | Dashboard cards and widget: counts only, cached 5 seconds per process                                       |
-| GET      | `/sessions/native-only/summary`         | **Why?** on the untracked-session notice: counts only, no query parameters (400 otherwise)                  |
-| POST     | `/sessions/native-only/end`             | **End these sessions**: empty body; signed-in administrators only (admin API tokens get 403); 5 per minute  |
-| GET      | `/sessions/analytics`                   | Analytics page: counts and grouped counts over every session, cached 30 seconds                             |
-| GET      | `/sessions/export`                      | Export batches of up to 1,000 rows, newest first; follow `meta.nextCursor`                                  |
-| GET      | `/user/:userId/sessions`                | Sessions panel                                                                                              |
-| POST     | `/sessions/:sessionId/terminate`        | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays)    |
-| DELETE   | `/sessions/:sessionId`                  | **Delete record** (record removed, token stays revoked; an open session also ends)                          |
-| POST     | `/sessions/clean-inactive`              | **Delete ended sessions** (all users; open and idle sessions are not affected; does not run the idle check) |
-| POST     | `/user/:userId/terminate-all`           | **End all sessions** (reason `manual`)                                                                      |
-| POST     | `/user/:userId/toggle-block`            | **Block user** / **Unblock user**                                                                           |
-| GET      | `/users/stats`                          | Widget totals (`totalUsers`, `blockedUsers`)                                                                |
-| GET      | `/geolocation/:ipAddress`               | **Look up location**                                                                                        |
-| GET      | `/geoip/status`                         | GeoIP database status                                                                                       |
-| PUT      | `/geoip/credentials`                    | Save or remove (`{ "clear": true }`) MaxMind credentials                                                    |
-| POST     | `/geoip/update`                         | Update database / Force download                                                                            |
-| GET, PUT | `/settings`                             | Configuration (PUT validates every field and returns `error.details.errors` on invalid input)               |
-| POST     | `/sessions/:sessionId/simulate-timeout` | Development only; removed when `NODE_ENV` is `production` or `staging`                                      |
+The **Admin panel sessions** routes need two more permissions, which only the Super Admin role has by default (Settings › Administration Panel › Roles › Plugins › Session Manager › Admin panel):
+
+| Permission                                           | Name in the role editor   | Allows                                                     |
+| ---------------------------------------------------- | ------------------------- | ---------------------------------------------------------- |
+| `plugin::magic-sessionmanager.admin-sessions.read`   | Read admin panel sessions | The Admin panel view and its two GET routes                |
+| `plugin::magic-sessionmanager.admin-sessions.revoke` | Sign out admins           | **Sign out** and **Sign out everywhere** (also needs read) |
+
+| Method   | Path                                                           | Admin UI action                                                                                                                                                           |
+| -------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET      | `/sessions`                                                    | Sessions dashboard: `?page=&pageSize=` (1-100), `status`, `reason`, `search`, `sort`; see below                                                                           |
+| GET      | `/sessions/active`                                             | Active sessions only; same paging parameters                                                                                                                              |
+| GET      | `/sessions/stats`                                              | Dashboard cards and widget: counts only, cached 5 seconds per process                                                                                                     |
+| GET      | `/sessions/native-only/summary`                                | **Why?** on the untracked-session notice: counts only, no query parameters (400 otherwise)                                                                                |
+| POST     | `/sessions/native-only/end`                                    | **End these sessions**: empty body; signed-in administrators only (admin API tokens get 403); 5 per minute                                                                |
+| GET      | `/sessions/analytics`                                          | Analytics page: counts and grouped counts over every session, cached 30 seconds                                                                                           |
+| GET      | `/sessions/export`                                             | Export batches of up to 1,000 rows, newest first; follow `meta.nextCursor`                                                                                                |
+| GET      | `/user/:userId/sessions`                                       | Sessions panel                                                                                                                                                            |
+| POST     | `/sessions/:sessionId/terminate`                               | **End session** (reason `manual`; in refresh mode the Strapi session is revoked first; the record stays)                                                                  |
+| DELETE   | `/sessions/:sessionId`                                         | **Delete record** (record removed, token stays revoked; an open session also ends)                                                                                        |
+| POST     | `/sessions/clean-inactive`                                     | **Delete ended sessions** (all users; open and idle sessions are not affected; does not run the idle check)                                                               |
+| POST     | `/user/:userId/terminate-all`                                  | **End all sessions** (reason `manual`)                                                                                                                                    |
+| POST     | `/user/:userId/toggle-block`                                   | **Block user** / **Unblock user**                                                                                                                                         |
+| GET      | `/users/stats`                                                 | Widget totals (`totalUsers`, `blockedUsers`)                                                                                                                              |
+| GET      | `/geolocation/:ipAddress`                                      | **Look up location**                                                                                                                                                      |
+| GET      | `/geoip/status`                                                | GeoIP database status                                                                                                                                                     |
+| PUT      | `/geoip/credentials`                                           | Save or remove (`{ "clear": true }`) MaxMind credentials                                                                                                                  |
+| POST     | `/geoip/update`                                                | Update database / Force download                                                                                                                                          |
+| GET, PUT | `/settings`                                                    | Configuration (PUT validates every field and returns `error.details.errors` on invalid input)                                                                             |
+| POST     | `/sessions/:sessionId/simulate-timeout`                        | Development only; removed when `NODE_ENV` is `production` or `staging`                                                                                                    |
+| GET      | `/admin-sessions/admins`                                       | Admin panel view: `?page=&pageSize=` (1-100), `search` (up to 100 characters, name or email), `filter` (`all`, `signed-in`, `not-signed-in`); needs `admin-sessions.read` |
+| GET      | `/admin-sessions/admins/:adminId/sessions`                     | **View sessions**: one entry per signed-in browser; needs `admin-sessions.read`                                                                                           |
+| POST     | `/admin-sessions/admins/:adminId/sessions/:sessionId/sign-out` | **Sign out** one browser; needs `admin-sessions.revoke`; signed-in administrators only; 10 per minute                                                                     |
+| POST     | `/admin-sessions/admins/:adminId/sign-out-everywhere`          | **Sign out everywhere**; needs `admin-sessions.revoke`; signed-in administrators only; 10 per minute                                                                      |
 
 **Session list parameters.** `page` (from 1), `pageSize` (1-100), `status` (`all`, `open`, `active`, `idle`, `ended`), `reason` (with `status=ended`: `logout`, `idle`, `expired`, `manual`, `blocked`, `unrecorded`), `search` (up to 100 characters; matches email, username, IP address, browser, operating system and device type) and `sort` (`loginTime:desc`, `loginTime:asc`, `lastActive:desc`, `lastActive:asc`). The response is `{ data, meta: { pagination: { page, pageSize, total, pageCount } } }` with exact totals. Unknown or out-of-range parameters return 400. Pages that start after the first 50,000 matching sessions return 400; narrow the filter or use the export, which walks every row with a cursor. Without `page` and `pageSize`, `GET /sessions` keeps the 4.x response (latest 1,000 rows, `meta.truncated`) for existing scripts.
 
@@ -642,6 +671,10 @@ Both untracked-session routes use the same `plugin::magic-sessionmanager.access`
 The list, statistics, analytics, export, untracked-session summary and `/users/stats` routes share the read rate limit (120 requests per minute per admin, raise it with `rateLimitReadMax`).
 
 **Block / unblock** (`toggle-block`): send `{ "blocked": true }` or `{ "blocked": false }`. This sets the state, is safe to retry and is what the admin UI sends. A request without a body still toggles, but is deprecated, because a retry after a lost response can reverse the intended state. A non-boolean `blocked` returns 400. The response contains `blocked` and `mode` (`explicit` or `toggle`). Blocking ends all open sessions with the reason `blocked`; if that fails, the response is 500 and the request can be retried.
+
+**Admin panel sessions.** `GET /admin-sessions/admins` returns `{ data: [{ id, name, email, roles: [{ name, superAdmin }], account, self, sessionCount, lastActiveAt, canSignOut, protectedReason }], meta: { supported, pagination, stats: { signedInAdmins, activeSessions, activeAccounts, totalAdmins }, policy, truncated } }`. `account` is `active`, `deactivated` or `invited`. `GET …/sessions` returns `{ data: [{ id, device, signedInAt, lastActiveAt, endsAt, rememberMe, current }], meta: { admin, policy } }`; `id` is the Strapi session id of the browser's newest session record (32 hexadecimal characters). No token, refresh token, device id or password field is ever returned. Both sign-out routes return `{ data: { ended, signedOutSelf } }`: `signedOutSelf` is `true` when the browser that sent the request was signed out. Answers: 404 for an unknown admin, and for a session id that is not a live session of that admin (no probing of other admins' sessions); 403 with `error.details.reason` `super-admin-protected` when an admin without the Super Admin role tries to sign out a Super Admin, or `browser-session-required` for admin API tokens; 429 after 10 sign-outs per minute per admin; 503 when the Strapi version has no session manager (`meta.supported: false` on the GET routes). Each sign-out writes one log line, `[magic-sessionmanager] Admin sign-out: actor=<admin id> target=<admin id> scope=one|all ended=<n>`, at info level (no email, session id or token), and emits the Strapi event `magic-sessionmanager.admin-sessions.signed-out` with the same fields.
+
+**How a sign-out works (Strapi 5.62).** The plugin deletes Strapi's own session records of that browser (`strapi.sessionManager('admin').invalidateRefreshToken(adminId, deviceId)`, the same call Strapi's logout makes) or of every browser (`invalidateRefreshToken(adminId)`). Strapi's admin authentication checks the session record on every admin request (`isSessionActive`), so the admin's next request returns 401 and the admin panel cannot renew its token: it shows the login page. There is no waiting period for the 30-minute access token (`accessTokenLifespan`). The plugin deletes every record of the browser, not only the newest one: an older access token belongs to an older, rotated record, and deleting just the newest record (`revokeSessionById`) would leave that token working until it expires. The integration suite proves both. Admin API tokens (Settings › Admin tokens) are separate from sessions and are not affected.
 
 Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404 for unknown IDs, 500 for server-side failures, 502 for a failed MaxMind download, 409 for a settings save based on an outdated `revision`.
 
@@ -832,7 +865,7 @@ The plugin sits in the request path of every authenticated Content API call, so 
 - **What leaves your server.** Only what you turn on: IP lookups at ipapi.co (provider `auto` without a local database, or `ipapi`), Discord or Slack webhooks (Team notifications), emails through your own Email provider (Security emails) and the MaxMind database download when you click **Update database** or run the updater. There is no telemetry, no install ping and no license check.
 - **Reporting a vulnerability.** Please do not post exploit details in a public issue. Open an issue that asks for a private contact, or use the email address on the maintainer's GitHub profile, and you will get a reply before anything is published.
 - **Secrets.** MaxMind license keys are never returned to the browser. Webhook URLs grant posting rights to your channel; treat them as secrets. Exports never contain tokens.
-- **Admin sessions** of Strapi administrators are out of scope.
+- **Admin panel sessions.** The Admin panel view reads Strapi's own `admin::session` records (origin `admin`) and stores nothing of its own: no IP address, user agent or sign-in history. Only Super Admin can see or sign out admins until another role is granted `admin-sessions.read` / `admin-sessions.revoke`; a delegated role cannot sign out a Super Admin. Sign-outs need a signed-in administrator (not an admin API token), are rate limited and logged with admin ids and counts only.
 
 ---
 
@@ -841,7 +874,8 @@ The plugin sits in the request path of every authenticated Content API call, so 
 | Problem                                                               | Fix                                                                                                                                                                                                                                                                                                                 |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | No Session Manager menu item                                          | Check `config/plugins.ts`, run `npm run build`, restart, hard-refresh the browser. For non-Super-Admin roles, grant "Access the Session Manager plugin".                                                                                                                                                            |
-| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded, not Strapi admin sign-ins. Check the Strapi log.                                                                                                                                                                                                   |
+| No **Admin panel** switch on the Session Manager page                 | Your role needs "Read admin panel sessions" (Settings › Roles › Plugins › Session Manager). Super Admin has it by default.                                                                                                                                                                                          |
+| No sessions appear                                                    | Only end-user sign-ins through Users & Permissions are recorded on this dashboard; Strapi admin sign-ins are under **Admin panel**. Check the Strapi log.                                                                                                                                                           |
 | Startup fails with `SESSION_ENCRYPTION_KEY is required in production` | Set the variable and restart.                                                                                                                                                                                                                                                                                       |
 | 401 on every request after a sign-in                                  | Check the `X-Session-Terminated-Reason` header. With Strict token check, tokens without a session record are rejected.                                                                                                                                                                                              |
 | 429 on sign-in                                                        | Temporary IP lockout. Wait 15 minutes or raise `maxFailedLogins`. Behind a proxy, turn on Trust proxy headers so the lockout targets the real client. With `Retry-After: 1`: more sign-ins from one address were running at once than `maxFailedLogins`; retry after a second.                                      |
@@ -856,7 +890,10 @@ The plugin stores sessions in the `magic_sessions` table and revocations in its 
 ## FAQ
 
 **Does it manage Strapi admin accounts?**
-No. It manages end users of Users & Permissions (`plugin::users-permissions.user`). Strapi administrator sessions are out of scope.
+It shows who is signed in to the Strapi admin panel and signs admins out (**Admin panel** view). It does not create, edit or deactivate admin accounts; that stays in Strapi's Settings › Users. Everything else in the plugin is about end users of Users & Permissions (`plugin::users-permissions.user`).
+
+**When does signing out an admin take effect?**
+On the admin's next request, usually their next click: Strapi 5.62 checks the session record on every admin request. They can sign in again with their password unless you deactivate the account in Settings › Users.
 
 **Do I need a license key, account or activation?**
 No. Everything is free under MIT, and the plugin does not contact any license or telemetry server. The only key you may add is your own MaxMind key for the GeoLite2 database.
@@ -919,7 +956,14 @@ npm run verify
 npm run verify:runtime
 ```
 
-HTTP integration tests need Strapi host dependencies: set `SESSION_HTTP_STRAPI_NODE_MODULES` to the `node_modules` of a Strapi 5 host; without it they skip with a message.
+HTTP integration tests need Strapi host dependencies: set `SESSION_HTTP_STRAPI_NODE_MODULES` to the `node_modules` of a Strapi 5 host; without it they skip with a message. This repository's own `node_modules` works (its devDependencies include Strapi 5.62 and Users & Permissions), which is what CI uses:
+
+```bash
+SESSION_HTTP_REQUIRED=1 SESSION_HTTP_STRAPI_NODE_MODULES=$PWD/node_modules node --test tests/isolated-admin-sessions-http.test.js
+# PostgreSQL: add SESSION_HTTP_DB=postgres MSM_TEST_PG_URL=postgres://user:pass@127.0.0.1:5432/db
+```
+
+The admin panel suite signs synthetic admins in through `POST /admin/login` and checks listing, signing out one browser and everywhere, self sign-out, the Super Admin guard, RBAC denials, the rate limit, that the next request and the refresh are rejected, and that admin sessions never reach the app-user numbers.
 
 Quick manual check: sign in to your app as an end user (`POST /api/auth/local`), open Session Manager and find the session as **Active**, click **End session** and confirm, then call any Content API route with the same token: it returns 401 and the row shows **Ended · Ended manually**.
 

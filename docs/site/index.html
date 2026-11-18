@@ -281,6 +281,14 @@ npm run develop</code></pre>
               </p>
             </article>
             <article class="card">
+              <h3>Admin panel sessions</h3>
+              <p>
+                Who can use the Strapi admin panel and who is signed in, on which browser and since
+                when. Sign an admin out of one browser or everywhere; it takes effect on their next
+                click. Separate from your app's users, Super Admin only by default.
+              </p>
+            </article>
+            <article class="card">
               <h3>Configuration</h3>
               <p>
                 Settings › Session Manager › Configuration with five tabs: Sessions, Login
@@ -438,6 +446,61 @@ npm run develop</code></pre>
               /></a>
               <figcaption>Online users widget</figcaption>
             </figure>
+            <figure class="shot shot-wide">
+              <a href="./img/admin-panel.webp"
+                ><img
+                  src="./img/admin-panel.webp"
+                  width="1440"
+                  height="1180"
+                  loading="lazy"
+                  alt="Admin panel sessions: view switch App users and Admin panel, cards Signed-in admins, Not signed in and All admins, how signing out works, search, a sign-in status filter and a table of admins with roles, status and last activity."
+              /></a>
+              <figcaption>Admin panel sessions (Strapi 5.62)</figcaption>
+            </figure>
+            <figure class="shot">
+              <a href="./img/admin-panel-sessions.webp"
+                ><img
+                  src="./img/admin-panel-sessions.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="Sessions of one admin: every signed-in browser with device, signed in, last active and latest end, Sign out per browser, Sign out everywhere and Manage in Settings."
+              /></a>
+              <figcaption>Sessions of one admin</figcaption>
+            </figure>
+            <figure class="shot">
+              <a href="./img/admin-panel-confirm.webp"
+                ><img
+                  src="./img/admin-panel-confirm.webp"
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  alt="Confirmation: Sign Clara Muster out of this browser? She is signed out on her next click and can sign in again with her password."
+              /></a>
+              <figcaption>Sign-out confirmation</figcaption>
+            </figure>
+            <figure class="shot">
+              <a href="./img/admin-panel-signed-out.webp"
+                ><img
+                  src="./img/admin-panel-signed-out.webp"
+                  width="1280"
+                  height="800"
+                  loading="lazy"
+                  alt="The signed-out admin after the next click: the Strapi login page."
+              /></a>
+              <figcaption>What the signed-out admin sees</figcaption>
+            </figure>
+            <figure class="shot shot-wide">
+              <a href="./img/admin-panel-dark.webp"
+                ><img
+                  src="./img/admin-panel-dark.webp"
+                  width="1440"
+                  height="1180"
+                  loading="lazy"
+                  alt="Admin panel sessions in the Strapi dark theme."
+              /></a>
+              <figcaption>Admin panel sessions in dark mode</figcaption>
+            </figure>
           </div>
 
           <h3 class="sub-title">Mobile, 390 px</h3>
@@ -463,6 +526,17 @@ npm run develop</code></pre>
                   alt="Session details dialog at 390 px wide in one column, with Close and End session in the footer."
               /></a>
               <figcaption>Session details on a phone</figcaption>
+            </figure>
+            <figure class="shot">
+              <a href="./img/admin-panel-mobile.webp"
+                ><img
+                  src="./img/admin-panel-mobile.webp"
+                  width="390"
+                  height="1560"
+                  loading="lazy"
+                  alt="Admin panel sessions at 390 px wide: the table becomes a card list with View sessions and Sign out everywhere buttons."
+              /></a>
+              <figcaption>Admin panel sessions on a phone</figcaption>
             </figure>
           </div>
         </section>
@@ -682,7 +756,11 @@ npm run develop</code></pre>
             Admin routes live under <code>/magic-sessionmanager</code> in the Strapi admin API. Each
             one requires an authenticated admin and the permission
             <code>plugin::magic-sessionmanager.access</code>, which also controls the menu link,
-            settings links, widget and user panel.
+            settings links, widget and user panel. The admin panel session routes also need
+            <code>plugin::magic-sessionmanager.admin-sessions.read</code> ("Read admin panel
+            sessions"), and signing out
+            <code>plugin::magic-sessionmanager.admin-sessions.revoke</code>
+            ("Sign out admins"). Only Super Admin has both by default.
           </p>
           <div class="table-wrap">
             <table>
@@ -768,6 +846,25 @@ npm run develop</code></pre>
                   <td>GET, PUT</td>
                   <td><code>/settings</code></td>
                   <td>Configuration</td>
+                </tr>
+                <tr>
+                  <td>GET</td>
+                  <td>
+                    <code>/admin-sessions/admins</code>,
+                    <code>/admin-sessions/admins/:adminId/sessions</code>
+                  </td>
+                  <td>Admin panel view and View sessions (<code>admin-sessions.read</code>)</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td>
+                    <code>/admin-sessions/admins/:adminId/sessions/:sessionId/sign-out</code>,
+                    <code>/admin-sessions/admins/:adminId/sign-out-everywhere</code>
+                  </td>
+                  <td>
+                    Sign out, Sign out everywhere (<code>admin-sessions.revoke</code>; signed-in
+                    admins only; 10 per minute; a delegated role cannot sign out a Super Admin)
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -882,8 +979,12 @@ const { data, meta } = await res.json();
             </article>
           </div>
           <p>
-            Strapi administrator sessions are out of scope. To report a vulnerability, do not post
-            exploit details publicly: open a
+            Signing out an admin deletes Strapi's own session records of that browser (or of every
+            browser). Strapi 5.62 checks the admin session on every admin request, so the admin is
+            signed out on their next click, without waiting for the access token to expire. Admin
+            API tokens are not affected. The plugin stores nothing about admins, and Strapi records
+            no IP address for admin sessions. Every sign-out is logged with admin ids and counts
+            only. To report a vulnerability, do not post exploit details publicly: open a
             <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">GitHub issue</a> that
             asks for a private contact, without credentials or personal data.
           </p>
@@ -1060,8 +1161,17 @@ const { data, meta } = await res.json();
           <details class="faq">
             <summary>Does it manage Strapi admin accounts?</summary>
             <p>
-              No. It manages end users of Users &amp; Permissions. Strapi administrator sessions are
-              out of scope.
+              It shows who is signed in to the Strapi admin panel and signs admins out (the Admin
+              panel view). Creating, editing and deactivating admins stays in Strapi's Settings ›
+              Users. Everything else is about end users of Users &amp; Permissions.
+            </p>
+          </details>
+          <details class="faq">
+            <summary>When does signing out an admin take effect?</summary>
+            <p>
+              On the admin's next request, usually their next click: Strapi 5.62 checks the session
+              on every admin request. They can sign in again with their password unless you
+              deactivate the account in Settings › Users.
             </p>
           </details>
           <details class="faq">

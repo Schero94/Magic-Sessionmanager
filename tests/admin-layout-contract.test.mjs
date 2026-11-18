@@ -154,7 +154,7 @@ test('dashboard action bar sits above the list it filters, labelled and responsi
     'search full width below the medium breakpoint'
   );
   assert.ok(
-    /<Searchbar\b[\s\S]*?\{t\('homepage\.search\.label'/.test(search),
+    /<Searchbar\b[\s\S]*?\{label \?\? t\('homepage\.search\.label'/.test(search),
     'search has an accessible label'
   );
   assert.ok(

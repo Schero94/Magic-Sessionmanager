@@ -53,6 +53,18 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['POST', '/user/:userId/terminate-all', 'session.terminateAllUserSessions'],
     ['POST', '/user/:userId/toggle-block', 'session.toggleUserBlock'],
     ['GET', '/users/stats', 'session.getUserStatsAdmin'],
+    ['GET', '/admin-sessions/admins', 'admin-sessions.listAdmins'],
+    ['GET', '/admin-sessions/admins/:adminId/sessions', 'admin-sessions.listAdminSessions'],
+    [
+      'POST',
+      '/admin-sessions/admins/:adminId/sessions/:sessionId/sign-out',
+      'admin-sessions.signOutSession',
+    ],
+    [
+      'POST',
+      '/admin-sessions/admins/:adminId/sign-out-everywhere',
+      'admin-sessions.signOutEverywhere',
+    ],
     ['GET', '/geolocation/:ipAddress', 'session.getIpGeolocation'],
     ['GET', '/geoip/status', 'geoip.getStatus'],
     ['PUT', '/geoip/credentials', 'geoip.storeCredentials'],
@@ -69,6 +81,31 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     adminRoutes.map(({ method, path, handler }) => [method, path, handler]),
     expected
   );
+});
+
+test('admin panel session routes need their own actions, and sign-out is write rate limited', () => {
+  const actionsOf = (route) =>
+    route.config.policies.find((policy) => policy?.name === 'admin::hasPermissions').config.actions;
+  const adminSessionRoutes = adminRoutes.filter(({ path }) => path.startsWith('/admin-sessions/'));
+  assert.equal(adminSessionRoutes.length, 4);
+  for (const route of adminSessionRoutes) {
+    const actions = actionsOf(route);
+    assert.ok(actions.includes('plugin::magic-sessionmanager.access'));
+    assert.ok(actions.includes('plugin::magic-sessionmanager.admin-sessions.read'));
+    const limit = route.config.middlewares[0];
+    assert.equal(limit.name, 'plugin::magic-sessionmanager.rate-limit');
+    if (route.method === 'GET') {
+      assert.ok(!actions.includes('plugin::magic-sessionmanager.admin-sessions.revoke'));
+      assert.equal(limit.config.profile, 'read');
+    } else {
+      assert.ok(actions.includes('plugin::magic-sessionmanager.admin-sessions.revoke'));
+      assert.deepEqual(limit.config, { profile: 'write', max: 10, window: 60_000 });
+    }
+  }
+  // Existing routes keep the plugin action only; the new actions are not required there.
+  for (const route of adminRoutes.filter(({ path }) => !path.startsWith('/admin-sessions/'))) {
+    assert.deepEqual(actionsOf(route), ['plugin::magic-sessionmanager.access']);
+  }
 });
 
 test('every content API route has a real controller action and JWT protection', () => {

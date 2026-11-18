@@ -9,7 +9,9 @@ const USER_UID = 'plugin::users-permissions.user';
 /**
  * Plugin register hook.
  *
- * - Registers the `access` RBAC action for admin access control.
+ * - Registers the `access` RBAC action for admin access control and the
+ *   `admin-sessions.read` / `admin-sessions.revoke` actions for the Strapi
+ *   admin panel sessions view.
  * - Removes the `sessions` relation field from the User content type so it
  *   doesn't clutter the default edit view (sessions are displayed via the
  *   SessionInfoPanel side panel).
@@ -33,6 +35,23 @@ module.exports = async ({ strapi }) => {
       // exists but is invisible in Settings → Roles → Plugins → Session
       // Manager, so admins cannot grant or revoke it.
       subCategory: 'General',
+      pluginName: 'magic-sessionmanager',
+    },
+    // Strapi admin panel sessions (4.14). Strapi grants every registered
+    // action to the Super Admin role at boot; other roles get nothing until
+    // a Super Admin grants it in Settings > Roles.
+    {
+      section: 'plugins',
+      displayName: 'Read admin panel sessions',
+      uid: 'admin-sessions.read',
+      subCategory: 'Admin panel',
+      pluginName: 'magic-sessionmanager',
+    },
+    {
+      section: 'plugins',
+      displayName: 'Sign out admins',
+      uid: 'admin-sessions.revoke',
+      subCategory: 'Admin panel',
       pluginName: 'magic-sessionmanager',
     },
   ]);

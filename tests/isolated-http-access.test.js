@@ -261,11 +261,12 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 21);
+        assert.equal(routes.length, 25);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)
             .replace(':userId', other.documentId)
+            .replace(':adminId', '1')
             .replace(':ipAddress', '192.0.2.1');
           for (const [kind, token] of [
             ['anonymous', null],
@@ -1318,7 +1319,23 @@ test(
         const testUser = await createUser('admin-target');
         const sessionToken = await jwt.issue({ id: testUser.id });
         const target = await createSession(testUser, 'admin-target-session', sessionToken);
+        // A separate synthetic admin with one Strapi admin session, so the
+        // sign-out routes never end the session of the calling admin.
+        const adminTarget = await app.db.query('admin::user').create({
+          data: {
+            email: 'admin-session-target@example.invalid',
+            firstname: 'Synthetic',
+            lastname: 'Target',
+            isActive: true,
+            roles: [editorRole.id],
+          },
+        });
+        const adminTargetSession = await app
+          .sessionManager('admin')
+          .generateRefreshToken(String(adminTarget.id), crypto.randomUUID(), { type: 'session' });
         const targets = {
+          'POST /admin-sessions/admins/:adminId/sessions/:sessionId/sign-out':
+            adminTargetSession.sessionId,
           'POST /sessions/:sessionId/terminate': target.documentId,
           'DELETE /sessions/:sessionId': target.documentId,
           'POST /sessions/:sessionId/simulate-timeout': target.documentId,
@@ -1340,6 +1357,7 @@ test(
           const pathname = route.path
             .replace(':sessionId', targets[key] || target.documentId)
             .replace(':userId', testUser.documentId)
+            .replace(':adminId', String(adminTarget.id))
             .replace(':ipAddress', '192.0.2.1');
           const result = await request(
             route.method,

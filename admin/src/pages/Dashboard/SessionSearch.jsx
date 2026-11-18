@@ -29,9 +29,11 @@ const SEARCH_DEBOUNCE_MS = 300;
  * @param {object} props
  * @param {string} props.value Current search from the URL.
  * @param {(value: string) => void} props.onSearch Writes the search to the URL.
+ * @param {string} [props.label] Accessible label; defaults to the session search label.
+ * @param {string} [props.placeholder] Placeholder; defaults to the session search hint.
  * @returns {import('react').ReactElement} Search form.
  */
-const SessionSearch = ({ value, onSearch }) => {
+const SessionSearch = ({ value, onSearch, label, placeholder }) => {
   const { formatMessage } = useIntl();
   const t = (id, defaultMessage) => formatMessage({ id: getTranslation(id), defaultMessage });
   const [draft, setDraft] = useState(value);
@@ -77,9 +79,11 @@ const SessionSearch = ({ value, onSearch }) => {
             apply('');
           }}
           clearLabel={t('homepage.search.clear', 'Clear search')}
-          placeholder={t('homepage.search.placeholder', 'Search user, email, IP or device')}
+          placeholder={
+            placeholder ?? t('homepage.search.placeholder', 'Search user, email, IP or device')
+          }
         >
-          {t('homepage.search.label', 'Search sessions')}
+          {label ?? t('homepage.search.label', 'Search sessions')}
         </Searchbar>
       </SearchForm>
     </SearchWrapper>

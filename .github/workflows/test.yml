@@ -121,3 +121,62 @@ jobs:
           MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_ci
           MSM_CONCURRENCY_REQUIRE: sqlite,postgres
         run: npm run test:concurrency
+
+  admin-sessions:
+    name: Real Strapi HTTP suites (SQLite + PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: strapi
+          POSTGRES_PASSWORD: strapi
+          POSTGRES_DB: magic_sessionmanager_http
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # The suites boot the Strapi version from this repository's devDependencies
+      # (no separate host app) and fail instead of skipping when it is missing.
+      - name: Admin panel sessions on SQLite
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+        run: node --test tests/isolated-admin-sessions-http.test.js
+
+      - name: Admin panel sessions on PostgreSQL
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+          SESSION_HTTP_DB: postgres
+          MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_http
+        run: node --test tests/isolated-admin-sessions-http.test.js
+
+      - name: Existing HTTP access suite (legacy and refresh mode)
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+        run: |
+          node --test tests/isolated-http-access.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-http-access.test.js
