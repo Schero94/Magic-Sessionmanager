@@ -2,7 +2,7 @@
 
 > Magic Session Manager (npm: strapi-plugin-magic-sessionmanager, plugin id: magic-sessionmanager) is a free, MIT-licensed Strapi 5 plugin that records every Users & Permissions sign-in as a session. Admins see who is online, end single sessions or all sessions of a user, and block accounts; the app gets logout routes, a "my devices" list, failed-login lockout and optional country rules.
 
-The current version is on npm (link below). The plugin sends no telemetry and needs no account or license key.
+Current version: __PACKAGE_VERSION__ (npm). The plugin sends no telemetry and needs no account or license key.
 
 What it does:
 

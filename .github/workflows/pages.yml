@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+  # semantic-release commits the new version to package.json with the workflow
+  # token, which starts no push workflow. Redeploy after every successful Release
+  # run on main so the stamped version below is the published one.
+  workflow_run:
+    workflows: ['Publish Package']
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +24,10 @@ concurrency:
 
 jobs:
   deploy:
+    # Deploy after a successful Release run triggered by a push to main only.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -24,6 +35,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Stamp the package version
+        # The site source never hardcodes the version: JSON-LD and llms.txt carry
+        # __PACKAGE_VERSION__, replaced here with the version from package.json.
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          grep -rl --include='*.html' --include='*.txt' '__PACKAGE_VERSION__' docs/site | xargs -r sed -i "s/__PACKAGE_VERSION__/${version}/g"
+          if grep -rq '__PACKAGE_VERSION__' docs/site; then echo 'Unreplaced version token in docs/site' >&2; exit 1; fi
       - name: Configure Pages
         uses: actions/configure-pages@v6
       - name: Upload site artifact
