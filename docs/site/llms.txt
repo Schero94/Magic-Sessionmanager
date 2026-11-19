@@ -1,0 +1,59 @@
+# Magic Session Manager for Strapi 5
+
+> Magic Session Manager (npm: strapi-plugin-magic-sessionmanager, plugin id: magic-sessionmanager) is a free, MIT-licensed Strapi 5 plugin that records every Users & Permissions sign-in as a session. Admins see who is online, end single sessions or all sessions of a user, and block accounts; the app gets logout routes, a "my devices" list, failed-login lockout and optional country rules.
+
+The current version is on npm (link below). The plugin sends no telemetry and needs no account or license key.
+
+What it does:
+
+- Sessions dashboard with Active, Idle and Ended counts, search, filters, CSV and JSON export and a details dialog per session (device, browser, IP address, location, security score).
+- End one session, end all sessions of a user, delete a record or block a user. Ended sessions are rejected on the next request with 401.
+- Content API under `/api/magic-sessionmanager` (Users & Permissions JWT, own sessions only, rate limited): `GET /my-sessions`, `GET /current-session`, `GET /user/:userId/sessions`, `POST /logout`, `POST /logout-all`, `POST /logout-others`, `DELETE /my-sessions/:sessionId`. `POST /api/auth/logout` also ends the current session.
+- Login protection: temporary IP lockout after failed sign-ins, Content API rate limits, optional rejection of VPN, proxy or low-score sign-ins, country allow or block lists.
+- IP location from a local MaxMind GeoLite2 database, from ipapi.co, or off.
+- Security emails through Strapi's Email plugin and sign-in notifications to Discord or Slack.
+- A Sessions panel next to each user in the Content Manager and an Online users widget on the Strapi homepage.
+- Admin panel sessions: who is signed in to the Strapi admin panel; sign an admin out of one browser or everywhere.
+- Works with `jwtManagement: 'refresh'` (Strapi's native sessions) and `'legacy-support'`, and with pm2 workers or Railway replicas on one PostgreSQL or MySQL database, without sticky sessions or Redis.
+- Stored tokens are encrypted with AES-256-GCM and never returned; retention deletes old history.
+
+Requirements:
+
+- Strapi `^5.50.0` and `@strapi/plugin-users-permissions` `^5.50.0` (tested on 5.50.0 and 5.63.0)
+- Node.js `^22.22.2 || >=24.15.0`
+- PostgreSQL, MySQL or SQLite (several processes need PostgreSQL or MySQL)
+- `SESSION_ENCRYPTION_KEY`, required when `NODE_ENV=production`
+
+Install:
+
+```bash
+npm install strapi-plugin-magic-sessionmanager
+```
+
+```typescript
+// config/plugins.ts
+export default () => ({
+  'magic-sessionmanager': { enabled: true },
+});
+```
+
+Then set `SESSION_ENCRYPTION_KEY`, run `npm run build` and `npm run develop`, and open Session Manager in the admin menu.
+
+Configuration essentials:
+
+- Admin permissions: `plugin::magic-sessionmanager.access`, `plugin::magic-sessionmanager.admin-sessions.read`, `plugin::magic-sessionmanager.admin-sessions.revoke`.
+- Optional route policy `plugin::magic-sessionmanager.session-required` for an explicit per-route check; revocation works on every Content API route without it.
+- Behind a proxy, turn on Koa's proxy mode or Trust proxy headers, otherwise all users share the proxy's IP address for the lockout.
+
+## Docs
+
+- [Documentation site](https://schero94.github.io/Magic-Sessionmanager/): overview, screenshots, configuration, API, examples, security, several instances, FAQ
+- [README](https://github.com/Schero94/Magic-Sessionmanager#readme): full reference for configuration, Content API, admin API and permissions, GeoIP, alerts, troubleshooting
+- [CHANGELOG](https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md)
+- [npm package](https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager)
+
+## Optional
+
+- [Running several instances](https://github.com/Schero94/Magic-Sessionmanager#running-several-instances-railway-replicas-pm2-cluster)
+- [Migration and upgrading](https://github.com/Schero94/Magic-Sessionmanager#migration-and-upgrading)
+- [Plugin hub overview](https://schero94.github.io/plugins/magic-sessionmanager/)
