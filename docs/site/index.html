@@ -3,15 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" />
+    <title>Magic Session Manager for Strapi 5: sessions, logout and login protection</title>
     <meta
       name="description"
-      content="Magic Session Manager for Strapi 5: see who is signed in, end sessions, block users, limit failed sign-ins and keep session history under control. Free, MIT, no telemetry."
+      content="Free Strapi 5 plugin: see who is signed in, end sessions in one click, block users, lock out password guessing and keep session history under control."
     />
-    <title>Magic Session Manager for Strapi 5</title>
     <link rel="canonical" href="https://schero94.github.io/Magic-Sessionmanager/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="author" content="Schero D." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#12151d" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Magic Session Manager" />
+    <meta property="og:site_name" content="Magic Session Manager documentation" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="Magic Session Manager for Strapi 5" />
     <meta
       property="og:description"
@@ -20,10 +24,10 @@
     <meta property="og:url" content="https://schero94.github.io/Magic-Sessionmanager/" />
     <meta
       property="og:image"
-      content="https://schero94.github.io/Magic-Sessionmanager/img/dashboard.webp"
+      content="https://schero94.github.io/Magic-Sessionmanager/img/og.jpg"
     />
-    <meta property="og:image:width" content="1440" />
-    <meta property="og:image:height" content="900" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
       content="Sessions dashboard with stat cards, filters and a table of sessions"
@@ -36,108 +40,259 @@
     />
     <meta
       name="twitter:image"
-      content="https://schero94.github.io/Magic-Sessionmanager/img/dashboard.webp"
+      content="https://schero94.github.io/Magic-Sessionmanager/img/og.jpg"
     />
     <link rel="icon" href="./img/icon.svg" type="image/svg+xml" />
     <link rel="icon" href="./img/icon-128.png" type="image/png" sizes="128x128" />
     <link rel="apple-touch-icon" href="./img/icon-512.png" />
+    <link rel="alternate" type="text/plain" href="./llms.txt" title="llms.txt" />
+    <link
+      rel="preload"
+      as="image"
+      href="./img/dashboard.webp"
+      type="image/webp"
+      fetchpriority="high"
+    />
     <link rel="stylesheet" href="./site.css" />
     <link rel="stylesheet" href="./site-extra.css" />
+    <script src="./site.js" defer></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://schero94.github.io/Magic-Sessionmanager/#software",
+            "name": "Magic Session Manager",
+            "alternateName": "strapi-plugin-magic-sessionmanager",
+            "description": "Free Strapi 5 plugin that records every Users & Permissions sign-in as a session, lets admins end sessions and block users, and adds logout routes, failed-login lockout and optional country rules.",
+            "applicationCategory": "DeveloperApplication",
+            "applicationSubCategory": "Strapi plugin",
+            "operatingSystem": "Node.js 22+ / Strapi 5",
+            "softwareRequirements": "Strapi ^5.50.0, @strapi/plugin-users-permissions ^5.50.0, Node.js ^22.22.2 || >=24.15.0",
+            "license": "https://opensource.org/licenses/MIT",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "url": "https://schero94.github.io/Magic-Sessionmanager/",
+            "downloadUrl": "https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager",
+            "codeRepository": "https://github.com/Schero94/Magic-Sessionmanager",
+            "screenshot": "https://schero94.github.io/Magic-Sessionmanager/img/dashboard.webp",
+            "author": {
+              "@type": "Person",
+              "name": "Schero D.",
+              "url": "https://schero94.github.io/"
+            },
+            "sameAs": [
+              "https://github.com/Schero94/Magic-Sessionmanager",
+              "https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager",
+              "https://schero94.github.io/plugins/magic-sessionmanager/"
+            ]
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Schero94",
+                "item": "https://schero94.github.io/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Plugins",
+                "item": "https://schero94.github.io/plugins/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Magic Session Manager",
+                "item": "https://schero94.github.io/Magic-Sessionmanager/"
+              }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Does it manage Strapi admin accounts?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "It shows who is signed in to the Strapi admin panel and signs admins out (the Admin panel view). Creating, editing and deactivating admins stays in Strapi's Settings › Users. Everything else is about end users of Users & Permissions."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "When does signing out an admin take effect?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "On the admin's next request, usually their next click: Strapi 5.62 checks the session on every admin request. They can sign in again with their password unless you deactivate the account in Settings › Users."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I need a license key, account or activation?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Everything is free under MIT and the plugin contacts no license or telemetry server. The only key you may add is your own MaxMind key for the GeoLite2 database."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I have to add the session-required policy?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Revocation works on every Content API route without configuration. The policy is an optional, explicit per-route check."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does it work with jwtManagement: 'refresh'?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Strapi issues, rotates and revokes its own sessions; the plugin adds device, IP address, location and history, and ends the native session when you end it."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What are \"untracked Strapi sign-ins\" on the dashboard?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Refresh tokens that Strapi still accepts but that have no session details from this plugin, for example sign-ins from before it started tracking, or tokens that custom code created without returning them. They are not in the list and are not active or online sessions. Why? shows a count-only summary (before or after tracking, how Strapi created them, expiry); End these sessions ends them. The README lists which sign-in paths are linked."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does it send my users' IP addresses anywhere?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Only when location lookup uses ipapi.co (provider ipapi, or auto without a local database). Choose local-mmdb or disabled to keep IP addresses on your server."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Why do sign-ins get 429?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "The temporary IP lockout counts failed sign-ins per IP address. Behind a proxy, turn on Koa's proxy mode or Trust proxy headers, otherwise all users share the proxy's address."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="topbar">
       <div class="topbar-inner">
-        <a class="brand" href="#main-content" aria-label="Magic Session Manager home">
+        <a class="brand" href="#top" aria-label="Magic Session Manager documentation, back to top">
           <img class="brand-logo" src="./img/icon.svg" alt="" width="32" height="32" />
           <span>Magic Session Manager</span>
         </a>
         <nav class="top-links" aria-label="Project links">
+          <a href="#install">Install</a>
           <a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub</a>
           <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm</a>
-          <a
-            class="top-link-wide"
-            href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md"
+          <a href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md"
             >Changelog</a
-          >
-          <a class="top-link-wide" href="https://github.com/Schero94/Magic-Sessionmanager/releases"
-            >Releases</a
           >
         </nav>
       </div>
     </header>
 
-    <div class="hero-wrap">
+    <div class="hero-wrap" id="top">
       <section class="hero" aria-labelledby="page-title">
-        <div class="hero-copy">
-          <span class="eyebrow">Strapi 5 plugin</span>
-          <h1 id="page-title">See who is signed in. End access in one click.</h1>
-          <p>
-            Magic Session Manager records every sign-in of your app's users (Users &amp;
-            Permissions) as a session. Admins see who is online, end single sessions or all sessions
-            of a user, and block accounts. Your app gets logout routes, a "my devices" list,
-            failed-login lockout and optional country rules. It works with Strapi's native
-            refresh-token sessions and with several server processes on one database.
-          </p>
-          <div class="hero-actions">
-            <a class="button primary" href="#install">Install the plugin</a>
-            <a class="button" href="#screenshots">See the screens</a>
-            <a class="button" href="https://github.com/Schero94/Magic-Sessionmanager"
-              >View source</a
-            >
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <nav class="crumbs" aria-label="Breadcrumb">
+              <ol>
+                <li><a href="https://schero94.github.io/">Schero94</a></li>
+                <li><a href="https://schero94.github.io/plugins/">Plugins</a></li>
+                <li><span aria-current="page">Magic Session Manager docs</span></li>
+              </ol>
+            </nav>
+            <h1 id="page-title">See who is signed in. End access in one click.</h1>
+            <p class="definition">
+              Magic Session Manager is a free, MIT-licensed Strapi 5 plugin that records every Users
+              &amp; Permissions sign-in as a session, so admins can see who is online, end sessions
+              and block accounts.
+            </p>
+            <p>
+              Your app gets logout routes, a "my devices" list, failed-login lockout and optional
+              country rules. It works with Strapi's native refresh-token sessions and with several
+              server processes on one database.
+            </p>
+            <div class="hero-actions">
+              <a class="button primary" href="#install">Install the plugin</a>
+              <a class="button" href="https://github.com/Schero94/Magic-Sessionmanager#readme"
+                >Read the README</a
+              >
+            </div>
+            <ul class="badges" aria-label="Package details">
+              <li>Strapi ^5.50.0</li>
+              <li>Node.js ^22.22.2 or &gt;=24.15.0</li>
+              <li>5 admin languages</li>
+              <li>MIT, no telemetry</li>
+            </ul>
+            <p class="shields" aria-label="Project status badges">
+              <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager"
+                ><img
+                  src="https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg"
+                  alt="npm version"
+                  height="20"
+              /></a>
+              <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager"
+                ><img
+                  src="https://img.shields.io/npm/dm/strapi-plugin-magic-sessionmanager.svg"
+                  alt="npm downloads"
+                  height="20"
+              /></a>
+              <a
+                href="https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml?query=branch%3Amain"
+                ><img
+                  src="https://img.shields.io/github/actions/workflow/status/Schero94/Magic-Sessionmanager/test.yml?branch=main&amp;label=CI&amp;logo=github"
+                  alt="CI build status"
+                  height="20"
+              /></a>
+              <a href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/LICENSE"
+                ><img
+                  src="https://img.shields.io/badge/License-MIT-blue.svg"
+                  alt="License: MIT"
+                  height="20"
+              /></a>
+              <a href="https://github.com/Schero94/Magic-Sessionmanager#compatibility"
+                ><img
+                  src="https://img.shields.io/badge/Strapi-5.50%2B-4945FF.svg"
+                  alt="Strapi 5.50+"
+                  height="20"
+              /></a>
+              <a href="https://schero94.github.io/Magic-Sessionmanager/"
+                ><img
+                  src="https://img.shields.io/badge/docs-project%20site-6d4aff.svg"
+                  alt="Documentation site"
+                  height="20"
+              /></a>
+            </p>
           </div>
-          <p class="shields" aria-label="Project status badges">
-            <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager"
-              ><img
-                src="https://img.shields.io/npm/v/strapi-plugin-magic-sessionmanager.svg"
-                alt="npm version"
-                height="20"
-            /></a>
-            <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager"
-              ><img
-                src="https://img.shields.io/npm/dm/strapi-plugin-magic-sessionmanager.svg"
-                alt="npm downloads"
-                height="20"
-            /></a>
-            <a
-              href="https://github.com/Schero94/Magic-Sessionmanager/actions/workflows/test.yml?query=branch%3Amain"
-              ><img
-                src="https://img.shields.io/github/actions/workflow/status/Schero94/Magic-Sessionmanager/test.yml?branch=main&amp;label=CI&amp;logo=github"
-                alt="CI build status"
-                height="20"
-            /></a>
-            <a href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/LICENSE"
-              ><img
-                src="https://img.shields.io/badge/License-MIT-blue.svg"
-                alt="License: MIT"
-                height="20"
-            /></a>
-            <a href="https://github.com/Schero94/Magic-Sessionmanager#compatibility"
-              ><img
-                src="https://img.shields.io/badge/Strapi-5.50%2B-4945FF.svg"
-                alt="Strapi 5.50+"
-                height="20"
-            /></a>
-            <a href="https://schero94.github.io/Magic-Sessionmanager/"
-              ><img
-                src="https://img.shields.io/badge/docs-project%20site-6d4aff.svg"
-                alt="Documentation site"
-                height="20"
-            /></a>
-          </p>
-          <ul class="badges" aria-label="Package details">
-            <li class="badge">Strapi 5, tested on 5.63</li>
-            <li class="badge">Node.js 22.22.2+ or 24.15.0+</li>
-            <li class="badge">5 admin languages</li>
-            <li class="badge">MIT, free, no telemetry</li>
-            <li class="badge">npm, Yarn and pnpm</li>
-          </ul>
+          <figure class="hero-shot">
+            <img
+              src="./img/dashboard.webp"
+              fetchpriority="high"
+              width="1440"
+              height="900"
+              alt="Sessions dashboard: four stat cards (Active, Idle, Ended, All), search, a status filter and a table of sessions with Active, Idle and Ended badges."
+            />
+          </figure>
         </div>
       </section>
     </div>
 
-    <div class="layout">
+    <main class="layout" id="main-content" tabindex="-1">
       <nav class="side-nav" aria-label="Page sections">
+        <a href="#fit">Is it a fit?</a>
         <a href="#install">Quick start</a>
         <a href="#features">Features</a>
         <a href="#screenshots">Screenshots</a>
@@ -153,7 +308,52 @@
         <a href="#releases">Releases</a>
       </nav>
 
-      <main class="content" id="main-content" tabindex="-1">
+      <div class="content">
+        <section class="section summary" id="fit" aria-labelledby="fit-title">
+          <h2 id="fit-title">Is Magic Session Manager the right fit?</h2>
+          <div class="fit-grid">
+            <div class="fit fit-yes">
+              <h3>Use it when</h3>
+              <ul>
+                <li>
+                  Your app users sign in through Users &amp; Permissions and you want to see and end
+                  their sessions.
+                </li>
+                <li>
+                  Your frontend needs "log out", "log out everywhere" and a "my devices" list.
+                </li>
+                <li>You want a lockout after failed sign-ins, rate limits or country rules.</li>
+                <li>
+                  You want to see who is signed in to the Strapi admin panel and sign admins out.
+                </li>
+              </ul>
+            </div>
+            <div class="fit fit-no">
+              <h3>Skip it when</h3>
+              <ul>
+                <li>Your users do not sign in through Users &amp; Permissions.</li>
+                <li>
+                  You need to create or edit admin accounts. That stays in Strapi's Settings ›
+                  Users.
+                </li>
+                <li>Your project runs Strapi older than 5.50.0.</li>
+                <li>You run several processes on SQLite. That setup needs PostgreSQL or MySQL.</li>
+              </ul>
+            </div>
+            <div class="fit fit-req">
+              <h3>Requirements</h3>
+              <ul>
+                <li>
+                  Strapi <code>^5.50.0</code> with <code>@strapi/plugin-users-permissions</code>
+                </li>
+                <li>Node.js <code>^22.22.2 || &gt;=24.15.0</code></li>
+                <li>PostgreSQL, MySQL or SQLite</li>
+                <li><code>SESSION_ENCRYPTION_KEY</code> when <code>NODE_ENV=production</code></li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
         <section class="section" id="install" aria-labelledby="install-title">
           <h2 id="install-title">Quick start (1 minute)</h2>
           <p class="section-lead">
@@ -1161,70 +1361,72 @@ const { data, meta } = await res.json();
 
         <section class="section" id="faq" aria-labelledby="faq-title">
           <h2 id="faq-title">FAQ</h2>
-          <details class="faq">
-            <summary>Does it manage Strapi admin accounts?</summary>
-            <p>
-              It shows who is signed in to the Strapi admin panel and signs admins out (the Admin
-              panel view). Creating, editing and deactivating admins stays in Strapi's Settings ›
-              Users. Everything else is about end users of Users &amp; Permissions.
-            </p>
-          </details>
-          <details class="faq">
-            <summary>When does signing out an admin take effect?</summary>
-            <p>
-              On the admin's next request, usually their next click: Strapi 5.62 checks the session
-              on every admin request. They can sign in again with their password unless you
-              deactivate the account in Settings › Users.
-            </p>
-          </details>
-          <details class="faq">
-            <summary>Do I need a license key, account or activation?</summary>
-            <p>
-              No. Everything is free under MIT and the plugin contacts no license or telemetry
-              server. The only key you may add is your own MaxMind key for the GeoLite2 database.
-            </p>
-          </details>
-          <details class="faq">
-            <summary>Do I have to add the <code>session-required</code> policy?</summary>
-            <p>
-              No. Revocation works on every Content API route without configuration. The policy is
-              an optional, explicit per-route check.
-            </p>
-          </details>
-          <details class="faq">
-            <summary>Does it work with <code>jwtManagement: 'refresh'</code>?</summary>
-            <p>
-              Yes. Strapi issues, rotates and revokes its own sessions; the plugin adds device, IP
-              address, location and history, and ends the native session when you end it.
-            </p>
-          </details>
-          <details class="faq">
-            <summary>What are "untracked Strapi sign-ins" on the dashboard?</summary>
-            <p>
-              Refresh tokens that Strapi still accepts but that have no session details from this
-              plugin, for example sign-ins from before it started tracking, or tokens that custom
-              code created without returning them. They are not in the list and are not active or
-              online sessions. <strong>Why?</strong> shows a count-only summary (before or after
-              tracking, how Strapi created them, expiry); <strong>End these sessions</strong> ends
-              them. The README lists which sign-in paths are linked.
-            </p>
-          </details>
-          <details class="faq">
-            <summary>Does it send my users' IP addresses anywhere?</summary>
-            <p>
-              Only when location lookup uses ipapi.co (provider <code>ipapi</code>, or
-              <code>auto</code> without a local database). Choose <code>local-mmdb</code> or
-              <code>disabled</code> to keep IP addresses on your server.
-            </p>
-          </details>
-          <details class="faq">
-            <summary>Why do sign-ins get 429?</summary>
-            <p>
-              The temporary IP lockout counts failed sign-ins per IP address. Behind a proxy, turn
-              on Koa's proxy mode or Trust proxy headers, otherwise all users share the proxy's
-              address.
-            </p>
-          </details>
+          <div class="faq">
+            <details>
+              <summary>Does it manage Strapi admin accounts?</summary>
+              <p>
+                It shows who is signed in to the Strapi admin panel and signs admins out (the Admin
+                panel view). Creating, editing and deactivating admins stays in Strapi's Settings ›
+                Users. Everything else is about end users of Users &amp; Permissions.
+              </p>
+            </details>
+            <details>
+              <summary>When does signing out an admin take effect?</summary>
+              <p>
+                On the admin's next request, usually their next click: Strapi 5.62 checks the
+                session on every admin request. They can sign in again with their password unless
+                you deactivate the account in Settings › Users.
+              </p>
+            </details>
+            <details>
+              <summary>Do I need a license key, account or activation?</summary>
+              <p>
+                No. Everything is free under MIT and the plugin contacts no license or telemetry
+                server. The only key you may add is your own MaxMind key for the GeoLite2 database.
+              </p>
+            </details>
+            <details>
+              <summary>Do I have to add the <code>session-required</code> policy?</summary>
+              <p>
+                No. Revocation works on every Content API route without configuration. The policy is
+                an optional, explicit per-route check.
+              </p>
+            </details>
+            <details>
+              <summary>Does it work with <code>jwtManagement: 'refresh'</code>?</summary>
+              <p>
+                Yes. Strapi issues, rotates and revokes its own sessions; the plugin adds device, IP
+                address, location and history, and ends the native session when you end it.
+              </p>
+            </details>
+            <details>
+              <summary>What are "untracked Strapi sign-ins" on the dashboard?</summary>
+              <p>
+                Refresh tokens that Strapi still accepts but that have no session details from this
+                plugin, for example sign-ins from before it started tracking, or tokens that custom
+                code created without returning them. They are not in the list and are not active or
+                online sessions. <strong>Why?</strong> shows a count-only summary (before or after
+                tracking, how Strapi created them, expiry); <strong>End these sessions</strong> ends
+                them. The README lists which sign-in paths are linked.
+              </p>
+            </details>
+            <details>
+              <summary>Does it send my users' IP addresses anywhere?</summary>
+              <p>
+                Only when location lookup uses ipapi.co (provider <code>ipapi</code>, or
+                <code>auto</code> without a local database). Choose <code>local-mmdb</code> or
+                <code>disabled</code> to keep IP addresses on your server.
+              </p>
+            </details>
+            <details>
+              <summary>Why do sign-ins get 429?</summary>
+              <p>
+                The temporary IP lockout counts failed sign-ins per IP address. Behind a proxy, turn
+                on Koa's proxy mode or Trust proxy headers, otherwise all users share the proxy's
+                address.
+              </p>
+            </details>
+          </div>
         </section>
 
         <section class="section" id="migration" aria-labelledby="migration-title">
@@ -1316,19 +1518,59 @@ npm run build &amp;&amp; npm run verify &amp;&amp; npm run verify:runtime</code>
             >
           </div>
         </section>
-      </main>
-    </div>
+      </div>
+    </main>
 
     <footer class="footer">
-      <p>
-        Magic Session Manager is free software under the MIT License. It sends no telemetry and
-        needs no account or key.
-      </p>
-      <p>
-        <a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub repository</a> ·
-        <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager">npm package</a> ·
-        <a href="https://github.com/Schero94/Magic-Sessionmanager/issues">Issues</a>
-      </p>
+      <div class="footer-inner">
+        <div>
+          <p class="footer-name">Magic Session Manager</p>
+          <p>
+            Sessions, logout routes and login protection for Strapi 5. MIT licensed, no telemetry,
+            maintained by <a href="https://schero94.github.io/">Schero D.</a>
+          </p>
+          <p>
+            Overview and the other plugins:
+            <a href="https://schero94.github.io/plugins/magic-sessionmanager/"
+              >Magic Session Manager on the plugin hub</a
+            >.
+          </p>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li>
+              <a href="https://github.com/Schero94/Magic-Sessionmanager">GitHub repository</a>
+            </li>
+            <li>
+              <a href="https://www.npmjs.com/package/strapi-plugin-magic-sessionmanager"
+                >npm package</a
+              >
+            </li>
+            <li>
+              <a href="https://github.com/Schero94/Magic-Sessionmanager/blob/main/CHANGELOG.md"
+                >Changelog</a
+              >
+            </li>
+            <li><a href="https://github.com/Schero94/Magic-Sessionmanager/issues">Issues</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Docs</h2>
+          <ul>
+            <li><a href="https://github.com/Schero94/Magic-Sessionmanager#readme">README</a></li>
+            <li>
+              <a href="https://github.com/Schero94/Magic-Sessionmanager#content-api">Content API</a>
+            </li>
+            <li>
+              <a href="https://github.com/Schero94/Magic-Sessionmanager#configuration"
+                >Configuration</a
+              >
+            </li>
+            <li><a href="./llms.txt">llms.txt</a></li>
+          </ul>
+        </div>
+      </div>
     </footer>
   </body>
 </html>
