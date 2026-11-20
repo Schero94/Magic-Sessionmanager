@@ -51,6 +51,7 @@ Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.g
 - [Contributing](#contributing)
 - [Maintenance status](#maintenance-status)
 - [Languages](#languages)
+- [Showcase your company](#showcase-your-company)
 - [License](#license)
 
 ---
@@ -1033,6 +1034,12 @@ The gate script runs from the default branch and reads lockfiles and reports as 
 The admin interface is available in English, German (formal "Sie"), French, Spanish and Portuguese, and follows the Strapi admin language. Dates use the admin locale.
 
 ---
+
+## Showcase your company
+
+Using Magic Session Manager in production? [Add your company](https://github.com/Schero94/Magic-Sessionmanager/issues/new?template=showcase.yml) to the "Used by" section of the [documentation site](https://schero94.github.io/Magic-Sessionmanager/#used-by). The form asks for the company name, the website, a logo (PNG, JPEG or WebP, uploaded to the issue) and an optional one-line description.
+
+A maintainer reviews every request and approves it with the `showcase-approved` label. `.github/workflows/showcase.yml` then validates the issue with `.github/scripts/showcase.mjs`, converts the logo to a WebP of at most 320 x 160 pixels and opens a `docs:` pull request that changes `docs/site/showcase.json`. The logo appears on the site after that pull request is merged. Website links carry `rel="ugc noopener"`. To remove an entry, open an issue that names the company; a maintainer then applies the `showcase-remove` label.
 
 ## License
 
