@@ -35,6 +35,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Render the showcase
+        # docs/site/showcase.json becomes static HTML, JSON-LD and an llms.txt section, so
+        # crawlers and language models see the "Used by" list without JavaScript.
+        run: node .github/scripts/showcase.mjs render --site docs/site
       - name: Stamp the package version
         # The site source never hardcodes the version: JSON-LD and llms.txt carry
         # __PACKAGE_VERSION__, replaced here with the version from package.json.
