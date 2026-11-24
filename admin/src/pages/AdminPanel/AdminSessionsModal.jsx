@@ -13,6 +13,7 @@ import {
   Typography,
 } from '@strapi/design-system';
 import { SignOut } from '@strapi/icons';
+import styled from 'styled-components';
 import { getTranslation } from '../../utils/getTranslation';
 import { useSessionFormatters } from '../../utils/useSessionFormatters';
 import { PropertyList } from '../../components/ui';
@@ -20,6 +21,32 @@ import Alert from '../../components/PersistentAlert';
 import { LastActive } from '../Dashboard/SessionTable';
 import { AdminRoles, AdminStatus, HIGHLIGHT_BADGE } from './AdminList';
 import { ContentActivityPanel, SignInHistoryPanel } from './AdminEventPanels';
+
+/**
+ * The dialog tabs stay on one row and scroll inside their own list, never the
+ * dialog body: at 320 px "Sitzungen / Anmeldeverlauf / Aktivität" is wider
+ * than the dialog. Same pattern and sentence-case labels as the Settings tabs.
+ */
+const DialogTabsList = styled(Tabs.List)`
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+`;
+
+/** Tabs keep their text width and never wrap; the list scrolls instead. */
+const DialogTabTrigger = styled(Tabs.Trigger)`
+  && {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+`;
+
+/** Own label element: resets the DS sigma uppercase without selecting into DS markup. */
+const DialogTabLabel = styled.span`
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: ${({ theme }) => theme.fontSizes[2]};
+`;
 
 /** Tabs of the admin details when the caller may see admin activity. */
 export const ADMIN_DIALOG_TABS = Object.freeze(['sessions', 'history', 'activity']);
@@ -282,17 +309,19 @@ const AdminSessionsModal = ({
         <Modal.Body>
           {canViewActivity ? (
             <Tabs.Root variant="simple" value={tab} onValueChange={setTab}>
-              <Tabs.List aria-label={t('adminPanel.dialog.tabs', 'Admin details')}>
-                <Tabs.Trigger value="sessions">
-                  {t('adminPanel.dialog.tab.sessions', 'Sessions')}
-                </Tabs.Trigger>
-                <Tabs.Trigger value="history">
-                  {t('adminPanel.dialog.tab.history', 'Sign-in history')}
-                </Tabs.Trigger>
-                <Tabs.Trigger value="activity">
-                  {t('adminPanel.dialog.tab.activity', 'Activity')}
-                </Tabs.Trigger>
-              </Tabs.List>
+              <DialogTabsList aria-label={t('adminPanel.dialog.tabs', 'Admin details')}>
+                <DialogTabTrigger value="sessions">
+                  <DialogTabLabel>{t('adminPanel.dialog.tab.sessions', 'Sessions')}</DialogTabLabel>
+                </DialogTabTrigger>
+                <DialogTabTrigger value="history">
+                  <DialogTabLabel>
+                    {t('adminPanel.dialog.tab.history', 'Sign-in history')}
+                  </DialogTabLabel>
+                </DialogTabTrigger>
+                <DialogTabTrigger value="activity">
+                  <DialogTabLabel>{t('adminPanel.dialog.tab.activity', 'Activity')}</DialogTabLabel>
+                </DialogTabTrigger>
+              </DialogTabsList>
               <Tabs.Content value="sessions">
                 <Box paddingTop={4}>{sessionsContent}</Box>
               </Tabs.Content>
