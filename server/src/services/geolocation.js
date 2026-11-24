@@ -13,7 +13,12 @@ const net = require('node:net');
 const path = require('node:path');
 const { getPluginSettings } = require('../utils/settings-loader');
 const { getCoordinator, hashedKey } = require('../utils/coordination');
-const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
+const {
+  DEFAULT_GEOIP_DIRECTORY,
+  resolveDatabaseTarget,
+} = require('../../../scripts/geoip-updater.cjs');
+const { calculateSecurityScore, getRiskLevel, noRiskData } = require('../utils/risk-data');
+const { lookupRiskData } = require('../utils/risk-databases');
 
 const GEO_API_TIMEOUT_MS = 4000;
 const IPAPI_SUCCESS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -58,6 +63,38 @@ function uniqueValues(values) {
 }
 
 /**
+ * Read locations for a configured database path, in order of preference.
+ *
+ * - An absolute path is used as it is.
+ * - A bare file name ("GeoLite2-Country.mmdb") is looked up in the plugin's
+ *   GeoIP folder first, where the admin and CLI downloads write it. Up to
+ *   4.14 it was resolved against the Strapi folder (process.cwd()), so a
+ *   downloaded database with a custom name was never found; that location
+ *   stays as a fallback for installs that put the file there.
+ * - Any other relative path (a legacy value with folders) keeps its old
+ *   meaning, relative to the Strapi folder. The settings API no longer
+ *   accepts such values; they can only come from older stored settings or
+ *   from the environment.
+ *
+ * @param {unknown} value Configured path or file name
+ * @returns {string[]} Absolute candidate paths, preferred first
+ */
+function resolveConfiguredCandidates(value) {
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  const trimmed = value.trim();
+  if (path.isAbsolute(trimmed)) return [trimmed];
+  const isBareName =
+    trimmed !== '.' && trimmed !== '..' && !/[\\/]/.test(trimmed) && !trimmed.includes('\0');
+  if (isBareName) {
+    return uniqueValues([
+      path.join(DEFAULT_GEOIP_DIRECTORY, trimmed),
+      path.resolve(process.cwd(), trimmed),
+    ]);
+  }
+  return [path.resolve(process.cwd(), trimmed)];
+}
+
+/**
  * Lists the selected database first, then supported environment and default
  * locations used by the read-only GeoIP provider.
  *
@@ -65,13 +102,13 @@ function uniqueValues(values) {
  * @returns {string[]} Candidate local database paths
  */
 function resolveDatabaseCandidates(settings = {}) {
-  const configured = normalizeDatabasePath(
+  const configured = resolveConfiguredCandidates(
     settings.geoIpDatabasePath ||
       process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
       process.env.GEOIP_DATABASE_PATH
   );
 
-  if (configured) return [configured];
+  if (configured.length > 0) return configured;
 
   return uniqueValues([
     normalizeDatabasePath(process.env.GEOLITE2_CITY_MMDB),
@@ -101,7 +138,11 @@ async function openLocalReader(databasePath) {
   }
 
   const { Reader } = require('@maxmind/geoip2-node');
-  const readerPromise = Reader.open(databasePath, { watchForUpdates: true });
+  const readerPromise = Reader.open(databasePath, {
+    watchForUpdates: true,
+    // Reloads a replaced file without keeping the process alive on its own.
+    watchForUpdatesNonPersistent: true,
+  });
   readerCache.set(databasePath, readerPromise);
 
   try {
@@ -330,14 +371,8 @@ function normalizeLocalCountryResult(data, lookupIp, getCountryFlag) {
     asn: null,
     network: data.traits?.network || null,
 
-    isVpn: false,
-    isProxy: false,
-    isThreat: false,
-    isAnonymous: false,
-    isTor: false,
-
-    securityScore: 100,
-    riskLevel: 'Low',
+    // A location database has no VPN, proxy or Tor data: no risk data here.
+    ...noRiskData(),
 
     _status: 'ok',
     _source: 'local-mmdb',
@@ -367,14 +402,8 @@ function normalizeLocalCityResult(data, lookupIp, getCountryFlag) {
     asn: null,
     network: data.traits?.network || null,
 
-    isVpn: false,
-    isProxy: false,
-    isThreat: false,
-    isAnonymous: false,
-    isTor: false,
-
-    securityScore: 100,
-    riskLevel: 'Low',
+    // A location database has no VPN, proxy or Tor data: no risk data here.
+    ...noRiskData(),
 
     _status: 'ok',
     _source: 'local-mmdb',
@@ -512,10 +541,7 @@ module.exports = ({ strapi }) => ({
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         latitude: null,
         longitude: null,
-        isVpn: false,
-        isProxy: false,
-        isThreat: false,
-        securityScore: 100,
+        ...noRiskData(),
         riskLevel: 'None',
         _status: 'private',
         _source: 'local',
@@ -534,7 +560,7 @@ module.exports = ({ strapi }) => ({
     }
 
     if (provider === 'local-mmdb') {
-      return this.getLocalMmdbIpInfo(lookupIp, settings);
+      return this.withRiskData(await this.getLocalMmdbIpInfo(lookupIp, settings), lookupIp);
     }
 
     if (provider === 'auto') {
@@ -542,7 +568,7 @@ module.exports = ({ strapi }) => ({
       if (databasePath && fs.existsSync(databasePath)) {
         const localResult = await this.getLocalMmdbIpInfo(lookupIp, settings);
         if (localResult?._status === 'ok' || settings.geoLookupFailureMode === 'block') {
-          return localResult;
+          return this.withRiskData(localResult, lookupIp);
         }
         strapi.log.warn(
           '[magic-sessionmanager/geolocation] Local MMDB lookup failed, falling back to ipapi.co'
@@ -550,7 +576,40 @@ module.exports = ({ strapi }) => ({
       }
     }
 
-    return this.getIpapiIpInfo(lookupIp);
+    return this.withRiskData(await this.getIpapiIpInfo(lookupIp), lookupIp);
+  },
+
+  /**
+   * Adds risk data (VPN, proxy, Tor, hosting) from the local risk databases
+   * to a location result. Location providers have none; without a risk
+   * database the result keeps noRiskData(). The lookup is local, so no
+   * address leaves the server. The ASN database also fills `asn` and `org`
+   * when the location provider gave none.
+   *
+   * @param {object} result Location lookup result.
+   * @param {string} lookupIp Normalized, validated IP address.
+   * @returns {Promise<object>} Result with risk fields.
+   */
+  async withRiskData(result, lookupIp) {
+    if (!result || typeof result !== 'object') return result;
+    try {
+      const { asn, org, ...risk } = await lookupRiskData(lookupIp);
+      if (risk._riskStatus === 'error') {
+        strapi.log.warn('[magic-sessionmanager/geolocation] Risk database lookup failed');
+      }
+      return {
+        ...result,
+        ...risk,
+        ...(asn && !result.asn ? { asn } : {}),
+        ...(org && !result.org ? { org } : {}),
+      };
+    } catch (error) {
+      strapi.log.warn(
+        '[magic-sessionmanager/geolocation] Risk database lookup failed:',
+        error?.name || 'Error'
+      );
+      return { ...result, ...noRiskData(), _riskStatus: 'error' };
+    }
   },
 
   /**
@@ -749,25 +808,9 @@ module.exports = ({ strapi }) => ({
           org: data.org,
           asn: data.asn,
 
-          isVpn: data.threat?.is_vpn || false,
-          isProxy: data.threat?.is_proxy || false,
-          isThreat: data.threat?.is_threat || false,
-          isAnonymous: data.threat?.is_anonymous || false,
-          isTor: data.threat?.is_tor || false,
-
-          securityScore: this.calculateSecurityScore({
-            isVpn: data.threat?.is_vpn,
-            isProxy: data.threat?.is_proxy,
-            isThreat: data.threat?.is_threat,
-            isAnonymous: data.threat?.is_anonymous,
-            isTor: data.threat?.is_tor,
-          }),
-
-          riskLevel: this.getRiskLevel({
-            isVpn: data.threat?.is_vpn,
-            isProxy: data.threat?.is_proxy,
-            isThreat: data.threat?.is_threat,
-          }),
+          // ipapi.co documents no VPN, proxy or threat fields
+          // (https://ipapi.co/api/), so its answer carries no risk data.
+          ...noRiskData(),
 
           _status: 'ok',
           _source: 'ipapi',
@@ -806,26 +849,17 @@ module.exports = ({ strapi }) => ({
    * @param {object} flags
    * @returns {number}
    */
-  calculateSecurityScore({ isVpn, isProxy, isThreat, isAnonymous, isTor }) {
-    let score = 100;
-    if (isTor) score -= 50;
-    if (isThreat) score -= 40;
-    if (isVpn) score -= 20;
-    if (isProxy) score -= 15;
-    if (isAnonymous) score -= 10;
-    return Math.max(0, score);
+  calculateSecurityScore(flags) {
+    return calculateSecurityScore(flags || {});
   },
 
   /**
-   * Maps threat indicators to a human-readable risk level.
+   * Maps risk indicators to a human-readable risk level.
    * @param {object} flags
    * @returns {string}
    */
-  getRiskLevel({ isVpn, isProxy, isThreat }) {
-    if (isThreat) return 'High';
-    if (isVpn && isProxy) return 'Medium-High';
-    if (isVpn || isProxy) return 'Medium';
-    return 'Low';
+  getRiskLevel(flags) {
+    return getRiskLevel(flags || {});
   },
 
   /**
@@ -882,11 +916,7 @@ module.exports = ({ strapi }) => ({
       timezone: 'Unknown',
       latitude: null,
       longitude: null,
-      isVpn: false,
-      isProxy: false,
-      isThreat: false,
-      securityScore: 50,
-      riskLevel: 'Unknown',
+      ...noRiskData(),
       _status: reason,
       _source: source,
       _reason: detail,

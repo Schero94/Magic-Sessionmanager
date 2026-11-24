@@ -14,6 +14,7 @@ const { runWithCallerRevocation } = require('../utils/block-revocation-scope');
 const { sendServerError } = require('../utils/http-errors');
 const { getCoordinator } = require('../utils/coordination');
 const { clearSessionStatsCache } = require('../utils/session-list');
+const { noRiskData } = require('../utils/risk-data');
 const {
   getNativeOnlySummary,
   endNativeOnlySessions,
@@ -58,11 +59,7 @@ function createDisabledGeolocationResult(ipAddress) {
     timezone: 'Unknown',
     latitude: null,
     longitude: null,
-    isVpn: false,
-    isProxy: false,
-    isThreat: false,
-    securityScore: 50,
-    riskLevel: 'Unknown',
+    ...noRiskData(),
     _status: 'disabled',
     _source: 'disabled',
   };

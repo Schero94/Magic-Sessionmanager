@@ -88,7 +88,12 @@ test('MaxMind credentials: save, confirmed removal and the environment note (IA 
 
 test('GeoIP update names edition and build date, and shows the server message on errors (IA E.2)', () => {
   const update = handler('handleUpdateGeoIpDatabase');
-  assert.match(update, /post\(`\/\$\{pluginId\}\/geoip\/update`, \{ force \}\)/);
+  assert.match(
+    update,
+    /const body = database === 'location' \? \{ force \} : \{ force, database \};/,
+    'the location download keeps its request body; risk downloads name their database'
+  );
+  assert.match(update, /post\(`\/\$\{pluginId\}\/geoip\/update`, body\)/);
   assert.match(update, /'GeoIP database updated: \{edition\}, built \{date\}\.'/);
   assert.match(
     unwrapSource(update),

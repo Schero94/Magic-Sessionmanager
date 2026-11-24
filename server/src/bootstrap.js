@@ -22,6 +22,7 @@ const { getPluginSettings, getSessionCreationGraceMs } = require('./utils/settin
 const { extractBearerToken } = require('./utils/extract-token');
 const { setSessionRejectionReason } = require('./utils/rejection-cache');
 const { evaluateGeoFirewall } = require('./utils/geo-firewall');
+const { dispatchLoginAlerts } = require('./utils/login-alerts');
 const { REVOCATION_UID } = require('./utils/session-revocation');
 const { getNativeSessionManager } = require('./utils/native-session-manager');
 const { CONTENT_API_PERMISSIONS_VERSION } = require('./utils/content-api-permissions');
@@ -1084,17 +1085,6 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 
         const notificationService = strapi.plugin('magic-sessionmanager').service('notifications');
 
-        // Security scoring is gated by the admin-facing `enableSecurityScoring`
-        // toggle. When disabled, we still evaluate VPN/Proxy/Threat flags but
-        // skip the numeric-score threshold check, so a false-positive score
-        // cannot itself mark a session as suspicious.
-        const scoreEvaluationEnabled = settings.enableSecurityScoring !== false;
-        const lowScore =
-          scoreEvaluationEnabled &&
-          typeof geoData.securityScore === 'number' &&
-          geoData.securityScore < 70;
-        const isSuspicious = geoData.isVpn || geoData.isProxy || geoData.isThreat || lowScore;
-
         // New-location detection: compare to the user's previous sessions.
         // "New" is defined as never having seen this country before. We
         // swallow lookup errors because this is purely informational alerting.
@@ -1153,85 +1143,16 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
           }
         }
 
-        if (settings.enableEmailAlerts) {
-          if (settings.alertOnVpnProxy && (geoData.isVpn || geoData.isProxy)) {
-            await notificationService.sendVpnProxyAlert({
-              user,
-              session: newSession,
-              reason: {
-                isVpn: geoData.isVpn,
-                isProxy: geoData.isProxy,
-              },
-              geoData,
-            });
-          }
-
-          if (settings.alertOnSuspiciousLogin && isSuspicious) {
-            await notificationService.sendSuspiciousLoginAlert({
-              user,
-              session: newSession,
-              reason: {
-                isVpn: geoData.isVpn,
-                isProxy: geoData.isProxy,
-                isThreat: geoData.isThreat,
-                securityScore: geoData.securityScore,
-              },
-              geoData,
-            });
-          }
-
-          if (settings.alertOnNewLocation && isNewLocation) {
-            await notificationService.sendNewLocationAlert({
-              user,
-              session: newSession,
-              geoData,
-            });
-          }
-        }
-
-        if (settings.enableWebhooks) {
-          const webhookEvent = isSuspicious
-            ? 'login.suspicious'
-            : isNewLocation
-              ? 'login.new_location'
-              : 'login.success';
-
-          // Fan out to every configured webhook channel. Each failure is
-          // isolated: a broken Slack URL does not stop Discord delivery.
-          const targets = [];
-          if (settings.discordWebhookUrl) {
-            targets.push({
-              url: settings.discordWebhookUrl,
-              payload: notificationService.formatDiscordWebhook({
-                event: webhookEvent,
-                session: newSession,
-                user,
-                geoData,
-              }),
-            });
-          }
-          if (settings.slackWebhookUrl) {
-            targets.push({
-              url: settings.slackWebhookUrl,
-              payload: notificationService.formatSlackWebhook({
-                event: webhookEvent,
-                session: newSession,
-                user,
-                geoData,
-              }),
-            });
-          }
-
-          await Promise.allSettled(
-            targets.map((t) =>
-              notificationService.sendWebhook({
-                event: webhookEvent,
-                data: t.payload,
-                webhookUrl: t.url,
-              })
-            )
-          );
-        }
+        // Risk alerts fire only with risk data from a real source; see
+        // utils/login-alerts.js and utils/risk-data.js.
+        await dispatchLoginAlerts({
+          settings,
+          notificationService,
+          user,
+          session: newSession,
+          geoData,
+          isNewLocation,
+        });
       } catch (notifErr) {
         log.warn('Notification failed:', notifErr?.name || 'Error');
       }

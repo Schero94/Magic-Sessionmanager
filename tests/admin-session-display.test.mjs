@@ -143,7 +143,9 @@ test('session details never send an IP address on open and never invent security
   assert.match(detailSource, /'IP location lookup is off\.'/);
   assert.match(detailSource, /'The location could not be determined\.'/);
   // Stored data never claims VPN/proxy values; scores come from the record only.
-  assert.match(detailSource, /storedGeo \? notStoredForPast : undefined/);
+  assert.match(detailSource, /storedGeo\s*\?\s*notStoredForPast\s*:\s*undefined/);
+  // A live answer without VPN/proxy data (ASN heuristic) says "Not available", not "No".
+  assert.match(detailSource, /yesNoText\(liveGeo\.isVpn\) \?\? notAvailable/);
   assert.match(detailSource, /'Not stored for past sign-ins'/);
   assert.match(
     detailSource,
@@ -152,8 +154,12 @@ test('session details never send an IP address on open and never invent security
   );
   assert.match(
     detailSource,
-    /const riskMessage = liveGeo \? RISK_LEVEL_MESSAGES\[liveGeo\.riskLevel\] : null/
+    /const riskMessage = liveGeo\?\.riskSource \? RISK_LEVEL_MESSAGES\[liveGeo\.riskLevel\] : null/
   );
+  // Without a risk source, score, VPN and proxy are one "Not available" row.
+  assert.match(detailSource, /const riskUnavailable = Boolean\(geo\) && !geo\.riskSource;/);
+  assert.match(detailSource, /'modal\.security\.riskUnavailable', 'Not available'/);
+  assert.doesNotMatch(detailSource, /session\.securityScore/, 'no score without its risk source');
   assert.doesNotMatch(detailSource, /securityScore:\s*(?:0|50|100)\b/);
   assert.doesNotMatch(detailSource, /isVpn:\s*false/);
   assert.doesNotMatch(detailSource, /isProxy:\s*false/);

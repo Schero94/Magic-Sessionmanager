@@ -600,9 +600,12 @@ module.exports = ({ strapi }) => {
                   city: geoData.city,
                   region: geoData.region,
                   timezone: geoData.timezone,
+                  // Marks the stored score as real risk data; without a
+                  // risk source the score is null (not a fake 100).
+                  ...(geoData.riskSource ? { riskSource: geoData.riskSource } : {}),
                 }
               : null,
-            securityScore: geoData?.securityScore ?? null,
+            securityScore: geoData?.riskSource ? (geoData.securityScore ?? null) : null,
           },
         });
 
