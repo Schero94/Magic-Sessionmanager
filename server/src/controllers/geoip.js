@@ -18,6 +18,7 @@ const {
 const { sendServerError } = require('../utils/http-errors');
 const { setPluginStoreValue } = require('../utils/plugin-store');
 const { getHostFingerprint } = require('../utils/coordination');
+const { getRiskDataStatus, RISK_DATABASES } = require('../utils/risk-databases');
 
 const CREDENTIALS_KEY = 'geoipCredentials';
 const SAFE_GEOIP_DIRECTORY_LABEL = 'data/magic-sessionmanager/geoip';
@@ -127,6 +128,28 @@ function buildUpdaterConfig(settings, storedCredentials, force = false) {
   });
 }
 
+/** Databases the admin can download: the location database or a risk database. */
+const UPDATABLE_DATABASES = new Set(['location', ...Object.keys(RISK_DATABASES)]);
+
+/**
+ * Builds the updater configuration for a risk database. Its destination is
+ * fixed to the edition's file in the dedicated GeoIP folder.
+ *
+ * @param {'anonymous-ip'|'asn'} database Risk database.
+ * @param {object} storedCredentials MaxMind credentials from the plugin store
+ * @param {boolean} [force=false] Whether to bypass the Last-Modified check
+ * @returns {object} Safe updater configuration
+ */
+function buildRiskUpdaterConfig(database, storedCredentials, force = false) {
+  return resolveConfig(process.env, force ? ['--force'] : [], {
+    accountId: process.env.MAXMIND_ACCOUNT_ID || storedCredentials.accountId || '',
+    licenseKey: process.env.MAXMIND_LICENSE_KEY || storedCredentials.licenseKey || '',
+    editionId: RISK_DATABASES[database].editionId,
+    databaseDirectory: DEFAULT_GEOIP_DIRECTORY,
+    force,
+  });
+}
+
 /**
  * Bounds credential input and removes NUL bytes before storage.
  *
@@ -185,8 +208,8 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
           instance: getHostFingerprint(),
           // VPN, proxy and Tor detection needs a dedicated risk data source.
           // The location providers (ipapi.co, GeoLite2 City/Country) have
-          // none, so the admin shows the dependent controls as unavailable.
-          risk: { available: false, source: null },
+          // none; the local Anonymous IP or ASN database is reported here.
+          risk: await getRiskDataStatus(),
         },
       });
     } catch (error) {
@@ -248,9 +271,18 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
     try {
       const body = ctx.request.body || {};
       const force = body.force === true;
+      const database = body.database === undefined ? 'location' : body.database;
+      if (!UPDATABLE_DATABASES.has(database)) {
+        return ctx.badRequest('Unknown GeoIP database', {
+          database: ['Use location, anonymous-ip or asn.'],
+        });
+      }
       const settings = await getPluginSettings(strapi);
       const storedCredentials = await getStoredCredentials(strapi);
-      const config = buildUpdaterConfig(settings, storedCredentials, force);
+      const config =
+        database === 'location'
+          ? buildUpdaterConfig(settings, storedCredentials, force)
+          : buildRiskUpdaterConfig(database, storedCredentials, force);
 
       if (!config.accountId || !config.licenseKey) {
         return ctx.badRequest('MaxMind credentials are required before downloading GeoIP data');
@@ -266,6 +298,15 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
           '[magic-sessionmanager/geoip] GeoIP download failed:',
           error?.name || 'Error'
         );
+        // 401/403 from MaxMind: wrong credentials, or the account does not
+        // include this (paid) database. The message stays fixed.
+        if (error?.httpStatus === 401 || error?.httpStatus === 403) {
+          return sendServerError(
+            ctx,
+            502,
+            'MaxMind refused the download. Check the credentials and that your account includes this database.'
+          );
+        }
         return sendServerError(ctx, 502, 'Error updating GeoIP database');
       }
       invalidateSettingsCache();
@@ -284,6 +325,7 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
   },
 
   __private: {
+    buildRiskUpdaterConfig,
     buildUpdaterConfig,
     getCredentialSource,
     getStoredCredentials,

@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { act } from 'react';
 import { network, permission, renderStrict, settle } from './harness/index.jsx';
 import Settings from '../../admin/src/pages/Settings';
 import SessionDetailModal from '../../admin/src/components/SessionDetailModal';
@@ -205,6 +206,61 @@ test('session details: a stored score with its risk source is shown', async () =
     const text = document.body.textContent;
     assert.match(text, /70\/100/);
     assert.doesNotMatch(text, /Needs a risk data source/);
+  } finally {
+    await handle.unmount();
+  }
+});
+
+test('risk data card: states and a download that names its database', async () => {
+  network.on('GET', '/magic-sessionmanager/settings', { settings: SAVED, revision: 1 });
+  network.on('GET', '/magic-sessionmanager/geoip/status', {
+    status: {
+      exists: true,
+      hasCredentials: true,
+      credentialSource: 'store',
+      risk: {
+        available: true,
+        source: 'asn-heuristic',
+        anonymousIp: { editionId: 'GeoIP2-Anonymous-IP', exists: false, usable: false },
+        asn: {
+          editionId: 'GeoLite2-ASN',
+          exists: true,
+          usable: true,
+          file: 'data/magic-sessionmanager/geoip/GeoLite2-ASN.mmdb',
+          metadata: { lastModified: 'Tue, 24 Nov 2026 10:00:00 GMT' },
+        },
+      },
+    },
+  });
+  network.on('POST', '/magic-sessionmanager/geoip/update', {
+    success: true,
+    result: { changed: false },
+  });
+  const handle = await renderStrict(<Settings />, {
+    path: '/settings/magic-sessionmanager/general?tab=location-data',
+    permissions: ALL,
+  });
+  await settle(10, 10);
+  try {
+    const card = handle.container.querySelector('#risk-data');
+    assert.ok(card, 'risk data card is rendered');
+    const text = card.textContent;
+    assert.match(text, /Risk data \(VPN, proxy, Tor\)/);
+    assert.match(text, /ASN heuristic/);
+    assert.match(text, /GeoLite2 ASN \(heuristic\)/);
+    assert.match(text, /Not downloaded/);
+    assert.match(text, /Ready/);
+    const buttons = [...card.querySelectorAll('button')].map((button) => button.textContent);
+    assert.deepEqual(buttons, ['Download Anonymous IP', 'Update ASN']);
+
+    const update = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Update ASN');
+    await act(async () => {
+      update.click();
+    });
+    await settle(10, 10);
+    const posts = network.calls.filter((call) => call.method === 'POST');
+    assert.equal(posts.length, 1);
+    assert.deepEqual(JSON.parse(posts[0].body), { force: false, database: 'asn' });
   } finally {
     await handle.unmount();
   }

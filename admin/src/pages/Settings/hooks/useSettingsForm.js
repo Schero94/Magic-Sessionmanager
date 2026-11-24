@@ -70,6 +70,8 @@ export function useSettingsForm() {
   const [geoIpStatusError, setGeoIpStatusError] = useState(false);
   const [geoIpCredentials, setGeoIpCredentials] = useState({ accountId: '', licenseKey: '' });
   const [geoIpUpdating, setGeoIpUpdating] = useState(false);
+  /** Risk database being downloaded ('anonymous-ip' | 'asn'), or null. */
+  const [riskUpdating, setRiskUpdating] = useState(null);
   const [geoIpSavingCredentials, setGeoIpSavingCredentials] = useState(false);
 
   const [settings, setSettings] = useState(INITIAL_SETTINGS);
@@ -409,22 +411,33 @@ export function useSettingsForm() {
    * Requests a GeoIP database update (`force` for "Force download"). The
    * server owns path validation and the external download. Success names
    * the edition and build date; errors show the server's message.
+   * `database` is 'location' (default) or a risk database ('anonymous-ip',
+   * 'asn'); each download has its own pending state.
    *
    * @param {boolean} force Bypass the freshness check and download again.
+   * @param {'location'|'anonymous-ip'|'asn'} [database] Database to download.
    * @returns {Promise<void>}
    */
   const handleUpdateGeoIpDatabase = useCallback(
-    async (force = false) => {
-      setGeoIpUpdating(true);
+    async (force = false, database = 'location') => {
+      const setPending = database === 'location' ? setGeoIpUpdating : setRiskUpdating;
+      setPending(database === 'location' ? true : database);
       try {
-        const response = await post(`/${pluginId}/geoip/update`, { force });
+        const body = database === 'location' ? { force } : { force, database };
+        const response = await post(`/${pluginId}/geoip/update`, body);
         requireSuccessfulMutation(response.data);
         const status = await fetchGeoIpStatus();
         const result = response.data.result || {};
+        const riskEntry =
+          database === 'anonymous-ip'
+            ? status?.risk?.anonymousIp
+            : database === 'asn'
+              ? status?.risk?.asn
+              : null;
         const values = {
-          edition: status?.editionId || '—',
+          edition: (riskEntry || status)?.editionId || '—',
           date: formatSessionDate(
-            result.lastModified || status?.metadata?.lastModified,
+            result.lastModified || (riskEntry || status)?.metadata?.lastModified,
             locale,
             '—',
             BUILD_DATE_OPTIONS
@@ -457,7 +470,7 @@ export function useSettingsForm() {
             ),
         });
       } finally {
-        setGeoIpUpdating(false);
+        setPending(database === 'location' ? false : null);
       }
     },
     [post, t, locale, toggleNotification, fetchGeoIpStatus]
@@ -490,6 +503,7 @@ export function useSettingsForm() {
       credentials: geoIpCredentials,
       setCredentials: setGeoIpCredentials,
       updating: geoIpUpdating,
+      riskUpdating,
       savingCredentials: geoIpSavingCredentials,
       fetchStatus: fetchGeoIpStatus,
       saveCredentials: handleSaveGeoIpCredentials,

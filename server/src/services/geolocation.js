@@ -15,6 +15,7 @@ const { getPluginSettings } = require('../utils/settings-loader');
 const { getCoordinator, hashedKey } = require('../utils/coordination');
 const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
 const { calculateSecurityScore, getRiskLevel, noRiskData } = require('../utils/risk-data');
+const { lookupRiskData } = require('../utils/risk-databases');
 
 const GEO_API_TIMEOUT_MS = 4000;
 const IPAPI_SUCCESS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -102,7 +103,11 @@ async function openLocalReader(databasePath) {
   }
 
   const { Reader } = require('@maxmind/geoip2-node');
-  const readerPromise = Reader.open(databasePath, { watchForUpdates: true });
+  const readerPromise = Reader.open(databasePath, {
+    watchForUpdates: true,
+    // Reloads a replaced file without keeping the process alive on its own.
+    watchForUpdatesNonPersistent: true,
+  });
   readerCache.set(databasePath, readerPromise);
 
   try {
@@ -520,7 +525,7 @@ module.exports = ({ strapi }) => ({
     }
 
     if (provider === 'local-mmdb') {
-      return this.getLocalMmdbIpInfo(lookupIp, settings);
+      return this.withRiskData(await this.getLocalMmdbIpInfo(lookupIp, settings), lookupIp);
     }
 
     if (provider === 'auto') {
@@ -528,7 +533,7 @@ module.exports = ({ strapi }) => ({
       if (databasePath && fs.existsSync(databasePath)) {
         const localResult = await this.getLocalMmdbIpInfo(lookupIp, settings);
         if (localResult?._status === 'ok' || settings.geoLookupFailureMode === 'block') {
-          return localResult;
+          return this.withRiskData(localResult, lookupIp);
         }
         strapi.log.warn(
           '[magic-sessionmanager/geolocation] Local MMDB lookup failed, falling back to ipapi.co'
@@ -536,7 +541,40 @@ module.exports = ({ strapi }) => ({
       }
     }
 
-    return this.getIpapiIpInfo(lookupIp);
+    return this.withRiskData(await this.getIpapiIpInfo(lookupIp), lookupIp);
+  },
+
+  /**
+   * Adds risk data (VPN, proxy, Tor, hosting) from the local risk databases
+   * to a location result. Location providers have none; without a risk
+   * database the result keeps noRiskData(). The lookup is local, so no
+   * address leaves the server. The ASN database also fills `asn` and `org`
+   * when the location provider gave none.
+   *
+   * @param {object} result Location lookup result.
+   * @param {string} lookupIp Normalized, validated IP address.
+   * @returns {Promise<object>} Result with risk fields.
+   */
+  async withRiskData(result, lookupIp) {
+    if (!result || typeof result !== 'object') return result;
+    try {
+      const { asn, org, ...risk } = await lookupRiskData(lookupIp);
+      if (risk._riskStatus === 'error') {
+        strapi.log.warn('[magic-sessionmanager/geolocation] Risk database lookup failed');
+      }
+      return {
+        ...result,
+        ...risk,
+        ...(asn && !result.asn ? { asn } : {}),
+        ...(org && !result.org ? { org } : {}),
+      };
+    } catch (error) {
+      strapi.log.warn(
+        '[magic-sessionmanager/geolocation] Risk database lookup failed:',
+        error?.name || 'Error'
+      );
+      return { ...result, ...noRiskData(), _riskStatus: 'error' };
+    }
   },
 
   /**

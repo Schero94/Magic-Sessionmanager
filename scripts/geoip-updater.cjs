@@ -27,6 +27,14 @@ const SUPPORTED_EDITION_IDS = new Set([
 const SUPPORTED_MMDB_NAMES = new Set(
   [...SUPPORTED_EDITION_IDS].map((editionId) => `${editionId}.mmdb`)
 );
+/**
+ * Risk databases (VPN, proxy, Tor, hosting). They live in the same folder
+ * but are never used as the location database: GeoIP2 Anonymous IP (paid)
+ * and GeoLite2 ASN (free, used for a hosting heuristic only).
+ */
+const RISK_EDITION_IDS = new Set(['GeoIP2-Anonymous-IP', 'GeoLite2-ASN']);
+const ALL_EDITION_IDS = new Set([...SUPPORTED_EDITION_IDS, ...RISK_EDITION_IDS]);
+const ALL_MMDB_NAMES = new Set([...ALL_EDITION_IDS].map((editionId) => `${editionId}.mmdb`));
 
 /**
  * Resolves a supported MMDB filename into the plugin's dedicated database
@@ -35,10 +43,15 @@ const SUPPORTED_MMDB_NAMES = new Set(
  *
  * @param {string} [value] Filename or canonical path to an MMDB file
  * @param {string} [directory] Dedicated database directory
+ * @param {Set<string>} [allowedNames] Accepted filenames (location databases by default)
  * @returns {string} Lexically resolved MMDB destination
  * @throws {Error} When the destination escapes the dedicated directory
  */
-function resolveDatabaseTarget(value, directory = DEFAULT_GEOIP_DIRECTORY) {
+function resolveDatabaseTarget(
+  value,
+  directory = DEFAULT_GEOIP_DIRECTORY,
+  allowedNames = SUPPORTED_MMDB_NAMES
+) {
   const root = path.resolve(directory);
   if (value !== undefined && typeof value !== 'string') {
     throw new Error('GeoIP database path must be a string');
@@ -59,7 +72,7 @@ function resolveDatabaseTarget(value, directory = DEFAULT_GEOIP_DIRECTORY) {
     filename = requested;
   }
 
-  if (!SUPPORTED_MMDB_NAMES.has(filename)) {
+  if (!allowedNames.has(filename)) {
     throw new Error('GeoIP database path must use a supported MMDB filename');
   }
 
@@ -73,12 +86,17 @@ function resolveDatabaseTarget(value, directory = DEFAULT_GEOIP_DIRECTORY) {
  *
  * @param {string} [value] Filename or canonical path to an MMDB file
  * @param {string} [directory] Dedicated database directory
+ * @param {Set<string>} [allowedNames] Accepted filenames
  * @returns {Promise<string>} Canonical MMDB destination
  * @throws {Error} When the directory, database or sidecar is unsafe
  */
-async function canonicalizeDatabaseTarget(value, directory = DEFAULT_GEOIP_DIRECTORY) {
+async function canonicalizeDatabaseTarget(
+  value,
+  directory = DEFAULT_GEOIP_DIRECTORY,
+  allowedNames = SUPPORTED_MMDB_NAMES
+) {
   const root = path.resolve(directory);
-  const target = resolveDatabaseTarget(value, root);
+  const target = resolveDatabaseTarget(value, root, allowedNames);
   await fs.mkdir(root, { recursive: true, mode: 0o700 });
 
   const rootStat = await fs.lstat(root);
@@ -113,10 +131,11 @@ async function canonicalizeDatabaseTarget(value, directory = DEFAULT_GEOIP_DIREC
  *
  * @param {string} value Requested edition identifier
  * @param {string} [fallback=DEFAULT_EDITION_ID] Fallback edition
+ * @param {Set<string>} [allowed] Accepted editions (location editions by default)
  * @returns {string} Supported edition identifier
  */
-function normalizeEditionId(value, fallback = DEFAULT_EDITION_ID) {
-  return SUPPORTED_EDITION_IDS.has(value) ? value : fallback;
+function normalizeEditionId(value, fallback = DEFAULT_EDITION_ID, allowed = SUPPORTED_EDITION_IDS) {
+  return allowed.has(value) ? value : fallback;
 }
 
 /**
@@ -176,13 +195,27 @@ function resolveConfig(env = process.env, argv = process.argv.slice(2), override
     env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
     env.GEOIP_DATABASE_PATH ||
     '';
-  const editionId = normalizeEditionId(
-    overrides.editionId ||
-      env.MAXMIND_EDITION_ID ||
-      inferEditionIdFromPath(configuredOutputPath) ||
-      DEFAULT_EDITION_ID
-  );
+  const requestedEdition = overrides.editionId || env.MAXMIND_EDITION_ID;
   const databaseDirectory = overrides.databaseDirectory || DEFAULT_GEOIP_DIRECTORY;
+  // A risk edition always goes to its own file name; the location path
+  // settings never apply to it.
+  if (RISK_EDITION_IDS.has(requestedEdition)) {
+    return {
+      accountId: overrides.accountId || env.MAXMIND_ACCOUNT_ID || env.MAXMIND_USER_ID || '',
+      licenseKey: overrides.licenseKey || env.MAXMIND_LICENSE_KEY || '',
+      editionId: requestedEdition,
+      outputPath: resolveDatabaseTarget(
+        `${requestedEdition}.mmdb`,
+        databaseDirectory,
+        ALL_MMDB_NAMES
+      ),
+      mmdbFileName: `${requestedEdition}.mmdb`,
+      force,
+    };
+  }
+  const editionId = normalizeEditionId(
+    requestedEdition || inferEditionIdFromPath(configuredOutputPath) || DEFAULT_EDITION_ID
+  );
   const outputPath = resolveDatabaseTarget(
     configuredOutputPath || `${editionId}.mmdb`,
     databaseDirectory
@@ -320,7 +353,9 @@ async function fetchHead(url, authHeader) {
   });
 
   if (!response.ok) {
-    throw new Error(`MaxMind HEAD failed with HTTP ${response.status}`);
+    const error = new Error(`MaxMind HEAD failed with HTTP ${response.status}`);
+    error.httpStatus = response.status;
+    throw error;
   }
 
   return {
@@ -348,7 +383,9 @@ async function fetchArchive(url, authHeader) {
   });
 
   if (!response.ok) {
-    throw new Error(`MaxMind download failed with HTTP ${response.status}`);
+    const error = new Error(`MaxMind download failed with HTTP ${response.status}`);
+    error.httpStatus = response.status;
+    throw error;
   }
 
   return Buffer.from(await response.arrayBuffer());
@@ -405,8 +442,12 @@ async function updateGeoIpDatabase(config = resolveConfig()) {
     throw new Error('MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY are required');
   }
 
-  const editionId = normalizeEditionId(config.editionId);
-  const outputPath = await canonicalizeDatabaseTarget(config.outputPath);
+  const editionId = normalizeEditionId(config.editionId, DEFAULT_EDITION_ID, ALL_EDITION_IDS);
+  const outputPath = await canonicalizeDatabaseTarget(
+    config.outputPath,
+    DEFAULT_GEOIP_DIRECTORY,
+    ALL_MMDB_NAMES
+  );
   const mmdbFileName = `${editionId}.mmdb`;
   if (path.basename(outputPath) !== mmdbFileName) {
     throw new Error('GeoIP database filename must match the selected edition');
@@ -467,6 +508,8 @@ async function updateGeoIpDatabase(config = resolveConfig()) {
 }
 
 module.exports = {
+  ALL_MMDB_NAMES,
+  RISK_EDITION_IDS,
   DEFAULT_EDITION_ID,
   DEFAULT_GEOIP_DIRECTORY,
   DEFAULT_MMDB_NAME,

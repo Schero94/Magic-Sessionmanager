@@ -131,6 +131,8 @@ test('automatic fallback does not log local reader error details', async (t) => 
   });
   service.getIpapiIpInfo = async () => ({ _status: 'ok', _source: 'fake' });
   assert.equal((await service.getIpInfo('8.8.4.4'))._source, 'fake');
-  assert.equal(warnings.length, 1);
-  assert.doesNotMatch(warnings[0], /private-path-and-ip-marker/);
+  // One warning for the fallback; the stubbed existsSync also makes the risk
+  // databases look present, so their failed open may add a second, generic one.
+  assert.ok(warnings.some((warning) => /falling back to ipapi\.co/.test(warning)));
+  for (const warning of warnings) assert.doesNotMatch(warning, /private-path-and-ip-marker/);
 });

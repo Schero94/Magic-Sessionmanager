@@ -291,13 +291,28 @@ const SessionDetailModal = ({ session, now, onClose, onCloseAutoFocus, onEndSess
           {
             id: 'vpn',
             label: t('modal.security.vpn', 'VPN'),
-            render: liveGeo ? yesNoText(liveGeo.isVpn) : storedGeo ? notStoredForPast : undefined,
+            render: liveGeo
+              ? (yesNoText(liveGeo.isVpn) ?? notAvailable)
+              : storedGeo
+                ? notStoredForPast
+                : undefined,
           },
           {
             id: 'proxy',
             label: t('modal.security.proxy', 'Proxy'),
-            render: liveGeo ? yesNoText(liveGeo.isProxy) : storedGeo ? notStoredForPast : undefined,
+            render: liveGeo
+              ? (yesNoText(liveGeo.isProxy) ?? notAvailable)
+              : storedGeo
+                ? notStoredForPast
+                : undefined,
           },
+          liveGeo
+            ? {
+                id: 'hosting',
+                label: t('modal.security.hosting', 'Hosting network'),
+                render: yesNoText(liveGeo.isHosting),
+              }
+            : null,
         ]),
     riskMessage
       ? {
@@ -474,6 +489,12 @@ const SessionDetailModal = ({ session, now, onClose, onCloseAutoFocus, onEndSess
                     'modal.security.scoreNote',
                     'Higher is safer. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on.'
                   )}
+                  {geo?.riskSource === 'asn-heuristic'
+                    ? ` ${t(
+                        'modal.security.asnHeuristicNote',
+                        'From the ASN heuristic: it only recognises large hosting and cloud networks, not VPNs, proxies or Tor.'
+                      )}`
+                    : null}
                 </Typography>
               ) : null}
               {riskUnavailable ? (

@@ -83,8 +83,9 @@ const booleanOrNull = (value) => (typeof value === 'boolean' ? value : null);
  *   country: string, city: string, timezone: string,
  *   riskSource: string|null,
  *   securityScore: number|null, riskLevel: string,
- *   isVpn: boolean|null, isProxy: boolean|null,
- * }} Display facts, or null without any location fact.
+ *   isVpn: boolean|null, isProxy: boolean|null, isHosting: boolean|null,
+ * }} Display facts, or null without any location fact. The ASN heuristic
+ *   only sees hosting networks, so its VPN and proxy values stay null.
  */
 export function normalizeGeoData(geo, fallback = {}) {
   if (!geo || typeof geo !== 'object') return null;
@@ -106,8 +107,9 @@ export function normalizeGeoData(geo, fallback = {}) {
     riskSource,
     securityScore,
     riskLevel: riskSource ? normalizeRiskLevel(geo.riskLevel) : '',
-    isVpn: riskSource ? booleanOrNull(geo.isVpn) : null,
-    isProxy: riskSource ? booleanOrNull(geo.isProxy) : null,
+    isVpn: riskSource === 'anonymous-ip' ? booleanOrNull(geo.isVpn) : null,
+    isProxy: riskSource === 'anonymous-ip' ? booleanOrNull(geo.isProxy) : null,
+    isHosting: riskSource ? booleanOrNull(geo.isHosting) : null,
   };
 }
 
@@ -139,6 +141,7 @@ export function getStoredGeoData(session) {
     riskLevel: _ignoredLevel,
     isVpn: _ignoredVpn,
     isProxy: _ignoredProxy,
+    isHosting: _ignoredHosting,
     ...facts
   } = geoLocation;
   return normalizeGeoData(facts, { securityScore: session?.securityScore });

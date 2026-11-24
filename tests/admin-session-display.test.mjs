@@ -143,7 +143,9 @@ test('session details never send an IP address on open and never invent security
   assert.match(detailSource, /'IP location lookup is off\.'/);
   assert.match(detailSource, /'The location could not be determined\.'/);
   // Stored data never claims VPN/proxy values; scores come from the record only.
-  assert.match(detailSource, /storedGeo \? notStoredForPast : undefined/);
+  assert.match(detailSource, /storedGeo\s*\?\s*notStoredForPast\s*:\s*undefined/);
+  // A live answer without VPN/proxy data (ASN heuristic) says "Not available", not "No".
+  assert.match(detailSource, /yesNoText\(liveGeo\.isVpn\) \?\? notAvailable/);
   assert.match(detailSource, /'Not stored for past sign-ins'/);
   assert.match(
     detailSource,

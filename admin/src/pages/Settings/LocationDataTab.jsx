@@ -3,6 +3,7 @@ import { SectionCard } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import GeoIpDatabaseCard from './GeoIpDatabaseCard';
+import RiskDataCard from './RiskDataCard';
 import { IntroText, RequiresNotice, RiskSourceNotice } from './SettingsBlocks';
 import { getRiskAvailability, riskDependentControl } from '../../utils/riskData.mjs';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
@@ -78,6 +79,8 @@ const LocationDataTab = ({ form }) => {
       </SectionCard>
 
       <GeoIpDatabaseCard form={form} />
+
+      <RiskDataCard form={form} />
     </Flex>
   );
 };

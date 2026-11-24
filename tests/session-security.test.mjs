@@ -58,7 +58,22 @@ test('geo data keeps missing facts missing and never invents security values', (
     riskLevel: '',
     isVpn: null,
     isProxy: null,
+    isHosting: null,
   });
+
+  // The ASN heuristic sees hosting networks only: VPN and proxy stay unknown.
+  const heuristic = normalizeGeoData({
+    country: 'Germany',
+    securityScore: 80,
+    isVpn: false,
+    isProxy: false,
+    isHosting: true,
+    riskSource: 'asn-heuristic',
+  });
+  assert.equal(heuristic.isVpn, null);
+  assert.equal(heuristic.isProxy, null);
+  assert.equal(heuristic.isHosting, true);
+  assert.equal(heuristic.securityScore, 80);
 
   const checked = normalizeGeoData({
     country: 'Germany',

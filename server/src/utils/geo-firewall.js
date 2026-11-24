@@ -34,20 +34,10 @@ function evaluateGeoFirewall(settings = {}, geoData = {}) {
     return { blocked: false, reason: null, status };
   }
 
-  if (status !== 'ok') {
-    if (getLookupFailureMode(settings) === 'block') {
-      return {
-        blocked: true,
-        reason: `geo_lookup_unavailable:${status}`,
-        status,
-      };
-    }
-    return { blocked: false, reason: null, status };
-  }
-
   // Risk rules apply only to risk data from a real source. Without one, the
   // flags are all false and the score is null, so nothing can be refused as
-  // "suspicious"; the lookup-failure rule above still applies.
+  // "suspicious"; the lookup-failure rule below still applies. Risk data is
+  // local, so it can be present even when the location lookup failed.
   if (settings.blockSuspiciousSessions && hasRiskData(geoData)) {
     if (geoData.isThreat) {
       return { blocked: true, reason: 'threat_ip', status };
@@ -72,6 +62,17 @@ function evaluateGeoFirewall(settings = {}, geoData = {}) {
         status,
       };
     }
+  }
+
+  if (status !== 'ok') {
+    if (getLookupFailureMode(settings) === 'block') {
+      return {
+        blocked: true,
+        reason: `geo_lookup_unavailable:${status}`,
+        status,
+      };
+    }
+    return { blocked: false, reason: null, status };
   }
 
   if (settings.enableGeofencing) {
