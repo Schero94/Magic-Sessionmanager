@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.16.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.15.0...v4.16.0) (2026-11-24)
+
+
+### Features
+
+* admin sign-in history with IP, Content Manager activity and a security event log ([#34](https://github.com/Schero94/Magic-Sessionmanager/issues/34)) ([ca53128](https://github.com/Schero94/Magic-Sessionmanager/commit/ca53128efb31b9293d9c45ddcb03ac041242ca56))
+
 
 Release type: minor (`feat`). Additive: a new content type, four new GET routes, one new permission and new settings keys; no existing route, response or setting changes.
 
