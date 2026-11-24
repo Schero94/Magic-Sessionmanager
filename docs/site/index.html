@@ -491,12 +491,21 @@ npm run develop</code></pre>
               </p>
             </article>
             <article class="card">
+              <h3>Admin sign-in history and activity</h3>
+              <p>
+                Every admin sign-in, failed attempt, lockout and sign-out with IP address, browser
+                and location, and who signed out whom. Optionally, which entries each admin opened,
+                created, edited, published or deleted in the Content Manager. Filters, CSV export,
+                IP anonymisation and retention; activity recording is off by default.
+              </p>
+            </article>
+            <article class="card">
               <h3>Configuration</h3>
               <p>
                 Settings › Session Manager › Configuration with five tabs: Sessions, Login
-                protection, Location data, Alerts, and Data and retention. Each tab is a deep link
-                (<code>?tab=</code>). Save and Discard changes sit in the header, and leaving with
-                unsaved changes asks first.
+                protection, Location data, Alerts, and Data and retention, plus Admin activity for
+                roles with "View admin activity". Each tab is a deep link (<code>?tab=</code>). Save
+                and Discard changes sit in the header, and leaving with unsaved changes asks first.
               </p>
             </article>
             <article class="card">
@@ -962,7 +971,9 @@ npm run develop</code></pre>
             <code>plugin::magic-sessionmanager.admin-sessions.read</code> ("Read admin panel
             sessions"), and signing out
             <code>plugin::magic-sessionmanager.admin-sessions.revoke</code>
-            ("Sign out admins"). Only Super Admin has both by default.
+            ("Sign out admins"). The sign-in history and activity routes also need
+            <code>plugin::magic-sessionmanager.admin-activity.read</code> ("View admin activity").
+            Only Super Admin has these by default.
           </p>
           <div class="table-wrap">
             <table>
@@ -1068,6 +1079,18 @@ npm run develop</code></pre>
                     admins only; 10 per minute; a delegated role cannot sign out a Super Admin)
                   </td>
                 </tr>
+                <tr>
+                  <td>GET</td>
+                  <td>
+                    <code>/admin-activity/sign-ins</code>, <code>/admin-activity/content</code>, and
+                    <code>/export</code> under each
+                  </td>
+                  <td>
+                    Sign-in history, Activity and their CSV exports
+                    (<code>admin-activity.read</code>; filters for admin, event or action, content
+                    type and date range)
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1154,6 +1177,17 @@ const { data, meta } = await res.json();
                 addresses to ipapi.co. Choose the local MaxMind database or turn the lookup off to
                 keep IP addresses on your server. The details dialog looks up a location only when
                 you click the button.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Admin sign-in history</h3>
+              <p>
+                The security log stores admin sign-ins with IP address and user agent. The address
+                is Strapi's client IP: behind a proxy set <code>server.proxy.koa</code> and
+                <code>maxIpsCount</code>. Anonymise the last part of IP addresses, set the retention
+                (90 days by default) and keep Content Manager activity off until employees, and in
+                Germany the works council, are informed. Typed emails and passwords are never
+                stored.
               </p>
             </article>
             <article class="card">
@@ -1433,6 +1467,22 @@ const { data, meta } = await res.json();
 
         <section class="section" id="migration" aria-labelledby="migration-title">
           <h2 id="migration-title">Migration and upgrading</h2>
+          <h3 class="sub-title">To the release with the security log (from 4.14.x)</h3>
+          <ul>
+            <li>
+              Nothing to do: Strapi creates the table <code>magic_sessions_security_events</code> on
+              first start. Admin sign-ins are recorded from then on; Content Manager activity stays
+              off until you turn it on.
+            </li>
+            <li>
+              Behind a reverse proxy, set <code>server.proxy.koa: true</code> and
+              <code>maxIpsCount</code>, otherwise the proxy's address is stored.
+            </li>
+            <li>
+              The new permission "View admin activity" is held by Super Admin only; grant it to
+              other roles in Settings › Roles.
+            </li>
+          </ul>
           <h3 class="sub-title">To the next release (from 4.10.x)</h3>
           <ul>
             <li>
