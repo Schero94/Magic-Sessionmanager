@@ -1,3 +1,13 @@
+## [Unreleased]
+
+### Fixed
+
+* **Row actions are spaced like Strapi's own tables.** In the Admin panel table the "View sessions" (eye) and red "Sign out everywhere" buttons, and in the App users table the "View details", "End session" and "More actions" buttons, were joined into one segmented `IconButtonGroup` and looked stuck together. They are separate actions, so they now sit 4 px apart in a right-aligned `Flex` (`gap={1}`), the layout Strapi uses in Settings > Webhooks and Settings > Users. Every other action group of the plugin already used a gap and is unchanged.
+
+### Tests
+
+* `npm run test:admin`: the row actions of both tables render as a flex row with a 4 px gap (fails with the old `IconButtonGroup`).
+
 ## [4.14.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.1...v4.14.2) (2026-11-18)
 
 

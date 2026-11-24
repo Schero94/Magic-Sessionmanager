@@ -84,7 +84,9 @@ test('Delete record has two confirmation variants: ended row and open row (I.1 i
 });
 
 test('table actions are View details, End session (disabled when ended) and More actions → Delete record', () => {
-  assert.match(actions, /<IconButtonGroup\b/);
+  // Separate actions are spaced like native Strapi tables (RowActions), not joined.
+  assert.match(actions, /<RowActions\b/);
+  assert.doesNotMatch(actions, /IconButtonGroup/);
   assert.match(actions, /label=\{canEnd \? endLabel : endedLabel\}/);
   assert.match(actions, /<SimpleMenu\b[\s\S]*?tag=\{IconButton\}[\s\S]*?label=\{moreLabel\}/);
   assert.match(
