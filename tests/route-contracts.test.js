@@ -65,6 +65,10 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
       '/admin-sessions/admins/:adminId/sign-out-everywhere',
       'admin-sessions.signOutEverywhere',
     ],
+    ['GET', '/admin-activity/sign-ins', 'admin-activity.listSignIns'],
+    ['GET', '/admin-activity/sign-ins/export', 'admin-activity.exportSignIns'],
+    ['GET', '/admin-activity/content', 'admin-activity.listContentActivity'],
+    ['GET', '/admin-activity/content/export', 'admin-activity.exportContentActivity'],
     ['GET', '/geolocation/:ipAddress', 'session.getIpGeolocation'],
     ['GET', '/geoip/status', 'geoip.getStatus'],
     ['PUT', '/geoip/credentials', 'geoip.storeCredentials'],
@@ -81,6 +85,24 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     adminRoutes.map(({ method, path, handler }) => [method, path, handler]),
     expected
   );
+});
+
+test('admin activity routes need access, admin-sessions.read and admin-activity.read, read limited', () => {
+  const routes = adminRoutes.filter(({ path }) => path.startsWith('/admin-activity/'));
+  assert.equal(routes.length, 4);
+  for (const route of routes) {
+    assert.equal(route.method, 'GET');
+    assert.equal(route.config.policies[0], 'admin::isAuthenticatedAdmin');
+    const actions = route.config.policies.find((policy) => policy?.name === 'admin::hasPermissions')
+      .config.actions;
+    assert.deepEqual(actions, [
+      'plugin::magic-sessionmanager.access',
+      'plugin::magic-sessionmanager.admin-sessions.read',
+      'plugin::magic-sessionmanager.admin-activity.read',
+    ]);
+    assert.equal(route.config.middlewares[0].name, 'plugin::magic-sessionmanager.rate-limit');
+    assert.equal(route.config.middlewares[0].config.profile, 'read');
+  }
 });
 
 test('admin panel session routes need their own actions, and sign-out is write rate limited', () => {
@@ -103,7 +125,9 @@ test('admin panel session routes need their own actions, and sign-out is write r
     }
   }
   // Existing routes keep the plugin action only; the new actions are not required there.
-  for (const route of adminRoutes.filter(({ path }) => !path.startsWith('/admin-sessions/'))) {
+  for (const route of adminRoutes.filter(
+    ({ path }) => !path.startsWith('/admin-sessions/') && !path.startsWith('/admin-activity/')
+  )) {
     assert.deepEqual(actionsOf(route), ['plugin::magic-sessionmanager.access']);
   }
 });

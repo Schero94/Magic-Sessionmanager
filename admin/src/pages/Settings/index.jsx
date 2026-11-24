@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, Tabs, Typography } from '@strapi/design-system';
-import { Blocker, Form, Page, useForm, useQueryParams } from '@strapi/strapi/admin';
+import { Blocker, Form, Page, useForm, useQueryParams, useRBAC } from '@strapi/strapi/admin';
 import { Check } from '@strapi/icons';
 import styled from 'styled-components';
 import { ConfirmAction, PageShell } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import Alert from '../../components/PersistentAlert';
+import pluginPermissions from '../../permissions';
 import {
-  SETTINGS_TAB_IDS,
   SETTINGS_TAB_LABELS,
   buildTabSearch,
   getRevealScrollDelta,
+  getVisibleSettingsTabs,
   resolveSettingsTab,
 } from './settingsTabs.mjs';
 import SessionsTab from './SessionsTab';
@@ -18,6 +19,7 @@ import LoginProtectionTab from './LoginProtectionTab';
 import LocationDataTab from './LocationDataTab';
 import AlertsTab from './AlertsTab';
 import DataRetentionTab from './DataRetentionTab';
+import AdminActivityTab from './AdminActivityTab';
 import { SettingsNavigationProvider } from './SettingsNavigation';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
@@ -82,6 +84,7 @@ const TAB_COMPONENTS = {
   'location-data': LocationDataTab,
   alerts: AlertsTab,
   'data-retention': DataRetentionTab,
+  'admin-activity': AdminActivityTab,
 };
 
 /**
@@ -119,7 +122,7 @@ const writeTabToAddressBar = (tab) => {
 
 /**
  * Settings › Session Manager › Configuration (IA D5): header with Save and
- * Discard changes, five deep-linkable tabs, unsaved-changes guard and the
+ * Discard changes, five deep-linkable tabs (six with "View admin activity"), unsaved-changes guard and the
  * storage note.
  *
  * @returns {import('react').ReactElement} Configuration page.
@@ -128,7 +131,14 @@ const SettingsPage = () => {
   const { t } = useSettingsTranslate();
   const form = useSettingsForm();
   const [{ query }] = useQueryParams();
-  const requestedTab = resolveSettingsTab(query?.tab);
+  const {
+    allowedActions: { canRead: canViewAdminActivity },
+  } = useRBAC(pluginPermissions.adminActivityRead);
+  const visibleTabs = useMemo(
+    () => getVisibleSettingsTabs(Boolean(canViewAdminActivity)),
+    [canViewAdminActivity]
+  );
+  const requestedTab = resolveSettingsTab(query?.tab, visibleTabs);
   const [activeTab, setActiveTab] = useState(requestedTab);
   const [followedTab, setFollowedTab] = useState(requestedTab);
   const tabsRef = useRef(null);
@@ -167,11 +177,14 @@ const SettingsPage = () => {
     if (await handleSave()) focusActiveTab();
   }, [handleSave, focusActiveTab]);
 
-  const changeTab = useCallback((tab) => {
-    const next = resolveSettingsTab(tab);
-    setActiveTab(next);
-    writeTabToAddressBar(next);
-  }, []);
+  const changeTab = useCallback(
+    (tab) => {
+      const next = resolveSettingsTab(tab, visibleTabs);
+      setActiveTab(next);
+      writeTabToAddressBar(next);
+    },
+    [visibleTabs]
+  );
 
   const navigation = useMemo(
     () => ({
@@ -275,7 +288,7 @@ const SettingsPage = () => {
             <SettingsTabsList
               aria-label={t('settings.config.tabs.label', 'Configuration sections')}
             >
-              {SETTINGS_TAB_IDS.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <SettingsTabTrigger key={tab} value={tab}>
                   <SettingsTabLabel>
                     {t(SETTINGS_TAB_LABELS[tab][0], SETTINGS_TAB_LABELS[tab][1])}
@@ -284,7 +297,7 @@ const SettingsPage = () => {
               ))}
             </SettingsTabsList>
             {/* All panels stay mounted (hidden) so drafts, local key state and validation survive tab switches. */}
-            {SETTINGS_TAB_IDS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const TabPanel = TAB_COMPONENTS[tab];
               return (
                 <Tabs.Content key={tab} value={tab} forceMount hidden={activeTab !== tab}>

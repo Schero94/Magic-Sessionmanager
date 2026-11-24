@@ -19,7 +19,9 @@
  *
  * The Strapi admin panel session routes (`/admin-sessions/...`) also require
  * `admin-sessions.read`, and the sign-out routes `admin-sessions.revoke`
- * (`adminSessionsPolicy()`); `hasPermissions` needs ALL listed actions.
+ * (`adminSessionsPolicy()`); `hasPermissions` needs ALL listed actions. The
+ * admin sign-in history and Content Manager activity (`/admin-activity/...`)
+ * require `admin-sessions.read` and `admin-activity.read`.
  *
  * The permissions are registered in `server/src/register.js`.
  * By Strapi convention:
@@ -35,6 +37,7 @@
 const PLUGIN_ACCESS_ACTION = 'plugin::magic-sessionmanager.access';
 const ADMIN_SESSIONS_READ_ACTION = 'plugin::magic-sessionmanager.admin-sessions.read';
 const ADMIN_SESSIONS_REVOKE_ACTION = 'plugin::magic-sessionmanager.admin-sessions.revoke';
+const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
 
 /**
  * Returns the policy chain that every admin route in this plugin must use.
@@ -281,6 +284,48 @@ const baseRoutes = [
       policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_SESSIONS_REVOKE_ACTION]),
       middlewares: adminSignOutRateLimit(),
       description: 'Sign a Strapi admin out of every browser (admin)',
+    },
+  },
+
+  // ============== ADMIN SIGN-IN HISTORY AND CONTENT MANAGER ACTIVITY ==============
+  {
+    method: 'GET',
+    path: '/admin-activity/sign-ins',
+    handler: 'admin-activity.listSignIns',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_ACTIVITY_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'List the admin sign-in history (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/admin-activity/sign-ins/export',
+    handler: 'admin-activity.exportSignIns',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_ACTIVITY_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'Get one export batch of the admin sign-in history (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/admin-activity/content',
+    handler: 'admin-activity.listContentActivity',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_ACTIVITY_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'List Content Manager activity of admins (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/admin-activity/content/export',
+    handler: 'admin-activity.exportContentActivity',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_ACTIVITY_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'Get one export batch of Content Manager activity of admins (admin)',
     },
   },
 

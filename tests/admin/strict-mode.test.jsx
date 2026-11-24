@@ -34,6 +34,7 @@ const PLUGIN = 'plugin::magic-sessionmanager';
 const ACCESS = permission(`${PLUGIN}.access`);
 const ADMIN_READ = permission(`${PLUGIN}.admin-sessions.read`);
 const ADMIN_REVOKE = permission(`${PLUGIN}.admin-sessions.revoke`);
+const ACTIVITY_READ = permission(`${PLUGIN}.admin-activity.read`);
 const ALL = [ACCESS, ADMIN_READ, ADMIN_REVOKE];
 const USER_MODEL = 'plugin::users-permissions.user';
 
@@ -267,6 +268,179 @@ test('admin panel sessions: StrictMode mount, one live list request, clean unmou
   assert.equal(result.calls.filter((call) => call.method !== 'GET').length, 0, 'no mutation');
 });
 
+/**
+ * Selects a Radix tab (it activates on mousedown).
+ * @param {string} name - Tab text.
+ */
+const selectTab = async (name) => {
+  const tab = [...document.querySelectorAll('[role="tab"]')].find(
+    (node) => node.textContent.trim() === name
+  );
+  assert.ok(tab, `tab ${name} exists`);
+  await act(async () => {
+    tab.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, button: 0 }));
+  });
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+};
+
+/** Admin list with one admin, as the admin panel view loads it. */
+const adminListRoute = () =>
+  network.on('GET', '/magic-sessionmanager/admin-sessions/admins', {
+    data: [
+      {
+        id: 1,
+        name: 'Ada Example',
+        email: 'ada@example.test',
+        roles: [{ name: 'Super Admin' }],
+        account: 'active',
+        sessionCount: 1,
+        lastActiveAt: minutesAgo(2),
+        self: true,
+        canSignOut: false,
+      },
+    ],
+    meta: {
+      pagination: { page: 1, pageSize: 25, pageCount: 1, total: 1 },
+      stats: { signedInAdmins: 1, activeSessions: 1, activeAccounts: 1, totalAdmins: 1 },
+      supported: true,
+      recording: { signIns: true, ipAddresses: true, anonymizeIp: false },
+    },
+  });
+
+const RECORDING = {
+  signIns: true,
+  contentActivity: true,
+  ipAddresses: true,
+  anonymizeIp: false,
+  retentionDays: 90,
+};
+
+const SIGN_INS = {
+  data: [
+    {
+      id: 7,
+      event: 'admin.sign-in',
+      reason: null,
+      provider: 'local',
+      scope: null,
+      at: minutesAgo(3),
+      ipAddress: '203.0.113.10',
+      ipAnonymized: false,
+      location: { country: 'Exampleland', countryCode: 'XX', city: 'Sample City' },
+      browser: 'Chrome 131',
+      os: 'macOS 10.15',
+      deviceType: 'desktop',
+      admin: { id: 1, name: 'Ada Example' },
+      actor: null,
+      session: { state: 'active', endedAt: null },
+    },
+    {
+      id: 6,
+      event: 'admin.sign-in.failed',
+      reason: 'invalid_credentials',
+      provider: 'local',
+      scope: null,
+      at: minutesAgo(5),
+      ipAddress: '198.51.100.7',
+      ipAnonymized: false,
+      location: null,
+      browser: null,
+      os: null,
+      deviceType: null,
+      admin: null,
+      actor: null,
+      session: null,
+    },
+  ],
+  meta: { pagination: { page: 1, pageSize: 20, pageCount: 1, total: 2 }, recording: RECORDING },
+};
+
+test('admin panel with "View admin activity": recent list, dialog tabs and lists load once each', async () => {
+  adminListRoute();
+  network.on('GET', '/magic-sessionmanager/admin-sessions/admins/1/sessions', {
+    data: [session({ id: 31, user: undefined })],
+    meta: {},
+  });
+  network.on('GET', '/magic-sessionmanager/admin-activity/sign-ins', SIGN_INS);
+  network.on('GET', '/magic-sessionmanager/admin-activity/content', {
+    data: [
+      {
+        id: 9,
+        action: 'publish',
+        at: minutesAgo(1),
+        contentType: {
+          uid: 'api::article.article',
+          name: 'Article',
+          kind: 'collection',
+          exists: true,
+        },
+        entry: { documentId: 'abc123', locale: 'en', title: 'Synthetic note', count: null },
+        admin: { id: 1, name: 'Ada Example' },
+      },
+    ],
+    meta: {
+      pagination: { page: 1, pageSize: 20, pageCount: 1, total: 1 },
+      recording: RECORDING,
+      contentTypes: [{ uid: 'api::article.article', name: 'Article', kind: 'collection' }],
+      contentManagerAccess: true,
+    },
+  });
+  const result = await checkStrictEntry(<PluginPage />, {
+    path: '/plugins/magic-sessionmanager/admin-panel',
+    permissions: [...ALL, ACTIVITY_READ],
+    async whileMounted(handle) {
+      assert.match(handle.container.textContent, /Recent sign-in activity/);
+      assert.match(handle.container.textContent, /Unknown account/);
+      assert.match(handle.container.textContent, /records every sign-in with time, browser and IP/);
+      await click(button('Open the details of Ada Example'));
+      const dialog = document.querySelector('[role="dialog"]');
+      assert.ok(dialog, 'details dialog is open');
+      const selected = dialog.querySelector('[role="tab"][aria-selected="true"]');
+      assert.equal(selected?.textContent, 'Sign-in history', 'opens at the history tab');
+      assert.match(
+        dialog.textContent,
+        /203\.0\.113\.10 · Sample City, Exampleland · Chrome 131 on macOS 10\.15/
+      );
+      assert.match(dialog.textContent, /Still signed in/);
+      await selectTab('Activity');
+      assert.match(document.querySelector('[role="dialog"]').textContent, /Synthetic note/);
+      await selectTab('Sessions');
+      assert.ok(document.querySelector('[data-admin-session]'), 'sessions tab shows the sessions');
+    },
+    // The recent list and the history tab read the same endpoint with different filters.
+    allowDuplicateGets: [
+      {
+        path: '/magic-sessionmanager/admin-activity/sign-ins',
+        reason: 'recent list and dialog tab',
+      },
+    ],
+  });
+  assert.equal(result.calls.filter((call) => call.method !== 'GET').length, 0, 'no mutation');
+  assert.equal(
+    live(result.calls, '/magic-sessionmanager/admin-activity/content').length,
+    1,
+    'activity loads once, when its tab opens'
+  );
+});
+
+test('admin panel without "View admin activity": no activity requests, no tabs', async () => {
+  adminListRoute();
+  network.on('GET', '/magic-sessionmanager/admin-sessions/admins/1/sessions', {
+    data: [session({ id: 31, user: undefined })],
+    meta: {},
+  });
+  const result = await checkStrictEntry(<PluginPage />, {
+    path: '/plugins/magic-sessionmanager/admin-panel',
+    permissions: ALL,
+    async whileMounted(handle) {
+      assert.doesNotMatch(handle.container.textContent, /Recent sign-in activity/);
+      await click(button('View sessions of Ada Example'));
+      assert.equal(document.querySelector('[role="dialog"] [role="tab"]'), null);
+    },
+  });
+  assert.equal(result.calls.filter((call) => call.pathname.includes('/admin-activity/')).length, 0);
+});
+
 test('settings page: StrictMode mount shows the loaded form, tabs switch cleanly', async () => {
   network.on('GET', '/magic-sessionmanager/settings', { settings: {}, revision: 1 });
   network.on('GET', '/magic-sessionmanager/geoip/status', {
@@ -274,9 +448,15 @@ test('settings page: StrictMode mount shows the loaded form, tabs switch cleanly
   });
   const result = await checkStrictEntry(<Settings />, {
     path: '/settings/magic-sessionmanager/general',
-    permissions: ALL,
+    permissions: [...ALL, ACTIVITY_READ],
     async whileMounted(handle) {
       assert.doesNotMatch(handle.container.textContent, /could not be loaded/i);
+      const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+      assert.equal(
+        tabs.at(-1),
+        'Admin activity',
+        'the Admin activity tab is shown with the action'
+      );
       for (const tab of [...document.querySelectorAll('[role="tab"]')].slice(1)) await click(tab);
     },
   });

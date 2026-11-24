@@ -41,6 +41,7 @@ Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.g
 - [Examples](#examples)
 - [Optional route policy: `session-required`](#optional-route-policy-session-required)
 - [Admin API and permissions](#admin-api-and-permissions)
+- [Admin activity and sign-in history](#admin-activity-and-sign-in-history)
 - [Running several instances (Railway replicas, pm2 cluster)](#running-several-instances-railway-replicas-pm2-cluster)
 - [Performance](#performance)
 - [Security and privacy](#security-and-privacy)
@@ -68,6 +69,7 @@ Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.g
 | Alerts                 | Security emails to the user through Strapi's Email plugin and sign-in notifications to Discord or Slack.                                                                                                                                                     |
 | Admin integration      | A Sessions panel next to each user in the Content Manager and an Online users widget on the Strapi homepage.                                                                                                                                                 |
 | Admin panel sessions   | Who can use the Strapi admin panel, who is signed in, on which browser and since when. Sign an admin out of one browser or everywhere; it takes effect on their next click.                                                                                  |
+| Admin activity         | A sign-in history per admin (sign-ins, failed attempts, lockouts, sign-outs, who signed out whom) with IP address, browser and location, and optional Content Manager activity.                                                                              |
 | Native Strapi sessions | Works with `jwtManagement: 'refresh'` (Strapi's own sessions and refresh tokens) and with `'legacy-support'`.                                                                                                                                                |
 | Several processes      | Lockout, rate limits, jobs and settings stay consistent across pm2 workers and Railway replicas that share one database.                                                                                                                                     |
 | Privacy                | Stored tokens are encrypted (AES-256-GCM) and never returned. Retention deletes old history automatically. No telemetry.                                                                                                                                     |
@@ -203,7 +205,8 @@ Open **Session Manager** and switch to **Admin panel** (the switch below the tit
 - **Sessions of an admin:** one entry per signed-in browser with Strapi's device label (for example "Chrome on macOS"), **This browser**, **Remember me**, Signed in, Last active and **Ends at the latest**. **Sign out** ends that browser, **Sign out everywhere** ends all of them, **Manage in Settings** opens the admin in Settings › Users.
 - **Confirmation:** every sign-out asks first. Signing yourself out of the browser you are using shows a warning; you are then taken to the login page.
 - **Protection:** an admin without the Super Admin role cannot sign out a Super Admin, so the last active Super Admin can never be signed out by someone else. The view explains this instead of showing a disabled button.
-- Strapi stores no IP address and no full user agent for admin sessions, so the view shows none. "Last active" is the last time the browser renewed its access token (Strapi's own signal), not every click.
+- **Sign-in history and activity** (roles with "View admin activity"): the details dialog gets three tabs, **Sessions**, **Sign-in history** and **Activity**. The history lists sign-ins with IP address, location, browser and operating system and whether that session is **Still signed in**, **Signed out** (and by whom) or **Session ended**, plus failed attempts with the reason, lockouts and sign-outs. **Activity** lists the entries the admin opened, created, edited, published, unpublished, discarded or deleted in the Content Manager, each with a link to the entry. Both tabs filter by event or action, content type and period, page with **Show more** and offer **Export CSV**. A **Recent sign-in activity** card under the table shows the latest five events of all admins, including failed sign-ins with an unknown email ("Unknown account"). See [Admin activity and sign-in history](#admin-activity-and-sign-in-history).
+- "Last active" is the last time the browser renewed its access token (Strapi's own signal), not every click. Strapi's own session records hold no IP address; the IP addresses in the sign-in history come from the plugin's security log.
 
 ### Session details
 
@@ -231,7 +234,7 @@ Part of every supported Strapi version (the widgets API exists since Strapi 5.13
 
 Two links: **Configuration** and **Analytics**.
 
-**Configuration** has five tabs, deep-linkable with `?tab=sessions|login-protection|location-data|alerts|data-retention`:
+**Configuration** has five tabs, deep-linkable with `?tab=sessions|login-protection|location-data|alerts|data-retention`, and a sixth, `admin-activity`, for roles with "View admin activity":
 
 | Tab                    | Question                                      | Contents                                                                                                                                                                                                                                                                                       |
 | ---------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -240,6 +243,7 @@ Two links: **Configuration** and **Analytics**.
 | **Location data**      | Where do IP location and risk data come from? | IP location lookup, Security scoring, Provider, GeoIP database status, MaxMind credentials, Update database / Force download, Risk data (GeoIP2 Anonymous IP, GeoLite2 ASN heuristic).                                                                                                         |
 | **Alerts**             | Who is told about sign-ins?                   | Security emails to users (with email templates) and Team notifications to Discord or Slack.                                                                                                                                                                                                    |
 | **Data and retention** | How long is session history kept?             | Keep ended sessions for, and **Delete ended sessions**.                                                                                                                                                                                                                                        |
+| **Admin activity**     | What is recorded about admins, and how long?  | Record admin sign-ins, Record Content Manager activity (with a note on informing employees and the works council), Store IP addresses, Anonymise the last part of IP addresses, Keep security events for.                                                                                      |
 
 **Save** applies the whole form; **Discard changes** re-loads the stored values (it does not restore defaults). Leaving with unsaved changes asks first. Settings are saved in the database; other server processes apply them within 30 seconds.
 
@@ -680,10 +684,11 @@ Prefix `/magic-sessionmanager` (Strapi admin API). Every route requires an authe
 
 The **Admin panel sessions** routes need two more permissions, which only the Super Admin role has by default (Settings › Administration Panel › Roles › Plugins › Session Manager › Admin panel):
 
-| Permission                                           | Name in the role editor   | Allows                                                     |
-| ---------------------------------------------------- | ------------------------- | ---------------------------------------------------------- |
-| `plugin::magic-sessionmanager.admin-sessions.read`   | Read admin panel sessions | The Admin panel view and its two GET routes                |
-| `plugin::magic-sessionmanager.admin-sessions.revoke` | Sign out admins           | **Sign out** and **Sign out everywhere** (also needs read) |
+| Permission                                           | Name in the role editor   | Allows                                                                                                                     |
+| ---------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `plugin::magic-sessionmanager.admin-sessions.read`   | Read admin panel sessions | The Admin panel view and its two GET routes                                                                                |
+| `plugin::magic-sessionmanager.admin-sessions.revoke` | Sign out admins           | **Sign out** and **Sign out everywhere** (also needs read)                                                                 |
+| `plugin::magic-sessionmanager.admin-activity.read`   | View admin activity       | Sign-in history, Activity, Recent sign-in activity, CSV exports and changing the Admin activity settings (also needs read) |
 
 | Method   | Path                                                           | Admin UI action                                                                                                                                                                                                                   |
 | -------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -711,6 +716,10 @@ The **Admin panel sessions** routes need two more permissions, which only the Su
 | GET      | `/admin-sessions/admins/:adminId/sessions`                     | **View sessions**: one entry per signed-in browser; needs `admin-sessions.read`                                                                                                                                                   |
 | POST     | `/admin-sessions/admins/:adminId/sessions/:sessionId/sign-out` | **Sign out** one browser; needs `admin-sessions.revoke`; signed-in administrators only; 10 per minute                                                                                                                             |
 | POST     | `/admin-sessions/admins/:adminId/sign-out-everywhere`          | **Sign out everywhere**; needs `admin-sessions.revoke`; signed-in administrators only; 10 per minute                                                                                                                              |
+| GET      | `/admin-activity/sign-ins`                                     | **Sign-in history** and **Recent sign-in activity**: `adminId`, `event` (`all`, `succeeded`, `failed`, `signed-out`), `from`, `to` (ISO dates), `page`, `pageSize` (1-100); needs `admin-activity.read`                           |
+| GET      | `/admin-activity/sign-ins/export`                              | CSV export batches of 500 rows, newest first; same filters plus `cursor`; follow `meta.nextCursor`                                                                                                                                |
+| GET      | `/admin-activity/content`                                      | **Activity**: `adminId`, `action` (`all`, `view`, `create`, `update`, `publish`, `unpublish`, `discard`, `delete`, `clone`), `contentType` (uid), `from`, `to`, `page`, `pageSize`; needs `admin-activity.read`                   |
+| GET      | `/admin-activity/content/export`                               | CSV export batches of 500 rows; same filters plus `cursor`                                                                                                                                                                        |
 
 **Session list parameters.** `page` (from 1), `pageSize` (1-100), `status` (`all`, `open`, `active`, `idle`, `ended`), `reason` (with `status=ended`: `logout`, `idle`, `expired`, `manual`, `blocked`, `unrecorded`), `search` (up to 100 characters; matches email, username, IP address, browser, operating system and device type) and `sort` (`loginTime:desc`, `loginTime:asc`, `lastActive:desc`, `lastActive:asc`). The response is `{ data, meta: { pagination: { page, pageSize, total, pageCount } } }` with exact totals. Unknown or out-of-range parameters return 400. Pages that start after the first 50,000 matching sessions return 400; narrow the filter or use the export, which walks every row with a cursor. Without `page` and `pageSize`, `GET /sessions` keeps the 4.x response (latest 1,000 rows, `meta.truncated`) for existing scripts.
 
@@ -727,6 +736,75 @@ The list, statistics, analytics, export, untracked-session summary and `/users/s
 Errors use Strapi's `{ data: null, error }` envelope: 400 for invalid input, 404 for unknown IDs, 500 for server-side failures, 502 for a failed MaxMind download, 409 for a settings save based on an outdated `revision`.
 
 ---
+
+## Admin activity and sign-in history
+
+Since 4.15 the plugin keeps a **security log**: one table (`plugin::magic-sessionmanager.security-event`, collection `magic_sessions_security_events`, hidden from the Content Manager and the Content-Type Builder) where every event has an actor (`actorType` `admin`/`user`/`system`, `actorId`), a target (`targetType`, `targetId`), an `event` name, `ip`, `userAgent`, `geo`, a small `meta` object (at most 16 plain values, 2 KB) and `createdAt`. It is indexed on actor, target, event and time. The admin panel uses it for two things:
+
+| Recorded                     | Events                                                                                                                                                                     | Default |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| **Admin sign-in history**    | `admin.sign-in`, `admin.sign-in.failed` (reason), `admin.lockout`, `admin.sign-out`, `admin.session.revoked` (who signed out whom, one browser or everywhere)              | On      |
+| **Content Manager activity** | `admin.content.view` (opening an entry), `.create`, `.update`, `.publish`, `.unpublish`, `.discard`, `.delete`, `.clone`, with content type, document id, locale and title | **Off** |
+
+**Who can see it.** The new permission **View admin activity** (`plugin::magic-sessionmanager.admin-activity.read`, together with `access` and `admin-sessions.read`). Only the Super Admin role has it until you grant it in Settings › Administration Panel › Roles › Plugins › Session Manager › Admin panel. The same permission is needed to change the settings below; other admins can still save the Configuration page, but not change these values (403).
+
+### How events are captured (Strapi 5.63)
+
+- **Sign-ins and failures** come from Strapi's own event hub events `admin.auth.success` and `admin.auth.error`, the events behind the documented `admin.auth.events.onConnectionSuccess` / `onConnectionError` callbacks ([Admin panel configuration](https://docs.strapi.io/cms/configurations/admin-panel)). They cover local and SSO sign-ins. For a failed attempt Strapi itself resolves the account; the plugin stores that admin id only when the typed email belongs to an existing admin, and never the typed email, the password or the request body.
+- **Sign-outs** come from `admin.logout`; **"Sign out" / "Sign out everywhere"** in this plugin record `admin.session.revoked` with the acting admin and the target admin.
+- **Lockouts** are Strapi's `admin::rateLimit` answering 429 on `POST /admin/login` (by default 5 attempts per 5 minutes per email and address, `admin.rateLimit`). Repeated 429s within 5 minutes are one event.
+- **Registration and password reset** create a session without an event; a small server middleware records them as sign-ins.
+- **Content Manager activity** is recorded by the same middleware after the Content Manager has answered: only successful calls of a signed-in admin to the entry routes (`collection-types` findOne, create, update, publish, unpublish, discard, delete, clone and bulk actions, and the single-type routes). List views, counts, relations and configuration calls are not activity. Opening the same entry (same admin, content type, document and locale) again within 10 minutes, or right after editing it, is one event.
+- The request behind an event is read from Strapi's request context (`strapi.requestContext`), which is how the IP address and user agent reach the event hub listeners.
+- Nothing is written on the request path. Events go to a bounded in-memory queue and are written in batches about once a second; GeoIP lookups also happen there. The settings are read when the batch is written, so a switched-off recording drops queued events.
+
+### Client IP address and reverse proxies
+
+The stored address is Strapi's client IP, `ctx.request.ip`. Koa takes it from the socket unless you trust your proxy; the plugin never reads `X-Forwarded-For` itself. Behind a reverse proxy or load balancer set, in `config/server.js`:
+
+```js
+module.exports = ({ env }) => ({
+  // ...
+  proxy: {
+    koa: true, // trust X-Forwarded-* from your proxy
+    maxIpsCount: 1, // number of proxies in front of Strapi (5.52+); 0 means unlimited and lets clients spoof
+    // ipHeader: 'CF-Connecting-IP', // only if your proxy sends another header (5.52+)
+  },
+});
+```
+
+Without `proxy.koa` every event shows the proxy's address. The integration suite runs once without and once with a trusted proxy (`ADMIN_ACTIVITY_PROXY=1`) and checks both.
+
+### Settings (Configuration › Admin activity)
+
+| Setting                                 | Key                        | Default | Notes                                                                                                                                |
+| --------------------------------------- | -------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Record admin sign-ins                   | `adminSignInHistory`       | On      | Sign-ins, failures, lockouts, sign-outs, who signed out whom.                                                                        |
+| Record Content Manager activity         | `adminContentActivity`     | **Off** | Records how people work; read the notes below before you turn it on.                                                                 |
+| Store IP addresses                      | `securityLogStoreIp`       | On      | Applies to the whole security log. Location uses the IP location lookup under Location data (local MaxMind database or ipapi.co).    |
+| Anonymise the last part of IP addresses | `securityLogAnonymizeIp`   | Off     | Stores `203.0.113.0` instead of `203.0.113.42`; IPv6 keeps the first 48 bits. The location is looked up from the anonymised address. |
+| Keep security events for                | `securityLogRetentionDays` | 90 days | 1-730. A daily job (03:17 server time, one process per cluster) deletes older events.                                                |
+
+When an admin account is deleted, the plugin deletes the events of that admin (sign-ins, failures, activity). Where that admin had signed someone else out, the event stays with the other admin and only the actor reference is cleared. The same clean-up runs daily for accounts deleted while the plugin was not running.
+
+### Legal notes (information, not legal advice)
+
+These notes describe what the feature does so you can check it with your data protection officer; they are not legal advice.
+
+- **GDPR.** Sign-in history with IP addresses is personal data of your admins. A typical basis is a legitimate interest in securing the admin panel (Art. 6(1)(f) GDPR) or, for employees, the national employment rules. Tell your admins about it in your privacy information (Art. 13), keep the retention as short as your security needs allow, and consider **Anonymise the last part of IP addresses**. An admin's events can be exported as CSV for an access request (Art. 15) and are deleted with the account.
+- **Content Manager activity.** This records what each person works on and when. In Germany, a technical system that can monitor the behaviour or performance of employees is subject to the works council's co-determination (Section 87(1) no. 6 BetrVG), and comparable rules exist in other countries. That is why it is off by default; inform the people concerned and, where there is one, agree it with the works council before you turn it on. Check whether a data protection impact assessment (Art. 35 GDPR) is needed.
+- **Third parties.** With the `auto` or `ipapi` location provider, IP addresses can be sent to ipapi.co. Use a local MaxMind database or turn off the IP location lookup to keep them on your server.
+
+### Performance
+
+Measured with `scripts/bench-admin-activity.cjs` (Strapi 5.63, SQLite, Node 22, Apple silicon, one process): 1,000 Content Manager requests per run (500 opens of 100 entries, 500 edits), three runs each, alternating.
+
+| Content Manager activity | Mean         | p50          | p95          | p99          | Events stored per run |
+| ------------------------ | ------------ | ------------ | ------------ | ------------ | --------------------- |
+| Off                      | 4.65-5.22 ms | 4.66-5.20 ms | 6.17-7.14 ms | 8.06-8.41 ms | 0                     |
+| On                       | 4.65-4.82 ms | 4.69-4.85 ms | 6.16-6.35 ms | 8.06-8.58 ms | 500-575               |
+
+The difference is within the run-to-run noise: recording adds no measurable latency, because the request only pushes an object onto the queue.
 
 ## Running several instances (Railway replicas, pm2 cluster)
 
@@ -895,6 +973,7 @@ The plugin sits in the request path of every authenticated Content API call, so 
 | Admin lists               | Only the visible page (25-100 rows) is loaded and enriched. Counts for the cards and the widget are cached 5 seconds per process, Analytics 30 seconds. `GET /my-sessions` returns at most 200.                                                                                |
 | Idle cleanup              | Runs on one process per interval (job lease). In `legacy-support` mode, `cleanupUseDbDirect: true` ends idle sessions with a single SQL update instead of one Document Service call per session.                                                                               |
 | Old history               | Retention deletes ended sessions older than `retentionDays` (90 by default) once a day, so the table does not grow without bound.                                                                                                                                              |
+| Security log              | Events are queued in memory and written in batches about once a second; nothing on the request path waits for the database or a GeoIP lookup. Indexes on actor, target, event and time; a daily job deletes events older than the retention.                                   |
 
 ---
 
@@ -913,7 +992,8 @@ The plugin sits in the request path of every authenticated Content API call, so 
 - **What leaves your server.** Only what you turn on: IP lookups at ipapi.co (provider `auto` without a local database, or `ipapi`), Discord or Slack webhooks (Team notifications), emails through your own Email provider (Security emails) and the MaxMind database download when you click **Update database** or run the updater. There is no telemetry, no install ping and no license check.
 - **Reporting a vulnerability.** Please do not post exploit details in a public issue. Open an issue that asks for a private contact, or use the email address on the maintainer's GitHub profile, and you will get a reply before anything is published.
 - **Secrets.** MaxMind license keys are never returned to the browser. Webhook URLs grant posting rights to your channel; treat them as secrets. Exports never contain tokens.
-- **Admin panel sessions.** The Admin panel view reads Strapi's own `admin::session` records (origin `admin`) and stores nothing of its own: no IP address, user agent or sign-in history. Only Super Admin can see or sign out admins until another role is granted `admin-sessions.read` / `admin-sessions.revoke`; a delegated role cannot sign out a Super Admin. Sign-outs need a signed-in administrator (not an admin API token), are rate limited and logged with admin ids and counts only.
+- **Admin panel sessions.** The Admin panel view reads Strapi's own `admin::session` records (origin `admin`). Only Super Admin can see or sign out admins until another role is granted `admin-sessions.read` / `admin-sessions.revoke`; a delegated role cannot sign out a Super Admin. Sign-outs need a signed-in administrator (not an admin API token), are rate limited and logged with admin ids and counts only.
+- **Admin activity and sign-in history.** The plugin's security log stores admin sign-ins with IP address and user agent (on by default; IP anonymisation and retention configurable) and, only when you turn it on, Content Manager activity. Only Super Admin sees it until another role gets `admin-activity.read`. Typed emails of failed sign-ins, passwords and request bodies are never stored. Details and legal notes: [Admin activity and sign-in history](#admin-activity-and-sign-in-history).
 
 ---
 
@@ -967,6 +1047,10 @@ Session history lives in the content-type tables `magic_sessions` and `magic_ses
 ---
 
 ## Migration and upgrading
+
+### To the release with the security log (from 4.14.x)
+
+Nothing to do. On the first start Strapi creates the table `magic_sessions_security_events` with its indexes, and the plugin starts recording admin sign-ins (with IP addresses) right away; Content Manager activity stays off until you turn it on. Existing routes, responses and settings are unchanged; the new routes and the permission **View admin activity** are additions, and only Super Admin has the permission at first. Behind a reverse proxy, check [Client IP address and reverse proxies](#client-ip-address-and-reverse-proxies) so the stored addresses are your users' and not your proxy's. To keep the previous behaviour (no sign-in history), turn off **Record admin sign-ins** in Configuration › Admin activity.
 
 ### Strapi older than 5.50
 

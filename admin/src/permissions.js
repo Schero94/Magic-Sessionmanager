@@ -7,6 +7,8 @@ const pluginPermissions = {
   adminSessionsRead: [{ action: `plugin::${pluginId}.admin-sessions.read`, subject: null }],
   /** Signing admins out. The server also requires `access` and `admin-sessions.read`. */
   adminSessionsRevoke: [{ action: `plugin::${pluginId}.admin-sessions.revoke`, subject: null }],
+  /** Admin sign-in history and Content Manager activity. The server also requires `access` and `admin-sessions.read`. */
+  adminActivityRead: [{ action: `plugin::${pluginId}.admin-activity.read`, subject: null }],
 };
 
 export default pluginPermissions;

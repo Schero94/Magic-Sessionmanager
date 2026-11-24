@@ -1,0 +1,78 @@
+{
+  "kind": "collectionType",
+  "collectionName": "magic_sessions_security_events",
+  "info": {
+    "singularName": "security-event",
+    "pluralName": "security-events",
+    "displayName": "Security event",
+    "description": "Security event log: admin sign-ins, failed attempts, lockouts, sign-outs, who signed out whom, and Content Manager activity of admins"
+  },
+  "options": {
+    "draftAndPublish": false,
+    "comment": ""
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": false
+    },
+    "content-type-builder": {
+      "visible": false
+    }
+  },
+  "indexes": [
+    {
+      "name": "msm_security_events_actor",
+      "columns": ["actor_type", "actor_id", "created_at"]
+    },
+    {
+      "name": "msm_security_events_target",
+      "columns": ["target_type", "target_id", "created_at"]
+    },
+    {
+      "name": "msm_security_events_event",
+      "columns": ["event", "created_at"]
+    },
+    {
+      "name": "msm_security_events_created",
+      "columns": ["created_at"]
+    }
+  ],
+  "attributes": {
+    "event": {
+      "type": "string",
+      "maxLength": 64,
+      "required": true
+    },
+    "actorType": {
+      "type": "enumeration",
+      "enum": ["admin", "user", "system"],
+      "required": true
+    },
+    "actorId": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "targetType": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "targetId": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "ip": {
+      "type": "string",
+      "maxLength": 45
+    },
+    "userAgent": {
+      "type": "text",
+      "maxLength": 500
+    },
+    "geo": {
+      "type": "json"
+    },
+    "meta": {
+      "type": "json"
+    }
+  }
+}

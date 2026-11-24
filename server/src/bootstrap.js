@@ -55,6 +55,7 @@ const {
   isThenable,
 } = require('./utils/native-session-capture');
 const { ensureNativeTrackingSince } = require('./utils/native-only-insight');
+const { installAdminActivityCapture } = require('./utils/admin-activity-capture');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -302,6 +303,16 @@ module.exports = async ({ strapi }) => {
 
     strapi.server.use(require('./middlewares/last-seen')({ strapi, sessionService }));
     log.info('[SUCCESS] LastSeen middleware mounted');
+
+    // Admin sign-in history and Content Manager activity (4.15). The
+    // retention job runs on one process per day (lease).
+    strapi.sessionManagerAdminActivityUninstall = installAdminActivityCapture(strapi, {
+      log,
+      runExclusive: async (name, leaseMs, job) => {
+        if (await coordinator.tryAcquireLease(name, leaseMs)) await job();
+      },
+    });
+    log.info('[SUCCESS] Admin activity capture mounted');
 
     const contentApiPermissionsReady = await ensureContentApiPermissions(strapi, log);
     mountDeferredContentApiPermissionRetry({

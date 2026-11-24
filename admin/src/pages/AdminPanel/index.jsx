@@ -38,6 +38,7 @@ import SessionSearch from '../Dashboard/SessionSearch';
 import { encodeSearchQuery, getErrorStatus } from '../Dashboard/dashboardModel.mjs';
 import { AdminCardList, AdminTable } from './AdminList';
 import AdminSessionsModal from './AdminSessionsModal';
+import { RecentSignInActivity } from './AdminEventPanels';
 import {
   ADMIN_DEFAULT_PAGE_SIZE,
   ADMIN_FILTER_OPTIONS,
@@ -92,6 +93,9 @@ const AdminPanelPage = () => {
   const {
     allowedActions: { canRevoke },
   } = useRBAC(pluginPermissions.adminSessionsRevoke);
+  const {
+    allowedActions: { canRead: canViewActivity },
+  } = useRBAC(pluginPermissions.adminActivityRead);
 
   const [admins, setAdmins] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -99,6 +103,7 @@ const AdminPanelPage = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [dialogTab, setDialogTab] = useState('sessions');
   const [dialogSessions, setDialogSessions] = useState([]);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [dialogError, setDialogError] = useState(false);
@@ -190,8 +195,9 @@ const AdminPanelPage = () => {
     [get]
   );
 
-  const openDialog = (admin, trigger) => {
+  const openDialog = (admin, trigger, tab = 'sessions') => {
     openerRef.current = trigger;
+    setDialogTab(tab);
     setSelected(admin);
     setDialogSessions([]);
     setDialogError(false);
@@ -375,6 +381,7 @@ const AdminPanelPage = () => {
   };
 
   const policy = meta?.policy;
+  const recording = meta?.recording;
   const range =
     pagination.total > 0
       ? {
@@ -492,8 +499,22 @@ const AdminPanelPage = () => {
             <ReadableText variant="omega" textColor="neutral800" tag="span">
               {t(
                 'adminPanel.howItWorks.body',
-                'Signing out takes effect on the admin’s next click: Strapi checks the session on every admin request. They can sign in again with their password; to stop that, deactivate the account in Settings > Users. Admin API tokens are not affected. Strapi records no IP address for admin sessions.'
-              )}
+                'Signing out takes effect on the admin’s next click: Strapi checks the session on every admin request. They can sign in again with their password; to stop that, deactivate the account in Settings > Users. Admin API tokens are not affected.'
+              )}{' '}
+              {recording?.ipAddresses
+                ? t(
+                    'adminPanel.howItWorks.recorded',
+                    'Session Manager records every sign-in with time, browser and IP address in the sign-in history.'
+                  )
+                : recording?.signIns
+                  ? t(
+                      'adminPanel.howItWorks.recordedNoIp',
+                      'Session Manager records every sign-in with time and browser in the sign-in history, without IP addresses.'
+                    )
+                  : t(
+                      'adminPanel.howItWorks.notRecorded',
+                      'Sign-in history is turned off, so no IP addresses of admins are recorded.'
+                    )}
             </ReadableText>
             {policy ? (
               <ReadableText variant="omega" textColor="neutral800" tag="span">
@@ -623,8 +644,17 @@ const AdminPanelPage = () => {
           </Flex>
         ) : null}
 
+        {showData && canViewActivity ? (
+          <RecentSignInActivity
+            onOpenAdmin={(admin, trigger) => openDialog(admin, trigger, 'history')}
+          />
+        ) : null}
+
         {selected ? (
           <AdminSessionsModal
+            key={`${selected.id}-${dialogTab}`}
+            canViewActivity={Boolean(canViewActivity)}
+            initialTab={dialogTab}
             admin={selected}
             sessions={dialogSessions}
             loading={dialogLoading && dialogSessions.length === 0}

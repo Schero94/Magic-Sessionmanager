@@ -39,5 +39,14 @@ module.exports = async ({ strapi }) => {
     strapi.sessionManagerUnsubscribers = [];
   }
 
+  if (typeof strapi.sessionManagerAdminActivityUninstall === 'function') {
+    try {
+      await strapi.sessionManagerAdminActivityUninstall();
+    } catch (err) {
+      log.warn('Failed to stop the admin activity capture:', err?.name || 'Error');
+    }
+    strapi.sessionManagerAdminActivityUninstall = null;
+  }
+
   log.info('[SUCCESS] Plugin cleanup completed');
 };

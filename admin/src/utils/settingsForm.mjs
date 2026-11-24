@@ -33,6 +33,11 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   geoIpProvider: 'auto',
   geoIpDatabasePath: '',
   geoLookupFailureMode: 'auto',
+  adminSignInHistory: true,
+  adminContentActivity: false,
+  securityLogStoreIp: true,
+  securityLogAnonymizeIp: false,
+  securityLogRetentionDays: 90,
 });
 
 /** Bounds enforced by the server (it clamps; the form reports instead). */

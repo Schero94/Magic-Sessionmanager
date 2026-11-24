@@ -1,3 +1,36 @@
+## [Unreleased]
+
+Release type: minor (`feat`). Additive: a new content type, four new GET routes, one new permission and new settings keys; no existing route, response or setting changes.
+
+### Added
+
+* **Security log** (`plugin::magic-sessionmanager.security-event`, table `magic_sessions_security_events`, hidden from the Content Manager and the Content-Type Builder). One row per event with `actorType`/`actorId`, `targetType`/`targetId`, `event`, `ip`, `userAgent`, `geo`, a bounded `meta` (at most 16 plain values, 2 KB) and `createdAt`, indexed on actor, target, event and time. Event names are an extendable registry (`admin.sign-in`, `admin.sign-in.failed`, `admin.lockout`, `admin.sign-out`, `admin.session.revoked`, `admin.content.*`), so later app-user events can use the same log.
+* **Admin sign-in history** (on by default): every admin sign-in (local and SSO, from Strapi's `admin.auth.success` event), failed attempt with Strapi's reason (`admin.auth.error`; linked to an admin only when the typed email belongs to one, the typed email itself is never stored), lockout (Strapi's login rate limit, 429), sign-out (`admin.logout`), first sign-in after registration and after a password reset, and every **Sign out** / **Sign out everywhere** in this plugin with the admin who did it. Stored with IP address (`ctx.request.ip`), user agent and, when IP location lookup is on, country and city.
+* **Content Manager activity** (off by default): which entries each admin opened, created, edited, published, unpublished, discarded, duplicated or deleted, with content type, document id, locale and title. Opening the same entry again within 10 minutes is one event; list views and polling are not recorded.
+* **Admin panel view:** the admin details dialog has the tabs **Sessions**, **Sign-in history** and **Activity**, with filters (event or action, content type, period), **Show more** and **Export CSV**. A **Recent sign-in activity** card under the table lists the latest five events of all admins. Shown to roles with the new permission **View admin activity** (`plugin::magic-sessionmanager.admin-activity.read`); only Super Admin has it at first.
+* **Configuration › Admin activity** (with the same permission): Record admin sign-ins, Record Content Manager activity (with a note on informing employees and the works council), Store IP addresses, Anonymise the last part of IP addresses (IPv4 /24, IPv6 /48) and Keep security events for (1-730 days, default 90). IP storage, anonymisation and retention apply to the whole log.
+* Admin routes `GET /admin-activity/sign-ins`, `/admin-activity/sign-ins/export`, `/admin-activity/content`, `/admin-activity/content/export` (need `access`, `admin-sessions.read` and `admin-activity.read`; read rate limit). `GET /admin-sessions/admins` adds `meta.recording`.
+* A daily retention job (`strapi.cron`, one process per cluster) deletes older events; deleting an admin account deletes that admin's events.
+* README: how events are captured, the reverse-proxy setup for correct client IPs (`server.proxy.koa`, `maxIpsCount`, `ipHeader`), the privacy defaults and legal notes (GDPR, German works council; information, not legal advice), and a latency bench (`scripts/bench-admin-activity.cjs`): no measurable difference with recording on.
+
+### Changed
+
+* The "How signing out works" note no longer says that admin sessions record no IP address; it says what the sign-in history records with the current settings.
+
+### Fixed
+
+* Enter and Space on the row buttons of the Admin panel table (View sessions, Sign out everywhere) did nothing: the Design System grid table handled the keys. They now open the dialog and the confirmation, as in the App users table.
+* A settings load that started before a settings change could cache the old values in that process until the next revision check (up to 2 seconds).
+
+### Migration
+
+* Nothing to do. Strapi creates the new table and indexes on the first start. Admin sign-ins are recorded from then on (with IP addresses); to keep the previous behaviour, turn off **Record admin sign-ins** in Configuration › Admin activity. Behind a reverse proxy set `server.proxy.koa: true` and `maxIpsCount`, otherwise the proxy's address is stored.
+
+### Tests
+
+* `tests/isolated-admin-activity-http.test.js` boots Strapi from this checkout and covers sign-in, failed sign-in, lockout, sign-out and sign-out by another admin, session states, IP with and without a trusted proxy (`ADMIN_ACTIVITY_PROXY=1`), view de-duplication, every write action, RBAC (401/403/200), settings permission and validation, anonymisation, switches off, retention and deletion with the admin. CI runs it in both proxy modes and on the Strapi 5.50 floor.
+* Unit tests for the event model, the queue and flush, IP anonymisation, bounded meta and the settings cache race; StrictMode tests for the new dialog tabs, recent list and settings tab; a keyboard test for the table row buttons.
+
 # [4.15.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.3...v4.15.0) (2026-11-24)
 
 

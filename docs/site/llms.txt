@@ -14,6 +14,7 @@ What it does:
 - Security emails through Strapi's Email plugin and sign-in notifications to Discord or Slack.
 - A Sessions panel next to each user in the Content Manager and an Online users widget on the Strapi homepage.
 - Admin panel sessions: who is signed in to the Strapi admin panel; sign an admin out of one browser or everywhere.
+- Admin sign-in history (security log): sign-ins, failed attempts, lockouts and sign-outs of admins with IP address, browser and location, who signed out whom, and optional Content Manager activity (opened, created, edited, published, deleted entries). IP anonymisation and retention are configurable; activity recording is off by default.
 - Works with `jwtManagement: 'refresh'` (Strapi's native sessions) and `'legacy-support'`, and with pm2 workers or Railway replicas on one PostgreSQL or MySQL database, without sticky sessions or Redis.
 - Stored tokens are encrypted with AES-256-GCM and never returned; retention deletes old history.
 
@@ -41,9 +42,9 @@ Then set `SESSION_ENCRYPTION_KEY`, run `npm run build` and `npm run develop`, an
 
 Configuration essentials:
 
-- Admin permissions: `plugin::magic-sessionmanager.access`, `plugin::magic-sessionmanager.admin-sessions.read`, `plugin::magic-sessionmanager.admin-sessions.revoke`.
+- Admin permissions: `plugin::magic-sessionmanager.access`, `plugin::magic-sessionmanager.admin-sessions.read`, `plugin::magic-sessionmanager.admin-sessions.revoke`, `plugin::magic-sessionmanager.admin-activity.read`.
 - Optional route policy `plugin::magic-sessionmanager.session-required` for an explicit per-route check; revocation works on every Content API route without it.
-- Behind a proxy, turn on Koa's proxy mode or Trust proxy headers, otherwise all users share the proxy's IP address for the lockout.
+- Behind a proxy, turn on Koa's proxy mode (`server.proxy.koa` with `maxIpsCount`) or Trust proxy headers, otherwise all users share the proxy's IP address for the lockout and the admin sign-in history stores the proxy's address.
 
 ## Used by
 

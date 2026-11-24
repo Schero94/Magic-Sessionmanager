@@ -31,6 +31,12 @@ let cached = null;
 let cachedAt = 0;
 let cachedRevision = null;
 let revisionCheckedAt = 0;
+/**
+ * Bumped by every invalidation. A load that started before an invalidation
+ * must not cache what it read: it may hold the values from before the change
+ * (it would otherwise be served until the next revision check).
+ */
+let generation = 0;
 
 /**
  * Safely coerces a value to a positive integer within bounds.
@@ -141,6 +147,11 @@ function normalizeStoredSettings(stored) {
     // of batching via the Document Service. Bypasses lifecycle hooks but
     // drains the backlog in one query on very large installations.
     'cleanupUseDbDirect',
+    // Security event log (4.15).
+    'adminSignInHistory',
+    'adminContentActivity',
+    'securityLogStoreIp',
+    'securityLogAnonymizeIp',
   ];
 
   if (stored.sessionCreationGraceMs !== undefined) {
@@ -191,6 +202,9 @@ function normalizeStoredSettings(stored) {
   if (stored.emailTemplates && typeof stored.emailTemplates === 'object') {
     out.emailTemplates = stored.emailTemplates;
   }
+  if (stored.securityLogRetentionDays !== undefined) {
+    out.securityLogRetentionDays = toIntInRange(stored.securityLogRetentionDays, 90, 1, 730);
+  }
   if (stored.trustedProxies !== undefined) {
     out.trustedProxies = stored.trustedProxies;
   }
@@ -221,6 +235,7 @@ async function getPluginSettings(strapi) {
     if (revision === cachedRevision) return cached;
   }
 
+  const loadGeneration = generation;
   let revision;
   try {
     revision = await coordinator.getRevision(SETTINGS_REVISION);
@@ -248,6 +263,7 @@ async function getPluginSettings(strapi) {
 
   const merged = { ...staticConfig, ...storedSettings };
 
+  if (loadGeneration !== generation) return merged;
   cached = merged;
   cachedAt = now;
   cachedRevision = revision;
@@ -267,10 +283,22 @@ function getPluginSettingsSync(strapi) {
 }
 
 /**
+ * The cached merged settings without any read, or null when nothing is
+ * cached (before the first load and right after a settings change). Hot
+ * request paths use it to skip work early without awaiting.
+ *
+ * @returns {object|null}
+ */
+function peekCachedSettings() {
+  return cached;
+}
+
+/**
  * Invalidate the cache so next call re-reads from store.
  * Called by settings controller after updates.
  */
 function invalidateSettingsCache() {
+  generation += 1;
   cached = null;
   cachedAt = 0;
   cachedRevision = null;
@@ -312,6 +340,7 @@ async function notifySettingsChanged(strapi) {
 module.exports = {
   getPluginSettings,
   getPluginSettingsSync,
+  peekCachedSettings,
   invalidateSettingsCache,
   notifySettingsChanged,
   getSettingsRevision,
