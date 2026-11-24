@@ -97,17 +97,38 @@ function bodyDeviceId(ctx) {
  * @returns {{ip: string|null, userAgent: string|null, deviceId: string|null}} Facts.
  */
 function currentRequestFacts(strapi) {
-  let ctx;
-  try {
-    ctx = strapi.requestContext?.get?.() || null;
-  } catch {
-    ctx = null;
-  }
+  const ctx = currentContext(strapi);
   return {
     ip: ctx ? getRequestIp(ctx) : null,
     userAgent: ctx ? getRequestUserAgent(ctx) : null,
     deviceId: ctx ? bodyDeviceId(ctx) : null,
   };
+}
+
+/**
+ * The Koa context of the request that emitted an event, if any.
+ *
+ * @param {any} strapi Strapi instance.
+ * @returns {any|null} Context.
+ */
+function currentContext(strapi) {
+  try {
+    return strapi.requestContext?.get?.() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Typed email of the current sign-in request, bounded. Only handed to the
+ * security log to look up an existing admin; it is never stored or logged.
+ *
+ * @param {any} ctx Koa context.
+ * @returns {string|null} Email or null.
+ */
+function attemptedEmailOf(ctx) {
+  const email = ctx?.request?.body?.email;
+  return typeof email === 'string' && email.length <= 254 ? email : null;
 }
 
 /**
@@ -199,13 +220,12 @@ function observeAuthentication(strapi, getService, ctx, route, thrown) {
   };
   if (name === AUTH_HANDLERS.login) {
     if (status !== 429) return;
-    const email = ctx.request?.body?.email;
     getService()?.record({
       event: SECURITY_EVENTS.ADMIN_LOCKOUT,
       actorType: 'admin',
       targetType: 'admin',
       // Resolved to an existing admin in the background, then dropped.
-      attemptedEmail: typeof email === 'string' ? email.slice(0, 254) : null,
+      attemptedEmail: attemptedEmailOf(ctx),
       meta: { reason: 'rate_limited', provider: 'local' },
       ...facts,
     });
@@ -277,7 +297,9 @@ function installAdminActivityCapture(strapi, { log, runExclusive }) {
   on('admin.auth.error', (payload) => {
     const switches = peekSwitches(strapi);
     if (switches && !switches.signIns) return;
-    // Set by Strapi only when the typed email belongs to an existing admin.
+    // Strapi 5.58+ sets `user` only when the typed email belongs to an
+    // existing admin. Older versions (5.50) send no user: then the typed
+    // email is resolved to an existing admin in the background, never stored.
     const id = payload?.user?.id ?? null;
     getService()?.record({
       event: SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED,
@@ -285,6 +307,9 @@ function installAdminActivityCapture(strapi, { log, runExclusive }) {
       actorId: id,
       targetType: 'admin',
       targetId: id,
+      ...(id === null
+        ? { attemptedEmail: attemptedEmailOf(currentContext(strapi)), actorFromEmail: true }
+        : {}),
       meta: {
         reason: safeReason(payload?.reason) || 'invalid_credentials',
         provider: safeReason(payload?.provider) || 'local',

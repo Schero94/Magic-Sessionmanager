@@ -92,6 +92,7 @@ const MAX_DELETE_STEPS = 200;
  * @property {Record<string, unknown>|null} [meta] Small facts (bounded before storage).
  * @property {string|null} [attemptedEmail] Typed email of a lockout. Held in memory only, used
  *   once to find an existing admin as the target, never stored or logged.
+ * @property {boolean} [actorFromEmail] The admin found by `attemptedEmail` is also the actor.
  * @property {any} [entryData] Content Manager entry, only to read its title in the flush.
  * @property {Date} [occurredAt] Event time (default now).
  */
@@ -333,9 +334,11 @@ module.exports = ({ strapi }) => {
         }
       }
       let targetId = toId(entry.targetId);
+      let actorId = toId(entry.actorId);
       if (!targetId && typeof entry.attemptedEmail === 'string') {
         const found = byEmail.get(entry.attemptedEmail.toLowerCase());
         targetId = found ? String(found) : null;
+        if (entry.actorFromEmail && !actorId) actorId = targetId;
       }
       const meta = { ...(entry.meta || {}) };
       const deviceHash = entry.deviceHash || hashDeviceId(entry.deviceId);
@@ -359,7 +362,7 @@ module.exports = ({ strapi }) => {
       rows.push({
         event: entry.event,
         actorType: entry.actorType,
-        actorId: toId(entry.actorId),
+        actorId,
         targetType: typeof entry.targetType === 'string' ? entry.targetType.slice(0, 191) : null,
         targetId,
         ip: storedIp,

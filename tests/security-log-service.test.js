@@ -33,7 +33,12 @@ function setup(stored = {}) {
           rows.push(...data);
           return { count: data.length };
         },
-        findMany: async () => (uid === 'admin::user' ? [] : rows),
+        findMany: async ({ where } = {}) =>
+          uid === 'admin::user'
+            ? [{ id: 5, email: 'erin.editor@example.test' }].filter((admin) =>
+                where?.email?.$in?.includes(admin.email)
+              )
+            : rows,
       }),
     },
     plugin: () => ({ service: () => null }),
@@ -216,4 +221,28 @@ test('settings cache: a load that started before a change does not cache old val
   assert.equal(loader.peekCachedSettings(), null, 'but it is not cached');
   strapi.store = () => store;
   assert.equal((await loader.getPluginSettings(strapi)).adminContentActivity, true);
+});
+
+test('a failed sign-in without a user from Strapi (5.50) is linked only to an existing admin', async () => {
+  const { service, rows } = setup();
+  const failed = (email) =>
+    service.record({
+      event: 'admin.sign-in.failed',
+      actorType: 'admin',
+      targetType: 'admin',
+      attemptedEmail: email,
+      actorFromEmail: true,
+      meta: { reason: 'invalid_credentials' },
+    });
+  failed('Erin.Editor@example.test');
+  failed('nobody@example.test');
+  await service.flush();
+  assert.deepEqual(
+    rows.map((row) => [row.actorId, row.targetId]),
+    [
+      ['5', '5'],
+      [null, null],
+    ]
+  );
+  assert.ok(!JSON.stringify(rows).includes('example.test'), 'typed emails are not stored');
 });

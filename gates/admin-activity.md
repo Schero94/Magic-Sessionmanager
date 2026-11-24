@@ -13,8 +13,9 @@ Branch `feat/admin-sign-in-history-activity`, 2026-11-24, on top of 4.14.3. Synt
 
 ## Tests
 
-- [x] `npm test`: 900 pass, 0 fail (includes the host suites against the workbench test-app, Strapi 5.58).
+- [x] `npm test`: 901 pass, 0 fail (includes the host suites against the workbench test-app, Strapi 5.58).
 - [x] `tests/isolated-admin-activity-http.test.js` against this repo's Strapi 5.63.0: 13/13 without proxy, 13/13 with `ADMIN_ACTIVITY_PROXY=1`; repeated four times after fixing a flush race (a flush with an empty queue left `flushing` set; regression test in `tests/security-log-service.test.js`).
+- [x] Strapi 5.50.0 floor: 13/13. On 5.50 `admin.auth.error` carries no `user`; the failed attempt is then linked by resolving the typed email to an existing admin in the background (never stored). Found by the CI floor job, regression test in `tests/security-log-service.test.js`.
 - [x] `npm run test:admin`: 16 pass (new: activity tabs, recent list, settings tab, no activity requests without the permission, row keys).
 - [x] `lint`, `format:check`, `test:ts:front`, `test:ts:back`, `build`, `verify`, `verify:runtime` clean.
 
