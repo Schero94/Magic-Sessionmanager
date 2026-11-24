@@ -22,6 +22,8 @@ Release type: minor (`feat` for the new risk data source, `fix` for the honest U
 * Discord and Slack messages list risk findings only when the sign-in had risk data, and now also name Tor and hosting networks. The `{{reason.securityScore}}` email variable renders `N/A` instead of `0` when there is no score.
 * README: the features table, Session details, the settings table, Location data, Login protection and Alerts describe what needs a risk data source; a new "Risk data (VPN, proxy, Tor)" section explains the previous behaviour.
 
+* **A custom "Database file name" was never found.** The reader resolved `geoIpDatabasePath` (for example `GeoLite2-Country.mmdb`) against the Strapi folder, while the admin and CLI downloads write it to `data/magic-sessionmanager/geoip/`. A file name is now read from that folder first; a file in the Strapi folder is still found for older setups, and absolute paths are unchanged. The settings API keeps refusing `..` and folder names with a field error on `geoIpDatabasePath`.
+
 ### Upgrade note
 
 * Saved settings are kept as they are. A risk switch that was on stays stored, has no effect while no risk data source exists, and applies again once one is set up. The admin says "Saved as on. It takes effect once a risk data source is set up."
@@ -32,6 +34,7 @@ Release type: minor (`feat` for the new risk data source, `fix` for the honest U
 
 ### Tests
 
+* `tests/geolocation-database-path.test.js` (regression, fails before the fix): a custom file name is read from the GeoIP folder, the Strapi-folder fallback and absolute paths still work, a missing file is reported for the GeoIP folder, and `..` or folder names are refused with a `geoIpDatabasePath` field error.
 * `tests/risk-databases.test.js` reads synthetic MMDB fixtures (written by `tests/helpers/mmdb-writer.js`; no MaxMind data is shipped) with the real `@maxmind/geoip2-node` reader: VPN, Tor, hosting, public and residential proxy and a clean address; the ASN heuristic; both databases; a wrong database type; the status report; and full sign-ins where the reject rule, the VPN and suspicious emails (through the real notification service) and the `login.suspicious` Discord post actually fire. Also the download routing, the fixed refusal message and that a location setting cannot select a risk file.
 * `tests/risk-honesty.test.js`: ipapi.co answers (even with a made-up `threat` object), failed and private lookups carry no score; without a source nothing is suspicious, no risk email or `login.suspicious` webhook is sent, and the new-country alert still works.
 * `tests/admin/risk-honesty.test.jsx` renders the Configuration page and the session details: without a source the risk controls are off, disabled and explained, saved values are kept and nothing is saved; with a source they are live.

@@ -13,7 +13,10 @@ const net = require('node:net');
 const path = require('node:path');
 const { getPluginSettings } = require('../utils/settings-loader');
 const { getCoordinator, hashedKey } = require('../utils/coordination');
-const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
+const {
+  DEFAULT_GEOIP_DIRECTORY,
+  resolveDatabaseTarget,
+} = require('../../../scripts/geoip-updater.cjs');
 const { calculateSecurityScore, getRiskLevel, noRiskData } = require('../utils/risk-data');
 const { lookupRiskData } = require('../utils/risk-databases');
 
@@ -60,6 +63,38 @@ function uniqueValues(values) {
 }
 
 /**
+ * Read locations for a configured database path, in order of preference.
+ *
+ * - An absolute path is used as it is.
+ * - A bare file name ("GeoLite2-Country.mmdb") is looked up in the plugin's
+ *   GeoIP folder first, where the admin and CLI downloads write it. Up to
+ *   4.14 it was resolved against the Strapi folder (process.cwd()), so a
+ *   downloaded database with a custom name was never found; that location
+ *   stays as a fallback for installs that put the file there.
+ * - Any other relative path (a legacy value with folders) keeps its old
+ *   meaning, relative to the Strapi folder. The settings API no longer
+ *   accepts such values; they can only come from older stored settings or
+ *   from the environment.
+ *
+ * @param {unknown} value Configured path or file name
+ * @returns {string[]} Absolute candidate paths, preferred first
+ */
+function resolveConfiguredCandidates(value) {
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  const trimmed = value.trim();
+  if (path.isAbsolute(trimmed)) return [trimmed];
+  const isBareName =
+    trimmed !== '.' && trimmed !== '..' && !/[\\/]/.test(trimmed) && !trimmed.includes('\0');
+  if (isBareName) {
+    return uniqueValues([
+      path.join(DEFAULT_GEOIP_DIRECTORY, trimmed),
+      path.resolve(process.cwd(), trimmed),
+    ]);
+  }
+  return [path.resolve(process.cwd(), trimmed)];
+}
+
+/**
  * Lists the selected database first, then supported environment and default
  * locations used by the read-only GeoIP provider.
  *
@@ -67,13 +102,13 @@ function uniqueValues(values) {
  * @returns {string[]} Candidate local database paths
  */
 function resolveDatabaseCandidates(settings = {}) {
-  const configured = normalizeDatabasePath(
+  const configured = resolveConfiguredCandidates(
     settings.geoIpDatabasePath ||
       process.env.MAGIC_SESSIONMANAGER_GEOIP_DATABASE ||
       process.env.GEOIP_DATABASE_PATH
   );
 
-  if (configured) return [configured];
+  if (configured.length > 0) return configured;
 
   return uniqueValues([
     normalizeDatabasePath(process.env.GEOLITE2_CITY_MMDB),
