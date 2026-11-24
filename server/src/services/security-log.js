@@ -230,6 +230,27 @@ module.exports = ({ strapi }) => {
   };
 
   /**
+   * The latest title the log holds for an entry (from an earlier open or edit).
+   *
+   * @param {string} targetType Content type uid.
+   * @param {string} targetId Document id.
+   * @returns {Promise<string|null>} Title or null.
+   */
+  const titleFromLog = async (targetType, targetId) => {
+    const rows = await events().findMany({
+      select: ['meta'],
+      where: { targetType, targetId, event: { $startsWith: 'admin.content.' } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      limit: 10,
+    });
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const title = toObject(row.meta).title;
+      if (typeof title === 'string' && title) return title;
+    }
+    return null;
+  };
+
+  /**
    * Builds the stored rows of a batch: switch per event family, IP options,
    * location (bounded lookups), device hash and title into a bounded `meta`;
    * the typed email of a lockout is resolved to an existing admin and then
@@ -275,6 +296,16 @@ module.exports = ({ strapi }) => {
     const geoCache = new Map();
     let geoBudget = GEO_LOOKUPS_PER_FLUSH;
 
+    /** @type {Map<string, string|null>} */
+    const knownTitles = new Map();
+    for (const entry of wanted) {
+      const title =
+        entry.entryData && entry.targetType && entry.targetId
+          ? pickEntryTitle(entry.entryData, await mainFieldOf(entry.targetType))
+          : null;
+      if (title) knownTitles.set(`${entry.targetType}|${toId(entry.targetId)}`, title);
+    }
+
     const rows = [];
     for (const entry of wanted) {
       const ip = options.storeIp ? normalizeIp(entry.ip) : null;
@@ -313,6 +344,16 @@ module.exports = ({ strapi }) => {
       if (entry.entryData && entry.targetType) {
         const title = pickEntryTitle(entry.entryData, await mainFieldOf(entry.targetType));
         if (title) meta.title = title;
+      }
+      // A delete answers without the entry: keep the name it had in the log.
+      if (!meta.title && entry.event.startsWith('admin.content.') && entry.targetType) {
+        const id = toId(entry.targetId);
+        if (id) {
+          const key = `${entry.targetType}|${id}`;
+          if (!knownTitles.has(key)) knownTitles.set(key, await titleFromLog(entry.targetType, id));
+          const known = knownTitles.get(key);
+          if (known) meta.title = known;
+        }
       }
       const occurredAt = entry.occurredAt || new Date();
       rows.push({

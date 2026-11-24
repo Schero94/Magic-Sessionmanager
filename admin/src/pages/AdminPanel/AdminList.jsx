@@ -27,6 +27,19 @@ import { getBadgeColors } from '../../components/ui/StatusBadge';
 import RowActions from '../../components/ui/RowActions';
 import { LastActive } from '../Dashboard/SessionTable';
 import { getAdminStatusPresentation } from './adminPanelModel.mjs';
+import { shouldIsolateActionKey } from '../Dashboard/dashboardModel.mjs';
+
+/**
+ * Keeps Enter and Space on a row button: the Design System grid table
+ * otherwise handles them for cell navigation and the button never fires
+ * (the same fix as the App users table, SessionActions).
+ *
+ * @param {import('react').KeyboardEvent<HTMLElement>} event Keydown inside the row actions.
+ * @returns {void}
+ */
+const keepActionKeys = (event) => {
+  if (shouldIsolateActionKey(event.key, true)) event.stopPropagation();
+};
 
 /** Cells that share the remaining width and cut long values instead of scrolling. */
 const SHRINKING_ADMIN_CELL = { maxWidth: 0, width: '34%' };
@@ -190,7 +203,7 @@ export const AdminTable = ({
                 <LastActive value={admin.lastActiveAt} />
               </Td>
               <Td>
-                <RowActions>
+                <RowActions onKeyDown={keepActionKeys}>
                   <IconButton
                     label={t('adminPanel.actions.view', 'View sessions of {name}', {
                       name: admin.name,

@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { act } from 'react';
 import { renderStrict } from './harness/index.jsx';
 import { AdminTable } from '../../admin/src/pages/AdminPanel/AdminList';
 import SessionActions from '../../admin/src/pages/Dashboard/SessionActions';
@@ -80,6 +81,32 @@ test('session dashboard table: view, end and more actions are spaced, not groupe
   );
   try {
     assertSpaced(document.querySelector('[data-row-actions]'), 3);
+  } finally {
+    await handle.unmount();
+  }
+});
+
+test('admin panel table: Enter and Space stay on the row button (the grid table would swallow them)', async () => {
+  const seen = [];
+  const handle = await renderStrict(
+    <div onKeyDown={(event) => seen.push(event.key)}>
+      <AdminTable
+        admins={[ADMIN]}
+        labelledBy="caption"
+        canRevoke
+        onView={() => {}}
+        onSignOutEverywhere={() => {}}
+      />
+    </div>
+  );
+  try {
+    const view = document.querySelector('[data-admin-row="3"] [data-row-actions] button');
+    for (const key of ['Enter', ' ', 'ArrowDown']) {
+      await act(async () => {
+        view.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }));
+      });
+    }
+    assert.deepEqual(seen, ['ArrowDown'], 'only navigation keys reach the table');
   } finally {
     await handle.unmount();
   }

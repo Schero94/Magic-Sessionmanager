@@ -6,6 +6,8 @@ import { unwrapSource } from './helpers/unwrapSource.mjs';
 import {
   SETTINGS_TAB_IDS,
   SETTINGS_TAB_LABELS,
+  getVisibleSettingsTabs,
+  resolveSettingsTab,
 } from '../admin/src/pages/Settings/settingsTabs.mjs';
 
 const page = readSettingsFile('index.jsx');
@@ -18,6 +20,7 @@ const TAB_FILES = {
   'location-data': 'LocationDataTab.jsx',
   alerts: 'AlertsTab.jsx',
   'data-retention': 'DataRetentionTab.jsx',
+  'admin-activity': 'AdminActivityTab.jsx',
 };
 
 /** Positions of quoted message ids in a source, for order checks. */
@@ -85,15 +88,31 @@ test('settings are split into a page, one module per tab and the useSettingsForm
   }
 });
 
-test('five DS tabs in IA order with sentence-case labels (IA I.1-16, F)', () => {
+test('five DS tabs in IA order with sentence-case labels, plus Admin activity (IA I.1-16, F)', () => {
   assert.deepEqual(
     [...SETTINGS_TAB_IDS],
-    ['sessions', 'login-protection', 'location-data', 'alerts', 'data-retention']
+    ['sessions', 'login-protection', 'location-data', 'alerts', 'data-retention', 'admin-activity']
   );
   assert.deepEqual(
     SETTINGS_TAB_IDS.map((tab) => SETTINGS_TAB_LABELS[tab][1]),
-    ['Sessions', 'Login protection', 'Location data', 'Alerts', 'Data and retention']
+    [
+      'Sessions',
+      'Login protection',
+      'Location data',
+      'Alerts',
+      'Data and retention',
+      'Admin activity',
+    ]
   );
+  // Admin activity is only shown to admins with "View admin activity".
+  assert.deepEqual(getVisibleSettingsTabs(false), SETTINGS_TAB_IDS.slice(0, 5));
+  assert.deepEqual(getVisibleSettingsTabs(true), [...SETTINGS_TAB_IDS]);
+  assert.equal(resolveSettingsTab('admin-activity', getVisibleSettingsTabs(false)), 'sessions');
+  assert.equal(
+    resolveSettingsTab('admin-activity', getVisibleSettingsTabs(true)),
+    'admin-activity'
+  );
+  assert.match(page, /useRBAC\(pluginPermissions\.adminActivityRead\)/);
   assert.match(
     page,
     /<Tabs\.Root\b[\s\S]*?variant="simple"[\s\S]*?value=\{activeTab\}[\s\S]*?onValueChange=\{changeTab\}/
@@ -135,10 +154,10 @@ test('tab labels are not rendered uppercase and scroll inside the tab list (IA H
 test('tabs are deep-linkable with ?tab= without triggering the unsaved-changes Blocker (IA C)', () => {
   assert.match(
     page,
-    /import \{ Blocker, Form, Page, useForm, useQueryParams \} from '@strapi\/strapi\/admin'/
+    /import \{ Blocker, Form, Page, useForm, useQueryParams, useRBAC \} from '@strapi\/strapi\/admin'/
   );
   assert.match(page, /const \[\{ query \}\] = useQueryParams\(\)/);
-  assert.match(page, /const requestedTab = resolveSettingsTab\(query\?\.tab\)/);
+  assert.match(page, /const requestedTab = resolveSettingsTab\(query\?\.tab, visibleTabs\)/);
   assert.match(
     page,
     /window\.history\.replaceState\(window\.history\.state, '', `\$\{pathname\}\$\{nextSearch\}\$\{hash\}`\)/

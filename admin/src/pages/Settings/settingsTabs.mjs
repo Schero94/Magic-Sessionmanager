@@ -11,7 +11,11 @@ export const SETTINGS_TAB_IDS = Object.freeze([
   'location-data',
   'alerts',
   'data-retention',
+  'admin-activity',
 ]);
+
+/** Tabs shown only to admins with "View admin activity" (server enforces the same). */
+export const PERMISSION_GATED_TABS = Object.freeze(['admin-activity']);
 
 export const DEFAULT_SETTINGS_TAB = 'sessions';
 
@@ -22,6 +26,7 @@ export const SETTINGS_TAB_LABELS = Object.freeze({
   'location-data': ['settings.config.tab.locationData', 'Location data'],
   alerts: ['settings.config.tab.alerts', 'Alerts'],
   'data-retention': ['settings.config.tab.dataRetention', 'Data and retention'],
+  'admin-activity': ['settings.config.tab.adminActivity', 'Admin activity'],
 });
 
 /** Settings keys shown on each tab (for error markers and the adjusted-values message). */
@@ -61,6 +66,13 @@ export const SETTINGS_TAB_FIELDS = Object.freeze({
     'slackWebhookUrl',
   ],
   'data-retention': ['retentionDays'],
+  'admin-activity': [
+    'adminSignInHistory',
+    'adminContentActivity',
+    'securityLogStoreIp',
+    'securityLogAnonymizeIp',
+    'securityLogRetentionDays',
+  ],
 });
 
 /**
@@ -111,6 +123,20 @@ export const SETTINGS_FIELD_LABELS = Object.freeze({
   discordWebhookUrl: ['settings.config.webhooks.discord.label', 'Discord webhook URL'],
   slackWebhookUrl: ['settings.config.webhooks.slack.label', 'Slack webhook URL'],
   retentionDays: ['settings.config.retention.keep.label', 'Keep ended sessions for'],
+  adminSignInHistory: ['settings.config.adminActivity.signIns.label', 'Record admin sign-ins'],
+  adminContentActivity: [
+    'settings.config.adminActivity.content.label',
+    'Record Content Manager activity',
+  ],
+  securityLogStoreIp: ['settings.config.adminActivity.storeIp.label', 'Store IP addresses'],
+  securityLogAnonymizeIp: [
+    'settings.config.adminActivity.anonymize.label',
+    'Anonymise the last part of IP addresses',
+  ],
+  securityLogRetentionDays: [
+    'settings.config.adminActivity.retention.label',
+    'Keep security events for',
+  ],
 });
 
 /** Select presets (IA F). Units are added by the page; -1 means "Forever". */
@@ -121,15 +147,30 @@ export const SELECT_PRESETS = Object.freeze({
   cleanupInterval: Object.freeze([15, 30, 60, 120]),
   sessionCreationGraceMs: Object.freeze([0, 2000, 5000, 10000, 30000]),
   retentionDays: Object.freeze([7, 30, 60, 90, 180, 365, -1]),
+  securityLogRetentionDays: Object.freeze([7, 30, 90, 180, 365]),
 });
 
 /**
  * @param {unknown} value Raw `tab` query value.
+ * @param {readonly string[]} [tabs] Tabs the admin can see (default: all).
  * @returns {string} A known tab id, else the default tab.
  */
-export function resolveSettingsTab(value) {
+export function resolveSettingsTab(value, tabs = SETTINGS_TAB_IDS) {
   const candidate = Array.isArray(value) ? value[0] : value;
-  return SETTINGS_TAB_IDS.includes(candidate) ? candidate : DEFAULT_SETTINGS_TAB;
+  return tabs.includes(candidate) ? candidate : DEFAULT_SETTINGS_TAB;
+}
+
+/**
+ * Tabs an admin can see: every tab, without the permission-gated ones when
+ * the admin lacks "View admin activity".
+ *
+ * @param {boolean} canViewAdminActivity Admin holds `admin-activity.read`.
+ * @returns {string[]} Tab ids in display order.
+ */
+export function getVisibleSettingsTabs(canViewAdminActivity) {
+  return SETTINGS_TAB_IDS.filter(
+    (tab) => canViewAdminActivity || !PERMISSION_GATED_TABS.includes(tab)
+  );
 }
 
 /**

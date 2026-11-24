@@ -34,6 +34,8 @@
 
 const { z } = require('@strapi/utils');
 const { hashDeviceId } = require('./admin-request-info');
+const { resolveSecurityLogSettings } = require('./security-log-settings');
+const { getPluginSettings } = require('./settings-loader');
 
 const ADMIN_ORIGIN = 'admin';
 const SESSION_UID = 'admin::session';
@@ -394,13 +396,34 @@ function summariseByAdmin(rows) {
 }
 
 /**
+ * What the security log records about admin sign-ins, for the explanation on
+ * the Admin panel view. Booleans only; a store failure reads as "not recorded".
+ *
+ * @param {any} strapi Running Strapi instance.
+ * @returns {Promise<{signIns: boolean, ipAddresses: boolean, anonymizeIp: boolean}>} Flags.
+ */
+async function readSignInRecording(strapi) {
+  try {
+    const options = resolveSecurityLogSettings(await getPluginSettings(strapi));
+    return {
+      signIns: options.signIns,
+      ipAddresses: options.signIns && options.storeIp,
+      anonymizeIp: options.signIns && options.storeIp && options.anonymizeIp,
+    };
+  } catch {
+    return { signIns: false, ipAddresses: false, anonymizeIp: false };
+  }
+}
+
+/**
  * One page of admin users with their live session summary, plus count-only
  * statistics over all admins.
  *
  * @param {any} strapi Running Strapi instance.
  * @param {{page: number, pageSize: number, search: string, filter: string}} query Parsed query.
  * @param {{id: any, roles?: any[]}} actor Caller.
- * @returns {Promise<{data: object[], meta: object}>} Response body.
+ * @returns {Promise<{data: object[], meta: object}>} Response body; `meta.recording` says
+ *   whether sign-ins and IP addresses are recorded (security log settings).
  */
 async function listAdmins(strapi, query, actor) {
   const policy = readSessionPolicy(strapi);
@@ -413,6 +436,7 @@ async function listAdmins(strapi, query, actor) {
         stats: null,
         policy,
         truncated: false,
+        recording: await readSignInRecording(strapi),
       },
     };
   }
@@ -514,6 +538,7 @@ async function listAdmins(strapi, query, actor) {
       },
       policy,
       truncated,
+      recording: await readSignInRecording(strapi),
     },
   };
 }

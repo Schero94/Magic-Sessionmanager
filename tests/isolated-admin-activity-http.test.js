@@ -557,6 +557,11 @@ test(
       }
       assert.equal(meta(rows[0]).title, 'Synthetic launch note');
       assert.equal(meta(rows[2]).title, 'Synthetic launch note (edited)');
+      assert.equal(
+        meta(rows[5]).title,
+        'Synthetic launch note (edited)',
+        'a delete keeps the name the entry had'
+      );
 
       const list = await request('GET', api(`/content?adminId=${owner.id}&action=publish`), {
         token: ada.token,
