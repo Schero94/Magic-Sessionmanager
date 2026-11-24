@@ -1,0 +1,86 @@
+/**
+ * Row action spacing: the icon buttons at the end of a table row are separate actions, so they
+ * sit apart like in Strapi's own list views (Flex with gap 1 = 4 px, Settings > Webhooks) instead
+ * of being joined into one segmented IconButtonGroup.
+ */
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { renderStrict } from './harness/index.jsx';
+import { AdminTable } from '../../admin/src/pages/AdminPanel/AdminList';
+import SessionActions from '../../admin/src/pages/Dashboard/SessionActions';
+
+const ADMIN = {
+  id: 3,
+  name: 'Anna Beispiel',
+  email: 'anna.beispiel@example.test',
+  roles: [{ name: 'Editor', superAdmin: false }],
+  account: 'active',
+  self: false,
+  sessionCount: 1,
+  lastActiveAt: new Date().toISOString(),
+  canSignOut: true,
+  protectedReason: null,
+};
+
+/**
+ * Asserts that the buttons of a row action container are spaced, not joined.
+ * @param {Element} container - The `[data-row-actions]` element.
+ * @param {number} buttons - Expected number of buttons.
+ */
+const assertSpaced = (container, buttons) => {
+  assert.ok(container, 'row actions container exists');
+  const style = window.getComputedStyle(container);
+  assert.equal(style.display, 'flex');
+  assert.equal(style.gap, '4px', 'actions are 4 px apart like native Strapi tables');
+  assert.equal(container.querySelectorAll(':scope > button, :scope > a').length >= buttons, true);
+};
+
+test('admin panel table: view and sign-out actions are spaced, not grouped', async () => {
+  const handle = await renderStrict(
+    <AdminTable
+      admins={[ADMIN]}
+      labelledBy="caption"
+      canRevoke
+      onView={() => {}}
+      onSignOutEverywhere={() => {}}
+    />
+  );
+  try {
+    const container = document.querySelector('[data-admin-row="3"] [data-row-actions]');
+    assertSpaced(container, 2);
+    const names = [...container.querySelectorAll('button')].map((node) => node.textContent.trim());
+    assert.deepEqual(names, [
+      'View sessions of Anna Beispiel',
+      'Sign out Anna Beispiel everywhere',
+    ]);
+  } finally {
+    await handle.unmount();
+  }
+});
+
+test('session dashboard table: view, end and more actions are spaced, not grouped', async () => {
+  const session = {
+    id: 'session-1',
+    documentId: 'session-1',
+    isActive: true,
+    isTrulyActive: true,
+    loginTime: new Date().toISOString(),
+    user: { id: 7, documentId: 'user-7', username: 'ben.muster', email: 'ben@example.test' },
+  };
+  const handle = await renderStrict(
+    <SessionActions
+      session={session}
+      layout="table"
+      onView={() => {}}
+      onEnd={async () => {}}
+      onDelete={async () => {}}
+      mutationPending={false}
+      focusFallback={{ current: null }}
+    />
+  );
+  try {
+    assertSpaced(document.querySelector('[data-row-actions]'), 3);
+  } finally {
+    await handle.unmount();
+  }
+});

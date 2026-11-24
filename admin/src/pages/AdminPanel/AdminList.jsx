@@ -5,7 +5,6 @@ import {
   Button,
   Flex,
   IconButton,
-  IconButtonGroup,
   Table,
   Tbody,
   Td,
@@ -25,6 +24,7 @@ import { getTranslation } from '../../utils/getTranslation';
  */
 export const HIGHLIGHT_BADGE = { backgroundColor: 'primary100', textColor: 'neutral800' };
 import { getBadgeColors } from '../../components/ui/StatusBadge';
+import RowActions from '../../components/ui/RowActions';
 import { LastActive } from '../Dashboard/SessionTable';
 import { getAdminStatusPresentation } from './adminPanelModel.mjs';
 
@@ -190,33 +190,31 @@ export const AdminTable = ({
                 <LastActive value={admin.lastActiveAt} />
               </Td>
               <Td>
-                <Flex justifyContent="flex-end">
-                  <IconButtonGroup>
+                <RowActions>
+                  <IconButton
+                    label={t('adminPanel.actions.view', 'View sessions of {name}', {
+                      name: admin.name,
+                    })}
+                    onClick={(event) => onView(admin, event.currentTarget)}
+                  >
+                    <Eye />
+                  </IconButton>
+                  {canRevoke && admin.canSignOut ? (
                     <IconButton
-                      label={t('adminPanel.actions.view', 'View sessions of {name}', {
-                        name: admin.name,
-                      })}
-                      onClick={(event) => onView(admin, event.currentTarget)}
+                      variant="danger-light"
+                      label={t(
+                        'adminPanel.actions.signOutEverywhere',
+                        'Sign out {name} everywhere',
+                        {
+                          name: admin.name,
+                        }
+                      )}
+                      onClick={(event) => onSignOutEverywhere(admin, event.currentTarget)}
                     >
-                      <Eye />
+                      <SignOut />
                     </IconButton>
-                    {canRevoke && admin.canSignOut ? (
-                      <IconButton
-                        variant="danger-light"
-                        label={t(
-                          'adminPanel.actions.signOutEverywhere',
-                          'Sign out {name} everywhere',
-                          {
-                            name: admin.name,
-                          }
-                        )}
-                        onClick={(event) => onSignOutEverywhere(admin, event.currentTarget)}
-                      >
-                        <SignOut />
-                      </IconButton>
-                    ) : null}
-                  </IconButtonGroup>
-                </Flex>
+                  ) : null}
+                </RowActions>
               </Td>
             </Tr>
           ))}

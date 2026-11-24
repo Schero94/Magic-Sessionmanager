@@ -1,17 +1,10 @@
 import { useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
-import {
-  Button,
-  Grid,
-  IconButton,
-  IconButtonGroup,
-  MenuItem,
-  SimpleMenu,
-} from '@strapi/design-system';
+import { Button, Grid, IconButton, MenuItem, SimpleMenu } from '@strapi/design-system';
 import { Cross, Eye, More, Trash } from '@strapi/icons';
 import { getTranslation } from '../../utils/getTranslation';
 import { useSessionFormatters } from '../../utils/useSessionFormatters';
-import { ConfirmAction } from '../../components/ui';
+import { ConfirmAction, RowActions } from '../../components/ui';
 import {
   getSessionUserLabels,
   shouldIsolateActionKey,
@@ -144,7 +137,7 @@ const SessionActions = ({
 
   if (layout === 'table') {
     return (
-      <IconButtonGroup onKeyDown={isolateActionKeys} onClick={(event) => event.stopPropagation()}>
+      <RowActions onKeyDown={isolateActionKeys} onClick={(event) => event.stopPropagation()}>
         <IconButton
           label={viewLabel}
           data-session-view={session.id}
@@ -179,7 +172,7 @@ const SessionActions = ({
           </MenuItem>
         </SimpleMenu>
         {deleteConfirm}
-      </IconButtonGroup>
+      </RowActions>
     );
   }
 
