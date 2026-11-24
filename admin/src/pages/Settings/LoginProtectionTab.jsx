@@ -4,9 +4,18 @@ import FormField from '../../components/FormField';
 import ReadableText, { ReadableParagraphs } from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import { MAX_FAILED_LOGINS_RANGE } from '../../utils/settingsForm.mjs';
+import { getRiskAvailability, riskDependentControl } from '../../utils/riskData.mjs';
+import Alert from '../../components/PersistentAlert';
 import { fieldHasError } from './settingsTabs.mjs';
 import CountryListEditor from './CountryListEditor';
-import { AdvancedSection, IntroText, RequiresGeolocation, TermList } from './SettingsBlocks';
+import {
+  AdvancedSection,
+  IntroText,
+  RequiresGeolocation,
+  RiskSourceNotice,
+  TermList,
+} from './SettingsBlocks';
+import { SettingsTabLink } from './SettingsNavigation';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
 /**
@@ -23,6 +32,12 @@ const LoginProtectionTab = ({ form }) => {
   const maxFailedError = tError(errors.maxFailedLogins);
   const maxFailedValue = Number(settings.maxFailedLogins);
   const lookupOff = !settings.enableGeolocation;
+  const risk = getRiskAvailability(form.geoIp.status);
+  const reject = riskDependentControl(settings.blockSuspiciousSessions, risk.state);
+  // A saved "Reject suspicious sign-ins" still makes the Automatic failure
+  // mode reject failed lookups; say so while the switch itself is inactive.
+  const autoStillRejects =
+    reject.savedOnButInactive && (settings.geoLookupFailureMode || 'auto') === 'auto';
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
@@ -116,24 +131,35 @@ const LoginProtectionTab = ({ form }) => {
         subtitle={t('settings.config.suspicious.intro', 'Refuses new sign-ins that look risky.')}
       >
         {lookupOff ? <RequiresGeolocation /> : null}
+        {!lookupOff && risk.state === 'missing' ? (
+          <Alert
+            variant="default"
+            closeLabel={t('common.close', 'Close')}
+            title={t('settings.config.risk.missing.title', 'No risk data source')}
+            data-risk-missing=""
+          >
+            {t(
+              'settings.config.risk.missing.body',
+              'VPN, proxy and Tor detection needs a risk data source. Until one is set up, no sign-in is refused as suspicious.'
+            )}{' '}
+            <SettingsTabLink tab="location-data">
+              {t('settings.config.risk.missing.link', 'Set up risk data')}
+            </SettingsTabLink>
+          </Alert>
+        ) : null}
         <SettingsToggleRow
           id="block-suspicious-sessions"
           title={t('settings.config.suspicious.reject.label', 'Reject suspicious sign-ins')}
           description={t(
             'settings.config.suspicious.reject.hint',
-            'Refuses sign-ins from VPN, proxy or known threat addresses and, with security scoring on, scores below 50.'
+            'Refuses sign-ins from VPN, proxy or Tor addresses and, with security scoring on, scores below 50. Hosting networks only trigger alerts.'
           )}
-          checked={settings.blockSuspiciousSessions}
-          disabled={lookupOff}
+          checked={reject.checked}
+          disabled={lookupOff || reject.disabled}
           onChange={(checked) => handleChange('blockSuspiciousSessions', checked)}
         >
-          {settings.geoIpProvider === 'local-mmdb' ? (
-            <ReadableText variant="pi" textColor="neutral600" tag="p">
-              {t(
-                'settings.config.suspicious.reject.localNote',
-                'The local database has no VPN, proxy or threat data and always scores 100, so only failed lookups can be refused.'
-              )}
-            </ReadableText>
+          {!lookupOff && reject.disabled ? (
+            <RiskSourceNotice savedOn={reject.savedOnButInactive} />
           ) : null}
         </SettingsToggleRow>
 
@@ -168,6 +194,14 @@ const LoginProtectionTab = ({ form }) => {
               </SingleSelect>
             </FormField>
           </EqualGrid>
+          {autoStillRejects ? (
+            <ReadableText variant="pi" textColor="neutral700" tag="p" data-auto-still-rejects="">
+              {t(
+                'settings.config.suspicious.failureMode.savedOnNote',
+                "Automatic still rejects sign-ins whose location cannot be determined, because 'Reject suspicious sign-ins' is saved as on. Choose 'Allow sign-in' to change that."
+              )}
+            </ReadableText>
+          ) : null}
         </AdvancedSection>
       </SectionCard>
 

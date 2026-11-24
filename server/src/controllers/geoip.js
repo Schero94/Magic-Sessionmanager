@@ -183,6 +183,10 @@ module.exports = ({ strapi, updateGeoIpDatabase: updateDatabase = updateGeoIpDat
           // its own file; `instance` is a non-reversible host fingerprint.
           scope: 'instance',
           instance: getHostFingerprint(),
+          // VPN, proxy and Tor detection needs a dedicated risk data source.
+          // The location providers (ipapi.co, GeoLite2 City/Country) have
+          // none, so the admin shows the dependent controls as unavailable.
+          risk: { available: false, source: null },
         },
       });
     } catch (error) {

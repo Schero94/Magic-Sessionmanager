@@ -1,5 +1,7 @@
 'use strict';
 
+const { REJECT_SCORE_BELOW, hasRiskData } = require('./risk-data');
+
 function normalizeCountryCode(value) {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toUpperCase();
@@ -43,9 +45,15 @@ function evaluateGeoFirewall(settings = {}, geoData = {}) {
     return { blocked: false, reason: null, status };
   }
 
-  if (settings.blockSuspiciousSessions) {
+  // Risk rules apply only to risk data from a real source. Without one, the
+  // flags are all false and the score is null, so nothing can be refused as
+  // "suspicious"; the lookup-failure rule above still applies.
+  if (settings.blockSuspiciousSessions && hasRiskData(geoData)) {
     if (geoData.isThreat) {
       return { blocked: true, reason: 'threat_ip', status };
+    }
+    if (geoData.isTor) {
+      return { blocked: true, reason: 'tor_exit_node', status };
     }
     if (geoData.isVpn) {
       return { blocked: true, reason: 'vpn_detected', status };
@@ -56,7 +64,7 @@ function evaluateGeoFirewall(settings = {}, geoData = {}) {
     if (
       settings.enableSecurityScoring !== false &&
       typeof geoData.securityScore === 'number' &&
-      geoData.securityScore < 50
+      geoData.securityScore < REJECT_SCORE_BELOW
     ) {
       return {
         blocked: true,

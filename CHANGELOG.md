@@ -1,3 +1,27 @@
+## [Unreleased]
+
+### Fixed
+
+* **Suspicious sign-in detection was never active, and the admin and README said it was.** The plugin read VPN, proxy and threat flags from a `threat` object that ipapi.co does not send ([ipapi.co API](https://ipapi.co/api/) documents no such field), and it scored every local GeoLite2 result 100. So every flag was `false` and every score 100: "Reject suspicious sign-ins", the suspicious-sign-in email, the VPN or proxy email and the `login.suspicious` team notification could never fire. The dead parsing is removed. ipapi.co and GeoLite2 still provide location data; they no longer pretend to provide risk data.
+* Without a risk data source, lookups report no risk data: the flags stay `false` (same field names), `securityScore` is `null` instead of a fake 100 (or 50 for failed and disabled lookups), `riskLevel` is `'Unknown'` and the new field `riskSource` is `null`. New sessions store `securityScore: null`; a session's `geoLocation` stores `riskSource` when risk data existed.
+* Risk rules and alerts run only on results with a `riskSource`. Flags without one never refuse a sign-in, never send the suspicious-sign-in or VPN or proxy email, and never turn a team notification into `login.suspicious`.
+* **Admin, Configuration:** while no risk data source is set up, "Reject suspicious sign-ins", "Security scoring" and the email types "Suspicious sign-in" and "VPN or proxy" are shown off and disabled with "Needs a risk data source" and a link to Location data. Login protection shows a "No risk data source" notice; Alerts says that `login.suspicious` is never sent. The hints no longer claim ipapi.co detects VPNs or that local results score 100.
+* **Admin, Session details:** without risk data, one "Not available" row with "Set up risk data" replaces the security score, VPN and proxy rows. Sessions recorded before this release show "Not available", because their stored 100 was never a real check.
+* Discord and Slack messages list risk findings only when the sign-in had risk data, and now also name Tor and hosting networks. The `{{reason.securityScore}}` email variable renders `N/A` instead of `0` when there is no score.
+* README: the features table, Session details, the settings table, Location data, Login protection and Alerts describe what needs a risk data source; a new "Risk data (VPN, proxy, Tor)" section explains the previous behaviour.
+
+### Upgrade note
+
+* Saved settings are kept as they are. A risk switch that was on stays stored, has no effect while no risk data source exists, and applies again once one is set up. The admin says "Saved as on. It takes effect once a risk data source is set up."
+* One rule keeps its previous behaviour: with `geoLookupFailureMode: 'auto'` and "Reject suspicious sign-ins" saved as on, a sign-in whose location cannot be determined is still rejected. Choose **Allow sign-in** under Login protection › Advanced › "If the location cannot be determined" to change that.
+* Code that reads `securityScore` must accept `null`. Code that relied on `securityScore: 100` for local results, or on `isVpn`/`isProxy` from ipapi.co, never received real data; check `riskSource` instead.
+* Stored sessions are not rewritten. Their old scores of 100 stay in the database; the admin ignores them because they carry no `riskSource`.
+
+### Tests
+
+* `tests/risk-honesty.test.js`: ipapi.co answers (even with a made-up `threat` object), failed and private lookups carry no score; without a source nothing is suspicious, no risk email or `login.suspicious` webhook is sent, and the new-country alert still works.
+* `tests/admin/risk-honesty.test.jsx` renders the Configuration page and the session details: without a source the risk controls are off, disabled and explained, saved values are kept and nothing is saved; with a source they are live.
+* `tests/geo-firewall.test.js`: flags without a source refuse nothing; the saved reject switch keeps the Automatic fail-closed rule.
 ## [4.14.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.2...v4.14.3) (2026-11-24)
 
 

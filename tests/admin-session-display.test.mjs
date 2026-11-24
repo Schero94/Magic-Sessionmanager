@@ -152,8 +152,12 @@ test('session details never send an IP address on open and never invent security
   );
   assert.match(
     detailSource,
-    /const riskMessage = liveGeo \? RISK_LEVEL_MESSAGES\[liveGeo\.riskLevel\] : null/
+    /const riskMessage = liveGeo\?\.riskSource \? RISK_LEVEL_MESSAGES\[liveGeo\.riskLevel\] : null/
   );
+  // Without a risk source, score, VPN and proxy are one "Not available" row.
+  assert.match(detailSource, /const riskUnavailable = Boolean\(geo\) && !geo\.riskSource;/);
+  assert.match(detailSource, /'modal\.security\.riskUnavailable', 'Not available'/);
+  assert.doesNotMatch(detailSource, /session\.securityScore/, 'no score without its risk source');
   assert.doesNotMatch(detailSource, /securityScore:\s*(?:0|50|100)\b/);
   assert.doesNotMatch(detailSource, /isVpn:\s*false/);
   assert.doesNotMatch(detailSource, /isProxy:\s*false/);

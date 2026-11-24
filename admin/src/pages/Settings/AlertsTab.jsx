@@ -10,7 +10,8 @@ import { fieldHasError } from './settingsTabs.mjs';
 import EmailTemplatesCard from './EmailTemplatesCard';
 import SecretTextInput from './SecretTextInput';
 import { SettingsTabLink } from './SettingsNavigation';
-import { AdvancedSection, IntroText, RequiresNotice } from './SettingsBlocks';
+import { AdvancedSection, IntroText, RequiresNotice, RiskSourceNotice } from './SettingsBlocks';
+import { getRiskAvailability, riskDependentControl } from '../../utils/riskData.mjs';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
 /** Webhook event names (protocol values, not translated). */
@@ -79,15 +80,17 @@ const AlertsTab = ({ form }) => {
   const emailTypesDisabled = lookupOff || !settings.enableEmailAlerts;
   const webhookFieldsDisabled = lookupOff || !settings.enableWebhooks;
   const templateErrors = fieldHasError(errors, 'emailTemplates');
+  const risk = getRiskAvailability(form.geoIp.status);
 
   const emailTypes = [
     {
       field: 'alertOnSuspiciousLogin',
+      needsRiskData: true,
       hintId: hintIds.suspicious,
       label: t('settings.config.email.suspicious.label', 'Suspicious sign-in'),
       hint: t(
         'settings.config.email.suspicious.hint',
-        'VPN, proxy or threat address, or a score below 70 with scoring on.'
+        'VPN, proxy, Tor or hosting address, or a score below 70 with scoring on.'
       ),
     },
     {
@@ -101,11 +104,12 @@ const AlertsTab = ({ form }) => {
     },
     {
       field: 'alertOnVpnProxy',
+      needsRiskData: true,
       hintId: hintIds.vpnProxy,
       label: t('settings.config.email.vpnProxy.label', 'VPN or proxy'),
       hint: t(
         'settings.config.email.vpnProxy.hint',
-        'Needs ipapi.co data; the local database does not detect VPNs or proxies.'
+        'Sign-in from a VPN, or from a public or residential proxy.'
       ),
     },
   ];
@@ -157,21 +161,30 @@ const AlertsTab = ({ form }) => {
           ) : null}
           <EmailTypeGrid>
             <div>
-              {emailTypes.map(({ field, hintId, label, hint }) => (
-                <AlertTypeCell key={field} checked={settings[field]} disabled={emailTypesDisabled}>
-                  <Checkbox
-                    checked={settings[field]}
-                    disabled={emailTypesDisabled}
-                    aria-describedby={hintId}
-                    onCheckedChange={(checked) => handleChange(field, checked === true)}
-                  >
-                    {label}
-                  </Checkbox>
-                  <ReadableText id={hintId} variant="pi" textColor="neutral600" tag="p">
-                    {hint}
-                  </ReadableText>
-                </AlertTypeCell>
-              ))}
+              {emailTypes.map(({ field, needsRiskData, hintId, label, hint }) => {
+                const control = needsRiskData
+                  ? riskDependentControl(settings[field], risk.state)
+                  : { checked: settings[field], disabled: false, savedOnButInactive: false };
+                const disabled = emailTypesDisabled || control.disabled;
+                return (
+                  <AlertTypeCell key={field} checked={control.checked} disabled={disabled}>
+                    <Checkbox
+                      checked={control.checked}
+                      disabled={disabled}
+                      aria-describedby={hintId}
+                      onCheckedChange={(checked) => handleChange(field, checked === true)}
+                    >
+                      {label}
+                    </Checkbox>
+                    <ReadableText id={hintId} variant="pi" textColor="neutral600" tag="p">
+                      {hint}
+                    </ReadableText>
+                    {!lookupOff && control.disabled ? (
+                      <RiskSourceNotice savedOn={control.savedOnButInactive} />
+                    ) : null}
+                  </AlertTypeCell>
+                );
+              })}
             </div>
           </EmailTypeGrid>
         </Flex>
@@ -214,6 +227,15 @@ const AlertsTab = ({ form }) => {
           <RequiresNotice>
             {t('settings.config.requires.webhooks', 'Requires Send team notifications')}
           </RequiresNotice>
+        ) : null}
+        {!lookupOff && risk.state === 'missing' ? (
+          <ReadableText variant="pi" textColor="neutral600" tag="p" data-risk-webhook-note="">
+            {t(
+              'settings.config.webhooks.noRiskData',
+              'Without a risk data source, {suspicious} is never sent.',
+              WEBHOOK_EVENTS
+            )}
+          </ReadableText>
         ) : null}
 
         <EqualGrid columns={2} stackBelow="medium" gap={6}>

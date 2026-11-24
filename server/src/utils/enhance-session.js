@@ -98,6 +98,7 @@ async function enhanceSession(session, opts = {}) {
           city: geoData.city,
           region: geoData.region,
           timezone: geoData.timezone,
+          ...(geoData.riskSource ? { riskSource: geoData.riskSource } : {}),
         };
 
         if (strapi) {
@@ -107,7 +108,7 @@ async function enhanceSession(session, opts = {}) {
               documentId: session.documentId,
               data: {
                 geoLocation,
-                securityScore: geoData.securityScore ?? null,
+                securityScore: geoData.riskSource ? (geoData.securityScore ?? null) : null,
               },
             })
             .catch(() => {

@@ -133,7 +133,13 @@ test('session detail dialog: state sentence, header status, copyable record ID, 
   assert.match(modal, /t\('common\.yes', 'Yes'\)/);
   assert.match(
     modal,
-    /'modal\.security\.scoreNote',\s*'Higher is safer\. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on\. Local database results are always 100\.'/
+    /'modal\.security\.scoreNote',\s*'Higher is safer\. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on\.'/
+  );
+  assert.doesNotMatch(modal, /always 100/, 'no claim of a fixed score');
+  assert.match(
+    unwrapSource(modal),
+    /'modal\.security\.riskUnavailableNote',\s*'Needs a risk data source\./,
+    'without a risk source the dialog says so instead of showing a score'
   );
   assert.doesNotMatch(modal, /'High' : 'Low'/);
   assert.match(modal, /<Modal\.Close>\s*<Button variant="tertiary">/);

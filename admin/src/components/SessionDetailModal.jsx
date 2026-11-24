@@ -30,6 +30,7 @@ import {
   getStoredGeoData,
   interpretLookupResult,
 } from '../utils/sessionSecurity.mjs';
+import { RISK_SETTINGS_PATH } from '../utils/riskData.mjs';
 import { useSessionFormatters } from '../utils/useSessionFormatters';
 import { logSafeAdminError } from '../utils/safeAdminLog.mjs';
 import { getSessionUserLabels, getUserEditPath } from '../pages/Dashboard/dashboardModel.mjs';
@@ -257,33 +258,47 @@ const SessionDetailModal = ({ session, now, onClose, onCloseAutoFocus, onEndSess
     </Typography>
   );
 
-  const score =
-    typeof geo?.securityScore === 'number'
-      ? geo.securityScore
-      : typeof session.securityScore === 'number' && Number.isFinite(session.securityScore)
-        ? session.securityScore
-        : null;
-  const riskMessage = liveGeo ? RISK_LEVEL_MESSAGES[liveGeo.riskLevel] : null;
+  // Score, VPN and proxy count only with a named risk source (riskData.mjs).
+  // Without one they were never checked, so one "Not available" row replaces
+  // a fake 100 and a misleading "No".
+  const score = typeof geo?.securityScore === 'number' ? geo.securityScore : null;
+  const riskUnavailable = Boolean(geo) && !geo.riskSource;
+  const riskMessage = liveGeo?.riskSource ? RISK_LEVEL_MESSAGES[liveGeo.riskLevel] : null;
+  const notAvailable = (
+    <Typography variant="omega" textColor="neutral600">
+      {t('modal.security.riskUnavailable', 'Not available')}
+    </Typography>
+  );
 
   const locationItems = [
     { id: 'country', label: t('modal.security.country', 'Country'), value: geo?.country },
     { id: 'city', label: t('modal.security.city', 'City'), value: geo?.city },
     { id: 'timezone', label: t('modal.security.timezone', 'Time zone'), value: geo?.timezone },
-    {
-      id: 'score',
-      label: t('modal.security.score', 'Security score'),
-      value: score === null ? null : t('modal.security.scoreValue', '{score}/100', { score }),
-    },
-    {
-      id: 'vpn',
-      label: t('modal.security.vpn', 'VPN'),
-      render: liveGeo ? yesNoText(liveGeo.isVpn) : storedGeo ? notStoredForPast : undefined,
-    },
-    {
-      id: 'proxy',
-      label: t('modal.security.proxy', 'Proxy'),
-      render: liveGeo ? yesNoText(liveGeo.isProxy) : storedGeo ? notStoredForPast : undefined,
-    },
+    ...(riskUnavailable
+      ? [
+          {
+            id: 'riskData',
+            label: t('modal.security.riskData', 'VPN, proxy and security score'),
+            render: notAvailable,
+          },
+        ]
+      : [
+          {
+            id: 'score',
+            label: t('modal.security.score', 'Security score'),
+            value: score === null ? null : t('modal.security.scoreValue', '{score}/100', { score }),
+          },
+          {
+            id: 'vpn',
+            label: t('modal.security.vpn', 'VPN'),
+            render: liveGeo ? yesNoText(liveGeo.isVpn) : storedGeo ? notStoredForPast : undefined,
+          },
+          {
+            id: 'proxy',
+            label: t('modal.security.proxy', 'Proxy'),
+            render: liveGeo ? yesNoText(liveGeo.isProxy) : storedGeo ? notStoredForPast : undefined,
+          },
+        ]),
     riskMessage
       ? {
           id: 'risk',
@@ -457,9 +472,22 @@ const SessionDetailModal = ({ session, now, onClose, onCloseAutoFocus, onEndSess
                 <Typography variant="pi" textColor="neutral600" data-score-note="">
                   {t(
                     'modal.security.scoreNote',
-                    'Higher is safer. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on. Local database results are always 100.'
+                    'Higher is safer. Below 70 can trigger a suspicious-sign-in email and below 50 a rejection, if those settings are on.'
                   )}
                 </Typography>
+              ) : null}
+              {riskUnavailable ? (
+                <Flex direction="column" alignItems="flex-start" gap={1} data-risk-unavailable="">
+                  <Typography variant="pi" textColor="neutral600">
+                    {t(
+                      'modal.security.riskUnavailableNote',
+                      'Needs a risk data source. Location data alone cannot tell VPNs, proxies or Tor apart, so no score was calculated.'
+                    )}
+                  </Typography>
+                  <TargetLink tag={NavLink} to={RISK_SETTINGS_PATH}>
+                    {t('modal.security.riskSetup', 'Set up risk data')}
+                  </TargetLink>
+                </Flex>
               ) : null}
               {lookupControls}
             </DetailSection>

@@ -1,4 +1,5 @@
 import { presentText } from './missingValue.mjs';
+import { isRiskSource } from './riskData.mjs';
 
 /**
  * Location and security presentation for the session detail modal. The
@@ -71,10 +72,16 @@ const booleanOrNull = (value) => (typeof value === 'boolean' ? value : null);
  * dropped (no emoji in the admin UI). The risk level comes only from the
  * record itself; a score is never mapped to a level on the client.
  *
+ * Score, risk level and VPN/proxy flags count only when the record names a
+ * risk source (`riskSource`). Without one they were never checked (location
+ * providers have no such data), so they are null and the dialog says "Not
+ * available" instead of a fake 100 or "No".
+ *
  * @param {object|null|undefined} geo Geolocation record.
  * @param {{securityScore?: unknown}} [fallback] Session-level score when the record has none.
  * @returns {null|{
  *   country: string, city: string, timezone: string,
+ *   riskSource: string|null,
  *   securityScore: number|null, riskLevel: string,
  *   isVpn: boolean|null, isProxy: boolean|null,
  * }} Display facts, or null without any location fact.
@@ -86,24 +93,29 @@ export function normalizeGeoData(geo, fallback = {}) {
   const timezone = presentText(geo.timezone);
   if (!country && !city && !timezone) return null;
 
+  const riskSource = isRiskSource(geo.riskSource) ? geo.riskSource : null;
   const rawScore =
     typeof geo.securityScore === 'number' ? geo.securityScore : fallback?.securityScore;
-  const securityScore = typeof rawScore === 'number' && Number.isFinite(rawScore) ? rawScore : null;
+  const securityScore =
+    riskSource && typeof rawScore === 'number' && Number.isFinite(rawScore) ? rawScore : null;
 
   return {
     country,
     city,
     timezone,
+    riskSource,
     securityScore,
-    riskLevel: normalizeRiskLevel(geo.riskLevel),
-    isVpn: booleanOrNull(geo.isVpn),
-    isProxy: booleanOrNull(geo.isProxy),
+    riskLevel: riskSource ? normalizeRiskLevel(geo.riskLevel) : '',
+    isVpn: riskSource ? booleanOrNull(geo.isVpn) : null,
+    isProxy: riskSource ? booleanOrNull(geo.isProxy) : null,
   };
 }
 
 /**
  * Reads the geolocation stored on a session row (object or JSON string).
- * The security score lives on the session itself. Risk level, VPN and proxy
+ * The security score lives on the session itself and counts only when the
+ * stored record names its risk source; rows written before risk sources
+ * existed carry a meaningless 100 and show "Not available". Risk level, VPN and proxy
  * flags are not stored for past sign-ins, so they stay empty here and the
  * dialog says so instead of showing "No" (IA D2.6).
  *

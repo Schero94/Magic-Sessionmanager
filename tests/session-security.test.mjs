@@ -48,15 +48,31 @@ test('geo data keeps missing facts missing and never invents security values', (
     isVpn: false,
     isProxy: false,
   });
+  // No risk source: the record's score, level and flags were never checked.
   assert.deepEqual(local, {
     country: 'Local Network',
     city: 'Localhost',
     timezone: 'Europe/Berlin',
-    securityScore: 100,
-    riskLevel: 'none',
-    isVpn: false,
-    isProxy: false,
+    riskSource: null,
+    securityScore: null,
+    riskLevel: '',
+    isVpn: null,
+    isProxy: null,
   });
+
+  const checked = normalizeGeoData({
+    country: 'Germany',
+    securityScore: 70,
+    riskLevel: 'Medium',
+    isVpn: true,
+    isProxy: false,
+    riskSource: 'anonymous-ip',
+  });
+  assert.equal(checked.riskSource, 'anonymous-ip');
+  assert.equal(checked.securityScore, 70);
+  assert.equal(checked.riskLevel, 'medium');
+  assert.equal(checked.isVpn, true);
+  assert.equal(checked.isProxy, false);
 
   const partial = normalizeGeoData({ country_code: 'DE', city: 'unknown' });
   assert.equal(partial.country, 'DE');
@@ -76,12 +92,18 @@ test('stored location trusts only the session score and has no VPN, proxy or ris
       riskLevel: 'None',
       isVpn: true,
       isProxy: false,
+      riskSource: 'anonymous-ip',
     }),
   });
   assert.equal(stored.securityScore, 30);
+  assert.equal(stored.riskSource, 'anonymous-ip');
   assert.equal(stored.riskLevel, '', 'risk level only from a live lookup');
   assert.equal(stored.isVpn, null, 'shown as "Not stored for past sign-ins"');
   assert.equal(stored.isProxy, null);
+  // Rows written before risk sources existed carry a fake 100: not available.
+  const legacy = getStoredGeoData({ securityScore: 100, geoLocation: { country: 'Germany' } });
+  assert.equal(legacy.securityScore, null);
+  assert.equal(legacy.riskSource, null);
   assert.equal(getStoredGeoData({ geoLocation: '{not json' }), null);
   assert.equal(getStoredGeoData({}), null);
 });
@@ -98,6 +120,7 @@ test('on-demand lookup results: ok, lookup off, or could not be determined (deci
       riskLevel: 'Low',
       isVpn: true,
       isProxy: false,
+      riskSource: 'anonymous-ip',
     },
   });
   assert.equal(ok.status, 'ok');
@@ -116,6 +139,14 @@ test('on-demand lookup results: ok, lookup off, or could not be determined (deci
     },
   });
   assert.deepEqual(disabled, { status: 'disabled', geo: null });
+
+  // A location-only answer (ipapi.co, GeoLite2) has no risk data.
+  const locationOnly = interpretLookupResult({
+    data: { _status: 'ok', country: 'Germany', securityScore: 100, isVpn: false },
+  });
+  assert.equal(locationOnly.status, 'ok');
+  assert.equal(locationOnly.geo.securityScore, null);
+  assert.equal(locationOnly.geo.isVpn, null);
 
   assert.deepEqual(interpretLookupResult({ data: { _status: 'private', country: 'Local' } }), {
     status: 'failed',

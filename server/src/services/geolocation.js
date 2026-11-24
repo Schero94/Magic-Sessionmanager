@@ -14,6 +14,7 @@ const path = require('node:path');
 const { getPluginSettings } = require('../utils/settings-loader');
 const { getCoordinator, hashedKey } = require('../utils/coordination');
 const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
+const { calculateSecurityScore, getRiskLevel, noRiskData } = require('../utils/risk-data');
 
 const GEO_API_TIMEOUT_MS = 4000;
 const IPAPI_SUCCESS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -330,14 +331,8 @@ function normalizeLocalCountryResult(data, lookupIp, getCountryFlag) {
     asn: null,
     network: data.traits?.network || null,
 
-    isVpn: false,
-    isProxy: false,
-    isThreat: false,
-    isAnonymous: false,
-    isTor: false,
-
-    securityScore: 100,
-    riskLevel: 'Low',
+    // A location database has no VPN, proxy or Tor data: no risk data here.
+    ...noRiskData(),
 
     _status: 'ok',
     _source: 'local-mmdb',
@@ -367,14 +362,8 @@ function normalizeLocalCityResult(data, lookupIp, getCountryFlag) {
     asn: null,
     network: data.traits?.network || null,
 
-    isVpn: false,
-    isProxy: false,
-    isThreat: false,
-    isAnonymous: false,
-    isTor: false,
-
-    securityScore: 100,
-    riskLevel: 'Low',
+    // A location database has no VPN, proxy or Tor data: no risk data here.
+    ...noRiskData(),
 
     _status: 'ok',
     _source: 'local-mmdb',
@@ -512,10 +501,7 @@ module.exports = ({ strapi }) => ({
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         latitude: null,
         longitude: null,
-        isVpn: false,
-        isProxy: false,
-        isThreat: false,
-        securityScore: 100,
+        ...noRiskData(),
         riskLevel: 'None',
         _status: 'private',
         _source: 'local',
@@ -749,25 +735,9 @@ module.exports = ({ strapi }) => ({
           org: data.org,
           asn: data.asn,
 
-          isVpn: data.threat?.is_vpn || false,
-          isProxy: data.threat?.is_proxy || false,
-          isThreat: data.threat?.is_threat || false,
-          isAnonymous: data.threat?.is_anonymous || false,
-          isTor: data.threat?.is_tor || false,
-
-          securityScore: this.calculateSecurityScore({
-            isVpn: data.threat?.is_vpn,
-            isProxy: data.threat?.is_proxy,
-            isThreat: data.threat?.is_threat,
-            isAnonymous: data.threat?.is_anonymous,
-            isTor: data.threat?.is_tor,
-          }),
-
-          riskLevel: this.getRiskLevel({
-            isVpn: data.threat?.is_vpn,
-            isProxy: data.threat?.is_proxy,
-            isThreat: data.threat?.is_threat,
-          }),
+          // ipapi.co documents no VPN, proxy or threat fields
+          // (https://ipapi.co/api/), so its answer carries no risk data.
+          ...noRiskData(),
 
           _status: 'ok',
           _source: 'ipapi',
@@ -806,26 +776,17 @@ module.exports = ({ strapi }) => ({
    * @param {object} flags
    * @returns {number}
    */
-  calculateSecurityScore({ isVpn, isProxy, isThreat, isAnonymous, isTor }) {
-    let score = 100;
-    if (isTor) score -= 50;
-    if (isThreat) score -= 40;
-    if (isVpn) score -= 20;
-    if (isProxy) score -= 15;
-    if (isAnonymous) score -= 10;
-    return Math.max(0, score);
+  calculateSecurityScore(flags) {
+    return calculateSecurityScore(flags || {});
   },
 
   /**
-   * Maps threat indicators to a human-readable risk level.
+   * Maps risk indicators to a human-readable risk level.
    * @param {object} flags
    * @returns {string}
    */
-  getRiskLevel({ isVpn, isProxy, isThreat }) {
-    if (isThreat) return 'High';
-    if (isVpn && isProxy) return 'Medium-High';
-    if (isVpn || isProxy) return 'Medium';
-    return 'Low';
+  getRiskLevel(flags) {
+    return getRiskLevel(flags || {});
   },
 
   /**
@@ -882,11 +843,7 @@ module.exports = ({ strapi }) => ({
       timezone: 'Unknown',
       latitude: null,
       longitude: null,
-      isVpn: false,
-      isProxy: false,
-      isThreat: false,
-      securityScore: 50,
-      riskLevel: 'Unknown',
+      ...noRiskData(),
       _status: reason,
       _source: source,
       _reason: detail,

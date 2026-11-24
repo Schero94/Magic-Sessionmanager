@@ -409,12 +409,15 @@ test('dependent fields stay visible, are disabled and say what they require (IA 
 
   const login = readSettingsFile('LoginProtectionTab.jsx');
   assert.match(login, /const lookupOff = !settings\.enableGeolocation/);
-  for (const id of ['block-suspicious-sessions', 'enable-geofencing']) {
+  for (const [id, disabled] of [
+    ['block-suspicious-sessions', /disabled=\{lookupOff \|\| reject\.disabled\}/],
+    ['enable-geofencing', /disabled=\{lookupOff\}/],
+  ]) {
     const row =
       login.match(
         new RegExp(`<SettingsToggleRow\\s+id="${id}"[\\s\\S]*?(?:\\/>|<\\/SettingsToggleRow>)`)
       )?.[0] || '';
-    assert.match(row, /disabled=\{lookupOff\}/, id);
+    assert.match(row, disabled, id);
   }
   assert.equal(
     (login.match(/\{lookupOff \? <RequiresGeolocation \/> : null\}/g) || []).length,
@@ -430,14 +433,14 @@ test('dependent fields stay visible, are disabled and say what they require (IA 
   );
   assert.match(alerts, /id="enable-email-alerts"[\s\S]*?disabled=\{lookupOff\}/);
   assert.match(alerts, /id="enable-webhooks"[\s\S]*?disabled=\{lookupOff\}/);
-  assert.match(alerts, /disabled=\{emailTypesDisabled\}/);
+  assert.match(alerts, /const disabled = emailTypesDisabled \|\| control\.disabled;/);
   assert.match(alerts, /settings\.config\.requires\.emailAlerts', 'Requires Send security emails'/);
   assert.match(alerts, /settings\.config\.requires\.webhooks', 'Requires Send team notifications'/);
 
   const location = readSettingsFile('LocationDataTab.jsx');
   assert.match(
     location,
-    /id="enable-security-scoring"[\s\S]*?disabled=\{!settings\.enableGeolocation\}/
+    /id="enable-security-scoring"[\s\S]*?disabled=\{!settings\.enableGeolocation \|\| scoring\.disabled\}/
   );
   assert.match(
     location,
