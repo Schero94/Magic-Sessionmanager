@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.14.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.2...v4.14.3) (2026-11-24)
+
+
+### Bug Fixes
+
+* **admin:** space row actions like Strapi's own tables ([#32](https://github.com/Schero94/Magic-Sessionmanager/issues/32)) ([1c5cadc](https://github.com/Schero94/Magic-Sessionmanager/commit/1c5cadcc3d1f71c689b0ebc5741442744c33efe0))
+
 
 ### Fixed
 
