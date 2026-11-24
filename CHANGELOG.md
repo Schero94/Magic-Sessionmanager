@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.15.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.3...v4.15.0) (2026-11-24)
+
+
+### Features
+
+* honest risk data and VPN, proxy, Tor and hosting detection with local MaxMind databases ([#33](https://github.com/Schero94/Magic-Sessionmanager/issues/33)) ([80e1e7e](https://github.com/Schero94/Magic-Sessionmanager/commit/80e1e7e988f048b4716dfd0dc8487cef4cec37cd))
+
 
 Release type: minor (`feat` for the new risk data source, `fix` for the honest UI). No breaking change for the HTTP API or stored settings; see the upgrade note for `securityScore: null`.
 
@@ -39,6 +45,7 @@ Release type: minor (`feat` for the new risk data source, `fix` for the honest U
 * `tests/risk-honesty.test.js`: ipapi.co answers (even with a made-up `threat` object), failed and private lookups carry no score; without a source nothing is suspicious, no risk email or `login.suspicious` webhook is sent, and the new-country alert still works.
 * `tests/admin/risk-honesty.test.jsx` renders the Configuration page and the session details: without a source the risk controls are off, disabled and explained, saved values are kept and nothing is saved; with a source they are live.
 * `tests/geo-firewall.test.js`: flags without a source refuse nothing; the saved reject switch keeps the Automatic fail-closed rule.
+
 ## [4.14.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.2...v4.14.3) (2026-11-24)
 
 
