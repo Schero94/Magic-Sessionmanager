@@ -690,11 +690,50 @@ test('login sends the dedicated VPN alert when enabled', async () => {
     isProxy: false,
     isThreat: false,
     securityScore: 80,
+    riskSource: 'anonymous-ip',
   };
   await strapi.middleware[0](ctx, () => ctx.downstream());
 
   assert.equal(ctx.status, 200);
   assert.equal(vpnAlerts, 1);
+});
+
+test('login sends no VPN alert for flags without a risk data source', async () => {
+  let vpnAlerts = 0;
+  const sessionService = {
+    createSession: async (data) => ({ documentId: 'session-no-risk', ...data }),
+  };
+  const notifications = {
+    sendVpnProxyAlert: async () => {
+      vpnAlerts++;
+      return true;
+    },
+  };
+  const strapi = createStrapi({
+    sessionService,
+    notifications,
+    settings: {
+      enableEmailAlerts: true,
+      alertOnSuspiciousLogin: false,
+      alertOnNewLocation: false,
+      alertOnVpnProxy: true,
+    },
+  });
+  bootstrap.__private.mountLoginInterceptor({ strapi, log: strapi.log, sessionService });
+
+  const ctx = createContext({
+    path: '/api/auth/local',
+    body: {
+      jwt: 'no-risk-access',
+      user: { documentId: 'user-no-risk', email: 'user@example.com' },
+    },
+  });
+  // A location-only result: the flags were never checked.
+  ctx.state.__magicSessionGeoData = { _status: 'ok', isVpn: true, securityScore: null };
+  await strapi.middleware[0](ctx, () => ctx.downstream());
+
+  assert.equal(ctx.status, 200);
+  assert.equal(vpnAlerts, 0);
 });
 
 test('pre-login GeoIP guard fails closed when lookup throws in block mode', async () => {

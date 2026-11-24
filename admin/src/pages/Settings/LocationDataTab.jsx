@@ -3,7 +3,9 @@ import { SectionCard } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import GeoIpDatabaseCard from './GeoIpDatabaseCard';
-import { IntroText, RequiresNotice } from './SettingsBlocks';
+import RiskDataCard from './RiskDataCard';
+import { IntroText, RequiresNotice, RiskSourceNotice } from './SettingsBlocks';
+import { getRiskAvailability, riskDependentControl } from '../../utils/riskData.mjs';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
 /**
@@ -17,6 +19,8 @@ import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 const LocationDataTab = ({ form }) => {
   const { t } = useSettingsTranslate();
   const { settings, handleChange } = form;
+  const risk = getRiskAvailability(form.geoIp.status);
+  const scoring = riskDependentControl(settings.enableSecurityScoring, risk.state);
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
@@ -58,21 +62,25 @@ const LocationDataTab = ({ form }) => {
           title={t('settings.config.lookup.scoring.label', 'Security scoring')}
           description={t(
             'settings.config.lookup.scoring.hint',
-            'Applies the score thresholds: below 70 triggers a suspicious-sign-in email, below 50 a rejection if enabled. Local database results always score 100.'
+            'Applies the score thresholds: below 70 triggers a suspicious-sign-in email, below 50 a rejection if enabled.'
           )}
-          checked={settings.enableSecurityScoring}
-          disabled={!settings.enableGeolocation}
+          checked={scoring.checked}
+          disabled={!settings.enableGeolocation || scoring.disabled}
           onChange={(checked) => handleChange('enableSecurityScoring', checked)}
         >
           {!settings.enableGeolocation ? (
             <RequiresNotice>
               {t('settings.config.requires.geolocation', 'Requires IP location lookup')}
             </RequiresNotice>
+          ) : scoring.disabled ? (
+            <RiskSourceNotice savedOn={scoring.savedOnButInactive} tab={null} />
           ) : null}
         </SettingsToggleRow>
       </SectionCard>
 
       <GeoIpDatabaseCard form={form} />
+
+      <RiskDataCard form={form} />
     </Flex>
   );
 };

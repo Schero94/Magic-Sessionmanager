@@ -826,8 +826,33 @@ test('createSession preserves a valid security score of zero', async () => {
   await service.createSession({
     userId: 'user-zero',
     token: 'access-zero',
-    geoData: { securityScore: 0 },
+    geoData: { securityScore: 0, riskSource: 'anonymous-ip' },
   });
 
   assert.equal(createdData.securityScore, 0);
+  assert.equal(createdData.geoLocation.riskSource, 'anonymous-ip');
+});
+
+test('createSession stores no score without a risk data source', async () => {
+  let createdData;
+  const strapi = {
+    documents: () => ({
+      create: async ({ data }) => {
+        createdData = data;
+        return { documentId: 'session-no-risk', ...data };
+      },
+    }),
+    log: createLogger(),
+  };
+
+  const service = createSessionService({ strapi });
+  await service.createSession({
+    userId: 'user-no-risk',
+    token: 'access-no-risk',
+    // A pre-fix lookup result: a fake 100 without a source.
+    geoData: { country: 'Germany', securityScore: 100 },
+  });
+
+  assert.equal(createdData.securityScore, null);
+  assert.equal('riskSource' in createdData.geoLocation, false);
 });

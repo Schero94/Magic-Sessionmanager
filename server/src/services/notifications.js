@@ -9,6 +9,30 @@
  * prevent XSS via user-controlled inputs (user-agent, geo data, etc.).
  */
 
+const { hasRiskData } = require('../utils/risk-data');
+
+/**
+ * Risk labels for a webhook message. Empty without risk data from a real
+ * source, so a message never claims a check that did not happen.
+ *
+ * @param {object} geoData Lookup result of the sign-in.
+ * @returns {string[]} Labels such as 'VPN' or 'Hosting (ASN heuristic)'.
+ */
+function getRiskWarnings(geoData) {
+  if (!hasRiskData(geoData)) return [];
+  const warnings = [];
+  if (geoData.isVpn) warnings.push('VPN');
+  if (geoData.isProxy) warnings.push('Proxy');
+  if (geoData.isTor) warnings.push('Tor');
+  if (geoData.isHosting) {
+    warnings.push(
+      geoData.riskSource === 'asn-heuristic' ? 'Hosting (ASN heuristic)' : 'Hosting provider'
+    );
+  }
+  if (geoData.isThreat) warnings.push('Threat');
+  return warnings;
+}
+
 const ALLOWED_WEBHOOK_HOSTS = ['discord.com', 'discordapp.com', 'hooks.slack.com'];
 
 const WEBHOOK_TIMEOUT_MS = 5000;
@@ -149,9 +173,10 @@ module.exports = ({ strapi }) => ({
     result = result.replace(/\{\{reason\.isVpn\}\}/g, data.reason?.isVpn ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isProxy\}\}/g, data.reason?.isProxy ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isThreat\}\}/g, data.reason?.isThreat ? 'Yes' : 'No');
+    const score = data.reason?.securityScore;
     result = result.replace(
       /\{\{reason\.securityScore\}\}/g,
-      esc(String(data.reason?.securityScore || '0'))
+      esc(typeof score === 'number' && Number.isFinite(score) ? String(score) : 'N/A')
     );
 
     return result;
@@ -355,11 +380,8 @@ module.exports = ({ strapi }) => ({
         text: `*Location*\n${locationFlag}${geoData.city || '?'}, ${geoData.country || '?'}`,
       });
 
-      if (geoData.isVpn || geoData.isProxy || geoData.isThreat) {
-        const warnings = [];
-        if (geoData.isVpn) warnings.push('VPN');
-        if (geoData.isProxy) warnings.push('Proxy');
-        if (geoData.isThreat) warnings.push('Threat');
+      const warnings = getRiskWarnings(geoData);
+      if (warnings.length > 0) {
         fields.push({
           type: 'mrkdwn',
           text: `*Security*\n${warnings.join(', ')} — score ${geoData.securityScore ?? '-'}/100`,
@@ -430,12 +452,8 @@ module.exports = ({ strapi }) => ({
         inline: true,
       });
 
-      if (geoData.isVpn || geoData.isProxy || geoData.isThreat) {
-        const warnings = [];
-        if (geoData.isVpn) warnings.push('VPN');
-        if (geoData.isProxy) warnings.push('Proxy');
-        if (geoData.isThreat) warnings.push('Threat');
-
+      const warnings = getRiskWarnings(geoData);
+      if (warnings.length > 0) {
         embed.fields.push({
           name: '[WARNING] Security',
           value: `${warnings.join(', ')} detected\nScore: ${geoData.securityScore}/100`,

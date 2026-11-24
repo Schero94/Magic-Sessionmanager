@@ -55,6 +55,35 @@ export const RequiresGeolocation = () => {
 };
 
 /**
+ * Says why a risk-dependent control is off: it needs a risk data source
+ * (VPN, proxy and Tor data), which location data alone does not provide.
+ * When the saved value is on, it also says that the value is kept and takes
+ * effect once a source exists, so an upgrade never silently loses a choice.
+ *
+ * @param {{ savedOn?: boolean, tab?: string|null }} props Saved state and the
+ *   tab that sets up risk data (null when the notice is already on that tab).
+ * @returns {import('react').ReactElement} Requirement lines.
+ */
+export const RiskSourceNotice = ({ savedOn = false, tab = 'location-data' }) => {
+  const { t } = useSettingsTranslate();
+  return (
+    <Flex direction="column" alignItems="flex-start" gap={1} data-risk-source-notice="">
+      <RequiresNotice tab={tab || undefined}>
+        {t('settings.config.requires.riskData', 'Needs a risk data source')}
+      </RequiresNotice>
+      {savedOn ? (
+        <Typography variant="pi" textColor="neutral600" tag="p">
+          {t(
+            'settings.config.requires.riskData.savedOn',
+            'Saved as on. It takes effect once a risk data source is set up.'
+          )}
+        </Typography>
+      ) : null}
+    </Flex>
+  );
+};
+
+/**
  * The DS accordion marks keyboard focus only with a faint border tint. The
  * trigger gets the same 2 px primary focus ring as other DS controls; the
  * styled trigger receives the class itself, no DS markup is selected (SET-17).

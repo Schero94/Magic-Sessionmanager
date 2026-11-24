@@ -1,3 +1,44 @@
+## [Unreleased]
+
+Release type: minor (`feat` for the new risk data source, `fix` for the honest UI). No breaking change for the HTTP API or stored settings; see the upgrade note for `securityScore: null`.
+
+### Added
+
+* **Real risk data from a local MaxMind database.** Configuration › Location data › **Risk data (VPN, proxy, Tor)** downloads, with the existing MaxMind credentials, either the **GeoIP2 Anonymous IP** database (paid: VPN, public and residential proxies, Tor exit nodes, hosting providers) or the free **GeoLite2 ASN** database, used as a clearly labelled **heuristic** for large hosting and cloud networks only. Lookups are local through the installed `@maxmind/geoip2-node` (`anonymousIP()`, `asn()`); no IP address leaves the server and the license key never reaches the browser.
+* With a risk source, "Reject suspicious sign-ins" refuses Tor exit nodes (`tor_exit_node`), VPNs and proxies, and scores below 50; hosting networks raise the suspicious-sign-in email and `login.suspicious` but are never refused. The VPN or proxy email fires for VPNs and proxies. Risk data is evaluated even when the location lookup itself failed.
+* Lookup results add `isTor`, `isHosting`, `isAnonymous`, `isPublicProxy`, `isResidentialProxy` and `riskSource`; the existing names (`isVpn`, `isProxy`, `isThreat`, `securityScore`, `riskLevel`) keep their meaning. With the ASN database, `asn` and `org` are filled when the location provider gave none.
+* `GET /magic-sessionmanager/geoip/status` reports `risk` (`available`, `source`, and per database `editionId`, `exists`, `usable`, `fromEnvironment`, `metadata`). `POST /magic-sessionmanager/geoip/update` accepts `database: 'location' | 'anonymous-ip' | 'asn'` (default `location`, anything else 400). A 401 or 403 from MaxMind answers 502 with "MaxMind refused the download. Check the credentials and that your account includes this database."
+* The CLI updater accepts `MAXMIND_EDITION_ID=GeoIP2-Anonymous-IP` and `GeoLite2-ASN`; risk databases always go to their own file in `data/magic-sessionmanager/geoip/` and cannot be selected as the location database. New environment variables `MAGIC_SESSIONMANAGER_ANONYMOUS_IP_DATABASE` and `MAGIC_SESSIONMANAGER_ASN_DATABASE` point at existing files instead.
+* Session details show "Hosting network" for live lookups, "Not available" for VPN and proxy when only the ASN heuristic answered, and a note on heuristic scores.
+* MaxMind database readers watch their file without keeping the Node.js process alive.
+
+### Fixed
+
+* **Suspicious sign-in detection was never active, and the admin and README said it was.** The plugin read VPN, proxy and threat flags from a `threat` object that ipapi.co does not send ([ipapi.co API](https://ipapi.co/api/) documents no such field), and it scored every local GeoLite2 result 100. So every flag was `false` and every score 100: "Reject suspicious sign-ins", the suspicious-sign-in email, the VPN or proxy email and the `login.suspicious` team notification could never fire. The dead parsing is removed. ipapi.co and GeoLite2 still provide location data; they no longer pretend to provide risk data.
+* Without a risk data source, lookups report no risk data: the flags stay `false` (same field names), `securityScore` is `null` instead of a fake 100 (or 50 for failed and disabled lookups), `riskLevel` is `'Unknown'` and the new field `riskSource` is `null`. New sessions store `securityScore: null`; a session's `geoLocation` stores `riskSource` when risk data existed.
+* Risk rules and alerts run only on results with a `riskSource`. Flags without one never refuse a sign-in, never send the suspicious-sign-in or VPN or proxy email, and never turn a team notification into `login.suspicious`.
+* **Admin, Configuration:** while no risk data source is set up, "Reject suspicious sign-ins", "Security scoring" and the email types "Suspicious sign-in" and "VPN or proxy" are shown off and disabled with "Needs a risk data source" and a link to Location data. Login protection shows a "No risk data source" notice; Alerts says that `login.suspicious` is never sent. The hints no longer claim ipapi.co detects VPNs or that local results score 100.
+* **Admin, Session details:** without risk data, one "Not available" row with "Set up risk data" replaces the security score, VPN and proxy rows. Sessions recorded before this release show "Not available", because their stored 100 was never a real check.
+* Discord and Slack messages list risk findings only when the sign-in had risk data, and now also name Tor and hosting networks. The `{{reason.securityScore}}` email variable renders `N/A` instead of `0` when there is no score.
+* README: the features table, Session details, the settings table, Location data, Login protection and Alerts describe what needs a risk data source; a new "Risk data (VPN, proxy, Tor)" section explains the previous behaviour.
+
+* **A custom "Database file name" was never found.** The reader resolved `geoIpDatabasePath` (for example `GeoLite2-Country.mmdb`) against the Strapi folder, while the admin and CLI downloads write it to `data/magic-sessionmanager/geoip/`. A file name is now read from that folder first; a file in the Strapi folder is still found for older setups, and absolute paths are unchanged. The settings API keeps refusing `..` and folder names with a field error on `geoIpDatabasePath`.
+
+### Upgrade note
+
+* Saved settings are kept as they are. A risk switch that was on stays stored, has no effect while no risk data source exists, and applies again once one is set up. The admin says "Saved as on. It takes effect once a risk data source is set up."
+* Nothing changes until you add a risk database. **Check your switches before you download one:** a "Reject suspicious sign-ins" saved as on starts refusing VPN, proxy and Tor sign-ins as soon as the database is present, and the suspicious-sign-in and VPN or proxy emails (on by default once "Send security emails" is on) start to be sent.
+* One rule keeps its previous behaviour: with `geoLookupFailureMode: 'auto'` and "Reject suspicious sign-ins" saved as on, a sign-in whose location cannot be determined is still rejected. Choose **Allow sign-in** under Login protection › Advanced › "If the location cannot be determined" to change that.
+* Code that reads `securityScore` must accept `null`. Code that relied on `securityScore: 100` for local results, or on `isVpn`/`isProxy` from ipapi.co, never received real data; check `riskSource` instead.
+* Stored sessions are not rewritten. Their old scores of 100 stay in the database; the admin ignores them because they carry no `riskSource`.
+
+### Tests
+
+* `tests/geolocation-database-path.test.js` (regression, fails before the fix): a custom file name is read from the GeoIP folder, the Strapi-folder fallback and absolute paths still work, a missing file is reported for the GeoIP folder, and `..` or folder names are refused with a `geoIpDatabasePath` field error.
+* `tests/risk-databases.test.js` reads synthetic MMDB fixtures (written by `tests/helpers/mmdb-writer.js`; no MaxMind data is shipped) with the real `@maxmind/geoip2-node` reader: VPN, Tor, hosting, public and residential proxy and a clean address; the ASN heuristic; both databases; a wrong database type; the status report; and full sign-ins where the reject rule, the VPN and suspicious emails (through the real notification service) and the `login.suspicious` Discord post actually fire. Also the download routing, the fixed refusal message and that a location setting cannot select a risk file.
+* `tests/risk-honesty.test.js`: ipapi.co answers (even with a made-up `threat` object), failed and private lookups carry no score; without a source nothing is suspicious, no risk email or `login.suspicious` webhook is sent, and the new-country alert still works.
+* `tests/admin/risk-honesty.test.jsx` renders the Configuration page and the session details: without a source the risk controls are off, disabled and explained, saved values are kept and nothing is saved; with a source they are live.
+* `tests/geo-firewall.test.js`: flags without a source refuse nothing; the saved reject switch keeps the Automatic fail-closed rule.
 ## [4.14.3](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.14.2...v4.14.3) (2026-11-24)
 
 

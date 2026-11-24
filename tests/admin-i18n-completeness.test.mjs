@@ -170,6 +170,9 @@ const SAME_AS_ENGLISH = {
     '{minutes} min',
     // Strapi's own role name, shown untranslated in every admin language.
     'Super Admin',
+    // MaxMind product names (https://dev.maxmind.com/geoip/docs/databases/anonymous-ip/).
+    'GeoIP2 Anonymous IP',
+    'Anonymous IP',
   ]),
   de: new Set([
     'Status',

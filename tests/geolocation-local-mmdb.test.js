@@ -95,7 +95,10 @@ test('local-mmdb provider returns normalized country data without remote fetch',
         assert.equal(result.country, 'Germany');
         assert.equal(result.isVpn, false);
         assert.equal(result.isProxy, false);
-        assert.equal(result.securityScore, 100);
+        // A location database has no risk data: no fake score of 100.
+        assert.equal(result.securityScore, null);
+        assert.equal(result.riskSource, null);
+        assert.equal(result.riskLevel, 'Unknown');
         assert.deepEqual(openCalls, [dbPath]);
       }
     );

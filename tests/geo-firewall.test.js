@@ -77,9 +77,57 @@ test('VPN blocking is independent from the email alert toggle', () => {
       blockSuspiciousSessions: true,
       alertOnVpnProxy: false,
     },
-    { _status: 'ok', isVpn: true }
+    { _status: 'ok', isVpn: true, riskSource: 'anonymous-ip' }
   );
 
   assert.equal(decision.blocked, true);
   assert.equal(decision.reason, 'vpn_detected');
+});
+
+test('risk flags without a risk data source never refuse a sign-in', () => {
+  const settings = { blockSuspiciousSessions: true, enableSecurityScoring: true };
+  for (const geoData of [
+    { _status: 'ok', isVpn: true },
+    { _status: 'ok', isThreat: true, securityScore: 10 },
+    { _status: 'ok', securityScore: null, riskSource: null },
+    { _status: 'ok', isProxy: true, riskSource: 'made-up' },
+  ]) {
+    assert.deepEqual(evaluateGeoFirewall(settings, geoData), {
+      blocked: false,
+      reason: null,
+      status: 'ok',
+    });
+  }
+});
+
+test('a saved reject switch keeps the Automatic fail-closed rule without a risk source', () => {
+  // Upgrade compatibility: the lookup-failure rule does not depend on risk data.
+  const decision = evaluateGeoFirewall({ blockSuspiciousSessions: true }, { _status: 'error' });
+  assert.equal(decision.blocked, true);
+  assert.equal(decision.reason, 'geo_lookup_unavailable:error');
+});
+
+test('risk data from a source refuses Tor, VPN, proxy and low scores but not hosting', () => {
+  const settings = { blockSuspiciousSessions: true };
+  const base = { _status: 'ok', riskSource: 'anonymous-ip', securityScore: 100 };
+  assert.equal(
+    evaluateGeoFirewall(settings, { ...base, isTor: true, securityScore: 40 }).reason,
+    'tor_exit_node'
+  );
+  assert.equal(
+    evaluateGeoFirewall(settings, { ...base, isProxy: true, securityScore: 75 }).reason,
+    'proxy_detected'
+  );
+  assert.equal(
+    evaluateGeoFirewall(settings, { ...base, securityScore: 45 }).reason,
+    'low_security_score:45'
+  );
+  assert.equal(
+    evaluateGeoFirewall(settings, { ...base, isHosting: true, securityScore: 70 }).blocked,
+    false
+  );
+  assert.equal(
+    evaluateGeoFirewall({ blockSuspiciousSessions: false }, { ...base, isVpn: true }).blocked,
+    false
+  );
 });
