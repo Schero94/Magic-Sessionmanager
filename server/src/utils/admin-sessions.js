@@ -33,6 +33,7 @@
  */
 
 const { z } = require('@strapi/utils');
+const { hashDeviceId } = require('./admin-request-info');
 
 const ADMIN_ORIGIN = 'admin';
 const SESSION_UID = 'admin::session';
@@ -587,8 +588,9 @@ class AdminSignOutError extends Error {
  * @returns {Promise<{ended: number, signedOutSelf: boolean, scope: 'one'|'all'}>} Number of
  *   browsers signed out and whether the caller's own browser was among them.
  * @throws {AdminSignOutError} 404 unknown admin or session, 403 guard, 503 no session manager.
- * @sideeffect Deletes `admin::session` rows of the target admin (origin admin only) and
- *   writes one audit log line with admin ids and counts (no email, session id or token).
+ * @sideeffect Deletes `admin::session` rows of the target admin (origin admin only),
+ *   writes one audit log line with admin ids and counts (no email, session id or token) and
+ *   queues an `admin.session.revoked` security event (actor and target).
  */
 async function signOutAdmin(strapi, { actor, adminId, sessionId }) {
   const manager = getAdminSessionManager(strapi);
@@ -620,6 +622,7 @@ async function signOutAdmin(strapi, { actor, adminId, sessionId }) {
 
   let ended;
   let signedOutSelf;
+  let endedDeviceId = null;
   if (sessionId) {
     // The session must be a live row of THIS admin; anything else is 404, so
     // ids of other admins cannot be probed.
@@ -632,6 +635,7 @@ async function signOutAdmin(strapi, { actor, adminId, sessionId }) {
     }
     if (blockReason === 'account-inactive') throw new AdminSignOutError(404, 'Session not found');
     await manager.invalidateRefreshToken(userId, String(row.deviceId));
+    endedDeviceId = String(row.deviceId);
     ended = 1;
     signedOutSelf = Boolean(currentDeviceId) && String(row.deviceId) === currentDeviceId;
   } else {
@@ -645,6 +649,24 @@ async function signOutAdmin(strapi, { actor, adminId, sessionId }) {
     target.id
   )} scope=${scope} ended=${ended}`;
   strapi.log.info(audit);
+  // Security log: who signed out whom. No IP or user agent: the request came
+  // from the actor, not from the browser that was signed out.
+  try {
+    strapi
+      .plugin('magic-sessionmanager')
+      ?.service('security-log')
+      ?.record({
+        event: 'admin.session.revoked',
+        actorType: 'admin',
+        actorId: Number(actor.id),
+        targetType: 'admin',
+        targetId: Number(target.id),
+        meta: { scope: scope === 'one' ? 'one_browser' : 'everywhere', ended },
+        deviceHash: endedDeviceId ? hashDeviceId(endedDeviceId) : null,
+      });
+  } catch {
+    // Recording must not undo or hide a completed sign-out.
+  }
   try {
     strapi.eventHub?.emit?.('magic-sessionmanager.admin-sessions.signed-out', {
       actorId: Number(actor.id),

@@ -12,9 +12,10 @@ const USER_UID = 'plugin::users-permissions.user';
  *
  * - Logs one error when the running Strapi is older than the supported floor
  *   (`MIN_STRAPI_VERSION`, 5.50.0).
- * - Registers the `access` RBAC action for admin access control and the
+ * - Registers the `access` RBAC action for admin access control, the
  *   `admin-sessions.read` / `admin-sessions.revoke` actions for the Strapi
- *   admin panel sessions view.
+ *   admin panel sessions view and `admin-activity.read` for the admin
+ *   sign-in history and Content Manager activity.
  * - Removes the `sessions` relation field from the User content type so it
  *   doesn't clutter the default edit view (sessions are displayed via the
  *   SessionInfoPanel side panel).
@@ -55,6 +56,16 @@ module.exports = async ({ strapi }) => {
       section: 'plugins',
       displayName: 'Sign out admins',
       uid: 'admin-sessions.revoke',
+      subCategory: 'Admin panel',
+      pluginName: 'magic-sessionmanager',
+    },
+    // Admin sign-in history and Content Manager activity (4.15): who signed
+    // in from where and what each admin did. Separate from reading the
+    // sessions, because it shows IP addresses and work activity.
+    {
+      section: 'plugins',
+      displayName: 'View admin activity',
+      uid: 'admin-activity.read',
       subCategory: 'Admin panel',
       pluginName: 'magic-sessionmanager',
     },

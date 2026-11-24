@@ -10,6 +10,14 @@ const { withPluginStoreKey } = require('../utils/plugin-store');
 const { LockTimeoutError } = require('../utils/coordination');
 const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
 const { sendServerError, sendValidationError } = require('../utils/http-errors');
+const {
+  SECURITY_LOG_DEFAULTS,
+  SECURITY_LOG_KEYS,
+  validateSecurityLogSettings,
+} = require('../utils/security-log-settings');
+
+/** Needed (besides plugin access) to change the security log settings. */
+const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
 const path = require('node:path');
 
 /**
@@ -229,6 +237,7 @@ const DEFAULT_SETTINGS = {
   strictSessionEnforcement: false,
   trustedProxies: false,
   emailTemplates: DEFAULT_EMAIL_TEMPLATES,
+  ...SECURITY_LOG_DEFAULTS,
 };
 
 /**
@@ -490,6 +499,10 @@ function validateSettingsUpdate(body, current) {
     }
   }
 
+  const securityLog = validateSecurityLogSettings(body);
+  errors.push(...securityLog.errors);
+  Object.assign(next, securityLog.values);
+
   if (errors.length > 0) return { errors };
 
   const settings = {};
@@ -531,6 +544,21 @@ function sendSettingsConflict(ctx, currentRevision) {
     },
   };
   return ctx.body;
+}
+
+/**
+ * Whether the caller holds `admin-activity.read` (checked with the same
+ * ability Strapi's `admin::hasPermissions` policy uses).
+ *
+ * @param {object} ctx Koa context
+ * @returns {boolean}
+ */
+function canChangeAdminActivity(ctx) {
+  try {
+    return ctx.state?.userAbility?.can?.(ADMIN_ACTIVITY_READ_ACTION) === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -579,6 +607,9 @@ module.exports = {
    * Omitted fields keep their stored value. Invalid values are rejected with
    * a 400 whose `error.details.errors` names each field; nothing is clamped
    * or written in that case. Store failures return a 500 with a safe message.
+   * Changing a security log setting (`adminSignInHistory`,
+   * `adminContentActivity`, `securityLogStoreIp`, `securityLogAnonymizeIp`,
+   * `securityLogRetentionDays`) also needs `admin-activity.read`, else 403.
    *
    * @route PUT /magic-sessionmanager/settings
    * @returns {Promise<void>}
@@ -625,6 +656,14 @@ module.exports = {
         const { settings: sanitizedSettings, errors } = validateSettingsUpdate(body, current);
         if (errors.length > 0) return { errors };
 
+        // What the security log records is changed only by admins who may
+        // see it (admin-activity.read). Sending the stored values back
+        // unchanged is allowed, so the whole form can still be saved.
+        const changesAdminActivity = SECURITY_LOG_KEYS.some(
+          (key) => sanitizedSettings[key] !== current[key]
+        );
+        if (changesAdminActivity && !canChangeAdminActivity(ctx)) return { forbidden: true };
+
         await pluginStore.set({
           key: 'settings',
           value: sanitizedSettings,
@@ -633,6 +672,11 @@ module.exports = {
         return { settings: sanitizedSettings, revision };
       });
 
+      if (outcome.forbidden) {
+        return ctx.forbidden('Changing the security log settings needs "View admin activity".', {
+          reason: 'admin-activity-permission',
+        });
+      }
       if (outcome.conflict) {
         return sendSettingsConflict(ctx, outcome.currentRevision);
       }
