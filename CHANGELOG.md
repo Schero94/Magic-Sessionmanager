@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.17.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.16.1...v4.17.0) (2026-11-25)
+
+
+### Features
+
+* account and IP lockout with unlock, session limits, sign-out on password change and per-role rules ([#35](https://github.com/Schero94/Magic-Sessionmanager/issues/35)) ([faeac7c](https://github.com/Schero94/Magic-Sessionmanager/commit/faeac7cc1a299043c3b9d6c03c54cfec96f9fa43))
+
 
 Release type: minor (`feat`). Additive: three new admin routes, one new permission and new settings keys; no existing route, response or setting changes meaning. One default differs between new and existing installations (see Migration).
 
