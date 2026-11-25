@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.22.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.21.0...v4.22.0) (2026-11-25)
+
+
+### Features
+
+* app-user security activity with its own permission, full page and Content Manager panel ([#43](https://github.com/Schero94/Magic-Sessionmanager/issues/43)) ([8716281](https://github.com/Schero94/Magic-Sessionmanager/commit/8716281cb2f9a5599be5579d9e51d39b50f3d49e))
+
 
 Release type: minor (`feat`). Additive: one RBAC action (`user-activity.read`, "View app-user security activity"), two read-only admin routes and new admin screens; no stored data changes. Four app-user event labels are shorter (see Changed), and a refused request during an impersonation now names the impersonated user (see Changed).
 
