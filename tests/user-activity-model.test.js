@@ -22,7 +22,10 @@ const DAY = 24 * 60 * 60 * 1000;
 
 test('the view lists every app-user and impersonation event, and no admin event', () => {
   for (const event of Object.values(SECURITY_EVENTS)) {
-    const isUser = event.startsWith('user.') || event.startsWith('impersonation.');
+    // `impersonation.write` (4.23) is only recorded while signed in as an admin.
+    const isUser =
+      event.startsWith('user.') ||
+      (event.startsWith('impersonation.') && event !== 'impersonation.write');
     assert.equal(USER_ACTIVITY_EVENTS.includes(event), isUser, event);
   }
   // Every event belongs to exactly one filter group besides "all".

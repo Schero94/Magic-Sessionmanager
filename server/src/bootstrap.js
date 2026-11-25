@@ -345,6 +345,10 @@ module.exports = async ({ strapi }) => {
     // sweep ends expired impersonations (and all of them while the switch is
     // off); ending is atomic, so several processes can run it.
     strapi.server.use(require('./middlewares/impersonation-guard')({}, { strapi }));
+    // Sign in as another admin (4.23): read-only unless changes were allowed,
+    // never identity or token changes, every change recorded for the real
+    // admin, and `/admin/logout` ends the impersonation only.
+    strapi.server.use(require('./middlewares/admin-impersonation-guard')({}, { strapi }));
     const impersonationSweep = setInterval(() => {
       strapi
         .plugin('magic-sessionmanager')

@@ -1155,6 +1155,8 @@ module.exports = ({ strapi }) => {
     /** @type {any[]} */
     const conditions = [{ event: { $in: [...SIGN_IN_FILTERS[query.event || 'all']] } }];
     if (query.adminId) conditions.push({ targetType: 'admin', targetId: String(query.adminId) });
+    // Impersonations of app users belong to the app-user activity.
+    else if (query.event === 'impersonation') conditions.push({ targetType: 'admin' });
     if (query.from) conditions.push({ createdAt: { $gte: query.from } });
     if (query.to) conditions.push({ createdAt: { $lte: query.to } });
     return { $and: conditions };

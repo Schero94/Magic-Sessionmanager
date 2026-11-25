@@ -5,6 +5,11 @@ import PluginIcon from './components/PluginIcon';
 import SessionInfoPanel from './components/SessionInfoPanel';
 import permissions from './permissions';
 import { logSafeAdminError } from './utils/safeAdminLog.mjs';
+import { bootImpersonationTab, startImpersonationTab } from './impersonationTab';
+
+// "Sign in as this admin" (4.23): in an impersonation tab, keep the token
+// in this tab before Strapi reads it. A no-op in every other tab.
+bootImpersonationTab();
 
 // Manual fallback for prefixPluginTranslations if helper-plugin is not available
 const prefixPluginTranslations = (data, pluginId) => {
@@ -20,6 +25,7 @@ const name = pluginPkg.strapi.name;
 export default {
   register(app) {
     const pluginPermissions = permissions.access;
+    startImpersonationTab();
 
     app.addMenuLink({
       to: `plugins/${pluginId}`,

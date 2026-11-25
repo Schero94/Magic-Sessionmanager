@@ -142,12 +142,26 @@ const ActiveImpersonationsCard = () => {
     (row.targetType === 'admin'
       ? t('impersonation.list.adminFallback', 'Admin #{id}', { id: row.targetId })
       : row.targetId);
-  const kind = (row) =>
-    row.targetType === 'admin' ? (
+  const kind = (row) => {
+    if (row.targetType !== 'admin') return null;
+    if (row.handoff === 'admin-session') {
+      return (
+        <Badge
+          backgroundColor={row.allowChanges ? 'danger100' : 'primary100'}
+          textColor="neutral800"
+        >
+          {row.allowChanges
+            ? t('impersonation.list.kind.adminChanges', 'Admin, signed in, changes allowed')
+            : t('impersonation.list.kind.adminSignedIn', 'Admin, signed in, read-only')}
+        </Badge>
+      );
+    }
+    return (
       <Badge backgroundColor="primary100" textColor="neutral800">
         {t('impersonation.list.kind.admin', 'Admin, view only')}
       </Badge>
-    ) : null;
+    );
+  };
 
   const time = (iso) => (
     <Typography tag="time" dateTime={iso} variant="omega" textColor="neutral800">

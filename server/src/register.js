@@ -134,8 +134,18 @@ module.exports = async ({ strapi }) => {
     // their own.
     {
       section: 'plugins',
-      displayName: 'View as admin (read-only permission preview)',
+      displayName: 'View admin permissions (read-only preview)',
       uid: 'impersonate.admins',
+      subCategory: 'Impersonation',
+      pluginName: 'magic-sessionmanager',
+    },
+    // "Sign in as this admin" (4.23): a real admin session of another admin
+    // in a separate tab, read-only unless changes are allowed. The same
+    // anti-escalation rules as the preview; only on tested Strapi releases.
+    {
+      section: 'plugins',
+      displayName: 'Sign in as another admin',
+      uid: 'impersonate.admins.sign-in',
       subCategory: 'Impersonation',
       pluginName: 'magic-sessionmanager',
     },

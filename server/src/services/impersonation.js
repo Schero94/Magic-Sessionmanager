@@ -50,6 +50,14 @@ const {
   resolveFrontendHandoff,
   validateStartBody,
 } = require('../utils/impersonation-rules');
+const {
+  ADMIN_DEVICE_PREFIX,
+  ADMIN_SIGN_IN_ACTION,
+  LANDING_PATH,
+  adminSignInSupport,
+  allowedSignInDurations,
+  validateSignInBody,
+} = require('../utils/admin-sign-in-rules');
 
 const UID = 'plugin::magic-sessionmanager.impersonation';
 const USER_UID = 'plugin::users-permissions.user';
@@ -87,6 +95,7 @@ const EVENTS = Object.freeze({
   ENDED: 'impersonation.ended',
   EXPIRED: 'impersonation.expired',
   REFUSED: 'impersonation.refused',
+  WRITE: 'impersonation.write',
 });
 
 /**
@@ -219,7 +228,26 @@ module.exports = ({ strapi }) => {
         durations: [...USER_DURATIONS],
         adminDurations: [...ADMIN_DURATIONS],
         mode: getNativeSessionManager(strapi) ? 'refresh' : 'legacy',
+        adminSignIn: service.adminSignInStatus(),
       };
+    },
+
+    /**
+     * Whether "Sign in as this admin" can run on this Strapi: a tested
+     * release, Strapi's session manager present, and at least one duration
+     * that fits into one admin access token.
+     *
+     * @returns {{supported: boolean, version: string|null, reason: string|null, durations: number[]}}
+     */
+    adminSignInStatus() {
+      const support = adminSignInSupport(strapi.config.get('info.strapi'));
+      const durations = allowedSignInDurations(
+        strapi.config.get('admin.auth.sessions.accessTokenLifespan', 30 * 60)
+      );
+      let reason = support.reason;
+      if (!reason && typeof strapi.sessionManager !== 'function') reason = 'no-session-manager';
+      if (!reason && durations.length === 0) reason = 'token-lifespan';
+      return { supported: reason === null, version: support.version, reason, durations };
     },
 
     /**
@@ -507,6 +535,440 @@ module.exports = ({ strapi }) => {
     },
 
     /**
+     * Starts "Sign in as this admin" (4.23): checks every anti-escalation
+     * rule, stores the impersonation with a one-time code (60 seconds,
+     * stored hashed) and returns the landing path for a new tab. The Strapi
+     * admin session is created only when that tab exchanges the code.
+     *
+     * @param {{actor: any, adminId: unknown, body: unknown, canReadAdmins: boolean,
+     *   nested?: boolean}} input Caller (with roles), target id, body; `nested` when the
+     *   request itself comes from an impersonation session.
+     * @returns {Promise<{impersonation: object, handoff: {type: 'admin-tab', path: string,
+     *   code: string, codeExpiresAt: string}}>}
+     * @throws {ImpersonationError} 400 invalid body; 403 off, unsupported Strapi, nested,
+     *   self, Super Admin, inactive, not a subset or already active; 404 unknown admin.
+     * @sideeffect Creates an impersonation row; queues `impersonation.started` or `.refused`.
+     */
+    async startAdminSignIn({ actor, adminId, body, canReadAdmins, nested = false }) {
+      const actorId = String(actor.id);
+      const refuse = (reason, status, message, extra = {}) => {
+        service.recordRefused({
+          actorId,
+          targetType: 'admin',
+          targetId: adminId,
+          reason,
+          via: 'sign-in',
+        });
+        return new ImpersonationError(status, message, { reason, ...extra });
+      };
+      if (!(await service.isEnabled())) {
+        throw refuse('disabled', 403, 'Impersonation is turned off');
+      }
+      const support = service.adminSignInStatus();
+      if (!support.supported) {
+        throw refuse('unsupported', 403, 'Not available on this Strapi version', {
+          cause: support.reason,
+        });
+      }
+      if (nested)
+        throw refuse('nested', 403, 'You cannot start an impersonation while impersonating');
+      if (typeof adminId !== 'string' || !ADMIN_ID_PATTERN.test(adminId)) {
+        throw new ImpersonationError(404, 'Admin not found');
+      }
+      const { value, errors: fieldErrors } = validateSignInBody(body, support.durations);
+      if (!value) {
+        throw new ImpersonationError(400, 'Invalid sign-in request', {
+          errors: fieldErrors.map((error) => ({ ...error, name: 'ValidationError' })),
+        });
+      }
+      const [caller, target] = await Promise.all([
+        loadAdmin(strapi, actor.id),
+        loadAdmin(strapi, Number(adminId)),
+      ]);
+      if (!target) throw new ImpersonationError(404, 'Admin not found');
+      const refusal = await previewRefusal(strapi, caller || actor, target);
+      if (refusal?.reason === 'super-admin' && !canReadAdmins) {
+        service.recordRefused({
+          actorId,
+          targetType: 'admin',
+          targetId: adminId,
+          reason: 'super-admin',
+          via: 'sign-in',
+        });
+        throw new ImpersonationError(404, 'Admin not found');
+      }
+      if (refusal) {
+        const messages = {
+          self: 'You cannot sign in as yourself',
+          'super-admin': 'You cannot sign in as a Super Admin',
+          'not-subset': 'This admin has permissions that you do not have',
+        };
+        throw refuse(
+          refusal.reason,
+          403,
+          messages[refusal.reason],
+          refusal.uncovered ? { uncovered: refusal.uncovered } : {}
+        );
+      }
+      if (target.isActive !== true) {
+        throw refuse('inactive', 403, 'This admin account is not active');
+      }
+
+      await service.sweep();
+      const running = await query().findOne({
+        where: {
+          targetType: 'admin',
+          targetId: String(target.id),
+          handoff: 'admin-session',
+          state: 'active',
+        },
+        select: ['id'],
+      });
+      if (running)
+        throw refuse('already-active', 403, 'Someone is already signed in as this admin');
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + value.durationMinutes * 60 * 1000);
+      const code = crypto.randomBytes(32).toString('base64url');
+      const codeExpiresAt = new Date(now.getTime() + CODE_TTL_MS);
+      const row = await query().create({
+        data: {
+          targetType: 'admin',
+          targetId: String(target.id),
+          actorId,
+          state: 'active',
+          reason: value.reason,
+          durationMinutes: value.durationMinutes,
+          handoff: 'admin-session',
+          notifyUser: false,
+          allowChanges: value.allowChanges,
+          startedAt: now,
+          expiresAt,
+          codeHash: hashToken(code),
+          codeExpiresAt,
+        },
+      });
+      record({
+        event: EVENTS.STARTED,
+        actorType: 'admin',
+        actorId,
+        targetType: 'admin',
+        targetId: String(target.id),
+        meta: {
+          reason: value.reason,
+          durationMinutes: value.durationMinutes,
+          handoff: 'admin-session',
+          allowChanges: value.allowChanges,
+        },
+      });
+      log.info(
+        `[IMPERSONATION] Admin sign-in started (${value.durationMinutes} min, ${value.allowChanges ? 'changes allowed' : 'read-only'})`
+      );
+      return {
+        impersonation: service.toDto(row, {
+          admins: new Map([
+            [String(target.id), canReadAdmins ? target : null],
+            [actorId, caller || actor],
+          ]),
+          viewer: actor,
+        }),
+        handoff: {
+          type: 'admin-tab',
+          path: LANDING_PATH,
+          cookieName: service.accessCookieName(),
+          code,
+          codeExpiresAt: codeExpiresAt.toISOString(),
+        },
+      };
+    },
+
+    /**
+     * Exchanges the one-time code of an admin sign-in for an admin access
+     * token of the target, in the new tab. The request carries the starting
+     * admin's own token, and only that admin can redeem the code. The Strapi
+     * admin session is created here on a dedicated device id, marked in its
+     * metadata, and expires with the impersonation; its refresh token never
+     * leaves the server, so the tab cannot renew it.
+     *
+     * @param {{code: unknown, actor: any, ability: any}} input Code and the calling admin.
+     * @returns {Promise<object|null>} `{ token, expiresAt, cookieName, impersonation }`, or null
+     *   for any unusable code.
+     * @sideeffect Consumes the code; creates one Strapi admin session for the target.
+     */
+    async exchangeAdminCode({ code, actor, ability }) {
+      if (typeof code !== 'string' || !CODE_PATTERN.test(code)) return null;
+      if (!(await service.isEnabled()) || !service.adminSignInStatus().supported) return null;
+      const codeHash = hashToken(code);
+      const now = new Date();
+      const row = await query().findOne({
+        where: { codeHash, state: 'active', handoff: 'admin-session' },
+      });
+      if (!row || String(row.actorId) !== String(actor?.id)) return null;
+      let stillAllowed;
+      try {
+        stillAllowed = ability?.can?.(ADMIN_SIGN_IN_ACTION) === true;
+      } catch {
+        stillAllowed = false;
+      }
+      if (!stillAllowed) return null;
+      const claimed = await query().updateMany({
+        where: {
+          id: row.id,
+          codeHash,
+          state: 'active',
+          credentialIssuedAt: { $null: true },
+          codeExpiresAt: { $gt: now },
+          expiresAt: { $gt: now },
+        },
+        data: { codeHash: null, codeExpiresAt: null, credentialIssuedAt: now },
+      });
+      if (Number(claimed?.count) !== 1) return null;
+
+      const target = await loadAdmin(strapi, Number(row.targetId));
+      if (!target || target.isActive !== true || (await previewRefusal(strapi, actor, target))) {
+        await service.end(row.documentId, { reason: 'failed', silent: true });
+        return null;
+      }
+      try {
+        const token = await service.issueAdminSession(row, target);
+        return {
+          token,
+          expiresAt: new Date(row.expiresAt).toISOString(),
+          cookieName: service.accessCookieName(),
+          impersonation: {
+            id: row.documentId,
+            allowChanges: row.allowChanges === true,
+            expiresAt: new Date(row.expiresAt).toISOString(),
+            targetName: adminLabel(target),
+            actorName: adminLabel(actor),
+          },
+        };
+      } catch (err) {
+        await service.end(row.documentId, { reason: 'failed', silent: true });
+        throw err;
+      }
+    },
+
+    /**
+     * Name of Strapi's admin access cookie (`admin.auth.cookie.name`,
+     * default `jwtToken`), so the impersonation tab can hide it.
+     *
+     * @returns {string}
+     */
+    accessCookieName() {
+      const configured = strapi.config.get('admin.auth.cookie.name');
+      return typeof configured === 'string' &&
+        /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(configured.trim())
+        ? configured.trim()
+        : 'jwtToken';
+    },
+
+    /**
+     * Creates the Strapi admin session of an admin sign-in and returns its
+     * access token. The device id is recorded before the session exists, so
+     * a failure below still revokes exactly this session.
+     *
+     * @param {any} row Impersonation row.
+     * @param {any} target Target admin.
+     * @returns {Promise<string>} Access token.
+     * @throws {Error} When the session cannot be created.
+     * @sideeffect Creates one `admin::session` row and shortens its expiry.
+     */
+    async issueAdminSession(row, target) {
+      const expiresAt = new Date(row.expiresAt);
+      if (expiresAt.getTime() - Date.now() < 5000) {
+        throw new ImpersonationError(403, 'Impersonation ended');
+      }
+      const deviceId = `${ADMIN_DEVICE_PREFIX}${crypto.randomBytes(12).toString('hex')}`;
+      await query().update({
+        where: { id: row.id },
+        data: { nativeUserId: String(target.id), nativeDeviceId: deviceId },
+      });
+      const manager = strapi.sessionManager('admin');
+      const refresh = await manager.generateRefreshToken(String(target.id), deviceId, {
+        type: 'session',
+        metadata: {
+          loginAt: new Date().toISOString(),
+          deviceName: 'Impersonation',
+          msmImpersonation: row.documentId,
+        },
+      });
+      // Strapi's admin auth strategy checks `expiresAt` of the session on
+      // every request (`isSessionActive`), so this ends the session with the
+      // impersonation, on every process, even if nobody ends it.
+      await strapi.db.query(NATIVE_SESSION_UID).update({
+        where: { sessionId: refresh.sessionId },
+        data: { expiresAt, absoluteExpiresAt: expiresAt },
+      });
+      const access = await manager.generateAccessToken(refresh.token);
+      if (!access || 'error' in access) throw new Error('Access token could not be minted');
+      remember(nativeSessionCache, `admin:${refresh.sessionId}`, row.documentId);
+      recordCache.delete(row.documentId);
+      return access.token;
+    },
+
+    /**
+     * Deletes the Strapi admin session of an admin sign-in, and only that
+     * one: by its user and its own device id. Without a stored device id
+     * nothing is deleted, because Strapi's `invalidateRefreshToken` without
+     * a device id would delete every session of the target.
+     *
+     * @param {any} row Impersonation row.
+     * @returns {Promise<void>}
+     * @sideeffect Deletes `admin::session` rows of the impersonation device.
+     */
+    async revokeAdminSession(row) {
+      const userId = row.nativeUserId ? String(row.nativeUserId) : '';
+      const deviceId = row.nativeDeviceId ? String(row.nativeDeviceId) : '';
+      if (!userId || !deviceId.startsWith(ADMIN_DEVICE_PREFIX)) return;
+      try {
+        await strapi.sessionManager('admin').invalidateRefreshToken(userId, deviceId);
+      } catch (err) {
+        log.error('[IMPERSONATION] Admin session revocation failed:', err?.name || 'Error');
+      }
+    },
+
+    /**
+     * The admin sign-in an admin access token belongs to, or null. The
+     * signature is verified with Strapi's session manager; the session row
+     * names the impersonation in its metadata (or by its device id, which
+     * fails closed). Results are cached per session id (immutable).
+     *
+     * @param {string} token Bearer token.
+     * @returns {Promise<string|null>} Impersonation id (`'unknown'` for a marked device
+     *   without readable metadata).
+     * @throws {Error} When the session lookup fails.
+     */
+    async adminImpersonationOfToken(token) {
+      const payload = decodeJwtPayload(token);
+      if (!payload || payload.type !== 'access') return null;
+      const sessionId = payload.sessionId;
+      if (typeof sessionId !== 'string' || !/^[a-f0-9]{16,64}$/i.test(sessionId)) return null;
+      const key = `admin:${sessionId}`;
+      if (nativeSessionCache.has(key)) {
+        return service.verifyAdminToken(token) ? nativeSessionCache.get(key) : null;
+      }
+      if (!service.verifyAdminToken(token)) return null;
+      const session = await strapi.db.query(NATIVE_SESSION_UID).findOne({
+        where: { sessionId, origin: 'admin' },
+        select: ['metadata', 'deviceId'],
+      });
+      let id = null;
+      const mark = session?.metadata?.msmImpersonation;
+      if (typeof mark === 'string' && DOCUMENT_ID_PATTERN.test(mark)) id = mark;
+      else if (
+        typeof session?.deviceId === 'string' &&
+        session.deviceId.startsWith(ADMIN_DEVICE_PREFIX)
+      ) {
+        id = 'unknown';
+      }
+      if (session) remember(nativeSessionCache, key, id);
+      return id;
+    },
+
+    /**
+     * Whether a token is a validly signed Strapi admin access token.
+     *
+     * @param {string} token Bearer token.
+     * @returns {boolean}
+     */
+    verifyAdminToken(token) {
+      try {
+        return strapi.sessionManager('admin').validateAccessToken(token)?.isValid === true;
+      } catch {
+        return false;
+      }
+    },
+
+    /**
+     * Loads an admin sign-in for the request guard (active rows are read on
+     * every request, like `loadForGuard`).
+     *
+     * @param {string} documentId Impersonation id.
+     * @returns {Promise<{id: string, actorId: string, targetId: string, state: string,
+     *   expiresAt: number, allowChanges: boolean}|null>}
+     */
+    async loadAdminForGuard(documentId) {
+      const cached = recordCache.get(`admin:${documentId}`);
+      if (cached && Date.now() - cached.at < RECORD_CACHE_MS) return cached.value;
+      const row = await query().findOne({
+        where: { documentId, targetType: 'admin', handoff: 'admin-session' },
+        select: ['documentId', 'actorId', 'targetId', 'state', 'expiresAt', 'allowChanges'],
+      });
+      const value = row
+        ? {
+            id: row.documentId,
+            actorId: String(row.actorId),
+            targetId: String(row.targetId),
+            state: row.state,
+            expiresAt: new Date(row.expiresAt).getTime(),
+            allowChanges: row.allowChanges === true,
+          }
+        : null;
+      if (!value || value.state !== 'active') {
+        remember(recordCache, `admin:${documentId}`, { value, at: Date.now() });
+      }
+      return value;
+    },
+
+    /**
+     * Records a change made while signed in as another admin: the real
+     * admin is the actor, the target admin in `meta.impersonating`.
+     *
+     * @param {{id: string, actorId: string, targetId: string}} impersonation Impersonation.
+     * @param {{method: string, path: string, status: number}} request What was done.
+     * @returns {void}
+     * @sideeffect Queues one always-on `impersonation.write` event.
+     */
+    recordAdminWrite(impersonation, { method, path, status }) {
+      record({
+        event: EVENTS.WRITE,
+        actorType: 'admin',
+        actorId: impersonation.actorId,
+        targetType: 'admin',
+        targetId: impersonation.targetId,
+        meta: {
+          impersonation: impersonation.id,
+          impersonating: impersonation.targetId,
+          method,
+          route: path,
+          status,
+        },
+      });
+    },
+
+    /**
+     * Records a refused admin API call of an admin sign-in (one event per
+     * impersonation and reason per minute).
+     *
+     * @param {{id: string, actorId: string, targetId: string}} impersonation Impersonation.
+     * @param {string} reason `read-only` or `identity`.
+     * @param {{method: string, path: string}} request Refused request.
+     * @returns {void}
+     */
+    recordRefusedAdminCall(impersonation, reason, { method, path }) {
+      const key = `${impersonation.id}|admin-${reason}`;
+      const now = Date.now();
+      const last = refusals.get(key);
+      if (last !== undefined && now - last < REFUSAL_DEDUP_MS) return;
+      remember(refusals, key, now);
+      record({
+        event: EVENTS.REFUSED,
+        actorType: 'admin',
+        actorId: impersonation.actorId,
+        targetType: 'admin',
+        targetId: impersonation.targetId,
+        meta: {
+          refusal: `call-${reason}`,
+          impersonation: impersonation.id,
+          impersonating: impersonation.targetId,
+          method,
+          route: path,
+        },
+      });
+    },
+
+    /**
      * Mints the short-lived credential of an impersonation and links its
      * Magic session row.
      *
@@ -688,6 +1150,10 @@ module.exports = ({ strapi }) => {
      * @sideeffect Deletes Strapi session rows, writes a revocation record, ends the Magic session.
      */
     async revoke(row, sessionReason) {
+      if (row.handoff === 'admin-session') {
+        await service.revokeAdminSession(row);
+        return;
+      }
       if (row.nativeUserId && row.nativeDeviceId) {
         try {
           await strapi
@@ -850,6 +1316,7 @@ module.exports = ({ strapi }) => {
         reason: row.reason,
         durationMinutes: row.durationMinutes,
         handoff: row.handoff,
+        allowChanges: row.allowChanges === true,
         credentialIssued: Boolean(row.credentialIssuedAt),
         startedAt: new Date(row.startedAt).toISOString(),
         expiresAt: new Date(row.expiresAt).toISOString(),

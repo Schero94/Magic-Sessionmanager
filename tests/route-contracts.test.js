@@ -21,9 +21,36 @@ function assertHandlerExists(route) {
   );
 }
 
+/**
+ * Reviewed exceptions (4.23, Sign in as this admin): the self routes answer only an impersonation session recognised by the
+ * admin impersonation guard; the target may not have plugin access.
+ */
+const IMPERSONATION_TAB_ROUTES = Object.freeze([
+  '/admin-impersonation/self',
+  '/admin-impersonation/self/end',
+]);
+
+test('the impersonation tab routes are the only reviewed exceptions', () => {
+  const find = (path) => adminRoutes.find((route) => route.path === path);
+  const exchange = find('/admin-impersonation/exchange').config.policies;
+  assert.deepEqual(
+    exchange.find((policy) => policy?.name === 'admin::hasPermissions').config.actions,
+    [
+      'plugin::magic-sessionmanager.access',
+      'plugin::magic-sessionmanager.impersonate.admins.sign-in',
+    ]
+  );
+  for (const path of ['/admin-impersonation/self', '/admin-impersonation/self/end']) {
+    assertHandlerExists(find(path));
+    assert.equal(find(path).config.auth, false);
+    assert.equal(find(path).config.middlewares[0].name, 'plugin::magic-sessionmanager.rate-limit');
+  }
+});
+
 test('every admin route has a real controller action and full RBAC protection', () => {
   for (const route of adminRoutes) {
     assertHandlerExists(route);
+    if (IMPERSONATION_TAB_ROUTES.includes(route.path)) continue;
     const policies = route.config?.policies || [];
     assert.ok(policies.includes('admin::isAuthenticatedAdmin'), `${route.path} lacks admin auth`);
     assert.ok(
@@ -82,6 +109,10 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['GET', '/impersonation/status', 'impersonation.status'],
     ['POST', '/impersonation/users/:userId', 'impersonation.startUser'],
     ['POST', '/impersonation/admins/:adminId/preview', 'impersonation.previewAdmin'],
+    ['POST', '/impersonation/admins/:adminId/sign-in', 'impersonation.signInAdmin'],
+    ['POST', '/admin-impersonation/exchange', 'impersonation.exchangeAdmin'],
+    ['GET', '/admin-impersonation/self', 'impersonation.adminSelf'],
+    ['POST', '/admin-impersonation/self/end', 'impersonation.endAdminSelf'],
     ['GET', '/impersonation/previews/:id', 'impersonation.getPreview'],
     ['GET', '/impersonation/active', 'impersonation.listActive'],
     ['POST', '/impersonation/:id/end', 'impersonation.end'],
@@ -167,6 +198,8 @@ test('admin panel session routes need their own actions, and sign-out is write r
       !path.startsWith('/user-activity') &&
       path !== '/lockouts/unlock' &&
       path !== '/webhook/test' &&
+      !IMPERSONATION_TAB_ROUTES.includes(path) &&
+      path !== '/admin-impersonation/exchange' &&
       !(
         path.startsWith('/impersonation/') &&
         !['/impersonation/status', '/impersonation/active', '/impersonation/:id/end'].includes(path)
@@ -191,13 +224,21 @@ test('impersonation routes need their impersonate action; starts are rate limite
   assert.deepEqual(actionsOf(find('/impersonation/users/:userId')), [access, users]);
   assert.deepEqual(actionsOf(find('/impersonation/admins/:adminId/preview')), [access, admins]);
   assert.deepEqual(actionsOf(find('/impersonation/previews/:id')), [access, admins]);
+  assert.deepEqual(actionsOf(find('/impersonation/admins/:adminId/sign-in')), [
+    access,
+    'plugin::magic-sessionmanager.impersonate.admins.sign-in',
+  ]);
   // Listing and ending serve both kinds: access plus either action.
   for (const path of ['/impersonation/active', '/impersonation/:id/end']) {
     const route = find(path);
     assert.deepEqual(actionsOf(route), [access]);
     assert.ok(route.config.policies.includes('plugin::magic-sessionmanager.can-impersonate'));
   }
-  for (const path of ['/impersonation/users/:userId', '/impersonation/admins/:adminId/preview']) {
+  for (const path of [
+    '/impersonation/users/:userId',
+    '/impersonation/admins/:adminId/preview',
+    '/impersonation/admins/:adminId/sign-in',
+  ]) {
     assert.deepEqual(find(path).config.middlewares[0].config, { max: 10, window: 10 * 60 * 1000 });
   }
 });

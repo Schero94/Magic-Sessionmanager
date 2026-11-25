@@ -121,6 +121,7 @@ const AdminActivityPage = () => {
     succeeded: t('adminPanel.activity.filter.succeeded', 'Sign-ins'),
     failed: t('adminPanel.activity.filter.failed', 'Failed and locked out'),
     'signed-out': t('adminPanel.activity.filter.signedOut', 'Sign-outs'),
+    impersonation: t('adminPanel.activity.filter.impersonation', 'Impersonation'),
     changes: t('adminPanel.activity.filter.changes', 'Settings and log access'),
   };
   const title = t('adminPanel.activity.page.title', 'Security activity');

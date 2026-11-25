@@ -13,6 +13,7 @@ import { network, permission, renderStrict, settle } from './harness/index.jsx';
 import ImpersonationPanelSection from '../../admin/src/components/impersonation/ImpersonationPanelSection';
 import ActiveImpersonationsCard from '../../admin/src/components/impersonation/ActiveImpersonationsCard';
 import PreviewAdminModal from '../../admin/src/components/impersonation/PreviewAdminModal';
+import SignInAsAdminModal from '../../admin/src/components/impersonation/SignInAsAdminModal';
 import { AdminTable } from '../../admin/src/pages/AdminPanel/AdminList';
 
 const IMPERSONATE = permission('plugin::magic-sessionmanager.impersonate.users');
@@ -301,12 +302,12 @@ test('View as: offered only with the permission, never for oneself or a Super Ad
     const names = [...document.querySelectorAll('[data-row-actions] button')].map((node) =>
       node.textContent.trim()
     );
-    assert.ok(names.includes('View as Ben Muster'));
-    assert.equal(names.includes('View as Self Admin'), false);
-    assert.equal(names.includes('View as Super Admin'), false);
+    assert.ok(names.includes('View permissions of Ben Muster'));
+    assert.equal(names.includes('View permissions of Self Admin'), false);
+    assert.equal(names.includes('View permissions of Super Admin'), false);
     const action = [
       ...document.querySelectorAll('[data-admin-row="7"] [data-row-actions] button'),
-    ].find((node) => node.textContent.trim() === 'View as Ben Muster');
+    ].find((node) => node.textContent.trim() === 'View permissions of Ben Muster');
     for (const key of ['Enter', ' ', 'ArrowDown']) {
       await act(async () => {
         action.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }));
@@ -330,7 +331,7 @@ test('View as: offered only with the permission, never for oneself or a Super Ad
   try {
     assert.equal(
       [...document.querySelectorAll('[data-row-actions] button')].some((node) =>
-        node.textContent.includes('View as')
+        node.textContent.includes('View permissions')
       ),
       false
     );
@@ -387,7 +388,7 @@ test('View as: reason first, then a read-only preview with banner, countdown and
   );
   try {
     const dialog = document.querySelector('[role="dialog"]');
-    assert.match(dialog.textContent, /View as Ben Muster/);
+    assert.match(dialog.textContent, /Permissions of Ben Muster/);
     network.clearCalls();
     await click(buttonByText(dialog, 'View permissions'));
     assert.equal(network.calls.filter((call) => call.method === 'POST').length, 0);
@@ -445,6 +446,139 @@ test('View as: a refused preview explains why and keeps the dialog open', async 
       /This admin has permissions that you do not have/
     );
     assert.equal(document.querySelector('[data-preview-banner]'), null);
+  } finally {
+    await handle.unmount();
+  }
+});
+
+const SUPPORTED = { supported: true, version: '5.64.0', reason: null, durations: [15, 30] };
+
+test('Sign in as: offered next to View permissions, disabled with the reason on an untested Strapi', async () => {
+  const opened = [];
+  const rows = [
+    ADMIN_ROW,
+    { ...ADMIN_ROW, id: 8, name: 'Self Admin', self: true },
+    { ...ADMIN_ROW, id: 10, name: 'Gone Admin', account: 'deactivated' },
+  ];
+  const handle = await renderStrict(
+    <AdminTable
+      admins={rows}
+      labelledBy="caption"
+      canRevoke={false}
+      canSignIn
+      onView={() => {}}
+      onSignOutEverywhere={() => {}}
+      onSignIn={(admin) => opened.push(admin.id)}
+    />
+  );
+  try {
+    const buttons = [...document.querySelectorAll('[data-row-actions] button')];
+    const names = buttons.map((node) => node.textContent.trim());
+    assert.ok(names.includes('Sign in as Ben Muster'));
+    assert.equal(names.includes('Sign in as Self Admin'), false);
+    assert.equal(names.includes('Sign in as Gone Admin'), false);
+    await click(buttons.find((node) => node.textContent.trim() === 'Sign in as Ben Muster'));
+    assert.deepEqual(opened, [7]);
+  } finally {
+    await handle.unmount();
+  }
+  const reason = 'Not available on Strapi 5.65.0: tested with 5.50 to 5.64.';
+  const off = await renderStrict(
+    <AdminTable
+      admins={[ADMIN_ROW]}
+      labelledBy="caption"
+      canRevoke={false}
+      canSignIn
+      signInUnavailable={reason}
+      onView={() => {}}
+      onSignOutEverywhere={() => {}}
+      onSignIn={() => opened.push('x')}
+    />
+  );
+  try {
+    const button = [...document.querySelectorAll('[data-row-actions] button')].find(
+      (node) => node.textContent.trim() === reason
+    );
+    assert.ok(button, 'the disabled button says why');
+    assert.ok(button.disabled || button.getAttribute('aria-disabled') === 'true');
+  } finally {
+    await off.unmount();
+  }
+});
+
+test('Sign in as: unsupported Strapi explains why and cannot start', async () => {
+  const handle = await renderStrict(
+    <SignInAsAdminModal
+      admin={{ id: 7, name: 'Ben Muster' }}
+      support={{
+        supported: false,
+        version: '5.65.0',
+        reason: 'untested-version',
+        durations: [15, 30],
+      }}
+      onClose={() => {}}
+    />,
+    { permissions: [ACCESS] }
+  );
+  try {
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.match(dialog.textContent, /Not available on Strapi 5\.65\.0/);
+    const start = buttonByText(dialog, 'Start sign-in');
+    assert.ok(start.disabled || start.getAttribute('aria-disabled') === 'true');
+  } finally {
+    await handle.unmount();
+  }
+});
+
+test('Sign in as: reason, duration and Allow changes (with warning), then a one-time link', async () => {
+  network.on('POST', '/magic-sessionmanager/impersonation/admins/7/sign-in', {
+    status: 201,
+    body: {
+      data: {
+        impersonation: { ...ROW, targetType: 'admin', targetId: '7', handoff: 'admin-session' },
+        handoff: {
+          type: 'admin-tab',
+          path: '/plugins/magic-sessionmanager/impersonate/land',
+          cookieName: 'jwtToken',
+          code: 'C'.repeat(43),
+          codeExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        },
+      },
+    },
+  });
+  const handle = await renderStrict(
+    <SignInAsAdminModal
+      admin={{ id: 7, name: 'Ben Muster' }}
+      support={SUPPORTED}
+      onClose={() => {}}
+    />,
+    { permissions: [ACCESS] }
+  );
+  try {
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.match(dialog.textContent, /Sign in as Ben Muster/);
+    assert.doesNotMatch(dialog.textContent, /appear in Strapi as made by/);
+    network.clearCalls();
+    await click(buttonByText(dialog, 'Start sign-in'));
+    assert.equal(network.calls.filter((call) => call.method === 'POST').length, 0, 'reason first');
+    await type(dialog.querySelector('textarea'), 'Ticket 4711');
+    await click(dialog.querySelector('button[role="checkbox"]'));
+    assert.match(dialog.textContent, /appear in Strapi as made by Ben Muster/);
+    await click(buttonByText(dialog, 'Start sign-in'));
+    const body = JSON.parse(network.calls.find((call) => call.method === 'POST').body);
+    assert.deepEqual(body, { reason: 'Ticket 4711', durationMinutes: 15, allowChanges: true });
+    const link = dialog.querySelector('a[href*="impersonate/land"]');
+    assert.ok(link);
+    const href = link.getAttribute('href');
+    assert.ok(
+      href.endsWith(
+        `/plugins/magic-sessionmanager/impersonate/land#code=${'C'.repeat(43)}&c=jwtToken`
+      ),
+      href
+    );
+    assert.equal(href.includes('?'), false, 'never in the query');
+    assert.equal(link.getAttribute('target'), '_blank');
+    assert.match(link.getAttribute('rel'), /noopener/);
   } finally {
     await handle.unmount();
   }

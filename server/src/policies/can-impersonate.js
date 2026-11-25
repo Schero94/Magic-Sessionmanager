@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * Allows a request when the admin holds either impersonation action:
- * `impersonate.users` or `impersonate.admins` (4.20). `admin::hasPermissions`
+ * Allows a request when the admin holds any impersonation action:
+ * `impersonate.users`, `impersonate.admins` (4.20) or
+ * `impersonate.admins.sign-in` (4.23). `admin::hasPermissions`
  * requires all listed actions, so "either" needs its own policy. Always
  * returns an explicit boolean (a policy returning `undefined` passes).
  *
@@ -20,6 +21,7 @@ module.exports = (policyContext) => {
   };
   return (
     can('plugin::magic-sessionmanager.impersonate.users') ||
-    can('plugin::magic-sessionmanager.impersonate.admins')
+    can('plugin::magic-sessionmanager.impersonate.admins') ||
+    can('plugin::magic-sessionmanager.impersonate.admins.sign-in')
   );
 };

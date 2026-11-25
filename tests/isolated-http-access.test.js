@@ -261,7 +261,7 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 41);
+        assert.equal(routes.length, 45);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)
@@ -1362,6 +1362,13 @@ test(
           'POST /lockouts/unlock': 404,
           'POST /impersonation/users/:userId': 403,
           'POST /impersonation/admins/:adminId/preview': 403,
+          // Sign in as this admin (4.23): off by default; the exchange
+          // refuses any unusable code; the self routes answer only an
+          // impersonation session (tests/isolated-admin-sign-in-http.test.js).
+          'POST /impersonation/admins/:adminId/sign-in': 403,
+          'POST /admin-impersonation/exchange': 400,
+          'GET /admin-impersonation/self': 401,
+          'POST /admin-impersonation/self/end': 401,
           'GET /impersonation/previews/:id': 404,
           'POST /impersonation/:id/end': 404,
         };

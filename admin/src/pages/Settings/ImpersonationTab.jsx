@@ -24,8 +24,12 @@ const ImpersonationTab = ({ form }) => {
   const locked = form.canChangeProtected === false;
   const {
     isLoading,
-    allowedActions: { canUsers, canAdmins },
-  } = useRBAC([...pluginPermissions.impersonateUsers, ...pluginPermissions.impersonateAdmins]);
+    allowedActions: { canUsers, canAdmins, canSignIn },
+  } = useRBAC([
+    ...pluginPermissions.impersonateUsers,
+    ...pluginPermissions.impersonateAdmins,
+    ...pluginPermissions.signInAsAdmin,
+  ]);
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
@@ -58,7 +62,7 @@ const ImpersonationTab = ({ form }) => {
         </SettingsToggleRow>
       </SectionCard>
 
-      {!isLoading && (canUsers || canAdmins) ? <ActiveImpersonationsCard /> : null}
+      {!isLoading && (canUsers || canAdmins || canSignIn) ? <ActiveImpersonationsCard /> : null}
     </Flex>
   );
 };

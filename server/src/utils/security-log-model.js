@@ -54,6 +54,10 @@ const SECURITY_EVENTS = Object.freeze({
   IMPERSONATION_ENDED: 'impersonation.ended',
   IMPERSONATION_EXPIRED: 'impersonation.expired',
   IMPERSONATION_REFUSED: 'impersonation.refused',
+  // 4.23: a change made while signed in as another admin. Actor = the real
+  // admin, target and `meta.impersonating` = the admin signed in as, plus
+  // the method and path (no query, no body).
+  IMPERSONATION_WRITE: 'impersonation.write',
 });
 
 /**
@@ -69,6 +73,7 @@ const KEEP_WITHOUT_ACTOR_EVENTS = Object.freeze([
   SECURITY_EVENTS.IMPERSONATION_ENDED,
   SECURITY_EVENTS.IMPERSONATION_EXPIRED,
   SECURITY_EVENTS.IMPERSONATION_REFUSED,
+  SECURITY_EVENTS.IMPERSONATION_WRITE,
 ]);
 
 /**
@@ -145,6 +150,19 @@ const ADMIN_LOG_EVENTS = Object.freeze([
   SECURITY_EVENTS.CONFIG_WEAK_KEY,
 ]);
 
+/**
+ * Impersonation events about admins (4.23): previews and sign-ins as
+ * another admin, refused calls and every change made while signed in as
+ * them. Listed only for admin targets (filter `impersonation`).
+ */
+const ADMIN_IMPERSONATION_EVENTS = Object.freeze([
+  SECURITY_EVENTS.IMPERSONATION_STARTED,
+  SECURITY_EVENTS.IMPERSONATION_ENDED,
+  SECURITY_EVENTS.IMPERSONATION_EXPIRED,
+  SECURITY_EVENTS.IMPERSONATION_REFUSED,
+  SECURITY_EVENTS.IMPERSONATION_WRITE,
+]);
+
 /** Filter groups of the sign-in history (API values). */
 const SIGN_IN_FILTERS = Object.freeze({
   all: [...ADMIN_SIGN_IN_EVENTS, ...ADMIN_LOG_EVENTS],
@@ -152,6 +170,7 @@ const SIGN_IN_FILTERS = Object.freeze({
   failed: [SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED, SECURITY_EVENTS.ADMIN_LOCKOUT],
   'signed-out': [SECURITY_EVENTS.ADMIN_SIGN_OUT, SECURITY_EVENTS.ADMIN_SESSION_REVOKED],
   changes: ADMIN_LOG_EVENTS,
+  impersonation: ADMIN_IMPERSONATION_EVENTS,
 });
 
 /** Content Manager actions (API values); the event is `admin.content.<action>`. */
@@ -487,6 +506,7 @@ module.exports = {
   USER_SIGN_IN_EVENTS,
   ACTOR_TYPES,
   ADMIN_CONTENT_EVENTS,
+  ADMIN_IMPERSONATION_EVENTS,
   ADMIN_LOG_EVENTS,
   ADMIN_SIGN_IN_EVENTS,
   CONTENT_ACTIONS,
