@@ -79,6 +79,8 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['POST', '/geoip/update', 'geoip.updateDatabase'],
     ['GET', '/impersonation/status', 'impersonation.status'],
     ['POST', '/impersonation/users/:userId', 'impersonation.startUser'],
+    ['POST', '/impersonation/admins/:adminId/preview', 'impersonation.previewAdmin'],
+    ['GET', '/impersonation/previews/:id', 'impersonation.getPreview'],
     ['GET', '/impersonation/active', 'impersonation.listActive'],
     ['POST', '/impersonation/:id/end', 'impersonation.end'],
     ['GET', '/settings', 'settings.getSettings'],
@@ -139,29 +141,39 @@ test('admin panel session routes need their own actions, and sign-out is write r
       !path.startsWith('/admin-activity/') &&
       path !== '/lockouts/unlock' &&
       path !== '/webhook/test' &&
-      !(path.startsWith('/impersonation/') && path !== '/impersonation/status')
+      !(
+        path.startsWith('/impersonation/') &&
+        !['/impersonation/status', '/impersonation/active', '/impersonation/:id/end'].includes(path)
+      )
   )) {
     assert.deepEqual(actionsOf(route), ['plugin::magic-sessionmanager.access']);
   }
 });
 
-test('impersonation routes need impersonate.users; starting is rate limited per admin', () => {
+test('impersonation routes need their impersonate action; starts are rate limited per admin', () => {
   const actionsOf = (route) =>
     route.config.policies.find((policy) => policy?.name === 'admin::hasPermissions').config.actions;
-  const routes = adminRoutes.filter(
-    ({ path }) => path.startsWith('/impersonation/') && path !== '/impersonation/status'
-  );
-  assert.equal(routes.length, 3);
-  for (const route of routes) {
+  const find = (path) => adminRoutes.find((route) => route.path === path);
+  const access = 'plugin::magic-sessionmanager.access';
+  const users = 'plugin::magic-sessionmanager.impersonate.users';
+  const admins = 'plugin::magic-sessionmanager.impersonate.admins';
+  for (const route of adminRoutes.filter(({ path }) => path.startsWith('/impersonation/'))) {
     assert.equal(route.config.policies[0], 'admin::isAuthenticatedAdmin');
-    assert.deepEqual(actionsOf(route), [
-      'plugin::magic-sessionmanager.access',
-      'plugin::magic-sessionmanager.impersonate.users',
-    ]);
     assert.equal(route.config.middlewares[0].name, 'plugin::magic-sessionmanager.rate-limit');
   }
-  const start = routes.find(({ path }) => path === '/impersonation/users/:userId');
-  assert.deepEqual(start.config.middlewares[0].config, { max: 10, window: 10 * 60 * 1000 });
+  assert.deepEqual(actionsOf(find('/impersonation/status')), [access]);
+  assert.deepEqual(actionsOf(find('/impersonation/users/:userId')), [access, users]);
+  assert.deepEqual(actionsOf(find('/impersonation/admins/:adminId/preview')), [access, admins]);
+  assert.deepEqual(actionsOf(find('/impersonation/previews/:id')), [access, admins]);
+  // Listing and ending serve both kinds: access plus either action.
+  for (const path of ['/impersonation/active', '/impersonation/:id/end']) {
+    const route = find(path);
+    assert.deepEqual(actionsOf(route), [access]);
+    assert.ok(route.config.policies.includes('plugin::magic-sessionmanager.can-impersonate'));
+  }
+  for (const path of ['/impersonation/users/:userId', '/impersonation/admins/:adminId/preview']) {
+    assert.deepEqual(find(path).config.middlewares[0].config, { max: 10, window: 10 * 60 * 1000 });
+  }
 });
 
 test('the signed webhook test needs settings.update and is write rate limited', () => {

@@ -38,6 +38,7 @@ import SessionSearch from '../Dashboard/SessionSearch';
 import { encodeSearchQuery, getErrorStatus } from '../Dashboard/dashboardModel.mjs';
 import { AdminCardList, AdminTable } from './AdminList';
 import AdminSessionsModal from './AdminSessionsModal';
+import PreviewAdminModal from '../../components/impersonation/PreviewAdminModal';
 import { RecentSignInActivity } from './AdminEventPanels';
 import {
   ADMIN_DEFAULT_PAGE_SIZE,
@@ -97,6 +98,12 @@ const AdminPanelPage = () => {
   const {
     allowedActions: { canRead: canViewActivity },
   } = useRBAC(pluginPermissions.adminActivityRead);
+  // "View as admin" (4.20): the read-only permission preview.
+  const {
+    allowedActions: { canAdmins: canPreviewAdmins },
+  } = useRBAC(pluginPermissions.impersonateAdmins);
+  const [impersonationEnabled, setImpersonationEnabled] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState(null);
 
   const [admins, setAdmins] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -113,6 +120,22 @@ const AdminPanelPage = () => {
   const dialogRequestRef = useRef(0);
   const hasLoadedRef = useRef(false);
   const openerRef = useRef(null);
+
+  // Whether the Impersonation switch is on; "View as" is offered only then.
+  useEffect(() => {
+    if (!canPreviewAdmins) return undefined;
+    let current = true;
+    get(`/${pluginId}/impersonation/status`)
+      .then(({ data }) => {
+        if (current) setImpersonationEnabled(data?.data?.enabled === true);
+      })
+      .catch((err) => {
+        if (!isCancelledRequest(err)) logSafeAdminError('impersonation.status', err);
+      });
+    return () => {
+      current = false;
+    };
+  }, [canPreviewAdmins, get]);
   const confirmReturnRef = useRef(null);
   const captionRef = useRef(null);
   const pageRef = useRef(null);
@@ -404,6 +427,11 @@ const AdminPanelPage = () => {
     canRevoke: Boolean(canRevoke),
     onView: openDialog,
     onSignOutEverywhere: (admin, trigger) => askSignOut(admin, null, trigger),
+    canPreview: Boolean(canPreviewAdmins) && impersonationEnabled,
+    onPreview: (admin, trigger) => {
+      openerRef.current = trigger;
+      setPreviewTarget({ id: admin.id, name: admin.name });
+    },
     busy: refreshing,
   };
 
@@ -695,6 +723,16 @@ const AdminPanelPage = () => {
             onSignOut={(session, trigger) => askSignOut(selected, session, trigger)}
             onSignOutEverywhere={(trigger) => askSignOut(selected, null, trigger)}
             onClose={closeDialog}
+            onCloseAutoFocus={(event) =>
+              restoreDialogFocus(event, openerRef.current, captionRef.current || pageRef.current)
+            }
+          />
+        ) : null}
+
+        {previewTarget ? (
+          <PreviewAdminModal
+            admin={previewTarget}
+            onClose={() => setPreviewTarget(null)}
             onCloseAutoFocus={(event) =>
               restoreDialogFocus(event, openerRef.current, captionRef.current || pageRef.current)
             }

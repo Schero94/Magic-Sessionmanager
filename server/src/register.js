@@ -20,7 +20,8 @@ const USER_UID = 'plugin::users-permissions.user';
  *   (4.17) for the protected settings (location lookup, webhooks, security
  *   log).
  * - Registers `impersonate.users` (4.20) for starting, listing and ending
- *   impersonations of app users.
+ *   impersonations of app users, and `impersonate.admins` for the read-only
+ *   permission preview of another admin.
  * - Disables GraphQL Shadow CRUD for the plugin's internal content types
  *   when the GraphQL plugin is installed (4.17).
  * - Removes the `sessions` relation field from the User content type so it
@@ -104,6 +105,17 @@ module.exports = async ({ strapi }) => {
       section: 'plugins',
       displayName: 'Impersonate app users',
       uid: 'impersonate.users',
+      subCategory: 'Impersonation',
+      pluginName: 'magic-sessionmanager',
+    },
+    // "View as admin" (4.20): a read-only preview of which content types and
+    // actions another admin can use. Never a Super Admin, never oneself, and
+    // for non-Super-Admins only admins whose permissions are a subset of
+    // their own.
+    {
+      section: 'plugins',
+      displayName: 'View as admin (read-only permission preview)',
+      uid: 'impersonate.admins',
       subCategory: 'Impersonation',
       pluginName: 'magic-sessionmanager',
     },

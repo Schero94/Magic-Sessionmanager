@@ -38,7 +38,10 @@ const getClientIp = require('../utils/getClientIp');
 const { getPluginSettings } = require('../utils/settings-loader');
 const { getNativeSessionManager } = require('../utils/native-session-manager');
 const { REVOCATION_UID } = require('../utils/session-revocation');
+const { buildPreview, loadAdmin, previewRefusal } = require('../utils/admin-preview');
 const {
+  ADMIN_DURATIONS,
+  ADMIN_ID_PATTERN,
   CODE_PATTERN,
   CODE_TTL_MS,
   DOCUMENT_ID_PATTERN,
@@ -214,6 +217,7 @@ module.exports = ({ strapi }) => {
         handoff: frontend ? 'frontend' : 'token',
         frontendOrigin: frontend ? frontend.origin : null,
         durations: [...USER_DURATIONS],
+        adminDurations: [...ADMIN_DURATIONS],
         mode: getNativeSessionManager(strapi) ? 'refresh' : 'legacy',
       };
     },
@@ -351,6 +355,140 @@ module.exports = ({ strapi }) => {
       return {
         impersonation: service.toDto(row, { users: new Map([[user.documentId, user]]), actor }),
         handoff,
+      };
+    },
+
+    /**
+     * Starts a read-only permission preview of another admin ("View as
+     * admin"). No session or token is created; the preview can be read by
+     * the admin who started it until it ends.
+     *
+     * @param {{actor: any, adminId: unknown, body: unknown, canReadAdmins: boolean}} input
+     *   Caller (with roles), target id and request body.
+     * @returns {Promise<object>} Impersonation DTO plus the preview.
+     * @throws {ImpersonationError} 400 invalid body or id; 403 feature off, self, Super Admin
+     *   or not a subset of the caller's permissions; 404 unknown admin.
+     * @sideeffect Creates an impersonation row; queues `impersonation.started` or `.refused`.
+     */
+    async previewAdmin({ actor, adminId, body, canReadAdmins }) {
+      const actorId = String(actor.id);
+      const refuse = (reason, status, message, extra = {}) => {
+        service.recordRefused({ actorId, targetType: 'admin', targetId: adminId, reason });
+        return new ImpersonationError(status, message, { reason, ...extra });
+      };
+      if (!(await service.isEnabled())) {
+        throw refuse('disabled', 403, 'Impersonation is turned off');
+      }
+      if (typeof adminId !== 'string' || !ADMIN_ID_PATTERN.test(adminId)) {
+        throw new ImpersonationError(404, 'Admin not found');
+      }
+      const { value, errors: fieldErrors } = validateStartBody(body, {
+        durations: ADMIN_DURATIONS,
+        notify: false,
+      });
+      if (!value) {
+        throw new ImpersonationError(400, 'Invalid preview request', {
+          errors: fieldErrors.map((error) => ({ ...error, name: 'ValidationError' })),
+        });
+      }
+      const [caller, target] = await Promise.all([
+        loadAdmin(strapi, actor.id),
+        loadAdmin(strapi, Number(adminId)),
+      ]);
+      if (!target) throw new ImpersonationError(404, 'Admin not found');
+      const refusal = await previewRefusal(strapi, caller || actor, target);
+      if (refusal) {
+        const messages = {
+          self: 'You cannot view yourself as another admin',
+          'super-admin': 'Super Admins cannot be viewed as another admin',
+          'not-subset': 'This admin has permissions that you do not have',
+        };
+        throw refuse(
+          refusal.reason,
+          403,
+          messages[refusal.reason],
+          refusal.uncovered ? { uncovered: refusal.uncovered } : {}
+        );
+      }
+
+      await service.sweep();
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + value.durationMinutes * 60 * 1000);
+      const row = await query().create({
+        data: {
+          targetType: 'admin',
+          targetId: String(target.id),
+          actorId,
+          state: 'active',
+          reason: value.reason,
+          durationMinutes: value.durationMinutes,
+          handoff: 'preview',
+          notifyUser: false,
+          startedAt: now,
+          expiresAt,
+        },
+      });
+      record({
+        event: EVENTS.STARTED,
+        actorType: 'admin',
+        actorId,
+        targetType: 'admin',
+        targetId: String(target.id),
+        meta: {
+          reason: value.reason,
+          durationMinutes: value.durationMinutes,
+          handoff: 'preview',
+        },
+      });
+      const preview = await buildPreview(strapi, target);
+      if (!canReadAdmins) preview.admin.name = '';
+      return {
+        impersonation: service.toDto(row, {
+          admins: new Map([
+            [String(target.id), canReadAdmins ? target : null],
+            [actorId, caller || actor],
+          ]),
+          viewer: actor,
+        }),
+        preview,
+      };
+    },
+
+    /**
+     * The preview of a running admin preview, for the admin who started it.
+     * An expired one is ended and answers 404 like an unknown one.
+     *
+     * @param {{id: unknown, viewer: any, canReadAdmins: boolean}} input Preview id and caller.
+     * @returns {Promise<object>} Impersonation DTO plus the preview.
+     * @throws {ImpersonationError} 404 unknown, ended, expired or started by someone else.
+     */
+    async getPreview({ id, viewer, canReadAdmins }) {
+      if (typeof id !== 'string' || !DOCUMENT_ID_PATTERN.test(id)) {
+        throw new ImpersonationError(404, 'Preview not found');
+      }
+      const row = await query().findOne({
+        where: { documentId: id, targetType: 'admin', state: 'active' },
+      });
+      if (!row || String(row.actorId) !== String(viewer.id)) {
+        throw new ImpersonationError(404, 'Preview not found');
+      }
+      if (new Date(row.expiresAt).getTime() <= Date.now()) {
+        await service.end(row.documentId, { reason: 'expired' });
+        throw new ImpersonationError(404, 'Preview not found');
+      }
+      const target = await loadAdmin(strapi, Number(row.targetId));
+      if (!target) {
+        await service.end(row.documentId, { reason: 'failed', silent: true });
+        throw new ImpersonationError(404, 'Preview not found');
+      }
+      const preview = await buildPreview(strapi, target);
+      if (!canReadAdmins) preview.admin.name = '';
+      return {
+        impersonation: service.toDto(row, {
+          admins: new Map([[String(target.id), canReadAdmins ? target : null]]),
+          viewer,
+        }),
+        preview,
       };
     },
 
@@ -618,12 +756,15 @@ module.exports = ({ strapi }) => {
     },
 
     /**
-     * Active impersonations of the given target types, newest first.
+     * Active impersonations of the given target types, newest first. Admin
+     * names are shown only to callers who may read admin users (as in the
+     * Admin panel view); the caller's own name always.
      *
-     * @param {{targetTypes: Array<'user'|'admin'>, viewer: any}} input Kinds the caller may see.
+     * @param {{targetTypes: Array<'user'|'admin'>, viewer: any, canReadAdmins?: boolean}} input
+     *   Kinds the caller may see.
      * @returns {Promise<object[]>} DTOs.
      */
-    async listActive({ targetTypes, viewer }) {
+    async listActive({ targetTypes, viewer, canReadAdmins = true }) {
       if (!targetTypes.length) return [];
       await service.sweep();
       const rows = await query().findMany({
@@ -649,7 +790,13 @@ module.exports = ({ strapi }) => {
         : [];
       const admins = adminIds.length
         ? await strapi.db.query('admin::user').findMany({
-            where: { id: { $in: adminIds } },
+            where: {
+              id: {
+                $in: canReadAdmins
+                  ? adminIds
+                  : adminIds.filter((id) => String(id) === String(viewer?.id)),
+              },
+            },
             select: ['id', 'firstname', 'lastname', 'username', 'email'],
           })
         : [];

@@ -21,6 +21,12 @@ const pluginPermissions = {
    * requires `access` and the Impersonation switch.
    */
   impersonateUsers: [{ action: `plugin::${pluginId}.impersonate.users`, subject: null }],
+  /**
+   * "View as admin" (4.20): the read-only permission preview of another
+   * admin. The server also requires `access`, the switch and the
+   * anti-escalation rules.
+   */
+  impersonateAdmins: [{ action: `plugin::${pluginId}.impersonate.admins`, subject: null }],
 };
 
 export default pluginPermissions;

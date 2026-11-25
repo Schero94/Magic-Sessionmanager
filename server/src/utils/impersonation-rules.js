@@ -21,6 +21,9 @@ const IMPERSONATION_KEYS = Object.freeze(Object.keys(IMPERSONATION_DEFAULTS));
 /** Durations an admin can choose for an app-user impersonation (minutes). */
 const USER_DURATIONS = Object.freeze([15, 30, 60]);
 
+/** Durations of an admin permission preview (minutes; at most 30). */
+const ADMIN_DURATIONS = Object.freeze([15, 30]);
+
 /** Shortest and longest reason, after trimming. */
 const REASON_MIN = 3;
 const REASON_MAX = 255;
@@ -34,8 +37,9 @@ const IMPERSONATION_HEADER = 'X-Magic-Impersonation';
 /** Hand-off code shape: 43 base64url characters (32 random bytes). */
 const CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
-/** Users & Permissions documentId shape. */
+/** Users & Permissions documentId / admin id shapes. */
 const DOCUMENT_ID_PATTERN = /^[A-Za-z0-9]{1,64}$/;
+const ADMIN_ID_PATTERN = /^[1-9][0-9]{0,15}$/;
 
 /** Loopback hosts that may use plain http outside production. */
 const LOOPBACK_HOSTS = Object.freeze(['localhost', '127.0.0.1', '[::1]']);
@@ -336,6 +340,8 @@ function decodeJwtPayload(token) {
 }
 
 module.exports = {
+  ADMIN_DURATIONS,
+  ADMIN_ID_PATTERN,
   CODE_PATTERN,
   CODE_TTL_MS,
   DOCUMENT_ID_PATTERN,

@@ -12,8 +12,8 @@ import { useSettingsTranslate } from './hooks/useSettingsTranslate';
  * Tab "Impersonation" (4.20): the switch that allows admins with "Impersonate
  * app users" to act as an app user for a limited time, the privacy note next
  * to it, and the list of running impersonations with End. The switch is a
- * protected setting (`settings.update`); the list needs the impersonate
- * permission.
+ * protected setting (`settings.update`); the list needs one of the two
+ * impersonate permissions.
  *
  * @param {{ form: ReturnType<typeof import('./hooks/useSettingsForm').useSettingsForm> }} props Settings form.
  * @returns {import('react').ReactElement} Tab content.
@@ -24,8 +24,8 @@ const ImpersonationTab = ({ form }) => {
   const locked = form.canChangeProtected === false;
   const {
     isLoading,
-    allowedActions: { canUsers },
-  } = useRBAC(pluginPermissions.impersonateUsers);
+    allowedActions: { canUsers, canAdmins },
+  } = useRBAC([...pluginPermissions.impersonateUsers, ...pluginPermissions.impersonateAdmins]);
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
@@ -58,7 +58,7 @@ const ImpersonationTab = ({ form }) => {
         </SettingsToggleRow>
       </SectionCard>
 
-      {!isLoading && canUsers ? <ActiveImpersonationsCard /> : null}
+      {!isLoading && (canUsers || canAdmins) ? <ActiveImpersonationsCard /> : null}
     </Flex>
   );
 };
