@@ -265,3 +265,36 @@ test('start-up check: the frontend origin must be allowed by the CSP form-action
   const noFrontend = createService({ strapi: fakeStrapi(['strapi::security'], undefined) });
   assert.equal(noFrontend.checkHandoffSetup(), true);
 });
+
+test('a refused call during an impersonation names the impersonated user as target', async () => {
+  const createService = require('../server/src/services/impersonation');
+  const recorded = [];
+  const strapi = {
+    config: { get: () => undefined },
+    log: { warn() {}, info() {}, error() {}, debug() {} },
+    db: {
+      query: () => ({
+        findOne: async () => ({
+          documentId: 'imp1',
+          actorId: '4',
+          targetId: 'usrann',
+          state: 'active',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      }),
+    },
+    plugin: () => ({
+      service: (name) =>
+        name === 'security-log' ? { record: (input) => recorded.push(input) } : null,
+    }),
+  };
+  const service = createService({ strapi });
+  const loaded = await service.loadForGuard('imp1');
+  assert.equal(loaded.targetId, 'usrann');
+  service.recordRefusedCall(loaded, 'credentials');
+  assert.equal(recorded.length, 1);
+  assert.deepEqual(
+    [recorded[0].event, recorded[0].targetType, recorded[0].targetId, recorded[0].meta.refusal],
+    ['impersonation.refused', 'user', 'usrann', 'call-credentials']
+  );
+});

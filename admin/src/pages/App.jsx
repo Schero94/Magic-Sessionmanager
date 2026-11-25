@@ -3,15 +3,18 @@ import { Route, Routes } from 'react-router-dom';
 import HomePage from './HomePage';
 import AdminPanelPage from './AdminPanel';
 import AdminActivityPage from './AdminPanel/ActivityPage';
+import UserActivityPage from './UserActivity/ActivityPage';
 import pluginPermissions from '../permissions';
 
 /**
  * Plugin page router. Strapi mounts this component at
  * `plugins/magic-sessionmanager/*`: the index is the app-user dashboard, and
  * `admin-panel` lists Strapi admin panel sessions and `admin-panel/activity`
- * shows the sign-in activity of all admins. All need plugin access; the admin
+ * shows the sign-in activity of all admins; `app-users/activity` (4.22) shows
+ * the security activity of app users. All need plugin access; the admin
  * panel views also need `admin-sessions.read`, the activity page
- * `admin-activity.read` as well. These checks only
+ * `admin-activity.read` as well, the app-user activity `user-activity.read`.
+ * These checks only
  * decide what is rendered; every API route enforces the same actions.
  *
  * @returns {import('react').ReactElement} Plugin routes.
@@ -36,6 +39,14 @@ const App = () => {
               <Page.Protect permissions={pluginPermissions.adminActivityRead}>
                 <AdminActivityPage />
               </Page.Protect>
+            </Page.Protect>
+          }
+        />
+        <Route
+          path="app-users/activity"
+          element={
+            <Page.Protect permissions={pluginPermissions.userActivityRead}>
+              <UserActivityPage />
             </Page.Protect>
           }
         />

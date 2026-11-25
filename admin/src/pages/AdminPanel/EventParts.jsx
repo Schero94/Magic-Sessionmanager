@@ -25,6 +25,8 @@ import {
   Shield,
   SignOut,
   Stack,
+  Stop,
+  Clock,
   Trash,
   User,
   WarningCircle,
@@ -81,6 +83,8 @@ const EVENT_ICONS = Object.freeze({
   notMe: WarningCircle,
   export: Download,
   impersonation: User,
+  impersonationEnd: Stop,
+  expired: Clock,
   webhook: Webhooks,
   other: Information,
 });
@@ -355,13 +359,16 @@ export const SessionState = ({ row }) => {
 
 /**
  * Column header in the DS sigma style; `hidden` keeps the name for screen
- * readers only (the actions column).
+ * readers only (the actions column). Every other prop goes to the DS `Th`:
+ * the DS row clones its cells with their grid `coords`, and the grid gives
+ * `tabIndex=0` to the cell at those coordinates. Without them no cell was
+ * focusable and Tab skipped the whole table (4.19 to 4.21).
  *
  * @param {{children: import('react').ReactNode, hidden?: boolean}} props
  * @returns {import('react').ReactElement} Header cell.
  */
-export const HeaderCell = ({ children, hidden = false }) => (
-  <Th>
+export const HeaderCell = ({ children, hidden = false, ...rest }) => (
+  <Th {...rest}>
     {hidden ? (
       <VisuallyHidden>{children}</VisuallyHidden>
     ) : (

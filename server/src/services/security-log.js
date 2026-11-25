@@ -59,6 +59,12 @@ const {
   normalizeIp,
 } = require('../utils/admin-request-info');
 const { resolveSecurityLogSettings } = require('../utils/security-log-settings');
+const {
+  USER_ACTIVITY_EVENTS,
+  userActivityWhere,
+  userEventAddress,
+  userEventFacts,
+} = require('../utils/user-activity-model');
 const { getPluginSettings } = require('../utils/settings-loader');
 const { shouldResolveGeoData } = require('../utils/enhance-session');
 const { createLogger } = require('../utils/logger');
@@ -67,6 +73,7 @@ const EVENT_UID = 'plugin::magic-sessionmanager.security-event';
 const ADMIN_USER_UID = 'admin::user';
 const ADMIN_SESSION_UID = 'admin::session';
 const PERMISSION_UID = 'admin::permission';
+const USER_UID = 'plugin::users-permissions.user';
 const SUPER_ADMIN_CODE = 'strapi-super-admin';
 
 /** Delay between a queued event and its write. */
@@ -127,7 +134,12 @@ const MAX_DELETE_STEPS = 200;
  *   Manager titles are resolved with it. Without it, no title is returned.
  * @property {boolean} [canReadAdmins] The reader holds `admin::users.read`; otherwise admin
  *   names are returned empty (the UI shows "Admin #id").
+ * @property {boolean} [canSeeImpersonationReason] The reader holds `impersonate.users`; only
+ *   then the app-user activity returns the reason an admin gave for an impersonation.
  */
+
+/** Lists whose reads are audited (`security-log.read`, `meta.list`). */
+const AUDITED_LISTS = Object.freeze(['sign-ins', 'content', 'user-activity']);
 
 /**
  * @param {unknown} value Candidate id.
@@ -699,13 +711,35 @@ module.exports = ({ strapi }) => {
      * @sideeffect Queues one always-on security event.
      */
     recordTokenRead(input) {
-      const now = Date.now();
-      const tokenId = toId(input?.tokenId);
-      const key = `${tokenId || '-'}|${input?.list}|${input?.exported ? 'export' : 'list'}`;
-      const last = readAudits.get(key);
-      if (last !== undefined && now - last < READ_AUDIT_DEDUP_MS) return false;
-      readAudits.set(key, now);
-      pruneDedup(readAudits, now, READ_AUDIT_DEDUP_MS);
+      return service.recordLogRead({ ...input, via: 'admin-token' });
+    },
+
+    /**
+     * Records a read of the security log (`security-log.read`, always on).
+     * Reads with an admin API token (4.17) are recorded once per token, list
+     * and kind within 5 minutes. An export of the app-user activity from the
+     * admin panel (4.22) is recorded each time it starts: it takes personal
+     * data of app users out of Strapi.
+     *
+     * @param {{adminId: unknown, tokenId?: unknown, list: 'sign-ins'|'content'|'user-activity',
+     *   exported: boolean, via: 'admin-token'|'admin-panel'}} input Who read what, and how.
+     * @returns {boolean} Whether an event was queued.
+     * @sideeffect Queues one always-on security event.
+     */
+    recordLogRead(input) {
+      const via = input?.via === 'admin-panel' ? 'admin-panel' : 'admin-token';
+      const list = AUDITED_LISTS.includes(/** @type {string} */ (input?.list))
+        ? input.list
+        : 'sign-ins';
+      const tokenId = via === 'admin-token' ? toId(input?.tokenId) : null;
+      if (via === 'admin-token') {
+        const now = Date.now();
+        const key = `${tokenId || '-'}|${list}|${input?.exported ? 'export' : 'list'}`;
+        const last = readAudits.get(key);
+        if (last !== undefined && now - last < READ_AUDIT_DEDUP_MS) return false;
+        readAudits.set(key, now);
+        pruneDedup(readAudits, now, READ_AUDIT_DEDUP_MS);
+      }
       return service.record({
         event: SECURITY_EVENTS.LOG_READ,
         actorType: 'admin',
@@ -713,9 +747,9 @@ module.exports = ({ strapi }) => {
         targetType: 'security-log',
         targetId: null,
         meta: {
-          list: input?.list === 'content' ? 'content' : 'sign-ins',
+          list,
           exported: input?.exported === true,
-          via: 'admin-token',
+          via,
           ...(tokenId ? { tokenId } : {}),
         },
       });
@@ -862,16 +896,72 @@ module.exports = ({ strapi }) => {
     },
 
     /**
-     * One export batch (newest first, keyset on id) of either list.
+     * One page of the app-user security activity (4.22), newest first:
+     * failed and refused sign-ins, lockouts, session limits, sign-outs after
+     * a password change, new devices, impossible travel, "This wasn't me",
+     * data exports and impersonations of app users. Rows older than the
+     * retention period are not returned; IP addresses follow the current
+     * "Store" and "Anonymise" switches.
      *
-     * @param {'sign-ins'|'content'} kind List.
+     * @param {{event?: string, userId?: string, from?: Date|null, to?: Date|null,
+     *   page: number, pageSize: number}} query Parsed filters.
+     * @param {Viewer} [viewer] Reader (user emails need Content Manager read access to the
+     *   user; admin names `admin::users.read`; impersonation reasons `impersonate.users`).
+     * @returns {Promise<{data: object[], meta: object}>} Response body.
+     */
+    async listUserActivity(query, viewer = {}) {
+      const settings = await readSettingsOrDefaults();
+      const options = resolveSecurityLogSettings(settings);
+      const where = userActivityWhere(query, options);
+      const [total, rows] = await Promise.all([
+        events().count({ where }),
+        events().findMany({
+          where,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          offset: (query.page - 1) * query.pageSize,
+          limit: query.pageSize,
+        }),
+      ]);
+      const shaped = await shapeUserEvents(Array.isArray(rows) ? rows : [], viewer, options);
+      return {
+        data: shaped.data,
+        meta: {
+          pagination: paginationOf(query, total),
+          recording: {
+            ipAddresses: options.storeIp,
+            anonymizeIp: options.anonymizeIp,
+            retentionDays: options.retentionDays,
+            userSignIns: settings.recordUserSignInEvents !== false,
+          },
+          identity: {
+            users: shaped.usersVisible,
+            names: viewer.canReadAdmins === true,
+            impersonationReasons: viewer.canSeeImpersonationReason === true,
+          },
+        },
+      };
+    },
+
+    /**
+     * One export batch (newest first, keyset on id) of a list.
+     *
+     * @param {'sign-ins'|'content'|'user-activity'} kind List.
      * @param {any} query Parsed filters (as for the list).
      * @param {number|null} cursor Id below which to continue.
      * @param {Viewer} [viewer] Reader; the same title and name rules as the lists.
      * @returns {Promise<{data: object[], meta: {nextCursor: string|null}}>} Batch.
      */
     async exportBatch(kind, query, cursor, viewer = {}) {
-      const base = kind === 'sign-ins' ? signInWhere(query) : activityWhere(query);
+      const options =
+        kind === 'user-activity'
+          ? resolveSecurityLogSettings(await readSettingsOrDefaults())
+          : null;
+      const base =
+        kind === 'sign-ins'
+          ? signInWhere(query)
+          : kind === 'user-activity' && options
+            ? userActivityWhere(query, options)
+            : activityWhere(query);
       const where = cursor ? { $and: [base, { id: { $lt: cursor } }] } : base;
       const rows = await events().findMany({
         where,
@@ -879,8 +969,11 @@ module.exports = ({ strapi }) => {
         limit: EXPORT_BATCH,
       });
       const list = Array.isArray(rows) ? rows : [];
-      const data =
-        kind === 'sign-ins' ? await shapeSignIns(list, viewer) : await shapeActivity(list, viewer);
+      let data;
+      if (kind === 'sign-ins') data = await shapeSignIns(list, viewer);
+      else if (kind === 'user-activity' && options) {
+        data = (await shapeUserEvents(list, viewer, options)).data;
+      } else data = await shapeActivity(list, viewer);
       const last = list[list.length - 1];
       return {
         data,
@@ -1091,19 +1184,27 @@ module.exports = ({ strapi }) => {
   }
 
   /**
+   * Merged plugin settings, or an empty object (the defaults) when they
+   * cannot be read.
+   *
+   * @returns {Promise<Record<string, any>>} Settings.
+   */
+  async function readSettingsOrDefaults() {
+    try {
+      return (await getPluginSettings(strapi)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
    * Current recording switches, for the UI.
    *
    * @returns {Promise<{signIns: boolean, contentActivity: boolean, ipAddresses: boolean,
    *   anonymizeIp: boolean, retentionDays: number}>} Flags.
    */
   async function recordingFlags() {
-    let settings;
-    try {
-      settings = await getPluginSettings(strapi);
-    } catch {
-      settings = {};
-    }
-    const options = resolveSecurityLogSettings(settings);
+    const options = resolveSecurityLogSettings(await readSettingsOrDefaults());
     return {
       signIns: options.signIns,
       contentActivity: options.content,
@@ -1201,8 +1302,9 @@ module.exports = ({ strapi }) => {
         read:
           row.event === SECURITY_EVENTS.LOG_READ
             ? {
-                list: meta.list === 'content' ? 'content' : 'sign-ins',
+                list: AUDITED_LISTS.includes(meta.list) ? meta.list : 'sign-ins',
                 exported: meta.exported === true,
+                via: meta.via === 'admin-panel' ? 'admin-panel' : 'admin-token',
               }
             : null,
         purge:
@@ -1409,6 +1511,135 @@ module.exports = ({ strapi }) => {
           : null,
       };
     });
+  }
+
+  /**
+   * App users of a page by documentId, with what this reader may see of
+   * them: the email and username only when the reader may read that user in
+   * the Content Manager (type, conditions and field-level permission on
+   * `email` / `username`), like Settings › Users for admins (4.16.1, F4).
+   *
+   * @param {Array<unknown>} documentIds Candidate ids.
+   * @param {any} ability Reader's CASL ability, or null.
+   * @returns {Promise<{users: Map<string, {id: number, documentId: string, email: string,
+   *   username: string}>, visible: boolean}>} Users, and whether the reader may read app users
+   *   in the Content Manager at all.
+   */
+  async function loadAppUsers(documentIds, ability) {
+    /** @type {Map<string, {id: number, documentId: string, email: string, username: string}>} */
+    const users = new Map();
+    if (!strapi.contentTypes?.[USER_UID]) return { users, visible: false };
+    let checker = null;
+    if (ability) {
+      try {
+        const checkers = strapi.plugin('content-manager')?.service('permission-checker');
+        const candidate = checkers?.create({ userAbility: ability, model: USER_UID }) || null;
+        checker = candidate && !candidate.cannot.read() ? candidate : null;
+      } catch {
+        checker = null;
+      }
+    }
+    const ids = [
+      ...new Set(
+        documentIds.filter((id) => typeof id === 'string' && /^[A-Za-z0-9]{1,64}$/.test(id))
+      ),
+    ];
+    if (!ids.length) return { users, visible: Boolean(checker) };
+    const attributes = strapi.contentTypes[USER_UID].attributes || {};
+    const found = await strapi.db.query(USER_UID).findMany({
+      select: ['id', 'documentId', 'email', 'username'],
+      where: { documentId: { $in: ids } },
+      ...(attributes.createdBy ? { populate: { createdBy: { select: ['id'] } } } : {}),
+      limit: ids.length * 2,
+    });
+    for (const user of Array.isArray(found) ? found : []) {
+      const may = (field) => {
+        if (!checker) return false;
+        try {
+          return checker.can.read(user, field) === true;
+        } catch {
+          return false;
+        }
+      };
+      const email = may('email') && typeof user.email === 'string' ? user.email : '';
+      const username = may('username') && typeof user.username === 'string' ? user.username : '';
+      users.set(String(user.documentId), {
+        id: Number(user.id),
+        documentId: String(user.documentId),
+        email: email.slice(0, 254),
+        username: username.slice(0, 200),
+      });
+    }
+    return { users, visible: Boolean(checker) };
+  }
+
+  /**
+   * Response rows of the app-user security activity (4.22): allowlisted
+   * fields, the event's own facts (numbers and codes, see userEventFacts),
+   * the app user as far as the reader may see them, the admin who acted
+   * (lifted a lock, impersonated) with their name only for
+   * `admin::users.read`, and the address as the current switches allow it.
+   * Rows an admin caused carry no address, browser or user agent: those
+   * would be the admin's own.
+   * Never the device hash, the socket address, a typed identifier or a token.
+   *
+   * @param {Array<Record<string, any>>} rows Stored rows.
+   * @param {Viewer} viewer Reader.
+   * @param {{storeIp: boolean, anonymizeIp: boolean}} options Security log settings.
+   * @returns {Promise<{data: object[], usersVisible: boolean}>} DTOs and the identity flag.
+   */
+  async function shapeUserEvents(rows, viewer, options) {
+    const list = rows.filter((row) => USER_ACTIVITY_EVENTS.includes(row.event));
+    const { users, visible } = await loadAppUsers(
+      list.filter((row) => row.targetType === 'user').map((row) => row.targetId),
+      viewer.ability || null
+    );
+    const admins = await loadAdmins(
+      list.filter((row) => row.actorType === 'admin').map((row) => row.actorId)
+    );
+    const data = list.map((row) => {
+      // Events an admin caused (lock lifted, impersonation) store the admin's own request: their
+      // address and browser belong to the admin sign-in data (`admin-activity.read`), not to the
+      // app user, so this view never returns them.
+      const byAdmin = row.actorType === 'admin';
+      const userAgent =
+        !byAdmin && typeof row.userAgent === 'string' && row.userAgent ? row.userAgent : null;
+      const described = describeUserAgent(userAgent);
+      const address = byAdmin
+        ? { ipAddress: null, ipAnonymized: false, keepLocation: false }
+        : userEventAddress(row, options, (ip) => anonymizeIp(normalizeIp(ip)));
+      const user =
+        row.targetType === 'user' && typeof row.targetId === 'string'
+          ? users.get(row.targetId) || null
+          : null;
+      const admin = row.actorType === 'admin' ? admins.get(Number(row.actorId)) : undefined;
+      let actor = null;
+      if (row.actorType === 'system') actor = { type: 'system', id: null, name: '' };
+      else if (row.actorType === 'admin' && toAdminId(row.actorId)) {
+        actor = {
+          type: 'admin',
+          id: Number(row.actorId),
+          name: admin && viewer.canReadAdmins === true ? adminName(admin) : '',
+        };
+      }
+      return {
+        id: Number(row.id),
+        event: row.event,
+        at: toIso(row.createdAt),
+        target: row.targetType === 'ip' ? 'ip' : 'user',
+        user,
+        actor,
+        details: userEventFacts(row.event, row.meta, viewer),
+        ipAddress: address.ipAddress,
+        ipAnonymized: address.ipAnonymized,
+        location: address.keepLocation ? toLocation(row.geo) : null,
+        browser: described.browserName,
+        os: described.osName,
+        deviceType: described.deviceType,
+        userAgent: userAgent ? userAgent.slice(0, MAX_USER_AGENT_LENGTH) : null,
+      };
+    });
+    return { data, usersVisible: visible };
   }
 
   return service;

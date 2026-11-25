@@ -215,8 +215,14 @@ export function withIdentityPlaceholders(admin, placeholderName, identity) {
  */
 export function withEventAdminNames(row, placeholderName) {
   if (!row || typeof row !== 'object') return row;
+  // App-user rows (4.22) also carry `{ type: 'system' }` actors without an id: never "Admin #".
   const fill = (admin) =>
-    admin && typeof admin === 'object' && !admin.name
+    admin &&
+    typeof admin === 'object' &&
+    !admin.name &&
+    admin.type !== 'system' &&
+    admin.id !== null &&
+    admin.id !== undefined
       ? { ...admin, name: placeholderName(admin.id), identityHidden: true }
       : admin;
   return {

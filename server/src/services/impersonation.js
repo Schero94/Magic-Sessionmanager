@@ -847,19 +847,21 @@ module.exports = ({ strapi }) => {
      * Loads one impersonation for the request guard (5-second cache).
      *
      * @param {string} documentId Impersonation id.
-     * @returns {Promise<{id: string, actorId: string, state: string, expiresAt: number}|null>}
+     * @returns {Promise<{id: string, actorId: string, targetId: string|null, state: string,
+     *   expiresAt: number}|null>}
      */
     async loadForGuard(documentId) {
       const cached = recordCache.get(documentId);
       if (cached && Date.now() - cached.at < RECORD_CACHE_MS) return cached.value;
       const row = await query().findOne({
         where: { documentId, targetType: 'user' },
-        select: ['documentId', 'actorId', 'state', 'expiresAt'],
+        select: ['documentId', 'actorId', 'targetId', 'state', 'expiresAt'],
       });
       const value = row
         ? {
             id: row.documentId,
             actorId: row.actorId,
+            targetId: typeof row.targetId === 'string' ? row.targetId : null,
             state: row.state,
             expiresAt: new Date(row.expiresAt).getTime(),
           }
@@ -913,7 +915,10 @@ module.exports = ({ strapi }) => {
      * Records a refused Content API call made while impersonating (one event
      * per impersonation and reason per minute).
      *
-     * @param {{id: string, actorId: string}} impersonation Impersonation.
+     * The impersonated user is the target (since 4.22), so the refusal shows
+     * in that user's security activity and is deleted with the account.
+     *
+     * @param {{id: string, actorId: string, targetId?: string|null}} impersonation Impersonation.
      * @param {string} reason Refusal reason.
      * @returns {void}
      */
@@ -928,7 +933,7 @@ module.exports = ({ strapi }) => {
         actorType: 'admin',
         actorId: impersonation.actorId,
         targetType: 'user',
-        targetId: null,
+        targetId: impersonation.targetId || null,
         meta: { refusal: `call-${reason}`, impersonation: impersonation.id },
       });
     },
