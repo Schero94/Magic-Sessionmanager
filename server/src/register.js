@@ -14,8 +14,10 @@ const USER_UID = 'plugin::users-permissions.user';
  *   (`MIN_STRAPI_VERSION`, 5.50.0).
  * - Registers the `access` RBAC action for admin access control, the
  *   `admin-sessions.read` / `admin-sessions.revoke` actions for the Strapi
- *   admin panel sessions view and `admin-activity.read` for the admin
- *   sign-in history and Content Manager activity.
+ *   admin panel sessions view, `admin-activity.read` for the admin
+ *   sign-in history and Content Manager activity, and `settings.update`
+ *   (4.17) for the protected settings (location lookup, webhooks, security
+ *   log).
  * - Removes the `sessions` relation field from the User content type so it
  *   doesn't clutter the default edit view (sessions are displayed via the
  *   SessionInfoPanel side panel).
@@ -67,6 +69,16 @@ module.exports = async ({ strapi }) => {
       displayName: 'View admin activity',
       uid: 'admin-activity.read',
       subCategory: 'Admin panel',
+      pluginName: 'magic-sessionmanager',
+    },
+    // Protected settings (4.17): IP location lookup (whether and where IP
+    // addresses are sent), team notification webhooks (the URLs are
+    // secrets) and the security log. The other settings stay on `access`.
+    {
+      section: 'plugins',
+      displayName: 'Change protected settings (location lookup, webhooks, security log)',
+      uid: 'settings.update',
+      subCategory: 'Settings',
       pluginName: 'magic-sessionmanager',
     },
   ]);
