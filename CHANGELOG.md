@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.16.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.16.0...v4.16.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* harden admin tracking (geo opt-in, failed sign-in flood, title and email exposure, protected settings, webhook secrets, proxy IP, hidden types) ([#38](https://github.com/Schero94/Magic-Sessionmanager/issues/38)) ([22b6705](https://github.com/Schero94/Magic-Sessionmanager/commit/22b670531a77bdefcbf1654c137d112e8eb3dd98))
+
 
 Release type: minor (`fix` commits for the security review of admin tracking, one `feat` for the new permission **Change protected settings**). Routes, paths and request bodies stay the same; the response and permission changes below close the review findings and are listed with what to do.
 
