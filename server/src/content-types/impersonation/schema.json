@@ -5,7 +5,7 @@
     "singularName": "impersonation",
     "pluralName": "impersonations",
     "displayName": "Impersonation",
-    "description": "Time-limited impersonations of app users and permission previews of admins, started by an admin with a reason"
+    "description": "Time-limited impersonations of app users, permission previews of admins and sign-ins as another admin, started by an admin with a reason"
   },
   "options": {
     "draftAndPublish": false,
@@ -68,10 +68,14 @@
     },
     "handoff": {
       "type": "enumeration",
-      "enum": ["frontend", "token", "preview"],
+      "enum": ["frontend", "token", "preview", "admin-session"],
       "required": true
     },
     "notifyUser": {
+      "type": "boolean",
+      "default": false
+    },
+    "allowChanges": {
       "type": "boolean",
       "default": false
     },

@@ -12,6 +12,7 @@ const { sendServerError } = require('../utils/http-errors');
 
 const IMPERSONATE_USERS_ACTION = 'plugin::magic-sessionmanager.impersonate.users';
 const IMPERSONATE_ADMINS_ACTION = 'plugin::magic-sessionmanager.impersonate.admins';
+const { ADMIN_SIGN_IN_ACTION } = require('../utils/admin-sign-in-rules');
 
 /**
  * Whether the caller's ability holds an action.
@@ -37,7 +38,9 @@ function callerCan(ctx, action) {
 function visibleTargetTypes(ctx) {
   return [
     ...(callerCan(ctx, IMPERSONATE_USERS_ACTION) ? ['user'] : []),
-    ...(callerCan(ctx, IMPERSONATE_ADMINS_ACTION) ? ['admin'] : []),
+    ...(callerCan(ctx, IMPERSONATE_ADMINS_ACTION) || callerCan(ctx, ADMIN_SIGN_IN_ACTION)
+      ? ['admin']
+      : []),
   ];
 }
 
@@ -237,6 +240,117 @@ module.exports = ({ strapi: app }) => {
     },
 
     /**
+     * Starts "Sign in as this admin" (4.23). Returns the landing path of the
+     * new tab and a one-time code for it; no session exists yet.
+     *
+     * @route POST /magic-sessionmanager/impersonation/admins/:adminId/sign-in
+     * @auth Admin JWT only (admin API tokens and impersonation sessions are refused);
+     *   `access` + `admin-sessions.read` + `impersonate.admins.sign-in`.
+     * @param {any} ctx Body `{ reason: string(3..255), durationMinutes: 15|30,
+     *   allowChanges?: boolean }`.
+     * @returns {Promise<void>} 201 `{ data: { impersonation, handoff: { type: 'admin-tab', path,
+     *   code, codeExpiresAt } } }`. Answers 403 with `details.reason` `disabled`, `unsupported`,
+     *   `api-token`, `nested`, `self`, `super-admin`, `not-subset`, `inactive` or
+     *   `already-active`, 400 for an invalid body and 404 for an unknown admin.
+     * @sideeffect Creates an impersonation row; logs `impersonation.started` or `.refused`.
+     */
+    async signInAdmin(ctx) {
+      ctx.set('Cache-Control', 'no-store');
+      return respond(ctx, 'sign-in', async () => {
+        const { adminId } = ctx.params;
+        requirePerson(ctx, 'admin', adminId);
+        const result = await service().startAdminSignIn({
+          actor: ctx.state.user,
+          adminId,
+          body: ctx.request.body,
+          canReadAdmins: callerCan(ctx, 'admin::users.read'),
+          nested: Boolean(ctx.state.magicAdminImpersonation),
+        });
+        ctx.status = 201;
+        ctx.body = { data: result };
+      });
+    },
+
+    /**
+     * Exchanges the one-time code of an admin sign-in for the target's
+     * access token. Called by the new tab with the starting admin's own
+     * token; only that admin can redeem the code. Every unusable code gets
+     * the same 400.
+     *
+     * @route POST /magic-sessionmanager/admin-impersonation/exchange
+     * @auth Admin JWT of the admin who started it (still holding `impersonate.admins.sign-in`).
+     * @param {any} ctx Body `{ code: string }`.
+     * @returns {Promise<void>} `{ data: { token, expiresAt, cookieName, impersonation } }`.
+     * @sideeffect Consumes the code; creates one Strapi admin session for the target.
+     */
+    async exchangeAdmin(ctx) {
+      ctx.set('Cache-Control', 'no-store');
+      const body = ctx.request.body;
+      const valid =
+        body &&
+        typeof body === 'object' &&
+        !Array.isArray(body) &&
+        Object.keys(body).length === 1 &&
+        typeof body.code === 'string' &&
+        ctx.state?.auth?.strategy?.name === 'admin' &&
+        !ctx.state.magicAdminImpersonation;
+      return respond(ctx, 'exchange', async () => {
+        const result = valid
+          ? await service().exchangeAdminCode({
+              code: body.code,
+              actor: ctx.state.user,
+              ability: ctx.state.userAbility,
+            })
+          : null;
+        if (!result) throw new ImpersonationError(400, 'Invalid or expired code');
+        ctx.body = { data: result };
+      });
+    },
+
+    /**
+     * State of the admin sign-in of the calling tab, for its banner.
+     *
+     * @route GET /magic-sessionmanager/admin-impersonation/self
+     * @auth The impersonation session's own token (checked by the admin impersonation guard);
+     *   401 for any other caller.
+     * @returns {Promise<void>} `{ data: { id, expiresAt, allowChanges } }`.
+     */
+    async adminSelf(ctx) {
+      ctx.set('Cache-Control', 'no-store');
+      const current = ctx.state.magicAdminImpersonation;
+      if (!current) return ctx.unauthorized('Not an impersonation session');
+      ctx.body = {
+        data: {
+          id: current.id,
+          expiresAt: new Date(current.expiresAt).toISOString(),
+          allowChanges: current.allowChanges === true,
+        },
+      };
+      return undefined;
+    },
+
+    /**
+     * Ends the admin sign-in of the calling tab: deletes its own Strapi
+     * session and nothing else.
+     *
+     * @route POST /magic-sessionmanager/admin-impersonation/self/end
+     * @auth The impersonation session's own token; 401 for any other caller.
+     * @returns {Promise<void>} `{ data: { ended: boolean } }`.
+     * @sideeffect Ends the impersonation; logs `impersonation.ended`.
+     */
+    async endAdminSelf(ctx) {
+      const current = ctx.state.magicAdminImpersonation;
+      if (!current) return ctx.unauthorized('Not an impersonation session');
+      return respond(ctx, 'end', async () => {
+        const ended = await service().end(current.id, {
+          reason: 'ended',
+          endedBy: current.actorId,
+        });
+        ctx.body = { data: { ended } };
+      });
+    },
+
+    /**
      * Exchanges a one-time hand-off code for the impersonation credential.
      * Public on purpose: the code is the credential (32 random bytes, stored
      * hashed, valid 60 seconds, single use). Every invalid, used or expired
@@ -269,3 +383,4 @@ module.exports = ({ strapi: app }) => {
 
 module.exports.IMPERSONATE_USERS_ACTION = IMPERSONATE_USERS_ACTION;
 module.exports.IMPERSONATE_ADMINS_ACTION = IMPERSONATE_ADMINS_ACTION;
+module.exports.ADMIN_SIGN_IN_ACTION = ADMIN_SIGN_IN_ACTION;

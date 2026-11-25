@@ -39,6 +39,10 @@ import { encodeSearchQuery, getErrorStatus } from '../Dashboard/dashboardModel.m
 import { AdminCardList, AdminTable } from './AdminList';
 import AdminSessionsModal from './AdminSessionsModal';
 import PreviewAdminModal from '../../components/impersonation/PreviewAdminModal';
+import ActiveImpersonationsCard from '../../components/impersonation/ActiveImpersonationsCard';
+import SignInAsAdminModal, {
+  unsupportedText,
+} from '../../components/impersonation/SignInAsAdminModal';
 import { RecentSignInActivity } from './AdminEventPanels';
 import {
   ADMIN_DEFAULT_PAGE_SIZE,
@@ -102,8 +106,14 @@ const AdminPanelPage = () => {
   const {
     allowedActions: { canAdmins: canPreviewAdmins },
   } = useRBAC(pluginPermissions.impersonateAdmins);
+  // "Sign in as this admin" (4.23).
+  const {
+    allowedActions: { canSignIn: canSignInAsAdmin },
+  } = useRBAC(pluginPermissions.signInAsAdmin);
   const [impersonationEnabled, setImpersonationEnabled] = useState(false);
+  const [signInSupport, setSignInSupport] = useState(null);
   const [previewTarget, setPreviewTarget] = useState(null);
+  const [signInTarget, setSignInTarget] = useState(null);
 
   const [admins, setAdmins] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -123,11 +133,13 @@ const AdminPanelPage = () => {
 
   // Whether the Impersonation switch is on; "View as" is offered only then.
   useEffect(() => {
-    if (!canPreviewAdmins) return undefined;
+    if (!canPreviewAdmins && !canSignInAsAdmin) return undefined;
     let current = true;
     get(`/${pluginId}/impersonation/status`)
       .then(({ data }) => {
-        if (current) setImpersonationEnabled(data?.data?.enabled === true);
+        if (!current) return;
+        setImpersonationEnabled(data?.data?.enabled === true);
+        setSignInSupport(data?.data?.adminSignIn || null);
       })
       .catch((err) => {
         if (!isCancelledRequest(err)) logSafeAdminError('impersonation.status', err);
@@ -135,7 +147,7 @@ const AdminPanelPage = () => {
     return () => {
       current = false;
     };
-  }, [canPreviewAdmins, get]);
+  }, [canPreviewAdmins, canSignInAsAdmin, get]);
   const confirmReturnRef = useRef(null);
   const captionRef = useRef(null);
   const pageRef = useRef(null);
@@ -432,6 +444,12 @@ const AdminPanelPage = () => {
       openerRef.current = trigger;
       setPreviewTarget({ id: admin.id, name: admin.name });
     },
+    canSignIn: Boolean(canSignInAsAdmin) && impersonationEnabled,
+    signInUnavailable: unsupportedText(signInSupport, t),
+    onSignIn: (admin, trigger) => {
+      openerRef.current = trigger;
+      setSignInTarget({ id: admin.id, name: admin.name });
+    },
     busy: refreshing,
   };
 
@@ -703,6 +721,10 @@ const AdminPanelPage = () => {
           </Flex>
         ) : null}
 
+        {showData && impersonationEnabled && (canSignInAsAdmin || canPreviewAdmins) ? (
+          <ActiveImpersonationsCard />
+        ) : null}
+
         {showData && canViewActivity ? (
           <RecentSignInActivity
             onOpenAdmin={(admin, trigger) => openDialog(admin, trigger, 'history')}
@@ -733,6 +755,17 @@ const AdminPanelPage = () => {
           <PreviewAdminModal
             admin={previewTarget}
             onClose={() => setPreviewTarget(null)}
+            onCloseAutoFocus={(event) =>
+              restoreDialogFocus(event, openerRef.current, captionRef.current || pageRef.current)
+            }
+          />
+        ) : null}
+
+        {signInTarget ? (
+          <SignInAsAdminModal
+            admin={signInTarget}
+            support={signInSupport}
+            onClose={() => setSignInTarget(null)}
             onCloseAutoFocus={(event) =>
               restoreDialogFocus(event, openerRef.current, captionRef.current || pageRef.current)
             }

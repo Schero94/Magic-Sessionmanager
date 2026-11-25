@@ -14,7 +14,7 @@ import {
   Typography,
   VisuallyHidden,
 } from '@strapi/design-system';
-import { Eye, SignOut, User } from '@strapi/icons';
+import { Eye, Key, SignOut, User } from '@strapi/icons';
 import { getTranslation } from '../../utils/getTranslation';
 
 /**
@@ -49,6 +49,17 @@ export const offersPreview = (admin, canPreview) =>
   Boolean(canPreview) &&
   admin.self !== true &&
   !(admin.roles || []).some((role) => role?.superAdmin === true);
+
+/**
+ * Whether "Sign in as" is offered for a row (UX only; the server enforces
+ * every rule): never for oneself, a Super Admin or an account that is not active.
+ *
+ * @param {object} admin Admin row.
+ * @param {boolean} [canSignIn] Caller holds "Sign in as another admin" and the switch is on.
+ * @returns {boolean}
+ */
+export const offersSignIn = (admin, canSignIn) =>
+  offersPreview(admin, canSignIn) && (admin.account === undefined || admin.account === 'active');
 
 const keepActionKeys = (event) => {
   if (shouldIsolateActionKey(event.key, true)) event.stopPropagation();
@@ -164,7 +175,10 @@ export const AdminStatus = ({ admin }) => {
  * @param {(admin: object, trigger: HTMLElement|null) => void} props.onView Opens the sessions dialog.
  * @param {(admin: object, trigger: HTMLElement|null) => void} props.onSignOutEverywhere Asks to sign out everywhere.
  * @param {boolean} [props.canPreview] Caller holds "View as admin" and the switch is on.
- * @param {(admin: object, trigger: HTMLElement|null) => void} [props.onPreview] Opens "View as".
+ * @param {(admin: object, trigger: HTMLElement|null) => void} [props.onPreview] Opens "View permissions".
+ * @param {boolean} [props.canSignIn] Caller holds "Sign in as another admin" and the switch is on.
+ * @param {string|null} [props.signInUnavailable] Why sign-in is off on this Strapi, or null.
+ * @param {(admin: object, trigger: HTMLElement|null) => void} [props.onSignIn] Opens "Sign in as".
  * @param {boolean} [props.busy] A refresh is running.
  * @returns {import('react').ReactElement} Table.
  */
@@ -176,6 +190,9 @@ export const AdminTable = ({
   onSignOutEverywhere,
   canPreview,
   onPreview,
+  canSignIn,
+  signInUnavailable,
+  onSignIn,
   busy,
 }) => {
   const t = useT();
@@ -241,12 +258,26 @@ export const AdminTable = ({
                   </IconButton>
                   {offersPreview(admin, canPreview) ? (
                     <IconButton
-                      label={t('adminPanel.actions.viewAs', 'View as {name}', {
+                      label={t('adminPanel.actions.viewPermissions', 'View permissions of {name}', {
                         name: admin.name || `#${admin.id}`,
                       })}
                       onClick={(event) => onPreview?.(admin, event.currentTarget)}
                     >
                       <User />
+                    </IconButton>
+                  ) : null}
+                  {offersSignIn(admin, canSignIn) ? (
+                    <IconButton
+                      label={
+                        signInUnavailable ||
+                        t('adminPanel.actions.signInAs', 'Sign in as {name}', {
+                          name: admin.name || `#${admin.id}`,
+                        })
+                      }
+                      disabled={Boolean(signInUnavailable)}
+                      onClick={(event) => onSignIn?.(admin, event.currentTarget)}
+                    >
+                      <Key />
                     </IconButton>
                   ) : null}
                   {canRevoke && admin.canSignOut ? (
@@ -285,7 +316,10 @@ export const AdminTable = ({
  * @param {(admin: object, trigger: HTMLElement|null) => void} props.onView Opens the sessions dialog.
  * @param {(admin: object, trigger: HTMLElement|null) => void} props.onSignOutEverywhere Asks to sign out everywhere.
  * @param {boolean} [props.canPreview] Caller holds "View as admin" and the switch is on.
- * @param {(admin: object, trigger: HTMLElement|null) => void} [props.onPreview] Opens "View as".
+ * @param {(admin: object, trigger: HTMLElement|null) => void} [props.onPreview] Opens "View permissions".
+ * @param {boolean} [props.canSignIn] Caller holds "Sign in as another admin" and the switch is on.
+ * @param {string|null} [props.signInUnavailable] Why sign-in is off on this Strapi, or null.
+ * @param {(admin: object, trigger: HTMLElement|null) => void} [props.onSignIn] Opens "Sign in as".
  * @returns {import('react').ReactElement} Card list.
  */
 export const AdminCardList = ({
@@ -296,6 +330,9 @@ export const AdminCardList = ({
   onSignOutEverywhere,
   canPreview,
   onPreview,
+  canSignIn,
+  signInUnavailable,
+  onSignIn,
 }) => {
   const t = useT();
   return (
@@ -346,12 +383,33 @@ export const AdminCardList = ({
                   variant="secondary"
                   startIcon={<User />}
                   onClick={(event) => onPreview?.(admin, event.currentTarget)}
-                  aria-label={t('adminPanel.actions.viewAs', 'View as {name}', {
-                    name: admin.name || `#${admin.id}`,
-                  })}
+                  aria-label={t(
+                    'adminPanel.actions.viewPermissions',
+                    'View permissions of {name}',
+                    {
+                      name: admin.name || `#${admin.id}`,
+                    }
+                  )}
                   flex="1 1 auto"
                 >
-                  {t('adminPanel.actions.viewAsShort', 'View as')}
+                  {t('adminPanel.actions.viewPermissionsShort', 'View permissions')}
+                </Button>
+              ) : null}
+              {offersSignIn(admin, canSignIn) ? (
+                <Button
+                  variant="secondary"
+                  startIcon={<Key />}
+                  disabled={Boolean(signInUnavailable)}
+                  onClick={(event) => onSignIn?.(admin, event.currentTarget)}
+                  aria-label={
+                    signInUnavailable ||
+                    t('adminPanel.actions.signInAs', 'Sign in as {name}', {
+                      name: admin.name || `#${admin.id}`,
+                    })
+                  }
+                  flex="1 1 auto"
+                >
+                  {t('adminPanel.actions.signInAsShort', 'Sign in as')}
                 </Button>
               ) : null}
               {canRevoke && admin.canSignOut ? (

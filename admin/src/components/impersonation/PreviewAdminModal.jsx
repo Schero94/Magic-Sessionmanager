@@ -235,7 +235,9 @@ const PreviewAdminModal = ({ admin, onClose, onCloseAutoFocus, onChanged }) => {
       <Modal.Content onCloseAutoFocus={onCloseAutoFocus} aria-describedby={undefined}>
         <Modal.Header closeLabel={t('common.close', 'Close')}>
           <Modal.Title>
-            {t('impersonation.preview.title', 'View as {name}', { name: name || `#${admin.id}` })}
+            {t('impersonation.preview.title', 'Permissions of {name}', {
+              name: name || `#${admin.id}`,
+            })}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>

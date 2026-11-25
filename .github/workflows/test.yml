@@ -270,6 +270,17 @@ jobs:
           node --test tests/isolated-impersonation-http.test.js
           SESSION_HTTP_MODE=refresh node --test tests/isolated-impersonation-http.test.js
 
+      # Sign in as this admin (4.23): the tab session, read-only, attribution,
+      # and that every ending leaves the target's own sessions alone.
+      - name: Sign in as another admin on SQLite and PostgreSQL
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+          MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_http
+        run: |
+          node --test tests/isolated-admin-sign-in-http.test.js
+          SESSION_HTTP_DB=postgres node --test tests/isolated-admin-sign-in-http.test.js
+
       - name: App-user security activity on SQLite and PostgreSQL
         env:
           SESSION_HTTP_REQUIRED: '1'
@@ -356,3 +367,4 @@ jobs:
           node --test tests/isolated-user-activity-http.test.js
           node --test tests/isolated-security-review2-http.test.js
           SESSION_HTTP_MODE=refresh node --test tests/isolated-security-review2-http.test.js
+          node --test tests/isolated-admin-sign-in-http.test.js

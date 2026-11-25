@@ -33,6 +33,12 @@ const pluginPermissions = {
    * anti-escalation rules.
    */
   impersonateAdmins: [{ action: `plugin::${pluginId}.impersonate.admins`, subject: null }],
+  /**
+   * "Sign in as this admin" (4.23): a real admin session of another admin in
+   * a separate tab. The server also requires `access`, the switch, a tested
+   * Strapi release and the anti-escalation rules.
+   */
+  signInAsAdmin: [{ action: `plugin::${pluginId}.impersonate.admins.sign-in`, subject: null }],
 };
 
 export default pluginPermissions;

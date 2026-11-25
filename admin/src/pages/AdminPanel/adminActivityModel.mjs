@@ -13,7 +13,13 @@ import {
  */
 
 /** Sign-in history filter of one admin (API values of `event`). */
-export const SIGN_IN_FILTER_OPTIONS = Object.freeze(['all', 'succeeded', 'failed', 'signed-out']);
+export const SIGN_IN_FILTER_OPTIONS = Object.freeze([
+  'all',
+  'succeeded',
+  'failed',
+  'signed-out',
+  'impersonation',
+]);
 
 /**
  * Filter of the activity of all admins: adds settings changes, token reads
@@ -369,6 +375,14 @@ export function getEventPresentation(row) {
         'expired',
         'adminPanel.activity.event.impersonationExpired',
         'Impersonation timed out'
+      );
+    case 'impersonation.write':
+      return appUserEvent(
+        'impersonation-write',
+        'warning',
+        'impersonation',
+        'adminPanel.activity.event.impersonationWrite',
+        'Change made while signed in as this admin'
       );
     case 'impersonation.refused':
       return appUserEvent(

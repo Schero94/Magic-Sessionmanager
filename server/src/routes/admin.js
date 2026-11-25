@@ -51,6 +51,7 @@ const LOCKOUTS_UNLOCK_ACTION = 'plugin::magic-sessionmanager.lockouts.unlock';
 const SETTINGS_UPDATE_ACTION = 'plugin::magic-sessionmanager.settings.update';
 const IMPERSONATE_USERS_ACTION = 'plugin::magic-sessionmanager.impersonate.users';
 const IMPERSONATE_ADMINS_ACTION = 'plugin::magic-sessionmanager.impersonate.admins';
+const ADMIN_SIGN_IN_ACTION = 'plugin::magic-sessionmanager.impersonate.admins.sign-in';
 
 /**
  * Plugin access plus either impersonation action (list and end serve both
@@ -502,6 +503,59 @@ const baseRoutes = [
           config: { max: 10, window: 10 * 60 * 1000 },
         },
       ],
+    },
+  },
+  // Sign in as this admin (4.23).
+  {
+    method: 'POST',
+    path: '/impersonation/admins/:adminId/sign-in',
+    handler: 'impersonation.signInAdmin',
+    config: {
+      policies: adminSessionsPolicy([ADMIN_SIGN_IN_ACTION]),
+      middlewares: [
+        {
+          name: 'plugin::magic-sessionmanager.rate-limit',
+          config: { max: 10, window: 10 * 60 * 1000 },
+        },
+      ],
+    },
+  },
+  {
+    method: 'POST',
+    path: '/admin-impersonation/exchange',
+    handler: 'impersonation.exchangeAdmin',
+    config: {
+      // The code is bound to the admin who started the sign-in, who must
+      // still hold the action.
+      policies: adminSessionsPolicy([ADMIN_SIGN_IN_ACTION]),
+      middlewares: [
+        {
+          name: 'plugin::magic-sessionmanager.rate-limit',
+          config: { max: 10, window: 60_000 },
+        },
+      ],
+    },
+  },
+  {
+    method: 'GET',
+    path: '/admin-impersonation/self',
+    handler: 'impersonation.adminSelf',
+    config: {
+      // The impersonation tab holds the target's token, and the target may
+      // not have plugin access. The admin impersonation guard recognises
+      // the session (signed token + session marker) before routing; the
+      // handler answers 401 to everybody else.
+      auth: false,
+      middlewares: adminReadRateLimit(),
+    },
+  },
+  {
+    method: 'POST',
+    path: '/admin-impersonation/self/end',
+    handler: 'impersonation.endAdminSelf',
+    config: {
+      auth: false,
+      middlewares: adminSignOutRateLimit(),
     },
   },
   {

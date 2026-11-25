@@ -1,3 +1,28 @@
+## [Unreleased]
+
+Release type: minor (`feat`). Adds **Sign in as another admin**: a real admin session of another admin in a separate browser tab, read-only unless changes are allowed. No breaking change: the 4.21 permission preview stays, under the new name **View permissions**.
+
+### Features
+
+* **Sign in as another admin.** Session Manager › Admin panel › row action **Sign in as** (key icon). The dialog asks for a reason, 15 or 30 minutes and **Allow changes** (off by default, with a warning that changes show as made by the other admin). **Open tab signed in as …** opens a new tab with that admin's menu and permissions and a bar on every page: who, read-only or changes allowed, time left, **End impersonation**. The starting admin's other tabs stay signed in as themselves.
+* New permission **Sign in as another admin** (`plugin::magic-sessionmanager.impersonate.admins.sign-in`). The Super Admin role holds it automatically; other roles only when granted. The **Allow impersonation** switch must be on.
+* The server creates the session with `strapi.sessionManager('admin').generateRefreshToken` on its own device id (`msm-admin-impersonation-…`), marks it in the session metadata, lets it expire with the impersonation and keeps the refresh token on the server. A one-time code (60 seconds, single use, only for the starting admin) in the URL fragment hands it to the new tab.
+* Read-only by default: a server middleware refuses every non-GET admin request of the session (403 `impersonation-read-only`), except Strapi's read-only permission check. Never allowed, even with **Allow changes**: the other admin's account, password and sessions, admin users, roles, API and transfer tokens, SSO providers, sign-in and password routes and every change route of this plugin (403 `impersonation-identity`).
+* `POST /admin/logout` from the impersonation tab ends only the impersonation; Strapi's logout (which without a device id deletes every session of the signed-in admin) never runs for the other admin.
+* Ending: the bar, **Active impersonations** (now also on the Admin panel page), Strapi's **Log out** in the tab, signing out in the starting admin's own tab, the switch, or the end of the duration. Only the impersonation's own session is deleted.
+* Attribution: every allowed change is recorded as `impersonation.write` with the real admin as actor and `meta.impersonating`, `meta.method`, `meta.route` and `meta.status`; refused requests as `impersonation.refused` (`call-read-only`, `call-identity`). New filter **Impersonation** in the admin sign-in history.
+* Version guard: enabled only on the Strapi releases it was tested against (5.50 to 5.64). On any other release **Sign in as** is disabled with the reason and the server answers 403 `unsupported`. `GET /impersonation/status` reports `adminSignIn: { supported, version, reason, durations }`.
+* New routes: `POST /impersonation/admins/:adminId/sign-in`, `POST /admin-impersonation/exchange`, `GET /admin-impersonation/self`, `POST /admin-impersonation/self/end`. `GET /impersonation/active` rows carry `allowChanges`; `handoff` can be `admin-session`.
+
+### Changed
+
+* "View as admin" is now **View permissions** (row action, dialog title "Permissions of …", permission display name "View admin permissions (read-only preview)"). Same permission id, route and behaviour.
+
+### Migration
+
+* Nothing to do. The impersonation table gets the `allowChanges` column (default false); Strapi adds it at start-up.
+* To use the feature, grant **Sign in as another admin** to the roles that need it (Super Admin has it). With **Allow changes**, Strapi's own "Last edited by", history and audit log show the other admin as the author; the plugin's security log is the record of who really made the change. Agree its use with your works council where one exists (see README › Impersonation).
+
 ## [4.22.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.22.0...v4.22.1) (2026-11-25)
 
 

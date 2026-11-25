@@ -300,6 +300,7 @@ export const SignInHistoryPanel = ({ admin }) => {
     succeeded: t('adminPanel.activity.filter.succeeded', 'Sign-ins'),
     failed: t('adminPanel.activity.filter.failed', 'Failed and locked out'),
     'signed-out': t('adminPanel.activity.filter.signedOut', 'Sign-outs'),
+    impersonation: t('adminPanel.activity.filter.impersonation', 'Impersonation'),
   };
 
   return (
