@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.19.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.18.0...v4.19.0) (2026-11-25)
+
+
+### Features
+
+* **admin:** show admin activity as tables with event details and a full-page view ([#39](https://github.com/Schero94/Magic-Sessionmanager/issues/39)) ([59d5e5a](https://github.com/Schero94/Magic-Sessionmanager/commit/59d5e5af40e6269d33ddf0f9e921dd440df83588))
+
 
 Release type: minor (`feat(admin)`: the admin activity lists become tables with event details and a full-page view). No route, permission or request changes; the sign-in list response gains fields and the `event` filter gains `changes`.
 
