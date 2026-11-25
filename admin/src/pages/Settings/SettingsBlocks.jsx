@@ -41,6 +41,25 @@ export const RequiresNotice = ({ tab, children }) => (
 );
 
 /**
+ * Says why protected settings are read-only (4.17): location lookup,
+ * webhooks and the security log need "Change protected settings"
+ * (`plugin::magic-sessionmanager.settings.update`). The server enforces it.
+ *
+ * @returns {import('react').ReactElement} Notice line.
+ */
+export const ProtectedNotice = () => {
+  const { t } = useSettingsTranslate();
+  return (
+    <RequiresNotice>
+      {t(
+        'settings.config.protected.notice',
+        'Read-only for your role: changing this needs the “Change protected settings” permission.'
+      )}
+    </RequiresNotice>
+  );
+};
+
+/**
  * The "Requires IP location lookup" line linking to Location data.
  *
  * @returns {import('react').ReactElement} Requirement line.

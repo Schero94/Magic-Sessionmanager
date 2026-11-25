@@ -25,8 +25,13 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   alertOnNewLocation: true,
   alertOnVpnProxy: true,
   enableWebhooks: false,
-  discordWebhookUrl: '',
-  slackWebhookUrl: '',
+  // Webhook URLs are never returned (4.17): the API sends hasDiscordWebhook /
+  // hasSlackWebhook and a hint; a URL key exists in the draft only while the
+  // admin replaces (text) or removes ('') it.
+  hasDiscordWebhook: false,
+  hasSlackWebhook: false,
+  discordWebhookHint: null,
+  slackWebhookHint: null,
   enableGeofencing: false,
   allowedCountries: [],
   blockedCountries: [],
@@ -37,8 +42,12 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   adminContentActivity: false,
   securityLogStoreIp: true,
   securityLogAnonymizeIp: false,
+  securityLogGeoLookup: false,
   securityLogRetentionDays: 90,
 });
+
+/** Keys the server accepts but never returns (write-only secrets, 4.17). */
+export const WRITE_ONLY_SETTINGS_KEYS = Object.freeze(['discordWebhookUrl', 'slackWebhookUrl']);
 
 /** Bounds enforced by the server (it clamps; the form reports instead). */
 export const MAX_FAILED_LOGINS_RANGE = Object.freeze({ min: 0, max: 100 });
@@ -214,6 +223,7 @@ export function getAdjustedFields(submitted, stored, previous) {
   const source = submitted || {};
   return Object.keys(source).filter(
     (key) =>
+      !WRITE_ONLY_SETTINGS_KEYS.includes(key) &&
       !areSettingsEqual(source[key], stored?.[key]) &&
       (previous === undefined || !areSettingsEqual(source[key], previous?.[key]))
   );

@@ -53,7 +53,18 @@ test('tab links keep other query values and replace only tab', () => {
 test('every editable setting belongs to exactly one tab and has a field label', () => {
   const owned = Object.values(SETTINGS_TAB_FIELDS).flat();
   assert.equal(new Set(owned).size, owned.length, 'no setting is shown on two tabs');
-  const editable = Object.keys(SETTINGS_DEFAULTS);
+  // Read-only webhook facts come from the server; the URLs are write-only (4.17, F6).
+  const readOnly = [
+    'hasDiscordWebhook',
+    'hasSlackWebhook',
+    'discordWebhookHint',
+    'slackWebhookHint',
+  ];
+  const editable = [
+    ...Object.keys(SETTINGS_DEFAULTS).filter((key) => !readOnly.includes(key)),
+    'discordWebhookUrl',
+    'slackWebhookUrl',
+  ];
   assert.deepEqual([...owned].sort(), [...editable, 'emailTemplates'].sort());
   for (const key of owned)
     assert.ok(SETTINGS_FIELD_LABELS[key], `${key} has a label for the adjusted-values message`);

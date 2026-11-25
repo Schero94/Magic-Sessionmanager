@@ -4,10 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  EVENT_NAME_PATTERN,
   SECURITY_EVENTS,
   boundMeta,
   deriveSessionStates,
   describeContentManagerRequest,
+  dropRankOf,
   handlerName,
   pickEntryTitle,
   recordingSwitchOf,
@@ -20,6 +22,7 @@ const {
   normalizeIp,
 } = require('../server/src/utils/admin-request-info');
 const {
+  legacyRetentionBelowMinimum,
   resolveSecurityLogSettings,
   validateSecurityLogSettings,
 } = require('../server/src/utils/security-log-settings');
@@ -86,6 +89,7 @@ test('settings: privacy defaults, stored false wins, invalid values are reported
     content: false,
     storeIp: true,
     anonymizeIp: false,
+    geoLookup: false,
     retentionDays: 90,
   });
   assert.equal(resolveSecurityLogSettings({ adminSignInHistory: false }).signIns, false);
@@ -104,6 +108,49 @@ test('settings: privacy defaults, stored false wins, invalid values are reported
   assert.equal(validateSecurityLogSettings({ securityLogRetentionDays: 0 }).errors.length, 1);
 });
 
+test('F1: the location lookup of security events is opt-in', () => {
+  assert.equal(resolveSecurityLogSettings({}).geoLookup, false);
+  assert.equal(resolveSecurityLogSettings({ securityLogGeoLookup: true }).geoLookup, true);
+  assert.deepEqual(validateSecurityLogSettings({ securityLogGeoLookup: 'yes' }).errors[0].path, [
+    'securityLogGeoLookup',
+  ]);
+});
+
+test('F5: retention is at least 7 days; stored 1-6 read as 7, new values below 7 are rejected', () => {
+  for (const days of [1, 6]) {
+    assert.equal(resolveSecurityLogSettings({ securityLogRetentionDays: days }).retentionDays, 7);
+    assert.equal(legacyRetentionBelowMinimum({ securityLogRetentionDays: days }), days);
+    assert.equal(validateSecurityLogSettings({ securityLogRetentionDays: days }).errors.length, 1);
+  }
+  assert.equal(legacyRetentionBelowMinimum({ securityLogRetentionDays: 7 }), null);
+  assert.equal(legacyRetentionBelowMinimum({}), null);
+  assert.equal(validateSecurityLogSettings({ securityLogRetentionDays: 7 }).errors.length, 0);
+});
+
+test('queue drop order: failed sign-ins first, account events last', () => {
+  assert.equal(dropRankOf(SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED).rank, 0);
+  assert.equal(dropRankOf(SECURITY_EVENTS.ADMIN_LOCKOUT).rank, 0);
+  assert.equal(dropRankOf(SECURITY_EVENTS.ADMIN_CONTENT_VIEW).rank, 1);
+  assert.equal(dropRankOf(SECURITY_EVENTS.ADMIN_CONTENT_UPDATE).rank, 2);
+  for (const event of [
+    SECURITY_EVENTS.ADMIN_SIGN_IN,
+    SECURITY_EVENTS.ADMIN_SIGN_OUT,
+    SECURITY_EVENTS.ADMIN_SESSION_REVOKED,
+    SECURITY_EVENTS.SETTINGS_UPDATED,
+  ]) {
+    assert.equal(dropRankOf(event).rank, 3, event);
+  }
+  assert.equal(recordingSwitchOf(SECURITY_EVENTS.SETTINGS_UPDATED), 'always');
+  assert.equal(recordingSwitchOf(SECURITY_EVENTS.LOG_RETENTION_PURGED), 'always');
+  for (const event of [
+    SECURITY_EVENTS.SETTINGS_UPDATED,
+    SECURITY_EVENTS.LOG_RETENTION_PURGED,
+    SECURITY_EVENTS.LOG_READ,
+  ]) {
+    assert.match(event, EVENT_NAME_PATTERN);
+  }
+});
+
 test('Content Manager requests: entry actions are activity, lists and failures are not', () => {
   const base = { status: 200, params: { model: 'api::article.article', id: 'abc123' } };
   assert.deepEqual(
@@ -120,8 +167,8 @@ test('Content Manager requests: entry actions are activity, lists and failures a
       documentId: 'abc123',
       locale: 'de',
       count: null,
-      data: { documentId: 'abc123', title: 'Hallo' },
-    }
+    },
+    'F3/item 3: the entry itself is not passed on'
   );
   assert.equal(
     describeContentManagerRequest({ ...base, route: route('collection-types.find') }),
@@ -166,7 +213,7 @@ test('Content Manager requests: entry actions are activity, lists and failures a
   });
   assert.deepEqual(
     [bulk.action, bulk.count, bulk.documentId, bulk.data],
-    ['delete', 3, null, null]
+    ['delete', 3, null, undefined]
   );
   const single = describeContentManagerRequest({
     status: 200,

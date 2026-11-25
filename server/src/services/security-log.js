@@ -14,8 +14,19 @@
  * timer flushes the queue about once a second in batches (`createMany`). The
  * flush reads the current settings, so an event whose switch is off is
  * dropped instead of stored, and applies the log-wide IP options (store,
- * anonymise). GeoIP lookups (the existing geolocation service, unchanged)
- * also happen in the flush.
+ * anonymise). The location lookup (opt-in since 4.17,
+ * `securityLogGeoLookup`) also happens in the flush, with the anonymised
+ * address and the local database only unless ipapi.co was chosen explicitly.
+ *
+ * Floods (4.17, security review F2): failed sign-ins of unknown accounts are
+ * counted per anonymised address and 5 minutes into one row (`meta.count`);
+ * each address stores at most `MAX_FAILED_ROWS_PER_IP` failed rows per hour,
+ * further attempts are counted into that row; when the queue is full, failed
+ * sign-ins go first, then Content Manager views, then other activity.
+ *
+ * Titles (4.17, F3): nothing of an entry is stored or queued. A list resolves
+ * the entry titles when it is read, with the reader's own Content Manager
+ * permissions (type, conditions and the main field).
  *
  * Storage uses the Query Engine (`strapi.db.query`) like the other
  * plugin-internal tables: no draft/publish, locales or relations.
@@ -26,11 +37,13 @@ const {
   ADMIN_CONTENT_EVENTS,
   CONTENT_ACTIONS,
   EVENT_NAME_PATTERN,
+  KEEP_WITHOUT_ACTOR_EVENTS,
   SECURITY_EVENTS,
   SIGN_IN_FILTERS,
   boundMeta,
   contentEvent,
   deriveSessionStates,
+  dropRankOf,
   pickEntryTitle,
   recordingSwitchOf,
   safeReason,
@@ -39,6 +52,7 @@ const {
   toObject,
 } = require('../utils/security-log-model');
 const {
+  MAX_USER_AGENT_LENGTH,
   anonymizeIp,
   describeUserAgent,
   hashDeviceId,
@@ -59,8 +73,16 @@ const SUPER_ADMIN_CODE = 'strapi-super-admin';
 const FLUSH_DELAY_MS = 1000;
 /** Rows per `createMany`. */
 const FLUSH_BATCH = 200;
-/** Events kept in the queue; older ones are dropped when the database is slow. */
+/** Events kept in the queue; see `dropRankOf` for what is dropped first when it is full. */
 const MAX_QUEUE = 2000;
+/** Failed sign-ins of unknown accounts from one anonymised address within this window are one row. */
+const FAILED_WINDOW_MS = 5 * 60 * 1000;
+/** Failed-sign-in and lockout rows stored per anonymised address and hour; more are counted. */
+const MAX_FAILED_ROWS_PER_IP = 30;
+/** Window of the per-address row cap. */
+const FAILED_CAP_WINDOW_MS = 60 * 60 * 1000;
+/** One `security-log.read` event per admin API token and list within this window. */
+const READ_AUDIT_DEDUP_MS = 5 * 60 * 1000;
 /** Opening the same entry again within this window is one "view". */
 const VIEW_DEDUP_MS = 10 * 60 * 1000;
 /** Repeated rejected sign-ins of one account and address within this window are one lockout. */
@@ -93,8 +115,18 @@ const MAX_DELETE_STEPS = 200;
  * @property {string|null} [attemptedEmail] Typed email of a lockout. Held in memory only, used
  *   once to find an existing admin as the target, never stored or logged.
  * @property {boolean} [actorFromEmail] The admin found by `attemptedEmail` is also the actor.
- * @property {any} [entryData] Content Manager entry, only to read its title in the flush.
+ * @property {string|null} [socketIp] TCP peer address; stored anonymised when it differs from `ip`.
+ * @property {number} [count] Attempts an aggregated failed sign-in stands for (internal).
+ * @property {boolean} [aggregate] Counted failed sign-in of an unknown account (internal).
  * @property {Date} [occurredAt] Event time (default now).
+ */
+
+/**
+ * @typedef {object} Viewer
+ * @property {any} [ability] The reader's CASL ability (`ctx.state.userAbility`); Content
+ *   Manager titles are resolved with it. Without it, no title is returned.
+ * @property {boolean} [canReadAdmins] The reader holds `admin::users.read`; otherwise admin
+ *   names are returned empty (the UI shows "Admin #id").
  */
 
 /**
@@ -161,6 +193,35 @@ function deviceHashOf(meta) {
   return typeof value === 'string' ? value : null;
 }
 
+/**
+ * Grouping key of a failed sign-in: anonymised address and 5-minute window.
+ *
+ * @param {unknown} ip Client address.
+ * @param {number} at Time in ms.
+ * @returns {{key: string, anonIp: string|null, windowStart: number}} Key parts.
+ */
+function failedGroupOf(ip, at) {
+  const anonIp = anonymizeIp(normalizeIp(ip));
+  const windowStart = Math.floor(at / FAILED_WINDOW_MS) * FAILED_WINDOW_MS;
+  return { key: `${anonIp || '-'}|${windowStart}`, anonIp, windowStart };
+}
+
+/**
+ * A failed sign-in whose account is unknown (no admin id, no typed email to
+ * resolve).
+ *
+ * @param {SecurityEventInput} entry Event.
+ * @returns {boolean}
+ */
+function isUnknownAccountFailure(entry) {
+  return (
+    entry.event === SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED &&
+    !toId(entry.actorId) &&
+    !toId(entry.targetId) &&
+    typeof entry.attemptedEmail !== 'string'
+  );
+}
+
 module.exports = ({ strapi }) => {
   const log = createLogger(strapi);
   /** @type {SecurityEventInput[]} */
@@ -170,13 +231,26 @@ module.exports = ({ strapi }) => {
   /** @type {Promise<void>|null} */
   let flushing = null;
   let stopped = false;
-  let dropped = 0;
+  /** Dropped events per family since the last log line. */
+  /** @type {Record<string, number>} */
+  let dropped = {};
   /** @type {Map<string, number>} */
   const viewed = new Map();
   /** @type {Map<string, number>} */
   const lockouts = new Map();
   /** @type {Map<string, {field: string|null, at: number}>} */
   const mainFields = new Map();
+  /** Queued aggregate per failed-sign-in group, merged into until the flush takes it. */
+  /** @type {Map<string, SecurityEventInput>} */
+  const pendingFailed = new Map();
+  /** Stored aggregate row per failed-sign-in group (this process). */
+  /** @type {Map<string, {id: number, count: number, windowStart: number}>} */
+  const storedFailed = new Map();
+  /** Failed rows stored per anonymised address in the current hour. */
+  /** @type {Map<string, {windowStart: number, rows: number}>} */
+  const failedRowsPerIp = new Map();
+  /** @type {Map<string, number>} */
+  const readAudits = new Map();
 
   const events = () => strapi.db.query(EVENT_UID);
 
@@ -231,43 +305,117 @@ module.exports = ({ strapi }) => {
   };
 
   /**
-   * The latest title the log holds for an entry (from an earlier open or edit).
+   * Whether one more failed-sign-in row may be stored for an address in the
+   * current hour; counts the row when it may.
    *
-   * @param {string} targetType Content type uid.
-   * @param {string} targetId Document id.
-   * @returns {Promise<string|null>} Title or null.
+   * @param {string|null} anonIp Anonymised address.
+   * @param {number} at Event time.
+   * @returns {boolean}
    */
-  const titleFromLog = async (targetType, targetId) => {
-    const rows = await events().findMany({
-      select: ['meta'],
-      where: { targetType, targetId, event: { $startsWith: 'admin.content.' } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      limit: 10,
-    });
-    for (const row of Array.isArray(rows) ? rows : []) {
-      const title = toObject(row.meta).title;
-      if (typeof title === 'string' && title) return title;
+  const takeFailedRowBudget = (anonIp, at) => {
+    const key = anonIp || '-';
+    const windowStart = Math.floor(at / FAILED_CAP_WINDOW_MS) * FAILED_CAP_WINDOW_MS;
+    const current = failedRowsPerIp.get(key);
+    const state =
+      current && current.windowStart === windowStart ? current : { windowStart, rows: 0 };
+    if (state.rows >= MAX_FAILED_ROWS_PER_IP) return false;
+    state.rows += 1;
+    failedRowsPerIp.set(key, state);
+    if (failedRowsPerIp.size > MAX_DEDUP_KEYS) {
+      for (const [ip, value] of failedRowsPerIp) {
+        if (value.windowStart !== windowStart) failedRowsPerIp.delete(ip);
+      }
     }
-    return null;
+    return true;
+  };
+
+  /**
+   * Stores counted failed sign-ins: one row per anonymised address and
+   * 5-minute window. A later flush in the same window raises `meta.count` of
+   * the row this process already stored.
+   *
+   * @param {Map<string, {entry: SecurityEventInput, count: number, anonIp: string|null,
+   *   windowStart: number}>} groups Groups of this batch.
+   * @param {ReturnType<typeof resolveSecurityLogSettings>} options Log settings.
+   * @returns {Promise<void>}
+   */
+  const writeFailedGroups = async (groups, options) => {
+    for (const [key, group] of groups) {
+      const known = storedFailed.get(key);
+      if (known) {
+        const row = await events().findOne({ select: ['id', 'meta'], where: { id: known.id } });
+        if (row) {
+          known.count += group.count;
+          const meta = toObject(row.meta);
+          await events().update({
+            where: { id: known.id },
+            data: { meta: boundMeta({ ...meta, count: known.count }) },
+          });
+          continue;
+        }
+        storedFailed.delete(key);
+      }
+      const { entry } = group;
+      const ip = options.storeIp ? group.anonIp : null;
+      const occurredAt = entry.occurredAt || new Date();
+      const created = await events().create({
+        data: {
+          event: SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED,
+          actorType: 'admin',
+          actorId: null,
+          targetType: 'admin',
+          targetId: null,
+          ip,
+          userAgent:
+            typeof entry.userAgent === 'string' && entry.userAgent
+              ? entry.userAgent.slice(0, MAX_USER_AGENT_LENGTH)
+              : null,
+          geo: null,
+          meta: boundMeta({
+            ...(entry.meta || {}),
+            count: group.count,
+            aggregated: true,
+            ...(ip ? { ipAnonymized: true } : {}),
+          }),
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        },
+      });
+      if (created?.id !== undefined) {
+        storedFailed.set(key, {
+          id: Number(created.id),
+          count: group.count,
+          windowStart: group.windowStart,
+        });
+      }
+    }
+    const now = Date.now();
+    for (const [key, value] of storedFailed) {
+      if (now - value.windowStart > 2 * FAILED_WINDOW_MS) storedFailed.delete(key);
+    }
   };
 
   /**
    * Builds the stored rows of a batch: switch per event family, IP options,
-   * location (bounded lookups), device hash and title into a bounded `meta`;
-   * the typed email of a lockout is resolved to an existing admin and then
-   * dropped.
+   * location (opt-in, bounded lookups of the anonymised address), device
+   * hash and the TCP peer into a bounded `meta`; the typed email of a
+   * lockout (Strapi before 5.58) is resolved to an existing admin and then
+   * dropped. Failed sign-ins of unknown accounts, and those over the
+   * per-address cap, are returned as groups instead of rows.
    *
    * @param {SecurityEventInput[]} batch Queued events.
    * @param {ReturnType<typeof resolveSecurityLogSettings>} options Log settings.
    * @param {Record<string, any>} settings Merged plugin settings.
-   * @returns {Promise<object[]>} Rows.
+   * @returns {Promise<{rows: object[], groups: Map<string, any>}>} Rows and failed groups.
    */
   const buildRows = async (batch, options, settings) => {
+    /** @type {Map<string, {entry: SecurityEventInput, count: number, anonIp: string|null, windowStart: number}>} */
+    const groups = new Map();
     const wanted = batch.filter((entry) => {
       const gate = recordingSwitchOf(entry.event);
       return gate === 'always' || (gate === 'signIns' ? options.signIns : options.content);
     });
-    if (!wanted.length) return [];
+    if (!wanted.length) return { rows: [], groups };
 
     const emails = [
       ...new Set(
@@ -290,49 +438,31 @@ module.exports = ({ strapi }) => {
     }
 
     const geoService =
-      options.storeIp && shouldResolveGeoData(settings)
+      options.geoLookup && options.storeIp && shouldResolveGeoData(settings)
         ? strapi.plugin('magic-sessionmanager').service('geolocation')
         : null;
     /** @type {Map<string, object|null>} */
     const geoCache = new Map();
     let geoBudget = GEO_LOOKUPS_PER_FLUSH;
 
-    /** @type {Map<string, string|null>} */
-    const knownTitles = new Map();
-    for (const entry of wanted) {
-      const title =
-        entry.entryData && entry.targetType && entry.targetId
-          ? pickEntryTitle(entry.entryData, await mainFieldOf(entry.targetType))
-          : null;
-      if (title) knownTitles.set(`${entry.targetType}|${toId(entry.targetId)}`, title);
-    }
+    /**
+     * Adds a failed sign-in to its group (anonymised address, 5 minutes).
+     *
+     * @param {SecurityEventInput} entry Event.
+     * @returns {void}
+     */
+    const addToGroup = (entry) => {
+      const at = (entry.occurredAt || new Date()).getTime();
+      const { key, anonIp, windowStart } = failedGroupOf(entry.ip, at);
+      const group = groups.get(key);
+      const count =
+        Number.isInteger(entry.count) && Number(entry.count) > 0 ? Number(entry.count) : 1;
+      if (group) group.count += count;
+      else groups.set(key, { entry, count, anonIp, windowStart });
+    };
 
     const rows = [];
     for (const entry of wanted) {
-      const ip = options.storeIp ? normalizeIp(entry.ip) : null;
-      const storedIp = ip && options.anonymizeIp ? anonymizeIp(ip) : ip;
-      let geo = null;
-      if (storedIp && geoService) {
-        if (geoCache.has(storedIp)) {
-          geo = geoCache.get(storedIp) || null;
-        } else if (geoBudget > 0) {
-          geoBudget -= 1;
-          try {
-            const info = await geoService.getIpInfo(storedIp);
-            geo =
-              info && info._status === 'ok'
-                ? {
-                    country: info.country || null,
-                    country_code: info.country_code || null,
-                    city: info.city || null,
-                  }
-                : null;
-          } catch {
-            geo = null;
-          }
-          geoCache.set(storedIp, geo);
-        }
-      }
       let targetId = toId(entry.targetId);
       let actorId = toId(entry.actorId);
       if (!targetId && typeof entry.attemptedEmail === 'string') {
@@ -340,24 +470,46 @@ module.exports = ({ strapi }) => {
         targetId = found ? String(found) : null;
         if (entry.actorFromEmail && !actorId) actorId = targetId;
       }
+      const isFailure =
+        entry.event === SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED ||
+        entry.event === SECURITY_EVENTS.ADMIN_LOCKOUT;
+      if (entry.event === SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED && !targetId) {
+        addToGroup(entry);
+        continue;
+      }
+      const at = (entry.occurredAt || new Date()).getTime();
+      if (isFailure && !takeFailedRowBudget(anonymizeIp(normalizeIp(entry.ip)), at)) {
+        addToGroup({
+          ...entry,
+          event: SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED,
+          meta: { ...(entry.meta || {}), reason: 'over_limit' },
+        });
+        continue;
+      }
+
+      const ip = options.storeIp ? normalizeIp(entry.ip) : null;
+      const storedIp = ip && options.anonymizeIp ? anonymizeIp(ip) : ip;
+      const lookupIp = ip ? anonymizeIp(ip) : null;
+      let geo = null;
+      if (lookupIp && geoService) {
+        if (geoCache.has(lookupIp)) {
+          geo = geoCache.get(lookupIp) || null;
+        } else if (geoBudget > 0) {
+          geoBudget -= 1;
+          try {
+            geo = (await geoService.getSecurityLogLocation(lookupIp)) || null;
+          } catch {
+            geo = null;
+          }
+          geoCache.set(lookupIp, geo);
+        }
+      }
       const meta = { ...(entry.meta || {}) };
       const deviceHash = entry.deviceHash || hashDeviceId(entry.deviceId);
       if (deviceHash) meta.deviceHash = deviceHash;
       if (storedIp && options.anonymizeIp) meta.ipAnonymized = true;
-      if (entry.entryData && entry.targetType) {
-        const title = pickEntryTitle(entry.entryData, await mainFieldOf(entry.targetType));
-        if (title) meta.title = title;
-      }
-      // A delete answers without the entry: keep the name it had in the log.
-      if (!meta.title && entry.event.startsWith('admin.content.') && entry.targetType) {
-        const id = toId(entry.targetId);
-        if (id) {
-          const key = `${entry.targetType}|${id}`;
-          if (!knownTitles.has(key)) knownTitles.set(key, await titleFromLog(entry.targetType, id));
-          const known = knownTitles.get(key);
-          if (known) meta.title = known;
-        }
-      }
+      const socketIp = options.storeIp ? normalizeIp(entry.socketIp) : null;
+      if (ip && socketIp && socketIp !== ip) meta.socketIp = anonymizeIp(socketIp);
       const occurredAt = entry.occurredAt || new Date();
       rows.push({
         event: entry.event,
@@ -368,7 +520,7 @@ module.exports = ({ strapi }) => {
         ip: storedIp,
         userAgent:
           typeof entry.userAgent === 'string' && entry.userAgent
-            ? entry.userAgent.slice(0, 500)
+            ? entry.userAgent.slice(0, MAX_USER_AGENT_LENGTH)
             : null,
         geo,
         meta: boundMeta(meta),
@@ -376,7 +528,7 @@ module.exports = ({ strapi }) => {
         updatedAt: occurredAt,
       });
     }
-    return rows;
+    return { rows, groups };
   };
 
   /**
@@ -413,6 +565,7 @@ module.exports = ({ strapi }) => {
     while (queue.length) {
       const batch = queue;
       queue = [];
+      pendingFailed.clear();
       let settings;
       try {
         settings = await getPluginSettings(strapi);
@@ -420,18 +573,51 @@ module.exports = ({ strapi }) => {
         return;
       }
       try {
-        const rows = await buildRows(batch, resolveSecurityLogSettings(settings), settings);
+        const options = resolveSecurityLogSettings(settings);
+        const { rows, groups } = await buildRows(batch, options, settings);
         for (let i = 0; i < rows.length; i += FLUSH_BATCH) {
           await events().createMany({ data: rows.slice(i, i + FLUSH_BATCH) });
         }
+        await writeFailedGroups(groups, options);
       } catch (err) {
         log.warn('[security-log] Events could not be written:', err?.name || 'Error');
       }
     }
-    if (dropped > 0) {
-      log.warn(`[security-log] ${dropped} queued events were dropped (queue full)`);
-      dropped = 0;
+    const families = Object.entries(dropped).filter(([, n]) => n > 0);
+    if (families.length) {
+      log.warn(
+        `[security-log] Queue full, events dropped: ${families
+          .map(([family, n]) => `${family}=${n}`)
+          .join(', ')}`
+      );
+      dropped = {};
     }
+  };
+
+  /**
+   * Makes room in a full queue: drops the oldest event of the lowest drop
+   * rank (failed sign-ins first; see `dropRankOf`) and counts it.
+   *
+   * @returns {void}
+   */
+  const dropOne = () => {
+    let index = -1;
+    let lowest = 4;
+    for (let i = 0; i < queue.length; i += 1) {
+      const { rank } = dropRankOf(queue[i].event);
+      if (rank < lowest) {
+        lowest = rank;
+        index = i;
+        if (rank === 0) break;
+      }
+    }
+    if (index === -1) return;
+    const [removed] = queue.splice(index, 1);
+    const { family } = dropRankOf(removed.event);
+    const weight =
+      Number.isInteger(removed.count) && Number(removed.count) > 0 ? Number(removed.count) : 1;
+    dropped[family] = (dropped[family] || 0) + weight;
+    for (const [key, value] of pendingFailed) if (value === removed) pendingFailed.delete(key);
   };
 
   const service = {
@@ -457,13 +643,63 @@ module.exports = ({ strapi }) => {
         lockouts.set(key, now);
         pruneDedup(lockouts, now, LOCKOUT_DEDUP_MS);
       }
-      queue.push({ ...input, occurredAt: input.occurredAt || new Date(now) });
-      if (queue.length > MAX_QUEUE) {
-        dropped += queue.length - MAX_QUEUE;
-        queue = queue.slice(queue.length - MAX_QUEUE);
+      /** @type {SecurityEventInput} */
+      const entry = { ...input, occurredAt: input.occurredAt || new Date(now) };
+      if (typeof entry.userAgent === 'string') {
+        entry.userAgent = entry.userAgent.slice(0, MAX_USER_AGENT_LENGTH);
       }
+      if (isUnknownAccountFailure(entry)) {
+        // Counted into the queued event of the same address and window, so a
+        // flood of made-up emails holds one queue slot.
+        const { key } = failedGroupOf(entry.ip, now);
+        const pending = pendingFailed.get(key);
+        if (pending) {
+          pending.count = (pending.count || 1) + 1;
+          schedule();
+          return true;
+        }
+        entry.aggregate = true;
+        entry.count = 1;
+        pendingFailed.set(key, entry);
+        if (pendingFailed.size > MAX_DEDUP_KEYS) pendingFailed.clear();
+      }
+      queue.push(entry);
+      while (queue.length > MAX_QUEUE) dropOne();
       schedule();
       return true;
+    },
+
+    /**
+     * Records that an admin API token read the security log (4.17): one
+     * `security-log.read` event per token and list within 5 minutes. Reads
+     * from the admin panel (a person) are not recorded.
+     *
+     * @param {{adminId: unknown, tokenId: unknown, list: 'sign-ins'|'content',
+     *   exported: boolean}} input Who read what.
+     * @returns {boolean} Whether an event was queued.
+     * @sideeffect Queues one always-on security event.
+     */
+    recordTokenRead(input) {
+      const now = Date.now();
+      const tokenId = toId(input?.tokenId);
+      const key = `${tokenId || '-'}|${input?.list}|${input?.exported ? 'export' : 'list'}`;
+      const last = readAudits.get(key);
+      if (last !== undefined && now - last < READ_AUDIT_DEDUP_MS) return false;
+      readAudits.set(key, now);
+      pruneDedup(readAudits, now, READ_AUDIT_DEDUP_MS);
+      return service.record({
+        event: SECURITY_EVENTS.LOG_READ,
+        actorType: 'admin',
+        actorId: /** @type {any} */ (input?.adminId) ?? null,
+        targetType: 'security-log',
+        targetId: null,
+        meta: {
+          list: input?.list === 'content' ? 'content' : 'sign-ins',
+          exported: input?.exported === true,
+          via: 'admin-token',
+          ...(tokenId ? { tokenId } : {}),
+        },
+      });
     },
 
     /**
@@ -473,9 +709,12 @@ module.exports = ({ strapi }) => {
      * admin, type, document and locale) again within 10 minutes, or right
      * after writing it, is not a new "view".
      *
+     * Only the type uid, document id, locale and (bulk) count are queued;
+     * the entry itself never is (4.17).
+     *
      * @param {{adminUserId: number|string, action: string, kind: 'collection'|'single',
      *   contentType: string, documentId: string|null, locale: string|null,
-     *   count: number|null, data?: any}} input Action.
+     *   count: number|null}} input Action.
      * @returns {boolean} Whether the action was queued.
      */
     recordContentAction(input) {
@@ -502,7 +741,6 @@ module.exports = ({ strapi }) => {
           locale: input.locale || null,
           ...(typeof input.count === 'number' ? { count: input.count } : {}),
         },
-        entryData: input.data || null,
       });
     },
 
@@ -546,9 +784,10 @@ module.exports = ({ strapi }) => {
      *
      * @param {{adminId?: number, event?: keyof typeof SIGN_IN_FILTERS, from?: Date|null,
      *   to?: Date|null, page: number, pageSize: number}} query Parsed filters.
+     * @param {Viewer} [viewer] Reader (admin names need `admin::users.read`).
      * @returns {Promise<{data: object[], meta: object}>} Response body.
      */
-    async listSignIns(query) {
+    async listSignIns(query, viewer = {}) {
       const where = signInWhere(query);
       const [total, rows] = await Promise.all([
         events().count({ where }),
@@ -560,10 +799,11 @@ module.exports = ({ strapi }) => {
         }),
       ]);
       return {
-        data: await shapeSignIns(Array.isArray(rows) ? rows : []),
+        data: await shapeSignIns(Array.isArray(rows) ? rows : [], viewer),
         meta: {
           pagination: paginationOf(query, total),
           recording: await recordingFlags(),
+          identity: { names: viewer.canReadAdmins === true },
         },
       };
     },
@@ -573,9 +813,11 @@ module.exports = ({ strapi }) => {
      *
      * @param {{adminId?: number, action?: string, contentType?: string, from?: Date|null,
      *   to?: Date|null, page: number, pageSize: number}} query Parsed filters.
+     * @param {Viewer} [viewer] Reader (titles need Content Manager read access to the entry and
+     *   its main field; admin names need `admin::users.read`).
      * @returns {Promise<{data: object[], meta: object}>} Response body.
      */
-    async listContentActivity(query) {
+    async listContentActivity(query, viewer = {}) {
       const where = activityWhere(query);
       const [total, rows] = await Promise.all([
         events().count({ where }),
@@ -587,10 +829,11 @@ module.exports = ({ strapi }) => {
         }),
       ]);
       return {
-        data: await shapeActivity(Array.isArray(rows) ? rows : []),
+        data: await shapeActivity(Array.isArray(rows) ? rows : [], viewer),
         meta: {
           pagination: paginationOf(query, total),
           recording: await recordingFlags(),
+          identity: { names: viewer.canReadAdmins === true },
           contentTypes: listContentTypes(),
           ...(query.adminId
             ? { contentManagerAccess: await service.hasContentManagerAccess(query.adminId) }
@@ -605,9 +848,10 @@ module.exports = ({ strapi }) => {
      * @param {'sign-ins'|'content'} kind List.
      * @param {any} query Parsed filters (as for the list).
      * @param {number|null} cursor Id below which to continue.
+     * @param {Viewer} [viewer] Reader; the same title and name rules as the lists.
      * @returns {Promise<{data: object[], meta: {nextCursor: string|null}}>} Batch.
      */
-    async exportBatch(kind, query, cursor) {
+    async exportBatch(kind, query, cursor, viewer = {}) {
       const base = kind === 'sign-ins' ? signInWhere(query) : activityWhere(query);
       const where = cursor ? { $and: [base, { id: { $lt: cursor } }] } : base;
       const rows = await events().findMany({
@@ -616,7 +860,8 @@ module.exports = ({ strapi }) => {
         limit: EXPORT_BATCH,
       });
       const list = Array.isArray(rows) ? rows : [];
-      const data = kind === 'sign-ins' ? await shapeSignIns(list) : await shapeActivity(list);
+      const data =
+        kind === 'sign-ins' ? await shapeSignIns(list, viewer) : await shapeActivity(list, viewer);
       const last = list[list.length - 1];
       return {
         data,
@@ -656,9 +901,12 @@ module.exports = ({ strapi }) => {
      * number of days, and the events of admins that no longer exist (where a
      * deleted admin signed someone else out, only the actor is cleared).
      *
+     * A run that deleted rows queues an always-on
+     * `security-log.retention.purged` event with the counts (4.17).
+     *
      * @param {{now?: Date}} [options] Clock for tests.
      * @returns {Promise<{expired: number, orphans: number}>} Deleted rows.
-     * @sideeffect Deletes and updates rows of the security event table.
+     * @sideeffect Deletes and updates rows of the security event table; queues one event.
      */
     async cleanup({ now = new Date() } = {}) {
       const options = resolveSecurityLogSettings(await getPluginSettings(strapi));
@@ -675,7 +923,7 @@ module.exports = ({ strapi }) => {
               {
                 actorType: 'admin',
                 actorId: { $notNull: true, $notIn: existing },
-                event: { $ne: SECURITY_EVENTS.ADMIN_SESSION_REVOKED },
+                event: { $notIn: [...KEEP_WITHOUT_ACTOR_EVENTS] },
               },
             ],
           },
@@ -683,11 +931,24 @@ module.exports = ({ strapi }) => {
         orphans = Number(removed?.count || 0);
         await events().updateMany({
           where: {
-            event: SECURITY_EVENTS.ADMIN_SESSION_REVOKED,
+            event: { $in: [...KEEP_WITHOUT_ACTOR_EVENTS] },
             actorType: 'admin',
             actorId: { $notNull: true, $notIn: existing },
           },
           data: { actorId: null },
+        });
+      }
+      if (expired + orphans > 0) {
+        service.record({
+          event: SECURITY_EVENTS.LOG_RETENTION_PURGED,
+          actorType: 'system',
+          targetType: 'security-log',
+          meta: {
+            count: expired + orphans,
+            expired,
+            orphans,
+            retentionDays: options.retentionDays,
+          },
         });
       }
       return { expired, orphans };
@@ -696,8 +957,8 @@ module.exports = ({ strapi }) => {
     /**
      * Deletes what was recorded about an admin whose account was deleted:
      * events they did and events about their account. Where they signed
-     * someone else out, the actor reference is cleared and the target keeps
-     * the event.
+     * someone else out, changed settings or read the log with a token, the
+     * actor reference is cleared and the event stays.
      *
      * @param {number} adminId Deleted admin id.
      * @returns {Promise<void>}
@@ -719,13 +980,13 @@ module.exports = ({ strapi }) => {
             {
               actorType: 'admin',
               actorId: key,
-              event: { $ne: SECURITY_EVENTS.ADMIN_SESSION_REVOKED },
+              event: { $notIn: [...KEEP_WITHOUT_ACTOR_EVENTS] },
             },
           ],
         },
       });
       await events().updateMany({
-        where: { event: SECURITY_EVENTS.ADMIN_SESSION_REVOKED, actorType: 'admin', actorId: key },
+        where: { event: { $in: [...KEEP_WITHOUT_ACTOR_EVENTS] }, actorType: 'admin', actorId: key },
         data: { actorId: null },
       });
     },
@@ -831,10 +1092,12 @@ module.exports = ({ strapi }) => {
    * hash, no raw user agent).
    *
    * @param {Array<Record<string, any>>} rows Stored rows.
+   * @param {Viewer} viewer Reader.
    * @returns {Promise<object[]>} DTOs.
    */
-  async function shapeSignIns(rows) {
+  async function shapeSignIns(rows, viewer) {
     const admins = await loadAdmins(rows.flatMap((row) => [row.targetId, row.actorId]));
+    const nameOf = (user) => (viewer.canReadAdmins === true ? adminName(user) : '');
     const states = await sessionStates(rows);
     return rows.map((row) => {
       const meta = toObject(row.meta);
@@ -848,6 +1111,8 @@ module.exports = ({ strapi }) => {
         event: row.event,
         reason: safeReason(meta.reason),
         provider: safeReason(meta.provider),
+        // Failed sign-ins of unknown accounts are counted per address and 5 minutes (4.17).
+        attempts: meta.aggregated === true && typeof meta.count === 'number' ? meta.count : null,
         scope: revoked ? safeReason(meta.scope) : null,
         at: toIso(row.createdAt),
         ipAddress: row.ip || null,
@@ -856,8 +1121,8 @@ module.exports = ({ strapi }) => {
         browser: described.browserName,
         os: described.osName,
         deviceType: described.deviceType,
-        admin: admin ? { id: Number(admin.id), name: adminName(admin) } : null,
-        actor: actor ? { id: Number(actor.id), name: adminName(actor) } : null,
+        admin: admin ? { id: Number(admin.id), name: nameOf(admin) } : null,
+        actor: actor ? { id: Number(actor.id), name: nameOf(actor) } : null,
         session:
           row.event === SECURITY_EVENTS.ADMIN_SIGN_IN && state
             ? { state: state.state, endedAt: toIso(state.endedAt) }
@@ -938,13 +1203,89 @@ module.exports = ({ strapi }) => {
   }
 
   /**
+   * Titles of the entries on a page, as the reader may see them in the
+   * Content Manager: the type must be readable, the main field readable
+   * (field-level permission), and the entry must pass the permission
+   * conditions (for example "is creator"). Deleted entries have no title.
+   *
+   * @param {Array<Record<string, any>>} rows Stored rows.
+   * @param {any} ability Reader's CASL ability, or null.
+   * @returns {Promise<Map<string, string>>} Title per `uid|documentId|locale` (and `uid|documentId|`).
+   */
+  async function resolveTitles(rows, ability) {
+    /** @type {Map<string, string>} */
+    const titles = new Map();
+    if (!ability) return titles;
+    let checkers;
+    try {
+      checkers = strapi.plugin('content-manager')?.service('permission-checker');
+    } catch {
+      checkers = null;
+    }
+    if (!checkers) return titles;
+    /** @type {Map<string, Set<string>>} */
+    const byType = new Map();
+    for (const row of rows) {
+      const uid = row.targetType;
+      const id = toId(row.targetId);
+      if (
+        typeof uid !== 'string' ||
+        !id ||
+        !uid.startsWith('api::') ||
+        !strapi.contentTypes?.[uid]
+      ) {
+        continue;
+      }
+      if (!byType.has(uid)) byType.set(uid, new Set());
+      byType.get(uid)?.add(id);
+    }
+    for (const [uid, ids] of byType) {
+      try {
+        const checker = checkers.create({ userAbility: ability, model: uid });
+        if (checker.cannot.read()) continue;
+        const mainField = await mainFieldOf(uid);
+        const attributes = strapi.contentTypes[uid]?.attributes || {};
+        if (!mainField || mainField === 'id' || !attributes[mainField]) continue;
+        if (checker.cannot.read(null, mainField)) continue;
+        const select = ['id', 'documentId', mainField];
+        if (attributes.locale) select.push('locale');
+        if (attributes.publishedAt) select.push('publishedAt');
+        const found = await strapi.db.query(uid).findMany({
+          select,
+          where: { documentId: { $in: [...ids] } },
+          ...(attributes.createdBy ? { populate: { createdBy: { select: ['id'] } } } : {}),
+          limit: Math.min(ids.size * 20, 10000),
+        });
+        // Prefer the draft (what the Content Manager edit view shows).
+        const ordered = (Array.isArray(found) ? found : []).sort(
+          (a, b) => Number(Boolean(a.publishedAt)) - Number(Boolean(b.publishedAt))
+        );
+        for (const doc of ordered) {
+          if (!checker.can.read(doc, mainField)) continue;
+          const title = pickEntryTitle(doc, mainField);
+          if (!title) continue;
+          const exact = `${uid}|${doc.documentId}|${doc.locale || ''}`;
+          const any = `${uid}|${doc.documentId}|`;
+          if (!titles.has(exact)) titles.set(exact, title);
+          if (!titles.has(any)) titles.set(any, title);
+        }
+      } catch {
+        // No title for this type; the list still loads.
+      }
+    }
+    return titles;
+  }
+
+  /**
    * Response rows of the activity list.
    *
    * @param {Array<Record<string, any>>} rows Stored rows.
+   * @param {Viewer} viewer Reader.
    * @returns {Promise<object[]>} DTOs.
    */
-  async function shapeActivity(rows) {
+  async function shapeActivity(rows, viewer) {
     const admins = await loadAdmins(rows.map((row) => row.actorId));
+    const titles = await resolveTitles(rows, viewer.ability || null);
     return rows.map((row) => {
       const meta = toObject(row.meta);
       const admin = row.actorType === 'admin' ? admins.get(Number(row.actorId)) : undefined;
@@ -962,10 +1303,17 @@ module.exports = ({ strapi }) => {
         entry: {
           documentId: row.targetId || null,
           locale: typeof meta.locale === 'string' ? meta.locale : null,
-          title: typeof meta.title === 'string' ? meta.title : null,
+          title:
+            titles.get(
+              `${row.targetType}|${row.targetId}|${typeof meta.locale === 'string' ? meta.locale : ''}`
+            ) ||
+            titles.get(`${row.targetType}|${row.targetId}|`) ||
+            null,
           count: typeof meta.count === 'number' ? meta.count : null,
         },
-        admin: admin ? { id: Number(admin.id), name: adminName(admin) } : null,
+        admin: admin
+          ? { id: Number(admin.id), name: viewer.canReadAdmins === true ? adminName(admin) : '' }
+          : null,
       };
     });
   }

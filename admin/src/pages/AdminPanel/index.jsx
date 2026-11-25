@@ -48,6 +48,7 @@ import {
   hasAdminFilters,
   parseAdminPanelQuery,
   splitDuration,
+  withIdentityPlaceholders,
 } from './adminPanelModel.mjs';
 
 /** Strapi's own user management (deactivate, roles, password). */
@@ -145,7 +146,16 @@ const AdminPanelPage = () => {
       const response = await get(`/${pluginId}/admin-sessions/admins`, { params: listParams });
       if (requestId !== requestIdRef.current) return;
       const body = response?.data || {};
-      setAdmins(Array.isArray(body.data) ? body.data : []);
+      const placeholder = (id) =>
+        formatMessage(
+          { id: getTranslation('adminPanel.identity.placeholder'), defaultMessage: 'Admin #{id}' },
+          { id }
+        );
+      setAdmins(
+        (Array.isArray(body.data) ? body.data : []).map((row) =>
+          withIdentityPlaceholders(row, placeholder, body.meta?.identity)
+        )
+      );
       setMeta(body.meta || null);
       setLoadError(false);
       hasLoadedRef.current = true;
@@ -159,7 +169,7 @@ const AdminPanelPage = () => {
         setRefreshing(false);
       }
     }
-  }, [get, listParams]);
+  }, [get, listParams, formatMessage]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after await; the compiler cannot see through the callback
@@ -182,7 +192,24 @@ const AdminPanelPage = () => {
         if (requestId !== dialogRequestRef.current) return;
         const body = response?.data || {};
         setDialogSessions(Array.isArray(body.data) ? body.data : []);
-        if (body.meta?.admin) setSelected((current) => (current ? body.meta.admin : current));
+        if (body.meta?.admin) {
+          const placeholder = (id) =>
+            formatMessage(
+              {
+                id: getTranslation('adminPanel.identity.placeholder'),
+                defaultMessage: 'Admin #{id}',
+              },
+              { id }
+            );
+          // The list row knows whether role names are visible; keep it.
+          setSelected((current) =>
+            current
+              ? withIdentityPlaceholders(body.meta.admin, placeholder, {
+                  roles: current.rolesHidden ? false : undefined,
+                })
+              : current
+          );
+        }
         setDialogError(false);
       } catch (err) {
         if (requestId !== dialogRequestRef.current || isCancelledRequest(err)) return;
@@ -192,7 +219,7 @@ const AdminPanelPage = () => {
         if (requestId === dialogRequestRef.current) setDialogLoading(false);
       }
     },
-    [get]
+    [get, formatMessage]
   );
 
   const openDialog = (admin, trigger, tab = 'sessions') => {
@@ -550,7 +577,11 @@ const AdminPanelPage = () => {
                   value={view.search}
                   onSearch={handleSearch}
                   label={t('adminPanel.search.label', 'Search admins')}
-                  placeholder={t('adminPanel.search.placeholder', 'Search name or email')}
+                  placeholder={
+                    meta?.identity?.names === false
+                      ? t('adminPanel.search.placeholderId', 'Search by admin ID')
+                      : t('adminPanel.search.placeholder', 'Search name or email')
+                  }
                 />
               </Flex>
               <Flex gap={2} alignItems="center" shrink={0}>

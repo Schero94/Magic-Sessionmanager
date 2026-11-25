@@ -18,7 +18,12 @@
  * Options of the whole log:
  * - `securityLogStoreIp` (default ON) and `securityLogAnonymizeIp` (default
  *   OFF: removes the last IPv4 octet / the last 80 IPv6 bits before storage),
- * - `securityLogRetentionDays` (default 90), enforced by a daily job.
+ * - `securityLogGeoLookup` (default OFF, 4.17): look up the country and city
+ *   of an event. When on, only the anonymised address is looked up, and only
+ *   in the local GeoIP database, unless the host explicitly chose ipapi.co as
+ *   provider. With the default (OFF) no admin address leaves the server.
+ * - `securityLogRetentionDays` (default 90, at least 7 since 4.17), enforced
+ *   by a daily job.
  */
 
 /** Defaults in user-facing units (days). */
@@ -27,6 +32,7 @@ const SECURITY_LOG_DEFAULTS = Object.freeze({
   adminContentActivity: false,
   securityLogStoreIp: true,
   securityLogAnonymizeIp: false,
+  securityLogGeoLookup: false,
   securityLogRetentionDays: 90,
 });
 
@@ -36,10 +42,19 @@ const SECURITY_LOG_BOOLEAN_KEYS = Object.freeze([
   'adminContentActivity',
   'securityLogStoreIp',
   'securityLogAnonymizeIp',
+  'securityLogGeoLookup',
 ]);
 
-/** Inclusive bounds of the retention, in days. */
-const SECURITY_LOG_RETENTION_RANGE = Object.freeze({ min: 1, max: 730 });
+/**
+ * Inclusive bounds of the retention, in days. The minimum is 7 since 4.17:
+ * a one-day retention let an admin who can change settings erase the trace
+ * of their own actions by the next morning. Stored values below 7 (set with
+ * 4.15 or 4.16) are raised to 7 at start-up and when read.
+ */
+const SECURITY_LOG_RETENTION_RANGE = Object.freeze({ min: 7, max: 730 });
+
+/** Lowest retention 4.15 and 4.16 accepted; values from 1 to 6 are raised to the minimum. */
+const LEGACY_RETENTION_MIN = 1;
 
 /** Every settings key of the log. */
 const SECURITY_LOG_KEYS = Object.freeze(Object.keys(SECURITY_LOG_DEFAULTS));
@@ -50,7 +65,7 @@ const SECURITY_LOG_KEYS = Object.freeze(Object.keys(SECURITY_LOG_DEFAULTS));
  *
  * @param {Record<string, unknown>|null|undefined} settings Merged plugin settings.
  * @returns {{signIns: boolean, content: boolean, storeIp: boolean, anonymizeIp: boolean,
- *   retentionDays: number}} Normalised flags.
+ *   geoLookup: boolean, retentionDays: number}} Normalised flags.
  */
 function resolveSecurityLogSettings(settings) {
   const source = settings && typeof settings === 'object' ? settings : {};
@@ -66,11 +81,28 @@ function resolveSecurityLogSettings(settings) {
     content: flag('adminContentActivity'),
     storeIp: flag('securityLogStoreIp'),
     anonymizeIp: flag('securityLogAnonymizeIp'),
+    geoLookup: flag('securityLogGeoLookup'),
     retentionDays:
       Number.isInteger(days) && days >= min && days <= max
         ? days
-        : SECURITY_LOG_DEFAULTS.securityLogRetentionDays,
+        : Number.isInteger(days) && days >= LEGACY_RETENTION_MIN && days < min
+          ? min
+          : SECURITY_LOG_DEFAULTS.securityLogRetentionDays,
   };
+}
+
+/**
+ * Stored retention from 4.15/4.16 that is below today's minimum (1 to 6
+ * days), or null when the stored value needs no change.
+ *
+ * @param {Record<string, unknown>|null|undefined} stored Raw stored settings.
+ * @returns {number|null} The stored value that must be raised, or null.
+ */
+function legacyRetentionBelowMinimum(stored) {
+  if (!stored || typeof stored !== 'object') return null;
+  const days = Number(stored.securityLogRetentionDays);
+  const { min } = SECURITY_LOG_RETENTION_RANGE;
+  return Number.isInteger(days) && days >= LEGACY_RETENTION_MIN && days < min ? days : null;
 }
 
 /**
@@ -118,10 +150,12 @@ function validateSecurityLogSettings(body) {
 }
 
 module.exports = {
+  LEGACY_RETENTION_MIN,
   SECURITY_LOG_BOOLEAN_KEYS,
   SECURITY_LOG_DEFAULTS,
   SECURITY_LOG_KEYS,
   SECURITY_LOG_RETENTION_RANGE,
+  legacyRetentionBelowMinimum,
   resolveSecurityLogSettings,
   validateSecurityLogSettings,
 };

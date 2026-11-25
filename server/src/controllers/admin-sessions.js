@@ -13,6 +13,7 @@ const {
   parseInput,
   sessionParamsSchema,
   signOutAdmin,
+  visibilityOf,
 } = require('../utils/admin-sessions');
 const { sendServerError, sendValidationError } = require('../utils/http-errors');
 const { createLogger } = require('../utils/logger');
@@ -91,13 +92,21 @@ module.exports = ({ strapi }) => {
      * @param {Context} ctx Reads `ctx.query.page` (1..1e6), `pageSize` (1..100), `search`
      *   (<= 100 chars, name or email) and `filter` (`all`|`signed-in`|`not-signed-in`).
      * @returns {Promise<unknown>} 200 `{ data: AdminRow[], meta: { supported, pagination, stats,
-     *   policy, truncated } }`; 400 ValidationError with field errors; 500 fixed message.
+     *   policy, truncated, recording, identity } }`; 400 ValidationError with field errors; 500
+     *   fixed message. Name and email are empty (and search matches the id only) unless the
+     *   caller holds `admin::users.read`; role names need `admin::users.read` or
+     *   `admin::roles.read`.
      */
     async listAdmins(ctx) {
       const parsed = parseInput(listQuerySchema, ctx.query);
       if (!parsed.ok) return sendValidationError(ctx, 'Invalid query', parsed.errors);
       try {
-        ctx.body = await listAdmins(strapi, parsed.value, actorFrom(ctx));
+        ctx.body = await listAdmins(
+          strapi,
+          parsed.value,
+          actorFrom(ctx),
+          visibilityOf(/** @type {any} */ (ctx).state?.userAbility)
+        );
         return ctx.body;
       } catch (error) {
         return fail(ctx, error, 'list');
@@ -112,13 +121,20 @@ module.exports = ({ strapi }) => {
      *   read rate limit.
      * @param {Context} ctx Reads `ctx.params.adminId` (positive integer).
      * @returns {Promise<unknown>} 200 `{ data: SessionRow[], meta: { supported, admin, policy } }`;
-     *   400 invalid id; 404 unknown admin; 500 fixed message. No tokens, device ids or hashes.
+     *   400 invalid id; 404 unknown admin; 500 fixed message. No tokens, device ids or hashes;
+     *   `SessionRow.id` is an opaque handle (not Strapi's session id). `meta.admin` follows the
+     *   list's identity rules.
      */
     async listAdminSessions(ctx) {
       const parsed = parseInput(adminParamsSchema, routeParams(ctx, ['adminId']));
       if (!parsed.ok) return sendValidationError(ctx, 'Invalid parameters', parsed.errors);
       try {
-        const body = await listAdminSessions(strapi, parsed.value.adminId, actorFrom(ctx));
+        const body = await listAdminSessions(
+          strapi,
+          parsed.value.adminId,
+          actorFrom(ctx),
+          visibilityOf(/** @type {any} */ (ctx).state?.userAbility)
+        );
         if (!body) return ctx.notFound('Admin not found');
         ctx.body = body;
         return ctx.body;
@@ -134,11 +150,13 @@ module.exports = ({ strapi }) => {
      * @auth Admin JWT only (admin API tokens get 403); admin::hasPermissions access +
      *   admin-sessions.read + admin-sessions.revoke; write rate limit (10/min per admin).
      *   A Super Admin can only be signed out by a Super Admin or themselves.
-     * @param {Context} ctx Reads `ctx.params.adminId` and `ctx.params.sessionId` (32 hex chars).
+     * @param {Context} ctx Reads `ctx.params.adminId` and `ctx.params.sessionId` (32 hex chars:
+     *   the `id` from the session list, or a raw Strapi session id).
      * @returns {Promise<unknown>} 200 `{ data: { ended, signedOutSelf } }`; 400 invalid params;
      *   403 not a browser session or Super Admin guard; 404 unknown admin, or a session that is
      *   not a live session of that admin; 503 no session manager; 500 fixed message.
-     * @sideeffect Deletes the target browser's `admin::session` rows; writes an audit log line.
+     * @sideeffect Deletes the target browser's `admin::session` rows (and again about a second
+     *   later); writes an audit log line.
      */
     async signOutSession(ctx) {
       if (ctx.state?.auth?.strategy?.name !== 'admin') {
@@ -172,7 +190,8 @@ module.exports = ({ strapi }) => {
      * @returns {Promise<unknown>} 200 `{ data: { ended, signedOutSelf } }`; 400 invalid id;
      *   403 not a browser session or Super Admin guard; 404 unknown admin; 503 no session
      *   manager; 500 fixed message.
-     * @sideeffect Deletes every `admin::session` row of the target admin; writes an audit log line.
+     * @sideeffect Deletes every `admin::session` row of the target admin (and again about a
+     *   second later); writes an audit log line.
      */
     async signOutEverywhere(ctx) {
       if (ctx.state?.auth?.strategy?.name !== 'admin') {

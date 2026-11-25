@@ -134,6 +134,10 @@ const SettingsPage = () => {
   const {
     allowedActions: { canRead: canViewAdminActivity },
   } = useRBAC(pluginPermissions.adminActivityRead);
+  // Location lookup, webhooks and the security log need settings.update (4.17).
+  const {
+    allowedActions: { canUpdate: canChangeProtected },
+  } = useRBAC(pluginPermissions.settingsUpdate);
   const visibleTabs = useMemo(
     () => getVisibleSettingsTabs(Boolean(canViewAdminActivity)),
     [canViewAdminActivity]
@@ -303,7 +307,9 @@ const SettingsPage = () => {
                 <Tabs.Content key={tab} value={tab} forceMount hidden={activeTab !== tab}>
                   <TabPanelFrame data-settings-tab-panel="">
                     <Flex direction="column" alignItems="stretch" paddingTop={6}>
-                      <TabPanel form={form} />
+                      <TabPanel
+                        form={{ ...form, canChangeProtected: Boolean(canChangeProtected) }}
+                      />
                     </Flex>
                   </TabPanelFrame>
                 </Tabs.Content>

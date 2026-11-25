@@ -288,6 +288,9 @@ test('API-6: a partial email template update keeps the other templates', async (
   });
 });
 
+/** Ability of an admin who holds every plugin action (Super Admin). */
+const ALL_ACTIONS = Object.freeze({ userAbility: { can: () => true }, user: { id: 1 } });
+
 test('API-6: the full payload the admin UI sends keeps working', async () => {
   const { strapi, state } = createSettingsStrapi(null);
   await withGlobalStrapi(strapi, async () => {
@@ -299,7 +302,7 @@ test('API-6: the full payload the admin UI sends keeps working', async () => {
       slackWebhookUrl: 'https://hooks.slack.com/services/synthetic',
       someUnknownKey: 'ignored',
     };
-    const ctx = createCtx({ body });
+    const ctx = createCtx({ body, state: ALL_ACTIONS });
     await settingsController.updateSettings(ctx);
     assert.equal(ctx.status, 200);
     assert.equal(state.stored.inactivityTimeout, 45);
@@ -362,10 +365,167 @@ test('API-6: clearing a webhook with an empty string is still allowed', async ()
     discordWebhookUrl: 'https://discord.com/api/webhooks/old',
   });
   await withGlobalStrapi(strapi, async () => {
-    const ctx = createCtx({ body: { discordWebhookUrl: '' } });
+    const ctx = createCtx({ body: { discordWebhookUrl: '' }, state: ALL_ACTIONS });
     await settingsController.updateSettings(ctx);
     assert.equal(ctx.status, 200);
     assert.equal(state.stored.discordWebhookUrl, '');
+  });
+});
+
+// ------------------------------------------------- 4.17 security review F1, F5, F6
+
+/**
+ * Ability that holds only the listed actions.
+ *
+ * @param {string[]} actions Action ids.
+ * @returns {{userAbility: {can: (action: string) => boolean}, user: {id: number}}} State.
+ */
+const holding = (actions) => ({
+  userAbility: { can: (action) => actions.includes(action) },
+  user: { id: 7 },
+});
+const SETTINGS_UPDATE = 'plugin::magic-sessionmanager.settings.update';
+const ACTIVITY_READ = 'plugin::magic-sessionmanager.admin-activity.read';
+const SYNTHETIC_HOOK =
+  'https://discord.com/api/webhooks/123456789012345678/SYNTHETICsecretTOKENvalue_abc';
+
+test('F1/F5: geo settings need settings.update; plain settings keep working with access', async () => {
+  for (const body of [
+    { enableGeolocation: false },
+    { geoIpProvider: 'ipapi' },
+    { geoLookupFailureMode: 'block' },
+    { geoIpDatabasePath: 'GeoLite2-City.mmdb' },
+    { enableWebhooks: true },
+    { slackWebhookUrl: 'https://hooks.slack.com/services/synthetic' },
+  ]) {
+    const { strapi, state } = createSettingsStrapi({ ...settingsController.DEFAULT_SETTINGS });
+    await withGlobalStrapi(strapi, async () => {
+      const ctx = createCtx({ body, state: holding([]) });
+      await settingsController.updateSettings(ctx);
+      assert.equal(ctx.status, 403, JSON.stringify(body));
+      assert.equal(ctx.body.error.details.reason, 'settings-update-permission');
+      assert.equal(state.writes, 0);
+      const allowed = createCtx({ body, state: holding([SETTINGS_UPDATE]) });
+      await settingsController.updateSettings(allowed);
+      assert.equal(allowed.status, 200, JSON.stringify(body));
+    });
+  }
+  const { strapi, state } = createSettingsStrapi({ ...settingsController.DEFAULT_SETTINGS });
+  await withGlobalStrapi(strapi, async () => {
+    const ctx = createCtx({
+      body: { ...settingsController.DEFAULT_SETTINGS, inactivityTimeout: 45, maxFailedLogins: 9 },
+      state: holding([]),
+    });
+    await settingsController.updateSettings(ctx);
+    assert.equal(ctx.status, 200, 'the whole form with unchanged protected keys saves');
+    assert.equal(state.stored.inactivityTimeout, 45);
+  });
+});
+
+test('F5: a role without settings.update can send back a legacy GeoIP path as GET shows it', async () => {
+  const { strapi, state } = createSettingsStrapi({
+    ...settingsController.DEFAULT_SETTINGS,
+    // A custom read path from an older version; GET shows no download filename for it.
+    geoIpDatabasePath: '/srv/legacy-geoip/GeoLite2-City.mmdb',
+  });
+  await withGlobalStrapi(strapi, async () => {
+    const get = createCtx({ state: holding([]) });
+    await settingsController.getSettings(get);
+    const ctx = createCtx({
+      body: { ...get.body.settings, inactivityTimeout: 31 },
+      state: holding([]),
+    });
+    await settingsController.updateSettings(ctx);
+    assert.equal(ctx.status, 200);
+    assert.equal(state.stored.inactivityTimeout, 31);
+  });
+});
+
+test('F5: security log keys need admin-activity.read and settings.update', async () => {
+  for (const [actions, status, reason] of [
+    [[], 403, 'admin-activity-permission'],
+    [[SETTINGS_UPDATE], 403, 'admin-activity-permission'],
+    [[ACTIVITY_READ], 403, 'settings-update-permission'],
+    [[ACTIVITY_READ, SETTINGS_UPDATE], 200, null],
+  ]) {
+    const { strapi, state } = createSettingsStrapi({ ...settingsController.DEFAULT_SETTINGS });
+    await withGlobalStrapi(strapi, async () => {
+      const ctx = createCtx({
+        body: { adminSignInHistory: false, securityLogGeoLookup: true },
+        state: holding(actions),
+      });
+      await settingsController.updateSettings(ctx);
+      assert.equal(ctx.status, status, actions.join('+') || 'none');
+      if (reason) {
+        assert.equal(ctx.body.error.details.reason, reason);
+        assert.equal(state.writes, 0);
+      } else {
+        assert.equal(state.stored.adminSignInHistory, false);
+        assert.equal(state.stored.securityLogGeoLookup, true);
+      }
+    });
+  }
+});
+
+test('F5: a settings change queues settings.updated with actor and key names, never values', async () => {
+  const { strapi } = createSettingsStrapi({ ...settingsController.DEFAULT_SETTINGS });
+  const recorded = [];
+  strapi.plugin = () => ({ service: () => ({ record: (event) => recorded.push(event) }) });
+  await withGlobalStrapi(strapi, async () => {
+    const ctx = createCtx({
+      body: { inactivityTimeout: 44, discordWebhookUrl: SYNTHETIC_HOOK },
+      state: holding([SETTINGS_UPDATE]),
+    });
+    await settingsController.updateSettings(ctx);
+    assert.equal(ctx.status, 200);
+    const unchanged = createCtx({ body: { inactivityTimeout: 15 }, state: holding([]) });
+    await settingsController.updateSettings(unchanged);
+  });
+  assert.equal(recorded.length, 2);
+  const [first] = recorded;
+  assert.equal(first.event, 'settings.updated');
+  assert.equal(first.actorType, 'admin');
+  assert.equal(first.actorId, 7);
+  assert.deepEqual(first.meta.keys.split(',').sort(), ['discordWebhookUrl', 'inactivityTimeout']);
+  assert.equal(first.meta.count, 2);
+  const serialized = JSON.stringify(recorded);
+  assert.ok(!serialized.includes('SYNTHETICsecret'), 'no value in the event');
+  assert.ok(!serialized.includes('44'), 'no value in the event');
+});
+
+test('F6: GET and PUT never return webhook URLs; omitted keeps, empty clears', async () => {
+  const { strapi, state } = createSettingsStrapi({
+    ...settingsController.DEFAULT_SETTINGS,
+    discordWebhookUrl: SYNTHETIC_HOOK,
+  });
+  await withGlobalStrapi(strapi, async () => {
+    const get = createCtx({ state: holding([]) });
+    await settingsController.getSettings(get);
+    assert.equal(get.status, 200);
+    assert.ok(!JSON.stringify(get.body).includes('SYNTHETICsecret'));
+    assert.ok(!JSON.stringify(get.body).includes('123456789012345678'));
+    assert.equal(get.body.settings.discordWebhookUrl, undefined);
+    assert.equal(get.body.settings.hasDiscordWebhook, true);
+    assert.equal(get.body.settings.discordWebhookHint, 'https://discord.com/…');
+    assert.equal(get.body.settings.hasSlackWebhook, false);
+    assert.equal(get.body.settings.slackWebhookHint, null);
+
+    // The GET response sent back as is (no URL in it) keeps the stored URL.
+    const resend = createCtx({
+      body: { ...get.body.settings, inactivityTimeout: 16 },
+      state: holding([]),
+    });
+    await settingsController.updateSettings(resend);
+    assert.equal(resend.status, 200);
+    assert.equal(state.stored.discordWebhookUrl, SYNTHETIC_HOOK);
+    assert.ok(!JSON.stringify(resend.body).includes('SYNTHETICsecret'));
+    assert.equal(resend.body.settings.hasDiscordWebhook, true);
+
+    const clear = createCtx({ body: { discordWebhookUrl: '' }, state: holding([SETTINGS_UPDATE]) });
+    await settingsController.updateSettings(clear);
+    assert.equal(clear.status, 200);
+    assert.equal(state.stored.discordWebhookUrl, '');
+    assert.equal(clear.body.settings.hasDiscordWebhook, false);
   });
 });
 

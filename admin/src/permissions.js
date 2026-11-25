@@ -9,6 +9,11 @@ const pluginPermissions = {
   adminSessionsRevoke: [{ action: `plugin::${pluginId}.admin-sessions.revoke`, subject: null }],
   /** Admin sign-in history and Content Manager activity. The server also requires `access` and `admin-sessions.read`. */
   adminActivityRead: [{ action: `plugin::${pluginId}.admin-activity.read`, subject: null }],
+  /**
+   * Protected settings (4.17): location lookup, webhooks and the security log.
+   * The server also requires `access` (and `admin-activity.read` for the log).
+   */
+  settingsUpdate: [{ action: `plugin::${pluginId}.settings.update`, subject: null }],
 };
 
 export default pluginPermissions;

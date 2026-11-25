@@ -9,6 +9,7 @@ const { CONTENT_ACTIONS, SIGN_IN_FILTERS } = require('../utils/security-log-mode
 const { parseInput } = require('../utils/admin-sessions');
 const { sendServerError, sendValidationError } = require('../utils/http-errors');
 const { createLogger } = require('../utils/logger');
+const { callerCan } = require('../utils/settings-access');
 
 /** Largest page of either list. */
 const MAX_PAGE_SIZE = 100;
@@ -87,6 +88,42 @@ module.exports = ({ strapi }) => {
    * @param {string} operation Name for the log line.
    * @returns {Promise<unknown>} Response body.
    */
+  /**
+   * The reader as the service needs it: their ability (Content Manager
+   * titles) and whether they may see admin names (`admin::users.read`).
+   *
+   * @param {Context} ctx Koa context.
+   * @returns {{ability: any, canReadAdmins: boolean}} Viewer.
+   */
+  const viewerOf = (ctx) => ({
+    ability: /** @type {any} */ (ctx).state?.userAbility || null,
+    canReadAdmins: callerCan(ctx, 'admin::users.read'),
+  });
+
+  /**
+   * Records a read by an admin API token (4.17). Reads from the admin panel
+   * are not recorded.
+   *
+   * @param {Context} ctx Koa context.
+   * @param {'sign-ins'|'content'} list List read.
+   * @param {boolean} exported Export batch.
+   * @returns {void}
+   */
+  const auditTokenRead = (ctx, list, exported) => {
+    const state = /** @type {any} */ (ctx).state;
+    if (state?.auth?.strategy?.name !== 'admin-token') return;
+    try {
+      service().recordTokenRead({
+        adminId: state.user?.id,
+        tokenId: state.auth?.credentials?.id,
+        list,
+        exported,
+      });
+    } catch {
+      // Auditing must not fail the read.
+    }
+  };
+
   const handle = async (ctx, schema, run, operation) => {
     const parsed = parseInput(schema, ctx.query);
     if (!parsed.ok) return sendValidationError(ctx, 'Invalid query', parsed.errors);
@@ -116,13 +153,23 @@ module.exports = ({ strapi }) => {
      * @param {Context} ctx Reads `ctx.query.adminId` (optional positive integer), `event`
      *   (`all`|`succeeded`|`failed`|`signed-out`), `from`/`to` (ISO dates), `page`, `pageSize`
      *   (1..100, default 20).
-     * @returns {Promise<unknown>} 200 `{ data: SignInRow[], meta: { pagination, recording } }`;
-     *   400 ValidationError with field errors; 500 fixed message. Rows hold IP address
-     *   (possibly anonymised), location, browser, OS and session state; never the device id,
-     *   a typed email or a token.
+     * @returns {Promise<unknown>} 200 `{ data: SignInRow[], meta: { pagination, recording,
+     *   identity } }`; 400 ValidationError with field errors; 500 fixed message. Rows hold IP
+     *   address (possibly anonymised), location, browser, OS and session state; never the
+     *   device id, a typed email or a token. Admin names are empty without
+     *   `admin::users.read` (`meta.identity.names` false).
+     * @sideeffect A read with an admin API token queues a `security-log.read` event.
      */
     async listSignIns(ctx) {
-      return handle(ctx, signInQuerySchema, (query) => service().listSignIns(query), 'sign-ins');
+      return handle(
+        ctx,
+        signInQuerySchema,
+        (query) => {
+          auditTokenRead(ctx, 'sign-ins', false);
+          return service().listSignIns(query, viewerOf(ctx));
+        },
+        'sign-ins'
+      );
     },
 
     /**
@@ -134,13 +181,18 @@ module.exports = ({ strapi }) => {
      * @param {Context} ctx Reads `ctx.query.adminId`, `action` (`all` or an action),
      *   `contentType` (uid), `from`/`to`, `page`, `pageSize`.
      * @returns {Promise<unknown>} 200 `{ data: ActivityRow[], meta: { pagination, recording,
-     *   contentTypes, contentManagerAccess? } }`; 400; 500 fixed message.
+     *   identity, contentTypes, contentManagerAccess? } }`; 400; 500 fixed message. Entry titles
+     *   are resolved when read, only for entries the caller may read in the Content Manager.
+     * @sideeffect A read with an admin API token queues a `security-log.read` event.
      */
     async listContentActivity(ctx) {
       return handle(
         ctx,
         activityQuerySchema,
-        (query) => service().listContentActivity(query),
+        (query) => {
+          auditTokenRead(ctx, 'content', false);
+          return service().listContentActivity(query, viewerOf(ctx));
+        },
         'content'
       );
     },
@@ -157,7 +209,10 @@ module.exports = ({ strapi }) => {
       return handle(
         ctx,
         signInExportSchema,
-        (query) => service().exportBatch('sign-ins', query, query.cursor || null),
+        (query) => {
+          auditTokenRead(ctx, 'sign-ins', true);
+          return service().exportBatch('sign-ins', query, query.cursor || null, viewerOf(ctx));
+        },
         'sign-in export'
       );
     },
@@ -174,7 +229,10 @@ module.exports = ({ strapi }) => {
       return handle(
         ctx,
         activityExportSchema,
-        (query) => service().exportBatch('content', query, query.cursor || null),
+        (query) => {
+          auditTokenRead(ctx, 'content', true);
+          return service().exportBatch('content', query, query.cursor || null, viewerOf(ctx));
+        },
         'activity export'
       );
     },

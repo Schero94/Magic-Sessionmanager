@@ -231,8 +231,10 @@ const AdminSessionsModal = ({
           {
             id: 'email',
             label: t('adminPanel.dialog.email', 'Email'),
-            value: admin.email,
-            kind: 'email',
+            value: admin.identityHidden
+              ? t('adminPanel.identity.emailHidden', 'Email hidden (needs “Read” on Users)')
+              : admin.email,
+            kind: admin.identityHidden ? undefined : 'email',
           },
           {
             id: 'roles',

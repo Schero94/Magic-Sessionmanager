@@ -13,10 +13,13 @@ const {
   listQuerySchema,
   parseInput,
   readSessionPolicy,
+  listAdminSessions,
+  sessionHandle,
   sessionParamsSchema,
   signOutAdmin,
   signOutBlockReason,
   summariseByAdmin,
+  visibilityOf,
 } = require('../server/src/utils/admin-sessions');
 const controllerFactory = require('../server/src/controllers/admin-sessions');
 
@@ -87,7 +90,7 @@ test('live rows are grouped per browser, newest first, without device ids', () =
   const groups = groupSessionsByDevice(rows, 'dev-1');
   assert.equal(groups.length, 2);
   assert.deepEqual(groups[0], {
-    id: 'b'.repeat(32),
+    id: sessionHandle('b'.repeat(32)),
     device: 'Firefox on Linux',
     signedInAt: '2026-11-17T09:00:00.000Z',
     lastActiveAt: '2026-11-17T10:00:00.000Z',
@@ -95,7 +98,8 @@ test('live rows are grouped per browser, newest first, without device ids', () =
     rememberMe: false,
     current: false,
   });
-  assert.equal(groups[1].id, 'a'.repeat(32));
+  assert.equal(groups[1].id, sessionHandle('a'.repeat(32)));
+  assert.ok(!JSON.stringify(groups).includes('a'.repeat(32)), 'item 5: no Strapi session id');
   assert.equal(groups[1].device, null, 'unknown device stays unknown');
   assert.equal(groups[1].signedInAt, '2026-11-15T08:00:00.000Z');
   assert.equal(
@@ -254,17 +258,25 @@ test('sign-out deletes per browser, flags self sign-out and audits without perso
   const fake = fakeStrapi({ users, sessions });
   const actor = { id: 1, roles: [SUPER], sessionId: 'a'.repeat(32) };
 
-  const one = await signOutAdmin(fake.strapi, { actor, adminId: '2', sessionId: 'b'.repeat(32) });
+  const one = await signOutAdmin(
+    fake.strapi,
+    { actor, adminId: '2', sessionId: 'b'.repeat(32) },
+    { repeatDelayMs: 60_000 }
+  );
   assert.deepEqual(one, { ended: 1, signedOutSelf: false, scope: 'one' });
   assert.deepEqual(fake.calls.at(-1), { userId: '2', deviceId: 'dev-erin' });
 
   await assert.rejects(
-    signOutAdmin(fake.strapi, { actor, adminId: '2', sessionId: 'a'.repeat(32) }),
+    signOutAdmin(
+      fake.strapi,
+      { actor, adminId: '2', sessionId: 'a'.repeat(32) },
+      { repeatDelayMs: 60_000 }
+    ),
     (error) => error.status === 404,
     'a session of another admin is not found'
   );
 
-  const self = await signOutAdmin(fake.strapi, { actor, adminId: '1' });
+  const self = await signOutAdmin(fake.strapi, { actor, adminId: '1' }, { repeatDelayMs: 60_000 });
   assert.deepEqual(self, { ended: 1, signedOutSelf: true, scope: 'all' });
   assert.deepEqual(fake.calls.at(-1), { userId: '1', deviceId: undefined });
 
@@ -311,4 +323,127 @@ test('sign-out routes refuse admin API tokens before touching anything', async (
     assert.equal(forbidden.details.reason, 'browser-session-required');
   }
   assert.equal(touched, false);
+});
+
+// ------------------------------------------------------------ 4.17 security review
+
+const future = () => new Date(Date.now() + 3600_000).toISOString();
+
+test('item 5: the session list returns an opaque handle; sign-out accepts it (and a raw id)', async () => {
+  const raw = 'c'.repeat(32);
+  const handle = sessionHandle(raw);
+  assert.match(handle, /^[a-f0-9]{32}$/);
+  assert.notEqual(handle, raw);
+  assert.equal(sessionHandle(raw), handle, 'stable across calls and processes');
+  const users = [{ id: 2, email: 'erin@example.test', isActive: true, roles: [EDITOR] }];
+  const sessions = [
+    {
+      userId: '2',
+      sessionId: raw,
+      deviceId: 'dev-erin',
+      origin: 'admin',
+      status: 'active',
+      expiresAt: future(),
+      createdAt: future(),
+    },
+  ];
+  const fake = fakeStrapi({ users, sessions });
+  const actor = { id: 1, roles: [SUPER], sessionId: null };
+  const listed = await listAdminSessions(fake.strapi, '2', actor);
+  assert.equal(listed.data[0].id, handle);
+  assert.ok(!JSON.stringify(listed).includes(raw));
+  const byHandle = await signOutAdmin(
+    fake.strapi,
+    { actor, adminId: '2', sessionId: handle },
+    { repeatDelayMs: 60_000 }
+  );
+  assert.equal(byHandle.ended, 1);
+  const byRaw = await signOutAdmin(
+    fake.strapi,
+    { actor, adminId: '2', sessionId: raw },
+    { repeatDelayMs: 60_000 }
+  );
+  assert.equal(byRaw.ended, 1, 'a raw Strapi session id still works (compatibility)');
+});
+
+test('item 1: a sign-out deletes the rows again a moment later (racing refresh)', async () => {
+  const users = [{ id: 2, email: 'erin@example.test', isActive: true, roles: [EDITOR] }];
+  const sessions = [
+    {
+      userId: '2',
+      sessionId: 'd'.repeat(32),
+      deviceId: 'dev-erin',
+      origin: 'admin',
+      status: 'active',
+      expiresAt: future(),
+      createdAt: future(),
+    },
+  ];
+  const fake = fakeStrapi({ users, sessions });
+  const actor = { id: 1, roles: [SUPER], sessionId: null };
+  await signOutAdmin(fake.strapi, { actor, adminId: '2' }, { repeatDelayMs: 10 });
+  await signOutAdmin(
+    fake.strapi,
+    { actor, adminId: '2', sessionId: sessionHandle('d'.repeat(32)) },
+    { repeatDelayMs: 10 }
+  );
+  assert.equal(fake.calls.length, 2);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(fake.calls, [
+    { userId: '2', deviceId: undefined },
+    { userId: '2', deviceId: 'dev-erin' },
+    { userId: '2', deviceId: undefined },
+    { userId: '2', deviceId: 'dev-erin' },
+  ]);
+});
+
+test('F4: email, name and roles need admin::users.read; role names also admin::roles.read', async () => {
+  assert.deepEqual(visibilityOf({ can: () => false }), { identity: false, roles: false });
+  assert.deepEqual(visibilityOf({ can: (a) => a === 'admin::roles.read' }), {
+    identity: false,
+    roles: true,
+  });
+  assert.deepEqual(visibilityOf({ can: (a) => a === 'admin::users.read' }), {
+    identity: true,
+    roles: true,
+  });
+  assert.deepEqual(visibilityOf(undefined), { identity: false, roles: false });
+
+  const users = [
+    { id: 1, firstname: 'Ada', email: 'ada@example.test', isActive: true, roles: [SUPER] },
+    { id: 2, firstname: 'Erin', email: 'erin@example.test', isActive: true, roles: [EDITOR] },
+    { id: 3, firstname: 'Rita', email: 'rita@example.test', isActive: true, roles: [EDITOR] },
+  ];
+  const fake = fakeStrapi({ users, sessions: [] });
+  const actor = { id: 3, roles: [EDITOR] };
+  const query = { page: 1, pageSize: 25, search: '', filter: 'all' };
+
+  const hidden = await listAdmins(fake.strapi, query, actor, { identity: false, roles: false });
+  const others = hidden.data.filter((row) => !row.self);
+  assert.equal(others.length, 2);
+  for (const row of others) {
+    assert.equal(row.name, '');
+    assert.equal(row.email, '');
+    assert.deepEqual(row.roles, []);
+  }
+  assert.ok(!JSON.stringify(hidden).includes('ada@example.test'));
+  assert.ok(!JSON.stringify(hidden).includes('Ada'));
+  assert.equal(hidden.data.find((row) => row.self).email, 'rita@example.test', 'own row stays');
+  assert.deepEqual(hidden.meta.identity, { names: false, emails: false, roles: false });
+
+  const roles = await listAdmins(fake.strapi, query, actor, { identity: false, roles: true });
+  assert.deepEqual(roles.data.find((row) => row.id === 1).roles, [
+    { name: 'Super Admin', superAdmin: true },
+  ]);
+  assert.equal(roles.data.find((row) => row.id === 1).email, '');
+
+  const full = await listAdmins(fake.strapi, query, actor, { identity: true, roles: true });
+  assert.equal(full.data.find((row) => row.id === 1).email, 'ada@example.test');
+
+  const session = await listAdminSessions(fake.strapi, '1', actor, {
+    identity: false,
+    roles: false,
+  });
+  assert.equal(session.meta.admin.email, '');
+  assert.equal(session.meta.admin.name, '');
 });

@@ -4,7 +4,7 @@ import ReadableText from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import GeoIpDatabaseCard from './GeoIpDatabaseCard';
 import RiskDataCard from './RiskDataCard';
-import { IntroText, RequiresNotice, RiskSourceNotice } from './SettingsBlocks';
+import { IntroText, ProtectedNotice, RequiresNotice, RiskSourceNotice } from './SettingsBlocks';
 import { getRiskAvailability, riskDependentControl } from '../../utils/riskData.mjs';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
@@ -21,6 +21,8 @@ const LocationDataTab = ({ form }) => {
   const { settings, handleChange } = form;
   const risk = getRiskAvailability(form.geoIp.status);
   const scoring = riskDependentControl(settings.enableSecurityScoring, risk.state);
+  // Whether and where IP addresses are looked up is protected (4.17).
+  const locked = form.canChangeProtected === false;
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
@@ -48,8 +50,10 @@ const LocationDataTab = ({ form }) => {
             'Looks up country and city at every sign-in and for listed sessions without a location.'
           )}
           checked={settings.enableGeolocation}
+          disabled={locked}
           onChange={(checked) => handleChange('enableGeolocation', checked)}
         >
+          {locked ? <ProtectedNotice /> : null}
           <ReadableText variant="pi" textColor="neutral700" tag="p" data-privacy-note="">
             {t(
               'settings.config.lookup.enable.privacy',

@@ -38,12 +38,17 @@ test('webhook URLs are masked single-line inputs with a reveal toggle and inline
   const notifications = readSettingsFile('AlertsTab.jsx');
   for (const id of ['discord-webhook-url', 'slack-webhook-url']) {
     const field =
-      notifications.match(new RegExp(`<FormField\\s+id="${id}"[\\s\\S]*?<\\/FormField>`))?.[0] ||
+      notifications.match(new RegExp(`<WebhookUrlField[\\s\\S]*?id="${id}"[\\s\\S]*?\\/>`))?.[0] ||
       '';
-    assert.match(field, /<SecretTextInput\b/, id);
-    assert.match(field, /revealedType="url"/, id);
     assert.match(field, /error=\{tError\(errors\.(?:discord|slack)WebhookUrl\)\}/, id);
   }
+  // 4.17 (F6): a stored URL is never shown; "Saved" with Replace and Remove.
+  const webhookField = readSettingsFile('WebhookUrlField.jsx');
+  assert.match(webhookField, /<SecretTextInput\b/);
+  assert.match(webhookField, /revealedType="url"/);
+  assert.match(webhookField, /t\('settings\.webhooks\.saved', 'Saved'\)/);
+  assert.match(webhookField, /t\('settings\.webhooks\.replace', 'Replace'\)/);
+  assert.match(webhookField, /t\('settings\.webhooks\.remove', 'Remove'\)/);
   assert.doesNotMatch(notifications, /settings\.webhooks\.characters/, 'no character counter');
   assert.doesNotMatch(notifications, /<Textarea\b/, 'single-line inputs only');
   assert.doesNotMatch(

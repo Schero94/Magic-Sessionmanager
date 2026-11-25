@@ -2,15 +2,20 @@ import { useId } from 'react';
 import { Box, Checkbox, Flex, Typography } from '@strapi/design-system';
 import styled from 'styled-components';
 import { EqualGrid, SectionCard } from '../../components/ui';
-import FormField from '../../components/FormField';
 import ReadableText from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import Alert from '../../components/PersistentAlert';
 import { fieldHasError } from './settingsTabs.mjs';
 import EmailTemplatesCard from './EmailTemplatesCard';
-import SecretTextInput from './SecretTextInput';
+import WebhookUrlField from './WebhookUrlField';
 import { SettingsTabLink } from './SettingsNavigation';
-import { AdvancedSection, IntroText, RequiresNotice, RiskSourceNotice } from './SettingsBlocks';
+import {
+  AdvancedSection,
+  IntroText,
+  ProtectedNotice,
+  RequiresNotice,
+  RiskSourceNotice,
+} from './SettingsBlocks';
 import { getRiskAvailability, riskDependentControl } from '../../utils/riskData.mjs';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
@@ -79,6 +84,8 @@ const AlertsTab = ({ form }) => {
   const lookupOff = !settings.enableGeolocation;
   const emailTypesDisabled = lookupOff || !settings.enableEmailAlerts;
   const webhookFieldsDisabled = lookupOff || !settings.enableWebhooks;
+  // Webhooks are protected settings (4.17): changing them needs settings.update.
+  const locked = form.canChangeProtected === false;
   const templateErrors = fieldHasError(errors, 'emailTemplates');
   const risk = getRiskAvailability(form.geoIp.status);
 
@@ -220,7 +227,7 @@ const AlertsTab = ({ form }) => {
             WEBHOOK_EVENTS
           )}
           checked={settings.enableWebhooks}
-          disabled={lookupOff}
+          disabled={lookupOff || locked}
           onChange={(checked) => handleChange('enableWebhooks', checked)}
         />
         {!lookupOff && !settings.enableWebhooks ? (
@@ -238,56 +245,47 @@ const AlertsTab = ({ form }) => {
           </ReadableText>
         ) : null}
 
+        {locked ? <ProtectedNotice /> : null}
+
         <EqualGrid columns={2} stackBelow="medium" gap={6}>
-          <FormField
+          <WebhookUrlField
+            key={`discord-${form.draftVersion}`}
+            form={form}
             id="discord-webhook-url"
-            name="discordWebhookUrl"
+            field="discordWebhookUrl"
+            hasKey="hasDiscordWebhook"
+            hintKey="discordWebhookHint"
             label={t('settings.config.webhooks.discord.label', 'Discord webhook URL')}
             description={t(
               'settings.config.webhooks.discord.hint',
               'Must start with https://discord.com or https://discordapp.com. Anyone with this URL can post to your channel.'
             )}
             error={tError(errors.discordWebhookUrl)}
-          >
-            <SecretTextInput
-              name="discordWebhookUrl"
-              revealedType="url"
-              value={settings.discordWebhookUrl || ''}
-              disabled={webhookFieldsDisabled && !errors.discordWebhookUrl}
-              onChange={(value) => handleChange('discordWebhookUrl', value)}
-              placeholder={t(
-                'settings.webhooks.discord.placeholder',
-                'https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz...'
-              )}
-              showLabel={t('settings.webhooks.show', 'Show URL')}
-              hideLabel={t('settings.webhooks.hide', 'Hide URL')}
-            />
-          </FormField>
-
-          <FormField
+            disabled={webhookFieldsDisabled || locked}
+            placeholder={t(
+              'settings.webhooks.discord.placeholder',
+              'https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz...'
+            )}
+          />
+          <WebhookUrlField
+            key={`slack-${form.draftVersion}`}
+            form={form}
             id="slack-webhook-url"
-            name="slackWebhookUrl"
+            field="slackWebhookUrl"
+            hasKey="hasSlackWebhook"
+            hintKey="slackWebhookHint"
             label={t('settings.config.webhooks.slack.label', 'Slack webhook URL')}
             description={t(
               'settings.config.webhooks.slack.hint',
               'Must start with https://hooks.slack.com. Anyone with this URL can post to your channel.'
             )}
             error={tError(errors.slackWebhookUrl)}
-          >
-            <SecretTextInput
-              name="slackWebhookUrl"
-              revealedType="url"
-              value={settings.slackWebhookUrl || ''}
-              disabled={webhookFieldsDisabled && !errors.slackWebhookUrl}
-              onChange={(value) => handleChange('slackWebhookUrl', value)}
-              placeholder={t(
-                'settings.webhooks.slack.placeholder',
-                'https://hooks.slack.com/services/XXXX/XXXX/XXXX'
-              )}
-              showLabel={t('settings.webhooks.show', 'Show URL')}
-              hideLabel={t('settings.webhooks.hide', 'Hide URL')}
-            />
-          </FormField>
+            disabled={webhookFieldsDisabled || locked}
+            placeholder={t(
+              'settings.webhooks.slack.placeholder',
+              'https://hooks.slack.com/services/XXXX/XXXX/XXXX'
+            )}
+          />
         </EqualGrid>
       </SectionCard>
     </Flex>

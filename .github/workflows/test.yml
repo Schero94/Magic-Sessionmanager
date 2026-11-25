@@ -222,6 +222,14 @@ jobs:
           node --test tests/isolated-admin-activity-http.test.js
           ADMIN_ACTIVITY_PROXY=1 node --test tests/isolated-admin-activity-http.test.js
 
+      - name: Admin sign-in history and activity on PostgreSQL
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+          SESSION_HTTP_DB: postgres
+          MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_http
+        run: node --test tests/isolated-admin-activity-http.test.js
+
       - name: Existing HTTP access suite (legacy and refresh mode)
         env:
           SESSION_HTTP_REQUIRED: '1'

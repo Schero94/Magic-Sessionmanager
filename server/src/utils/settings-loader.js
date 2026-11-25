@@ -152,6 +152,8 @@ function normalizeStoredSettings(stored) {
     'adminContentActivity',
     'securityLogStoreIp',
     'securityLogAnonymizeIp',
+    // Opt-in location lookup of security events (4.17).
+    'securityLogGeoLookup',
   ];
 
   if (stored.sessionCreationGraceMs !== undefined) {
@@ -203,7 +205,8 @@ function normalizeStoredSettings(stored) {
     out.emailTemplates = stored.emailTemplates;
   }
   if (stored.securityLogRetentionDays !== undefined) {
-    out.securityLogRetentionDays = toIntInRange(stored.securityLogRetentionDays, 90, 1, 730);
+    // At least 7 days since 4.17; stored 1-6 read as 7 (raised at start-up).
+    out.securityLogRetentionDays = toIntInRange(stored.securityLogRetentionDays, 90, 7, 730);
   }
   if (stored.trustedProxies !== undefined) {
     out.trustedProxies = stored.trustedProxies;

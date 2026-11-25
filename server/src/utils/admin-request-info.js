@@ -20,8 +20,11 @@ const crypto = require('node:crypto');
 const net = require('node:net');
 const { parseUserAgent } = require('./user-agent-parser');
 
-/** Longest stored user agent. */
-const MAX_USER_AGENT_LENGTH = 500;
+/**
+ * Longest stored user agent (4.17: 256, was 500). Real browsers send about
+ * 120 to 200 characters; the rest only let a client store more text.
+ */
+const MAX_USER_AGENT_LENGTH = 256;
 /** Longest device id that is hashed (the admin panel sends a UUID). */
 const MAX_DEVICE_ID_LENGTH = 200;
 
@@ -57,6 +60,23 @@ function normalizeIp(value) {
 function getRequestIp(ctx) {
   try {
     return normalizeIp(ctx?.request?.ip);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The address of the TCP peer (the socket), normalised. Behind a proxy this
+ * is the proxy; without one it equals `ctx.request.ip`. Stored, anonymised,
+ * next to the client IP when the two differ (4.17, F7), so a spoofed
+ * `X-Forwarded-For` value can be told apart.
+ *
+ * @param {any} ctx Koa context.
+ * @returns {string|null} Normalised address, or null when unknown.
+ */
+function getSocketIp(ctx) {
+  try {
+    return normalizeIp(ctx?.req?.socket?.remoteAddress ?? ctx?.request?.socket?.remoteAddress);
   } catch {
     return null;
   }
@@ -163,9 +183,11 @@ function hashDeviceId(deviceId) {
 }
 
 module.exports = {
+  MAX_USER_AGENT_LENGTH,
   anonymizeIp,
   describeUserAgent,
   getRequestIp,
+  getSocketIp,
   getRequestUserAgent,
   hashDeviceId,
   normalizeIp,

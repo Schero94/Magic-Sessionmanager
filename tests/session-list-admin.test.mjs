@@ -75,6 +75,30 @@ test('CSV cells that start like a formula are neutralised (CSV injection)', () =
   assert.equal(escapeCsvValue(null), '""');
 });
 
+test('item 4: CSV escaping covers zero-width prefixes and full-width formula signs', () => {
+  for (const value of [
+    '\u200b=1+1',
+    '\ufeff@SUM(A1)',
+    '\u200d\u200c+cmd',
+    '\u2060-2',
+    '\u00ad=x',
+    '  =x',
+    '\uff1dHYPERLINK("http://x")',
+    '\uff0bcmd',
+    '\uff0dcmd',
+    '\uff20SUM(A1)',
+    '\u200b\uff1d1',
+    '\nline',
+  ]) {
+    assert.ok(escapeCsvValue(value).startsWith(`"'`), JSON.stringify(value));
+  }
+  assert.equal(escapeCsvValue('Plain title'), '"Plain title"');
+  assert.equal(escapeCsvValue('a=b'), '"a=b"', 'only a leading sign counts');
+  const started = performance.now();
+  escapeCsvValue(`${'\u200b'.repeat(50_000)}x`);
+  assert.ok(performance.now() - started < 200, 'linear on adversarial input');
+});
+
 test('analytics from the server merge raw device and browser groups into the display buckets', async () => {
   const { analyticsFromServer } = await import('../admin/src/utils/sessionAnalytics.mjs');
   const result = analyticsFromServer({
