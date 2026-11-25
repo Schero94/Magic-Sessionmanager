@@ -14,6 +14,8 @@ const pluginPermissions = {
    * The server also requires `access` (and `admin-activity.read` for the log).
    */
   settingsUpdate: [{ action: `plugin::${pluginId}.settings.update`, subject: null }],
+  /** Lifting a sign-in lock. The server also requires `access`. */
+  lockoutsUnlock: [{ action: `plugin::${pluginId}.lockouts.unlock`, subject: null }],
 };
 
 export default pluginPermissions;

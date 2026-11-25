@@ -2,6 +2,8 @@ import {
   Alert as DesignSystemAlert,
   Badge,
   Flex,
+  NumberInput,
+  Radio,
   SingleSelect,
   SingleSelectOption,
   Typography,
@@ -12,9 +14,17 @@ import { ReadableParagraphs } from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import { SELECT_PRESETS } from './settingsTabs.mjs';
 import EncryptionKeyCard, { useEncryptionKeyDraft } from './EncryptionKeyCard';
-import { AdvancedSection, IntroText, PresetSelect, TermList } from './SettingsBlocks';
+import {
+  AdvancedSection,
+  IntroText,
+  PresetSelect,
+  ProtectedNotice,
+  TermList,
+} from './SettingsBlocks';
 import { useOptionLabels } from './hooks/useOptionLabels';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
+import RoleRulesSection from './RoleRulesSection';
+import { POLICY_RANGES } from '../../utils/policyForm.mjs';
 
 /** Session end reasons sent in X-Session-Terminated-Reason (IA A.4, F 1.3). */
 const REJECTION_REASONS = [
@@ -64,10 +74,14 @@ const formatReasonCodes = (locale) => {
  * @returns {import('react').ReactElement} Tab content.
  */
 const SessionsTab = ({ form }) => {
-  const { t, locale } = useSettingsTranslate();
+  const { t, tError, locale } = useSettingsTranslate();
   const units = useOptionLabels();
   const encryptionKeyDraft = useEncryptionKeyDraft();
-  const { settings, handleChange, relaxedWarningDismissed, setRelaxedWarningDismissed } = form;
+  const { settings, handleChange, relaxedWarningDismissed, setRelaxedWarningDismissed, errors } =
+    form;
+  const sessionLimit = Number(settings.maxSessionsPerUser) || 0;
+  // Session limit, password-change sign-out and role rules are protected settings.
+  const locked = form.canChangeProtected === false;
   const lastSeenTooSlow =
     Number(settings.lastSeenRateLimit) * 2 > Number(settings.inactivityTimeout) * 60;
 
@@ -247,6 +261,114 @@ const SessionsTab = ({ form }) => {
             />
           </EqualGrid>
         </AdvancedSection>
+      </SectionCard>
+
+      <SectionCard
+        id="session-limit"
+        title={t('settings.config.sessionLimit.title', 'Concurrent sessions')}
+        subtitle={t(
+          'settings.config.sessionLimit.intro',
+          'Limits how many sessions one user can have open at the same time.'
+        )}
+      >
+        {locked ? <ProtectedNotice /> : null}
+        <EqualGrid columns={2} stackBelow="medium" gap={6}>
+          <FormField
+            id="max-sessions-per-user"
+            name="maxSessionsPerUser"
+            label={t('settings.config.sessionLimit.max.label', 'Open sessions per user')}
+            description={t(
+              'settings.config.sessionLimit.max.hint',
+              '0 means no limit. Sessions that are idle or past their maximum age do not count.'
+            )}
+            suffix={t('settings.roleRules.dialog.sessionsSuffix', 'sessions')}
+            error={tError(errors.maxSessionsPerUser)}
+            required
+          >
+            <NumberInput
+              key={form.draftVersion}
+              value={settings.maxSessionsPerUser}
+              onValueChange={(value) => handleChange('maxSessionsPerUser', value ?? '')}
+              disabled={locked}
+              min={POLICY_RANGES.maxSessionsPerUser.min}
+              max={POLICY_RANGES.maxSessionsPerUser.max}
+              step={1}
+            />
+          </FormField>
+        </EqualGrid>
+        {sessionLimit > 0 ? (
+          <Flex direction="column" alignItems="stretch" gap={2} data-session-limit-policy="">
+            <Typography
+              id="session-limit-policy-label"
+              variant="pi"
+              fontWeight="bold"
+              tag="div"
+              textColor="neutral800"
+            >
+              {t('settings.config.sessionLimit.policy.label', 'When the limit is reached')}
+            </Typography>
+            <Radio.Group
+              aria-labelledby="session-limit-policy-label"
+              value={settings.sessionLimitPolicy || 'end-oldest'}
+              disabled={locked}
+              onValueChange={(value) => handleChange('sessionLimitPolicy', value)}
+            >
+              <Radio.Item value="end-oldest">
+                {t('settings.config.sessionLimit.policy.endOldest', 'End the oldest session')}
+              </Radio.Item>
+              <Radio.Item value="refuse">
+                {t('settings.config.sessionLimit.policy.refuse', 'Refuse the new sign-in')}
+              </Radio.Item>
+            </Radio.Group>
+            {settings.sessionLimitPolicy === 'refuse' ? (
+              <DesignSystemAlert
+                variant="warning"
+                closeLabel={t('common.close', 'Close')}
+                title={t(
+                  'settings.config.sessionLimit.refuse.title',
+                  'Users can lock themselves out'
+                )}
+              >
+                {t(
+                  'settings.config.sessionLimit.refuse.body',
+                  'A user who reaches the limit cannot sign in on a new device until another session ends or times out. The app receives 403 with the code SESSION_LIMIT_REACHED.'
+                )}
+              </DesignSystemAlert>
+            ) : null}
+          </Flex>
+        ) : null}
+      </SectionCard>
+
+      <SectionCard
+        id="password-change"
+        title={t('settings.config.passwordChange.title', 'Password change')}
+      >
+        {locked ? <ProtectedNotice /> : null}
+        <SettingsToggleRow
+          id="end-other-sessions-on-password-change"
+          title={t(
+            'settings.config.passwordChange.label',
+            'End other sessions after a password change'
+          )}
+          description={t(
+            'settings.config.passwordChange.hint',
+            'When a user changes their password, every other session of that user ends. The session that made the change stays. A password reset always ends the other sessions.'
+          )}
+          checked={settings.endOtherSessionsOnPasswordChange === true}
+          disabled={locked}
+          onChange={(checked) => handleChange('endOtherSessionsOnPasswordChange', checked)}
+        />
+      </SectionCard>
+
+      <SectionCard
+        id="role-rules"
+        title={t('settings.roleRules.cardTitle', 'Roles')}
+        subtitle={t(
+          'settings.roleRules.cardIntro',
+          'Optional. Most installations need no role rules.'
+        )}
+      >
+        <RoleRulesSection form={form} />
       </SectionCard>
 
       <SectionCard

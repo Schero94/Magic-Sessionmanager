@@ -46,6 +46,10 @@ module.exports = {
 
     trustedProxies: null,
 
+    // Sign-in and session policies (4.17). Existing installations keep
+    // `endOtherSessionsOnPasswordChange: false` (utils/upgrade-defaults.js).
+    endOtherSessionsOnPasswordChange: true,
+
     // Cross-process state for pm2 cluster / several replicas. `enabled:
     // false` keeps every counter, lease and cache per process (the pre-4.10
     // behaviour). `counterStore` may supply an object with async

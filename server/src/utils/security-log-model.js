@@ -34,6 +34,13 @@ const SECURITY_EVENTS = Object.freeze({
   SETTINGS_UPDATED: 'settings.updated',
   LOG_RETENTION_PURGED: 'security-log.retention.purged',
   LOG_READ: 'security-log.read',
+  // App users (Users & Permissions), 4.17.
+  USER_SIGN_IN_FAILED: 'user.sign-in.failed',
+  USER_SIGN_IN_REFUSED: 'user.sign-in.refused',
+  USER_LOCKOUT: 'user.lockout',
+  USER_LOCKOUT_LIFTED: 'user.lockout.lifted',
+  USER_SESSION_LIMIT: 'user.session.limit',
+  USER_PASSWORD_CHANGE_ENDED: 'user.password-change.ended-others',
 });
 
 /**
@@ -59,7 +66,11 @@ const KEEP_WITHOUT_ACTOR_EVENTS = Object.freeze([
  *   family named in the drop log line.
  */
 function dropRankOf(event) {
-  if (event === SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED || event === SECURITY_EVENTS.ADMIN_LOCKOUT) {
+  if (
+    event === SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED ||
+    event === SECURITY_EVENTS.ADMIN_LOCKOUT ||
+    USER_SIGN_IN_EVENTS.includes(event)
+  ) {
     return { rank: 0, family: 'failed' };
   }
   if (event === SECURITY_EVENTS.ADMIN_CONTENT_VIEW) return { rank: 1, family: 'content-view' };
@@ -68,6 +79,26 @@ function dropRankOf(event) {
   }
   return { rank: 3, family: 'account' };
 }
+
+/**
+ * App-user sign-in events governed by the "Record failed and refused
+ * sign-ins" switch (`recordUserSignInEvents`).
+ */
+const USER_SIGN_IN_EVENTS = Object.freeze([
+  SECURITY_EVENTS.USER_SIGN_IN_FAILED,
+  SECURITY_EVENTS.USER_SIGN_IN_REFUSED,
+  SECURITY_EVENTS.USER_LOCKOUT,
+]);
+
+/** Why a sign-in was refused (`meta.reason` of `user.sign-in.refused`). */
+const REFUSAL_REASONS = Object.freeze([
+  'lockout',
+  'too-many-attempts',
+  'session-limit',
+  'country',
+  'risk',
+  'location-unavailable',
+]);
 
 /** Shape every stored event name must have (registry and future events). */
 const EVENT_NAME_PATTERN = /^[a-z][a-z0-9-]{0,30}(\.[a-z][a-z0-9-]{0,30}){1,3}$/;
@@ -112,15 +143,17 @@ const ADMIN_CONTENT_EVENTS = Object.freeze(CONTENT_ACTIONS.map(contentEvent));
 
 /**
  * Which recording switch governs an event: `signIns` (admin sign-in
- * history), `content` (Content Manager activity) or `always` (events of later
- * features, which bring their own switch).
+ * history), `content` (Content Manager activity), `userSignIns` (failed and
+ * refused app-user sign-ins and lockouts) or `always` (admin actions and
+ * policy outcomes, which are only written when their feature is on).
  *
  * @param {string} event Event name.
- * @returns {'signIns'|'content'|'always'} Switch.
+ * @returns {'signIns'|'content'|'userSignIns'|'always'} Switch.
  */
 function recordingSwitchOf(event) {
   if (ADMIN_SIGN_IN_EVENTS.includes(event)) return 'signIns';
   if (event.startsWith('admin.content.')) return 'content';
+  if (USER_SIGN_IN_EVENTS.includes(event)) return 'userSignIns';
   return 'always';
 }
 
@@ -419,6 +452,8 @@ function toObject(value) {
 }
 
 module.exports = {
+  REFUSAL_REASONS,
+  USER_SIGN_IN_EVENTS,
   ACTOR_TYPES,
   ADMIN_CONTENT_EVENTS,
   ADMIN_SIGN_IN_EVENTS,

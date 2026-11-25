@@ -1,5 +1,6 @@
 import { areSettingsEqual } from './settingsEquality.mjs';
 import { TEMPLATE_KEYS, TEMPLATE_LIMITS, fillMissingTemplates } from './emailTemplateDraft.mjs';
+import { POLICY_FORM_DEFAULTS, validatePolicyFields } from './policyForm.mjs';
 
 /**
  * Client defaults. They mirror DEFAULT_SETTINGS in
@@ -44,6 +45,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   securityLogAnonymizeIp: false,
   securityLogGeoLookup: false,
   securityLogRetentionDays: 90,
+  ...POLICY_FORM_DEFAULTS,
 });
 
 /** Keys the server accepts but never returns (write-only secrets, 4.17). */
@@ -84,6 +86,10 @@ export function normalizeSettings(loaded) {
     ...loaded,
     allowedCountries: Array.isArray(loaded.allowedCountries) ? loaded.allowedCountries : [],
     blockedCountries: Array.isArray(loaded.blockedCountries) ? loaded.blockedCountries : [],
+    lockoutTrustedAddresses: Array.isArray(loaded.lockoutTrustedAddresses)
+      ? loaded.lockoutTrustedAddresses
+      : [],
+    roleRules: Array.isArray(loaded.roleRules) ? loaded.roleRules : [],
     emailTemplates: fillMissingTemplates(loaded.emailTemplates),
   };
 }
@@ -165,6 +171,7 @@ export function validateSettings(settings) {
 
   const maxFailed = validateMaxFailedLogins(source.maxFailedLogins);
   if (maxFailed) errors.maxFailedLogins = maxFailed;
+  Object.assign(errors, validatePolicyFields(source));
 
   if (!isAllowedWebhookUrl(source.discordWebhookUrl, WEBHOOK_HOSTS.discordWebhookUrl)) {
     errors.discordWebhookUrl = message(

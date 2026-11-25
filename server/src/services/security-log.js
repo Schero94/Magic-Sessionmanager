@@ -411,9 +411,12 @@ module.exports = ({ strapi }) => {
   const buildRows = async (batch, options, settings) => {
     /** @type {Map<string, {entry: SecurityEventInput, count: number, anonIp: string|null, windowStart: number}>} */
     const groups = new Map();
+    const recordUserSignIns = settings.recordUserSignInEvents !== false;
     const wanted = batch.filter((entry) => {
       const gate = recordingSwitchOf(entry.event);
-      return gate === 'always' || (gate === 'signIns' ? options.signIns : options.content);
+      if (gate === 'always') return true;
+      if (gate === 'userSignIns') return recordUserSignIns;
+      return gate === 'signIns' ? options.signIns : options.content;
     });
     if (!wanted.length) return { rows: [], groups };
 
@@ -964,6 +967,32 @@ module.exports = ({ strapi }) => {
      * @returns {Promise<void>}
      * @sideeffect Deletes and updates rows of the security event table.
      */
+    /**
+     * Deletes what the log holds about an app user whose account was
+     * deleted: events about the account and events the user caused.
+     *
+     * @param {string} userDocumentId Deleted user's documentId.
+     * @returns {Promise<void>}
+     * @sideeffect Deletes rows of the security event table.
+     */
+    async deleteUserData(userDocumentId) {
+      const key = toId(userDocumentId);
+      if (!key) return;
+      queue = queue.filter(
+        (entry) =>
+          !(entry.targetType === 'user' && String(entry.targetId) === key) &&
+          !(entry.actorType === 'user' && String(entry.actorId) === key)
+      );
+      await events().deleteMany({
+        where: {
+          $or: [
+            { targetType: 'user', targetId: key },
+            { actorType: 'user', actorId: key },
+          ],
+        },
+      });
+    },
+
     async deleteAdminData(adminId) {
       const id = toAdminId(adminId);
       if (!id) return;

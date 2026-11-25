@@ -25,6 +25,7 @@
  */
 
 const { SECURITY_LOG_KEYS } = require('./security-log-settings');
+const { POLICY_KEYS } = require('./policy-settings');
 
 const SETTINGS_UPDATE_ACTION = 'plugin::magic-sessionmanager.settings.update';
 const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
@@ -49,6 +50,9 @@ const PROTECTED_SETTINGS_KEYS = Object.freeze([
   ...GEO_SETTINGS_KEYS,
   ...WEBHOOK_SETTINGS_KEYS,
   ...SECURITY_LOG_KEYS,
+  // Sign-in and session policies (lockout, trusted addresses, session
+  // limit, password-change sign-out, recording switch, per-role rules).
+  ...POLICY_KEYS,
 ]);
 
 /** Secret webhook URL keys and the flag/hint keys returned instead. */

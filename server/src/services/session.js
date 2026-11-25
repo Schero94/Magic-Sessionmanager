@@ -6,6 +6,7 @@ const { parseUserAgent } = require('../utils/user-agent-parser');
 const { resolveUserDocumentId } = require('../utils/resolve-user');
 const { enhanceSessions, shouldResolveGeoData } = require('../utils/enhance-session');
 const { getPluginSettings } = require('../utils/settings-loader');
+const { hasRoleOverride, inactivityTimeoutFor } = require('../utils/policy-settings');
 const {
   cleanupExpiredAccessTokenRevocations,
   persistAccessTokenRevocation,
@@ -1292,6 +1293,9 @@ module.exports = ({ strapi }) => {
         const settings = await getPluginSettings(strapi);
         const nativeManager = getNativeSessionManager(strapi);
         const inactivityTimeout = settings.inactivityTimeout || 15 * 60 * 1000;
+        // Role rules with their own inactivity timeout (4.17) are applied
+        // per session, which needs the Document Service path below.
+        const perRole = hasRoleOverride(settings, 'inactivityTimeout');
 
         const now = new Date();
         const cutoffTime = new Date(now.getTime() - inactivityTimeout);
@@ -1300,7 +1304,7 @@ module.exports = ({ strapi }) => {
           `[CLEANUP] Cleaning up sessions inactive since before ${cutoffTime.toISOString()}`
         );
 
-        if (useDbDirect && !nativeManager) {
+        if (useDbDirect && !nativeManager && !perRole) {
           // Fast path: single SQL UPDATE. Drains the entire backlog in one
           // statement, regardless of size. Uses snake_case since Strapi
           // content-type field names map to snake_case columns by default.
@@ -1341,7 +1345,11 @@ module.exports = ({ strapi }) => {
           const batch = await strapi.documents(SESSION_UID).findMany({
             filters: { isActive: true },
             fields: ['documentId', 'lastActive', 'loginTime', 'nativeSessionId'],
-            populate: { user: { fields: ['id', 'documentId'] } },
+            populate: {
+              user: perRole
+                ? { fields: ['id', 'documentId'], populate: { role: { fields: ['documentId'] } } }
+                : { fields: ['id', 'documentId'] },
+            },
             limit: BATCH,
             start,
             sort: { loginTime: 'asc' },
@@ -1355,9 +1363,15 @@ module.exports = ({ strapi }) => {
               : session.loginTime
                 ? new Date(session.loginTime)
                 : null;
+            const sessionCutoff = perRole
+              ? new Date(
+                  now.getTime() -
+                    inactivityTimeoutFor(settings, session.user?.role?.documentId || null)
+                )
+              : cutoffTime;
 
-            if (lastActiveTime && lastActiveTime < cutoffTime) {
-              sessionsToDeactivate.push(session);
+            if (lastActiveTime && lastActiveTime < sessionCutoff) {
+              sessionsToDeactivate.push({ ...session, cutoff: sessionCutoff });
             }
           }
 
@@ -1384,8 +1398,8 @@ module.exports = ({ strapi }) => {
               documentId: session.documentId,
               isActive: true,
               $or: [
-                { lastActive: { $lt: cutoffTime } },
-                { lastActive: { $null: true }, loginTime: { $lt: cutoffTime } },
+                { lastActive: { $lt: session.cutoff } },
+                { lastActive: { $null: true }, loginTime: { $lt: session.cutoff } },
               ],
             };
             if (nativeManager) {

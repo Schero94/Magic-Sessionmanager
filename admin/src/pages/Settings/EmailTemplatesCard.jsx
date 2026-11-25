@@ -129,6 +129,7 @@ const TEMPLATE_TAB_LABELS = {
   suspiciousLogin: ['settings.email.templates.tab.suspicious', 'Suspicious sign-in'],
   newLocation: ['settings.email.templates.tab.newLocation', 'New country'],
   vpnProxy: ['settings.email.templates.tab.vpnProxy', 'VPN or proxy'],
+  accountLocked: ['settings.email.templates.tab.accountLocked', 'Account locked'],
 };
 
 /**

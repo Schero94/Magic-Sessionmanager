@@ -19,6 +19,7 @@ const {
   missingSettingsPermission,
   toPublicSettings,
 } = require('../utils/settings-access');
+const { POLICY_DEFAULTS, validatePolicySettings } = require('../utils/policy-settings');
 const path = require('node:path');
 
 /**
@@ -82,11 +83,9 @@ function getSafeGeoIpFilename(value) {
  * @returns {object} Sanitized templates
  */
 function sanitizeEmailTemplates(templates) {
-  const defaults = {
-    suspiciousLogin: { subject: '', html: '', text: '' },
-    newLocation: { subject: '', html: '', text: '' },
-    vpnProxy: { subject: '', html: '', text: '' },
-  };
+  const defaults = Object.fromEntries(
+    Object.keys(DEFAULT_EMAIL_TEMPLATES).map((key) => [key, { subject: '', html: '', text: '' }])
+  );
 
   if (!templates || typeof templates !== 'object') return defaults;
 
@@ -205,6 +204,8 @@ const DEFAULT_EMAIL_TEMPLATES = {
   suspiciousLogin: { subject: '', html: '', text: '' },
   newLocation: { subject: '', html: '', text: '' },
   vpnProxy: { subject: '', html: '', text: '' },
+  // 4.17: sent to a user whose account was locked after failed sign-ins.
+  accountLocked: { subject: '', html: '', text: '' },
 };
 
 const DEFAULT_SETTINGS = {
@@ -239,6 +240,9 @@ const DEFAULT_SETTINGS = {
   trustedProxies: false,
   emailTemplates: DEFAULT_EMAIL_TEMPLATES,
   ...SECURITY_LOG_DEFAULTS,
+  ...POLICY_DEFAULTS,
+  lockoutTrustedAddresses: [],
+  roleRules: [],
 };
 
 /**
@@ -504,6 +508,10 @@ function validateSettingsUpdate(body, current) {
   errors.push(...securityLog.errors);
   Object.assign(next, securityLog.values);
 
+  const policies = validatePolicySettings(body);
+  errors.push(...policies.errors);
+  Object.assign(next, policies.values);
+
   if (errors.length > 0) return { errors };
 
   const settings = {};
@@ -585,6 +593,28 @@ function recordSettingsChange(ctx, keys) {
   } catch {
     // Recording must not undo a saved change.
   }
+}
+
+/**
+ * Reports role rules whose role is not a Users & Permissions role.
+ *
+ * @param {unknown} rules Validated role rules.
+ * @returns {Promise<Array<{path: Array<string|number>, message: string}>>} Field errors.
+ */
+async function findUnknownRoles(rules) {
+  if (!Array.isArray(rules) || rules.length === 0) return [];
+  const ids = rules.map((rule) => rule.role);
+  const rows = await strapi.db
+    .query('plugin::users-permissions.role')
+    .findMany({ where: { documentId: { $in: ids } }, select: ['documentId'] });
+  const known = new Set((Array.isArray(rows) ? rows : []).map((row) => row.documentId));
+  return rules
+    .map((rule, index) => (known.has(rule.role) ? null : index))
+    .filter((index) => index !== null)
+    .map((index) => ({
+      path: ['roleRules', index, 'role'],
+      message: 'This role does not exist any more',
+    }));
 }
 
 /**
@@ -693,6 +723,9 @@ module.exports = {
 
         const { settings: sanitizedSettings, errors } = validateSettingsUpdate(body, current);
         if (errors.length > 0) return { errors };
+
+        const roleErrors = await findUnknownRoles(sanitizedSettings.roleRules);
+        if (roleErrors.length > 0) return { errors: roleErrors };
 
         // Protected keys change only with the matching permission. Sending
         // the stored values back unchanged is allowed, so the whole form can

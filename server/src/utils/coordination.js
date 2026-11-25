@@ -114,6 +114,20 @@ function assertKey(key) {
   }
 }
 
+/**
+ * Registry keys are stored with a 4-character prefix in a 191-character
+ * column and matched with LIKE, so they are bounded and wildcard-free.
+ *
+ * @param {unknown} key Candidate key.
+ * @returns {void}
+ * @throws {TypeError} When the key is not a bounded, wildcard-free string.
+ */
+function assertRegistryKey(key) {
+  if (typeof key !== 'string' || !/^[a-z0-9:-]{1,180}$/.test(key)) {
+    throw new TypeError('registry key must be 1-180 lowercase letters, digits, ":" or "-"');
+  }
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -141,6 +155,8 @@ function createMemoryBackend() {
   const leases = new Map();
   const revisions = new Map();
   const lockTails = new Map();
+  /** Listable entries (sign-in locks); unlike the cache, kept in memory mode. */
+  const registry = new Map();
 
   const pruneCounters = (now) => {
     if (counters.size < 5000) return;
@@ -175,13 +191,14 @@ function createMemoryBackend() {
       return { hits: entry.hits, windowStart: entry.windowStart, blockedUntil: entry.blockedUntil };
     },
 
-    async block(key, untilMs) {
+    async block(key, untilMs, { windowStart } = {}) {
       const entry = counters.get(key) || {
         hits: 0,
         windowStart: 0,
         blockedUntil: 0,
         expiresAt: 0,
       };
+      if (Number.isFinite(windowStart)) entry.windowStart = windowStart;
       if (entry.blockedUntil < untilMs) entry.blockedUntil = untilMs;
       entry.expiresAt = Math.max(entry.expiresAt, untilMs);
       counters.set(key, entry);
@@ -250,8 +267,31 @@ function createMemoryBackend() {
 
     async cacheSet() {},
 
+    async registryPut(key, value, ttlMs, now = Date.now()) {
+      registry.set(key, { value, expiresAt: now + ttlMs });
+    },
+
+    async registryList(prefix, limit = 200, now = Date.now()) {
+      const out = [];
+      for (const [key, entry] of registry) {
+        if (entry.expiresAt <= now) {
+          registry.delete(key);
+          continue;
+        }
+        if (key.startsWith(prefix) && out.length < limit) out.push({ key, value: entry.value });
+      }
+      return out;
+    },
+
+    async registryDelete(key) {
+      registry.delete(key);
+    },
+
     async prune(now = Date.now()) {
       let removed = 0;
+      for (const [k, v] of registry) {
+        if (v.expiresAt <= now) registry.delete(k);
+      }
       for (const [k, v] of counters) {
         if (v.expiresAt <= now && v.blockedUntil <= now) {
           counters.delete(k);
@@ -266,6 +306,7 @@ function createMemoryBackend() {
       leases.clear();
       revisions.clear();
       lockTails.clear();
+      registry.clear();
     },
   };
 }
@@ -491,7 +532,7 @@ function createDatabaseBackend({ knex, dialect }) {
 
     peek: readCounter,
 
-    async block(key, untilMs) {
+    async block(key, untilMs, { windowStart } = {}) {
       await ensureCounterRow(key, untilMs);
       await knex(TABLES.counters)
         .where({ k: key })
@@ -502,6 +543,10 @@ function createDatabaseBackend({ knex, dialect }) {
             untilMs,
             untilMs,
           ]),
+          // Moves the counting window so it ends when the lock ends: the
+          // hits stay (requests already in flight are still turned away),
+          // and the first attempt after the lock starts a new window.
+          ...(Number.isFinite(windowStart) ? { window_start: Math.trunc(windowStart) } : {}),
         });
     },
 
@@ -595,6 +640,41 @@ function createDatabaseBackend({ knex, dialect }) {
         .insert({ k: key, v: JSON.stringify(value), expires_at: expiresAt })
         .onConflict('k')
         .merge(['v', 'expires_at']);
+    },
+
+    /**
+     * Listable entries live in the cache table under their own key prefix
+     * (`reg:`), so they share its expiry index and pruning.
+     */
+    async registryPut(key, value, ttlMs, now = Date.now()) {
+      await knex(TABLES.cache)
+        .insert({ k: `reg:${key}`, v: JSON.stringify(value), expires_at: now + ttlMs })
+        .onConflict('k')
+        .merge(['v', 'expires_at']);
+    },
+
+    async registryList(prefix, limit = 200, now = Date.now()) {
+      const rows = await knex(TABLES.cache)
+        .select('k', 'v')
+        .where('k', 'like', `reg:${prefix}%`)
+        .andWhere('expires_at', '>', now)
+        .orderBy('k', 'asc')
+        .limit(limit);
+      const out = [];
+      for (const row of rows) {
+        try {
+          out.push({ key: String(row.k).slice(4), value: JSON.parse(row.v) });
+        } catch {
+          // skip unreadable rows
+        }
+      }
+      return out;
+    },
+
+    async registryDelete(key) {
+      await knex(TABLES.cache)
+        .where({ k: `reg:${key}` })
+        .del();
     },
 
     async prune(now = Date.now()) {
@@ -703,10 +783,17 @@ function createCoordinator({
       return counterCall('counter read', 'peek', [key]);
     },
 
-    /** Raises the block deadline of `key` to `untilMs` (never lowers it). */
-    block(key, untilMs) {
+    /**
+     * Raises the block deadline of `key` to `untilMs` (never lowers it).
+     * With `windowStart` the counting window is moved (see the lockout).
+     */
+    block(key, untilMs, options) {
       assertKey(key);
-      return counterCall('counter block', 'block', [key, untilMs]);
+      return counterCall(
+        'counter block',
+        'block',
+        options ? [key, untilMs, options] : [key, untilMs]
+      );
     },
 
     /** Removes counter `key`. */
@@ -817,6 +904,54 @@ function createCoordinator({
         'cache write',
         (backend) => backend.cacheSet(key, value, ttlMs),
         () => sharedMemory.cacheSet(key, value, ttlMs)
+      );
+    },
+
+    /**
+     * Stores a listable entry (for example an active sign-in lock) until
+     * `ttlMs` from now. Unlike the cache it also works in memory mode, and
+     * entries can be listed by key prefix. Keys use lowercase letters,
+     * digits, `:` and `-` only, so they are free of LIKE wildcards.
+     *
+     * @param {string} key Entry key (at most 180 characters).
+     * @param {unknown} value JSON-serialisable value.
+     * @param {number} ttlMs Lifetime in milliseconds.
+     * @returns {Promise<void>}
+     */
+    registryPut(key, value, ttlMs) {
+      assertRegistryKey(key);
+      return run(
+        'registry write',
+        (backend) => backend.registryPut(key, value, ttlMs),
+        () => sharedMemory.registryPut(key, value, ttlMs)
+      );
+    },
+
+    /**
+     * Unexpired entries whose key starts with `prefix`, ordered by key.
+     *
+     * @param {string} prefix Key prefix (letters, digits, `:` and `-` only).
+     * @param {number} [limit] Most entries returned.
+     * @returns {Promise<Array<{key: string, value: any}>>}
+     */
+    registryList(prefix, limit = 200) {
+      if (typeof prefix !== 'string' || !/^[a-z0-9:-]{1,180}$/.test(prefix)) {
+        throw new TypeError('registry prefix must be letters, digits, ":" or "-"');
+      }
+      return run(
+        'registry read',
+        (backend) => backend.registryList(prefix, limit),
+        () => sharedMemory.registryList(prefix, limit)
+      );
+    },
+
+    /** Removes a listable entry. */
+    registryDelete(key) {
+      assertRegistryKey(key);
+      return run(
+        'registry delete',
+        (backend) => backend.registryDelete(key),
+        () => sharedMemory.registryDelete(key)
       );
     },
 

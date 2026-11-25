@@ -35,19 +35,20 @@ test('the field hint and the {count} lockout sentence use separate messages (I18
   const field = login.slice(login.indexOf('id="max-failed-logins"'), login.indexOf('<NumberInput'));
   assert.match(
     field,
-    /label=\{t\('settings\.config\.failed\.lockout\.label', 'Temporary IP lockout after'\)\}/
+    /label=\{t\('settings\.config\.failed\.lockout\.label', 'Lock an IP address after'\)\}/
   );
   assert.match(unwrapSource(field), /description=\{t\('settings\.config\.failed\.lockout\.hint'/);
-  assert.doesNotMatch(field, /settings\.config\.failed\.lockout\.preview'/);
+  assert.doesNotMatch(field, /settings\.config\.failed\.preview\./);
+  // The preview sentences pass every placeholder they use (4.17: IP and account lockout).
   assert.match(
-    login,
-    /'settings\.config\.failed\.lockout\.preview',\s*'After \{count, plural, one \{# failed sign-in\} other \{# failed sign-ins\}\} from one IP address within 15 minutes, that address is refused for 15 minutes\. User accounts are not blocked\. Counted per server process\.',\s*\{ count: maxFailedValue \}/
+    unwrapSource(login),
+    /'settings\.config\.failed\.preview\.ip',\s*'\{count, plural, one \{# failed sign-in\} other \{# failed sign-ins\}\} from one IP address within \{window, plural, one \{# minute\} other \{# minutes\}\} lock that address for \{duration, plural, one \{# minute\} other \{# minutes\}\}\.',\s*\{ count: ip, window, duration \}/
   );
-  assert.doesNotMatch(
-    login,
-    /will be blocked after/i,
-    'the lockout targets IP addresses, not accounts (IA A.1)'
+  assert.match(
+    unwrapSource(login),
+    /'settings\.config\.failed\.preview\.account',[\s\S]*?\{ count: account, window, duration \}/
   );
+  assert.doesNotMatch(login, /will be blocked after/i);
   assert.doesNotMatch(login, /background="warning50"/, 'warning50 is not a DS token');
 });
 

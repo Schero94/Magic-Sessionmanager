@@ -39,7 +39,7 @@ test('every Settings switch uses a shared horizontal title-copy-control row', ()
   const row = readAdminFile('components/SettingsToggleRow.jsx');
   const instances = settings.match(/<SettingsToggleRow\b/g) || [];
 
-  assert.equal(instances.length, 13, 'all thirteen settings switches use the shared row');
+  assert.equal(instances.length, 16, 'all sixteen settings switches use the shared row');
   assert.ok(
     !/<ToggleCard\b|<GreenToggle\b|<Toggle\b/.test(settings),
     'no standalone vertical toggle cards remain'
@@ -93,15 +93,20 @@ test('settings field pairs share an equal-height two-column grid that stacks bel
   assert.doesNotMatch(settings, /@media\s*\(/, 'no custom media queries');
 });
 
-test('unpaired temporary IP lockout field uses the full card width', () => {
+test('the IP and account lockout fields share an equal two-column grid (4.17)', () => {
   const security = readSettingsFile('LoginProtectionTab.jsx');
   const fieldPosition = security.indexOf('id="max-failed-logins"');
-  const before = security.slice(security.lastIndexOf('<SectionCard', fieldPosition), fieldPosition);
-  assert.ok(fieldPosition >= 0);
-  assert.doesNotMatch(
-    before.slice(before.lastIndexOf('/>')),
-    /<EqualGrid\b/,
-    'a single field is not squeezed into a half column'
+  const accountPosition = security.indexOf('id="max-failed-logins-account"');
+  const gridStart = security.lastIndexOf('<EqualGrid', fieldPosition);
+  assert.ok(fieldPosition >= 0 && accountPosition > fieldPosition);
+  assert.match(
+    security.slice(gridStart, fieldPosition),
+    /<EqualGrid columns=\{2\} stackBelow="medium"/
+  );
+  assert.equal(
+    security.slice(fieldPosition, accountPosition).includes('</EqualGrid>'),
+    false,
+    'both fields are in the same grid'
   );
 });
 

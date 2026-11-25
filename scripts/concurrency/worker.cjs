@@ -15,6 +15,7 @@ const {
   createDatabaseBackend,
   ensureTables,
 } = require('../../server/src/utils/coordination');
+const { createLoginLockout } = require('../../server/src/utils/login-lockout');
 
 const strapiDatabaseRequire = createRequire(require.resolve('@strapi/database/package.json'));
 const knexFactory = strapiDatabaseRequire('knex');
@@ -130,27 +131,67 @@ async function main() {
     }
     results.revision = true;
 
-    // 6. Lockout: the shared counter blocks after `maxFailed` hits in total.
+    // 6. Lockout: the plugin's real lockout engine (utils/login-lockout.js),
+    // as the sign-in middleware runs it. Per account (every process signs in
+    // from its own address) and per IP (one shared address): in each case
+    // only `maxFailed` attempts may reach the (simulated) password check in
+    // total, cluster-wide.
     await barrier('lockout');
-    // Same order as the login middleware: peek for a block, reserve the
-    // attempt with hit(), and only an attempt within the limit reaches the
-    // (simulated) password check.
-    let attempts = 0;
-    for (let i = 0; i < config.lockoutAttemptsPerWorker; i++) {
-      const state = await coordinator.peek('lf:test');
-      if (state && state.blockedUntil > Date.now()) break;
-      const entry = await coordinator.hit('lf:test', 15 * 60_000);
-      if (entry.hits > config.maxFailed) {
-        await coordinator.release('lf:test');
-        continue;
+    const lockout = createLoginLockout(coordinator);
+    const policy = {
+      ipMax: config.maxFailed,
+      windowMs: 15 * 60_000,
+      durationMs: 15 * 60_000,
+      trusted: [],
+    };
+    const attack = async ({ ip, identifier, ipMax, accountMax }) => {
+      let attempts = 0;
+      const p = { ...policy, ipMax };
+      for (let i = 0; i < config.lockoutAttemptsPerWorker; i++) {
+        const decision = await lockout.reserve({ ip, identifier, policy: p, accountMax });
+        if (decision.outcome === 'locked') break;
+        if (decision.outcome === 'busy') continue;
+        attempts++;
+        await sleep(1);
+        await lockout.settle(decision.reservation, 'failure', {
+          policy: p,
+          accountMax,
+          display: { ip, userDocumentId: 'synthetic-user' },
+        });
       }
-      attempts++;
-      await sleep(1);
-      if (entry.hits >= config.maxFailed) {
-        await coordinator.block('lf:test', Date.now() + 15 * 60_000);
-      }
+      return attempts;
+    };
+    results.accountAttempts = await attack({
+      ip: `192.0.2.${10 + config.workerIndex}`,
+      identifier: 'shared-account@example.com',
+      ipMax: 0,
+      accountMax: config.maxFailed,
+    });
+    await barrier('lockout-ip');
+    results.lockoutAttempts = await attack({
+      ip: '198.51.100.50',
+      identifier: null,
+      ipMax: config.maxFailed,
+      accountMax: 0,
+    });
+
+    // 7. Every process sees the same "Locked now" list; one process lifts
+    // both locks and every process then sees the account unlocked.
+    await barrier('locks');
+    results.listedLocks = (await lockout.listLocks()).map((lock) => lock.kind).sort();
+    await barrier('unlock');
+    if (config.workerIndex === 0) {
+      for (const lock of await lockout.listLocks()) await lockout.unlock(lock.id);
     }
-    results.lockoutAttempts = attempts;
+    await barrier('unlocked');
+    results.locksAfterUnlock = (await lockout.listLocks()).length;
+    const after = await lockout.reserve({
+      ip: '203.0.113.50',
+      identifier: 'shared-account@example.com',
+      policy: { ...policy, ipMax: 0 },
+      accountMax: 1000,
+    });
+    results.afterUnlock = after.outcome;
   } catch (err) {
     results.error = `${err?.name || 'Error'}: ${err?.message || ''}`;
   } finally {

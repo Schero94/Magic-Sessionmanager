@@ -33,6 +33,29 @@ function getRiskWarnings(geoData) {
   return warnings;
 }
 
+/**
+ * Default templates of the alerts added in 4.17. A stored template of the
+ * same key with no html and no text falls back to these, so an upgrade with
+ * customised older templates still sends a complete mail.
+ */
+const POLICY_TEMPLATES = Object.freeze({
+  accountLocked: Object.freeze({
+    subject: 'Your account was locked after failed sign-ins',
+    html: `<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>Your account was temporarily locked</h2>
+    <p>Hello {{user.username}},</p>
+    <p>There were several failed sign-in attempts for your account. To protect it, sign-in is locked for {{lock.minutes}} minutes, until {{lock.until}}.</p>
+    <p>If these attempts were not yours, change your password after the lock ends.</p>
+    <p style="color: #666; font-size: 12px;">This is an automated security notification.</p>
+  </div>
+</body>
+</html>`,
+    text: `Your account was temporarily locked\n\nHello {{user.username}},\n\nThere were several failed sign-in attempts for your account. To protect it, sign-in is locked for {{lock.minutes}} minutes, until {{lock.until}}.\n\nIf these attempts were not yours, change your password after the lock ends.`,
+  }),
+});
+
 const ALLOWED_WEBHOOK_HOSTS = ['discord.com', 'discordapp.com', 'hooks.slack.com'];
 
 const WEBHOOK_TIMEOUT_MS = 5000;
@@ -123,7 +146,63 @@ module.exports = ({ strapi }) => ({
         html: `<h2>[WARNING] VPN/Proxy Detected</h2><p>Account: {{user.email}}</p><p>Time: {{session.loginTime}}</p><p>IP: {{session.ipAddress}}</p><p>VPN: {{reason.isVpn}}, Proxy: {{reason.isProxy}}</p>`,
         text: `[WARNING] VPN/Proxy Detected\n\nAccount: {{user.email}}\nTime: {{session.loginTime}}\nIP: {{session.ipAddress}}\nVPN: {{reason.isVpn}}, Proxy: {{reason.isProxy}}`,
       },
+      ...POLICY_TEMPLATES,
     };
+  },
+
+  /**
+   * One template by key. A stored template without html and text falls back
+   * to the default of that key.
+   *
+   * @param {string} key Template key.
+   * @returns {Promise<{subject: string, html: string, text: string}>} Template.
+   */
+  async getTemplate(key) {
+    const templates = await this.getEmailTemplates();
+    const template = templates?.[key];
+    if (template && (template.html || template.text)) {
+      return {
+        subject: template.subject || POLICY_TEMPLATES[key]?.subject || '',
+        html: template.html || '',
+        text: template.text || '',
+      };
+    }
+    return { ...POLICY_TEMPLATES[key] };
+  },
+
+  /**
+   * Emails a user that their account was locked after failed sign-ins.
+   * Sent through Strapi's email plugin, so a provider plugin such as Magic
+   * Mail delivers it when installed.
+   *
+   * @param {{user: {email?: string, username?: string}, minutes: number, until: number}} params
+   *   Account, lock duration in minutes and lock end (epoch ms).
+   * @returns {Promise<boolean>} Whether the mail was handed to the email plugin.
+   * @sideeffect Sends one email.
+   */
+  async sendAccountLockedEmail({ user, minutes, until }) {
+    try {
+      if (!user?.email) return false;
+      const template = await this.getTemplate('accountLocked');
+      const data = { user, lock: { minutes, until } };
+      await strapi
+        .plugin('email')
+        .service('email')
+        .send({
+          to: user.email,
+          subject: this.replaceVariables(template.subject, data),
+          html: this.replaceVariables(template.html, data),
+          text: this.replaceVariables(template.text, data),
+        });
+      strapi.log.info('[magic-sessionmanager/notifications] Account lock email sent');
+      return true;
+    } catch (err) {
+      strapi.log.error(
+        '[magic-sessionmanager/notifications] Account lock email failed:',
+        err?.name || 'Error'
+      );
+      return false;
+    }
   },
 
   /**
@@ -173,6 +252,14 @@ module.exports = ({ strapi }) => ({
     result = result.replace(/\{\{reason\.isVpn\}\}/g, data.reason?.isVpn ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isProxy\}\}/g, data.reason?.isProxy ? 'Yes' : 'No');
     result = result.replace(/\{\{reason\.isThreat\}\}/g, data.reason?.isThreat ? 'Yes' : 'No');
+    result = result.replace(
+      /\{\{lock\.minutes\}\}/g,
+      esc(Number.isFinite(data.lock?.minutes) ? String(data.lock.minutes) : 'N/A')
+    );
+    result = result.replace(
+      /\{\{lock\.until\}\}/g,
+      esc(Number.isFinite(data.lock?.until) ? new Date(data.lock.until).toUTCString() : 'N/A')
+    );
     const score = data.reason?.securityScore;
     result = result.replace(
       /\{\{reason\.securityScore\}\}/g,

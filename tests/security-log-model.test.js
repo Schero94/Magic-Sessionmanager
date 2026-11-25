@@ -80,7 +80,13 @@ test('each event family has its recording switch; later families record by defau
   assert.equal(recordingSwitchOf(SECURITY_EVENTS.ADMIN_SESSION_REVOKED), 'signIns');
   assert.equal(recordingSwitchOf(SECURITY_EVENTS.ADMIN_LOCKOUT), 'signIns');
   assert.equal(recordingSwitchOf('admin.content.publish'), 'content');
-  assert.equal(recordingSwitchOf('user.sign-in.failed'), 'always');
+  assert.equal(recordingSwitchOf('user.sign-in.failed'), 'userSignIns');
+  assert.equal(recordingSwitchOf('user.sign-in.refused'), 'userSignIns');
+  assert.equal(recordingSwitchOf('user.lockout'), 'userSignIns');
+  // Admin actions and policy outcomes are recorded whenever their feature is on.
+  assert.equal(recordingSwitchOf('user.lockout.lifted'), 'always');
+  assert.equal(recordingSwitchOf('user.session.limit'), 'always');
+  assert.equal(recordingSwitchOf('user.later-feature.event'), 'always');
 });
 
 test('settings: privacy defaults, stored false wins, invalid values are reported', () => {

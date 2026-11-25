@@ -26,12 +26,7 @@ const { dispatchLoginAlerts } = require('./utils/login-alerts');
 const { REVOCATION_UID } = require('./utils/session-revocation');
 const { getNativeSessionManager } = require('./utils/native-session-manager');
 const { CONTENT_API_PERMISSIONS_VERSION } = require('./utils/content-api-permissions');
-const {
-  getCoordinator,
-  hashedKey,
-  initCoordination,
-  LockTimeoutError,
-} = require('./utils/coordination');
+const { getCoordinator, initCoordination, LockTimeoutError } = require('./utils/coordination');
 const { removeLegacyLicenseData, withPluginStoreKey } = require('./utils/plugin-store');
 const {
   normalizeApiPrefix,
@@ -61,9 +56,28 @@ const {
   migrateSecurityLog,
   warnUnboundedProxyTrust,
 } = require('./utils/security-log-hardening');
+const { createLoginLockout } = require('./utils/login-lockout');
+const {
+  accountThresholdFor,
+  inactivityTimeoutFor,
+  hasRoleOverride,
+  resolveLockoutPolicy,
+} = require('./utils/policy-settings');
+const {
+  createAddressCap,
+  createRefusalDedup,
+  createSessionWithinLimit,
+  displayIp,
+  findAccountByIdentifier,
+  readSignInIdentifier,
+  recordUserEvent,
+  refusalReasonOfGeoDecision,
+} = require('./utils/sign-in-policies');
+const { SECURITY_EVENTS, USER_SIGN_IN_EVENTS } = require('./utils/security-log-model');
+const { applyUpgradeDefaults } = require('./utils/upgrade-defaults');
+const { anonymizeIp, normalizeIp } = require('./utils/admin-request-info');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
-const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** Leases for the periodic jobs. Only the holder runs the job. */
 const JOB_LEASES = Object.freeze({
@@ -132,6 +146,14 @@ module.exports = async ({ strapi }) => {
     const coordinator = await initCoordination(strapi, log);
 
     await checkEncryptionKeyConsistency(strapi, log);
+
+    // Keeps the previous behaviour of settings whose default changed
+    // (existing installations only); see utils/upgrade-defaults.js.
+    try {
+      await applyUpgradeDefaults(strapi, log);
+    } catch (err) {
+      log.warn('[UPGRADE] Previous defaults could not be kept:', err?.name || 'Error');
+    }
 
     await ensureSessionLookupIndexes(strapi, log);
 
@@ -394,6 +416,42 @@ async function checkEncryptionKeyConsistency(strapi, log) {
  * @param {{strapi: object, log: object}} deps
  */
 function mountPreLoginGeoGuard({ strapi, log }) {
+  const shouldRecordRefusal = createRefusalDedup();
+  const shouldRecordUnknownAccount = createRefusalDedup({ windowMs: 5 * 60 * 1000 });
+
+  /**
+   * Logs a refused sign-in (country rule, risky address, unavailable
+   * location) when "Record failed and refused sign-ins" is on.
+   *
+   * @param {object} ctx Koa context.
+   * @param {object} settings Merged settings.
+   * @param {string} ip Client IP.
+   * @param {string|null} decisionReason Geo rule reason.
+   * @returns {Promise<void>}
+   */
+  const recordRefusal = async (ctx, settings, ip, decisionReason) => {
+    if (!resolveLockoutPolicy(settings).record) return;
+    const reason = refusalReasonOfGeoDecision(decisionReason);
+    const identifier = readSignInIdentifier(ctx);
+    if (!shouldRecordRefusal(`${reason}|${ip}|${identifier || ''}`)) return;
+    const account = await findAccountByIdentifier(strapi, identifier).catch(() => null);
+    if (
+      !account &&
+      !shouldRecordUnknownAccount(`refused|${anonymizeIp(normalizeIp(ip || '')) || 'none'}`)
+    ) {
+      return;
+    }
+    recordUserEvent(strapi, {
+      event: SECURITY_EVENTS.USER_SIGN_IN_REFUSED,
+      actorType: 'user',
+      targetType: 'user',
+      targetId: account?.documentId || null,
+      ip,
+      userAgent: ctx.request?.headers?.['user-agent'] || null,
+      meta: { reason },
+    });
+  };
+
   strapi.server.use(async (ctx, next) => {
     if (!shouldRunPreAuthGeoGuard(apiPathOf(strapi, ctx), ctx.method)) {
       return next();
@@ -420,6 +478,7 @@ function mountPreLoginGeoGuard({ strapi, log }) {
 
       if (decision.blocked) {
         log.warn(`[PRE-BLOCKED] Login rejected (${decision.reason})`);
+        await recordRefusal(ctx, settings, ip, decision.reason);
         ctx.status = 403;
         ctx.body = {
           error: {
@@ -441,6 +500,7 @@ function mountPreLoginGeoGuard({ strapi, log }) {
       const failureDecision = evaluateGeoFirewall(settings, { _status: 'error' });
       if (failureDecision.blocked) {
         log.warn('[PRE-BLOCKED] Login rejected because GeoIP lookup failed');
+        await recordRefusal(ctx, settings, ip, 'geo_lookup_unavailable:error');
         ctx.status = 403;
         ctx.body = {
           error: {
@@ -727,87 +787,127 @@ async function compensateNativeSession({ nativeSessionManager, nativeSession, lo
 }
 
 /**
- * IP-based lockout after `maxFailedLogins` failed attempts within a 15-minute
- * window. Lockout duration = 15 minutes.
+ * Failed sign-in lockout per IP address and, optionally, per account (see
+ * `utils/login-lockout.js`). Thresholds, the counting window, the lock
+ * duration and trusted addresses come from the settings; the defaults keep
+ * the earlier behaviour (5 failures per IP within 15 minutes lock that IP for
+ * 15 minutes; no account lockout).
  *
- * The counter lives in the shared coordination store (database table by
- * default, see `utils/coordination.js`), keyed by a SHA-256 hash of the
- * client IP. Every pm2 worker and replica therefore sees the same count and
- * the same lock, a successful login clears it everywhere, and a restart does
- * not reset it. When the shared store is unavailable the middleware falls
- * back to per-process counters.
- *
- * The feature is opt-in via `settings.maxFailedLogins > 0`. When the
- * setting is 0 or missing, the middleware is a no-op (still mounted for
- * live-reload).
+ * Counters live in the shared coordination store, keyed by SHA-256 hashes of
+ * the IP and of the lower-cased account identifier, so every pm2 worker and
+ * replica sees the same counts and locks; a successful sign-in clears them.
+ * Failed and refused sign-ins and new locks go to the security log (switch
+ * `recordUserSignInEvents`); an account lock can email the account owner.
  *
  * @param {{strapi: object, log: object}} deps
  */
 function mountFailedLoginLockout({ strapi, log }) {
-  const WINDOW_MS = FAILED_LOGIN_WINDOW_MS;
-  const coordinator = getCoordinator(strapi);
-  const keyFor = (ip) => hashedKey('lf', ip);
+  const lockout = createLoginLockout(getCoordinator(strapi));
+  const shouldRecordRefusal = createRefusalDedup();
+  // Sign-ins naming an account that does not exist are aggregated: one
+  // event per anonymised client address per 5 minutes (same rule as the
+  // admin sign-in history), so guessing names cannot flood the log.
+  const shouldRecordUnknownAccount = createRefusalDedup({ windowMs: 5 * 60 * 1000 });
+  const underAddressCap = createAddressCap();
+  const unknownAccountKey = (ip) => `unknown|${anonymizeIp(normalizeIp(ip || '')) || 'none'}`;
 
   strapi.server.use(async (ctx, next) => {
     if (!isFailedLoginTrackedPath(apiPathOf(strapi, ctx), ctx.method)) return next();
 
     const settings = await getRequestSettings(strapi, ctx);
-    const maxFailed = Number(settings.maxFailedLogins) || 0;
-    if (maxFailed <= 0) return next();
+    const policy = resolveLockoutPolicy(settings);
+    const accountPossible = policy.accountMax > 0 || policy.accountMaxByRole;
+    if (policy.ipMax <= 0 && !accountPossible && !policy.record) return next();
 
-    const ip = getClientIp(ctx);
-    if (!ip || ip === 'unknown') return next();
+    const rawIp = getClientIp(ctx);
+    const ip = rawIp && rawIp !== 'unknown' ? rawIp : null;
+    const identifier = readSignInIdentifier(ctx);
+    const userAgent = ctx.request?.headers?.['user-agent'] || null;
 
-    const key = keyFor(ip);
-    const now = Date.now();
-    let existing = null;
+    // The account is looked up only when needed: before the password check
+    // when a role rule decides the account threshold, otherwise after a
+    // failure (for the log entry, the lock list and the lock email).
+    let account;
+    const loadAccount = async () => {
+      if (account !== undefined) return account;
+      let found = null;
+      if (identifier) {
+        try {
+          found = await findAccountByIdentifier(strapi, identifier);
+        } catch (err) {
+          log.debug('[LOCKOUT] Account lookup failed:', err?.name || 'Error');
+        }
+      }
+      account = found;
+      return account;
+    };
+    if (policy.accountMaxByRole) await loadAccount();
+    const accountMax = accountThresholdFor(settings, account?.role || null);
+    const event = (name, meta) => {
+      const signInFamily = USER_SIGN_IN_EVENTS.includes(name);
+      if (signInFamily && !policy.record) return false;
+      // At most 30 sign-in events per anonymised address and hour.
+      if (signInFamily && !underAddressCap(ip)) return false;
+      return recordUserEvent(strapi, {
+        event: name,
+        actorType: 'user',
+        actorId: null,
+        targetType: 'user',
+        targetId: account?.documentId || null,
+        ip,
+        userAgent,
+        meta,
+      });
+    };
+    // A locked client that keeps trying is logged once per minute, so a
+    // hammering client cannot flood the security log.
+    const refusedOnce = (reason, meta) => {
+      if (!policy.record) return;
+      if (!account) {
+        if (!shouldRecordUnknownAccount(`refused|${unknownAccountKey(ip)}`)) return;
+        event(SECURITY_EVENTS.USER_SIGN_IN_REFUSED, { reason, unknownAccount: true, ...meta });
+        return;
+      }
+      if (!shouldRecordRefusal(`${reason}|${ip || ''}|${identifier || ''}`)) return;
+      event(SECURITY_EVENTS.USER_SIGN_IN_REFUSED, { reason, ...meta });
+    };
+
+    let decision;
     try {
-      existing = await coordinator.peek(key);
+      decision = await lockout.reserve({ ip, identifier, policy, accountMax });
     } catch (err) {
-      log.debug('[LOCKOUT] Counter read failed:', err?.name || 'Error');
+      log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
+      decision = {
+        outcome: 'allow',
+        retryAfter: 0,
+        lockedKind: null,
+        reservation: { ipKey: null, ipHits: 0, accountKey: null, accountHits: 0 },
+      };
     }
-    const rejectLocked = (retrySec) => {
-      ctx.set('Retry-After', String(retrySec));
-      log.warn(`[LOCKOUT] Rejected login from locked client (${retrySec}s remaining)`);
+
+    if (decision.outcome === 'locked') {
+      ctx.set('Retry-After', String(decision.retryAfter));
+      log.warn(
+        `[LOCKOUT] Rejected sign-in from a locked client (${decision.retryAfter}s remaining)`
+      );
+      if (policy.record) await loadAccount();
+      refusedOnce('lockout', { lock: decision.lockedKind });
       ctx.status = 429;
       ctx.body = {
         error: {
           status: 429,
           name: 'TooManyRequestsError',
           message: 'Too many failed login attempts. Please try again later.',
-          details: { retryAfter: retrySec },
+          details: { retryAfter: decision.retryAfter },
         },
       };
-    };
-    if (existing && existing.blockedUntil > now) {
-      rejectLocked(Math.ceil((existing.blockedUntil - now) / 1000));
       return;
     }
-
-    // Reserve the attempt BEFORE the password check. Counting only after
-    // the handler returned let every request of a parallel burst pass the
-    // `peek` above before the first failure was recorded (measured: 10 of 48
-    // parallel wrong passwords reached the check with a limit of 5). The
-    // shared counter returns the value written by this request, so at most
-    // `maxFailed` attempts that are failed or still running reach the
-    // password check per window, cluster-wide.
-    //
-    // A request over that number is turned away with a short Retry-After
-    // and gives its reservation back. It does NOT lock the client: it may be
-    // one of several correct logins arriving at once from one address (for
-    // example an office behind NAT). Only completed failures lock.
-    let reserved = null;
-    try {
-      reserved = await coordinator.hit(key, WINDOW_MS);
-    } catch (err) {
-      log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
-    }
-    if (reserved && reserved.hits > maxFailed) {
-      try {
-        await coordinator.release(key);
-      } catch (err) {
-        log.debug('[LOCKOUT] Counter release failed:', err?.name || 'Error');
-      }
+    if (decision.outcome === 'busy') {
+      // One of several sign-ins arriving at once from one address or for one
+      // account: turned away briefly, never locked.
+      if (policy.record) await loadAccount();
+      refusedOnce('too-many-attempts', {});
       ctx.set('Retry-After', '1');
       ctx.status = 429;
       ctx.body = {
@@ -833,21 +933,52 @@ function mountFailedLoginLockout({ strapi, log }) {
     }
     const status = thrown ? statusOfThrownError(thrown) : ctx.status;
 
-    // Every 4xx from a login endpoint is a failure and keeps its reserved
+    // Every 4xx from a sign-in endpoint is a failure and keeps its reserved
     // hit. 5xx (almost always a server bug) and 429 from another limiter
-    // give the hit back. 200 with a jwt resets the counter.
+    // give the hit back. 200 with a jwt resets the counters.
+    const result =
+      !thrown && status === 200 && ctx.body && ctx.body.jwt
+        ? 'success'
+        : status >= 400 && status < 500 && status !== 429
+          ? 'failure'
+          : 'neutral';
+    if (result === 'failure') {
+      if (policy.record || decision.reservation.accountKey) await loadAccount();
+      if (account) {
+        event(SECURITY_EVENTS.USER_SIGN_IN_FAILED, { status });
+      } else if (shouldRecordUnknownAccount(`failed|${unknownAccountKey(ip)}`)) {
+        event(SECURITY_EVENTS.USER_SIGN_IN_FAILED, { status, unknownAccount: true });
+      }
+    }
     try {
-      if (!thrown && status === 200 && ctx.body && ctx.body.jwt) {
-        await coordinator.clear(key);
-      } else if (status >= 400 && status < 500 && status !== 429) {
-        if (reserved && reserved.hits >= maxFailed) {
-          await coordinator.block(key, Date.now() + WINDOW_MS);
-          log.warn(
-            `[LOCKOUT] Client locked for 15min after ${reserved.hits} failed login attempts`
-          );
+      const locks = await lockout.settle(decision.reservation, result, {
+        policy,
+        accountMax,
+        display: {
+          ip: displayIp(settings, ip),
+          userDocumentId: account?.documentId || null,
+        },
+      });
+      for (const lock of locks) {
+        const minutes = Math.round(policy.durationMs / 60000);
+        log.warn(
+          `[LOCKOUT] ${lock.kind === 'ip' ? 'Client' : 'Account'} locked for ${minutes}min after ${lock.failures} failed sign-ins`
+        );
+        event(SECURITY_EVENTS.USER_LOCKOUT, {
+          kind: lock.kind,
+          failures: lock.failures,
+          minutes,
+        });
+        if (lock.kind === 'account' && policy.notifyUser && account?.email) {
+          const notifications = strapi.plugin('magic-sessionmanager').service('notifications');
+          notifications
+            .sendAccountLockedEmail({
+              user: account,
+              minutes,
+              until: lock.until,
+            })
+            .catch(() => {});
         }
-      } else if (reserved) {
-        await coordinator.release(key);
       }
     } catch (err) {
       log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
@@ -885,6 +1016,70 @@ function statusOfThrownError(err) {
     PolicyError: 403,
   };
   return byName[err?.name] || 500;
+}
+
+/**
+ * Answers a sign-in refused by the concurrent session limit (policy
+ * "Refuse the new sign-in"): 403 with the stable code
+ * `SESSION_LIMIT_REACHED`, and no tokens or refresh cookie.
+ *
+ * @param {{ctx: object, strapi: object, limit: number}} params
+ * @returns {void}
+ */
+function refuseSessionLimit({ ctx, strapi, limit }) {
+  stripAuthTokensFromResponse(ctx, getRefreshCookieName(strapi));
+  ctx.status = 403;
+  ctx.body = {
+    data: null,
+    error: {
+      status: 403,
+      name: 'ForbiddenError',
+      message: 'Too many active sessions. Sign out on another device and try again.',
+      details: { code: 'SESSION_LIMIT_REACHED', limit },
+    },
+  };
+}
+
+/**
+ * After a successful `POST /auth/change-password`, ends every other session
+ * of the user when "End other sessions after a password change" is on. The
+ * current session (already rotated to the new token) stays. Throws so the
+ * caller fails closed: the new token is never released while older sessions
+ * stay usable.
+ *
+ * @param {{strapi: object, ctx: object, log: object, sessionService: object,
+ *   userDocumentId: string|null, currentSessionId: string}} params
+ * @returns {Promise<void>}
+ * @throws {Error} When the owner is unknown or the sessions could not be ended.
+ * @sideeffect Ends sessions (and native sessions) of the user; writes a log event.
+ */
+async function endOtherSessionsAfterPasswordChange({
+  strapi,
+  ctx,
+  log,
+  sessionService,
+  userDocumentId,
+  currentSessionId,
+}) {
+  const settings = await getPluginSettings(strapi);
+  if (settings.endOtherSessionsOnPasswordChange !== true) return;
+  if (!userDocumentId) throw new Error('password change owner could not be resolved');
+  const { terminatedCount } = await sessionService.terminateSession({
+    userId: userDocumentId,
+    exceptSessionId: currentSessionId,
+    reason: 'logout',
+  });
+  recordUserEvent(strapi, {
+    event: SECURITY_EVENTS.USER_PASSWORD_CHANGE_ENDED,
+    actorType: 'user',
+    actorId: userDocumentId,
+    targetType: 'user',
+    targetId: userDocumentId,
+    ip: getClientIp(ctx),
+    userAgent: ctx.request?.headers?.['user-agent'] || null,
+    meta: { ended: Number(terminatedCount) || 0 },
+  });
+  log.info('[PASSWORD] Ended the other sessions after a password change');
 }
 
 /**
@@ -956,6 +1151,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
             fields: ['documentId'],
           });
 
+          let currentSidecarId;
           if (matchingSession) {
             const rotated = await sessionService.rotateSessionTokens({
               sessionId: matchingSession.documentId,
@@ -966,6 +1162,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
             });
             if (!rotated)
               throw new Error('current sidecar changed before native password rotation was linked');
+            currentSidecarId = matchingSession.documentId;
             log.info('[PASSWORD] Native session link updated');
           } else {
             const userAgent = ctx.request.headers?.['user-agent'] || 'unknown';
@@ -981,7 +1178,16 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
             if (!createdSidecar?.documentId) {
               throw new Error('native password-change sidecar creation returned no documentId');
             }
+            currentSidecarId = createdSidecar.documentId;
           }
+          await endOtherSessionsAfterPasswordChange({
+            strapi,
+            ctx,
+            log,
+            sessionService,
+            userDocumentId: nativeSession.userDocumentId,
+            currentSessionId: currentSidecarId,
+          });
         } catch (err) {
           if (nativeSessionManager && nativeSession) {
             await compensateNativeSession({ nativeSessionManager, nativeSession, log });
@@ -1022,6 +1228,19 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
         });
         if (!rotated) throw new Error('current session changed before token rotation');
         log.info('[PASSWORD] Legacy session tokens rotated');
+        const owner = await strapi.documents(SESSION_UID).findOne({
+          documentId: matchingSession.documentId,
+          fields: ['documentId'],
+          populate: { user: { fields: ['documentId'] } },
+        });
+        await endOtherSessionsAfterPasswordChange({
+          strapi,
+          ctx,
+          log,
+          sessionService,
+          userDocumentId: owner?.user?.documentId || null,
+          currentSessionId: matchingSession.documentId,
+        });
       } catch (err) {
         failClosedAuthResponse({
           ctx,
@@ -1069,26 +1288,72 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
       }
 
       const geoData = ctx.state?.__magicSessionGeoData || null;
+      const requestSettings = await getPluginSettings(strapi);
+      const isReset = isPasswordResetRequest(apiPath, ctx.method);
 
-      const newSession = await sessionService.createSession({
-        userId: userDocId,
-        ip,
-        userAgent,
-        token: ctx.body.jwt,
-        refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
-        geoData,
-        ...(nativeSession ? { nativeSessionId: nativeSession.sessionId } : {}),
-      });
+      const create = () =>
+        sessionService.createSession({
+          userId: userDocId,
+          ip,
+          userAgent,
+          token: ctx.body.jwt,
+          refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
+          geoData,
+          ...(nativeSession ? { nativeSessionId: nativeSession.sessionId } : {}),
+        });
+      // The concurrent session limit (off by default) is applied while the
+      // new session is created, in one cluster-wide section per user. A reset
+      // ends every older session below anyway.
+      const limited = isReset
+        ? { session: await create(), refused: false, ended: 0, limit: 0 }
+        : await createSessionWithinLimit({
+            strapi,
+            settings: requestSettings,
+            userDocumentId: userDocId,
+            create,
+            sessionService,
+          });
+      const newSession = limited.session;
 
       if (!newSession?.documentId) {
         throw new Error(`session creation returned no documentId for user ${userDocId}`);
+      }
+
+      if (limited.refused) {
+        // The new session was ended inside the section (its native session
+        // revoked); its tokens never leave the server.
+        recordUserEvent(strapi, {
+          event: SECURITY_EVENTS.USER_SIGN_IN_REFUSED,
+          actorType: 'user',
+          actorId: userDocId,
+          targetType: 'user',
+          targetId: userDocId,
+          ip,
+          userAgent,
+          meta: { reason: 'session-limit', limit: limited.limit },
+        });
+        refuseSessionLimit({ ctx, strapi, limit: limited.limit });
+        log.info('[LIMIT] Sign-in refused: the user reached the session limit');
+        return;
+      }
+      if (limited.ended > 0) {
+        recordUserEvent(strapi, {
+          event: SECURITY_EVENTS.USER_SESSION_LIMIT,
+          actorType: 'system',
+          targetType: 'user',
+          targetId: userDocId,
+          ip,
+          userAgent,
+          meta: { ended: limited.ended, limit: limited.limit },
+        });
+        log.info(`[LIMIT] Ended ${limited.ended} older session(s) to stay within the limit`);
       }
 
       // A completed password reset must end every older session of this
       // user, including legacy JWTs that stay cryptographically valid. The
       // new session is excluded. A failure fails closed so the client never
       // receives the new token while old ones remain usable (GA-04).
-      if (isPasswordResetRequest(apiPath, ctx.method)) {
+      if (isReset) {
         await sessionService.terminateSession({
           userId: userDocId,
           exceptSessionId: newSession.documentId,
@@ -2075,11 +2340,14 @@ async function registerSessionAwareAuthStrategy(strapi) {
           return decoded;
         }
 
+        // Role rules with their own inactivity timeout need the user's role.
+        const needsRole = hasRoleOverride(settings, 'inactivityTimeout');
         let userRecord;
         try {
           userRecord = await strapi.documents('plugin::users-permissions.user').findOne({
             documentId: userDocId,
             fields: ['documentId', 'blocked'],
+            ...(needsRole ? { populate: { role: { fields: ['documentId'] } } } : {}),
           });
         } catch (err) {
           if (strictMode) {
@@ -2162,7 +2430,10 @@ async function registerSessionAwareAuthStrategy(strapi) {
             return null;
           }
 
-          const inactivityTimeout = settings.inactivityTimeout || 15 * 60 * 1000;
+          const inactivityTimeout = inactivityTimeoutFor(
+            settings,
+            userRecord?.role?.documentId || null
+          );
           const lastActiveMs = thisSession.lastActive
             ? new Date(thisSession.lastActive).getTime()
             : thisSession.loginTime

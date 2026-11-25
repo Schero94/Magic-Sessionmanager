@@ -69,6 +69,9 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['GET', '/admin-activity/sign-ins/export', 'admin-activity.exportSignIns'],
     ['GET', '/admin-activity/content', 'admin-activity.listContentActivity'],
     ['GET', '/admin-activity/content/export', 'admin-activity.exportContentActivity'],
+    ['GET', '/lockouts', 'lockouts.list'],
+    ['POST', '/lockouts/unlock', 'lockouts.unlock'],
+    ['GET', '/roles', 'lockouts.roles'],
     ['GET', '/geolocation/:ipAddress', 'session.getIpGeolocation'],
     ['GET', '/geoip/status', 'geoip.getStatus'],
     ['PUT', '/geoip/credentials', 'geoip.storeCredentials'],
@@ -126,9 +129,33 @@ test('admin panel session routes need their own actions, and sign-out is write r
   }
   // Existing routes keep the plugin action only; the new actions are not required there.
   for (const route of adminRoutes.filter(
-    ({ path }) => !path.startsWith('/admin-sessions/') && !path.startsWith('/admin-activity/')
+    ({ path }) =>
+      !path.startsWith('/admin-sessions/') &&
+      !path.startsWith('/admin-activity/') &&
+      path !== '/lockouts/unlock'
   )) {
     assert.deepEqual(actionsOf(route), ['plugin::magic-sessionmanager.access']);
+  }
+});
+
+test('lifting a sign-in lock needs lockouts.unlock and is write rate limited', () => {
+  const unlock = adminRoutes.find(({ path }) => path === '/lockouts/unlock');
+  assert.equal(unlock.method, 'POST');
+  assert.equal(unlock.config.policies[0], 'admin::isAuthenticatedAdmin');
+  assert.deepEqual(
+    unlock.config.policies.find((policy) => policy?.name === 'admin::hasPermissions').config
+      .actions,
+    ['plugin::magic-sessionmanager.access', 'plugin::magic-sessionmanager.lockouts.unlock']
+  );
+  assert.deepEqual(unlock.config.middlewares[0].config, {
+    profile: 'write',
+    max: 10,
+    window: 60_000,
+  });
+  for (const path of ['/lockouts', '/roles']) {
+    const route = adminRoutes.find((candidate) => candidate.path === path);
+    assert.equal(route.method, 'GET');
+    assert.equal(route.config.middlewares[0].config.profile, 'read');
   }
 });
 
