@@ -19,6 +19,9 @@ const USER_UID = 'plugin::users-permissions.user';
  *   sign-in history and Content Manager activity, and `settings.update`
  *   (4.17) for the protected settings (location lookup, webhooks, security
  *   log).
+ * - Registers `user-activity.read` (4.22) for the app-user security
+ *   activity (failed sign-ins, lockouts, new devices, ... of Users &
+ *   Permissions accounts) and its export.
  * - Registers `impersonate.users` (4.20) for starting, listing and ending
  *   impersonations of app users, and `impersonate.admins` for the read-only
  *   permission preview of another admin.
@@ -75,6 +78,17 @@ module.exports = async ({ strapi }) => {
       displayName: 'View admin activity',
       uid: 'admin-activity.read',
       subCategory: 'Admin panel',
+      pluginName: 'magic-sessionmanager',
+    },
+    // App-user security activity (4.22): failed and refused sign-ins,
+    // lockouts, new devices, impossible travel, "This wasn't me", data
+    // exports and impersonations of Users & Permissions accounts, with IP
+    // addresses. Separate from plugin access because it shows personal data.
+    {
+      section: 'plugins',
+      displayName: 'View app-user security activity',
+      uid: 'user-activity.read',
+      subCategory: 'General',
       pluginName: 'magic-sessionmanager',
     },
     // Protected settings (4.17): IP location lookup (whether and where IP

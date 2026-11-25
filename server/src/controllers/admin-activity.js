@@ -6,13 +6,9 @@
 
 const { z } = require('@strapi/utils');
 const { CONTENT_ACTIONS, SIGN_IN_FILTERS } = require('../utils/security-log-model');
-const { parseInput } = require('../utils/admin-sessions');
-const { sendServerError, sendValidationError } = require('../utils/http-errors');
+const { cursorField, handleEventQuery, periodAndPaging } = require('../utils/event-query');
 const { createLogger } = require('../utils/logger');
 const { callerCan } = require('../utils/settings-access');
-
-/** Largest page of either list. */
-const MAX_PAGE_SIZE = 100;
 
 const adminIdField = z
   .string()
@@ -20,20 +16,9 @@ const adminIdField = z
   .transform(Number)
   .optional();
 
-const dateField = (name) =>
-  z
-    .string()
-    .max(40, `${name} must be an ISO 8601 date`)
-    .refine((value) => !Number.isNaN(Date.parse(value)), `${name} must be an ISO 8601 date`)
-    .transform((value) => new Date(value))
-    .optional();
-
 const common = {
   adminId: adminIdField,
-  from: dateField('from'),
-  to: dateField('to'),
-  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
-  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
+  ...periodAndPaging(),
 };
 
 const signInQuerySchema = z.strictObject({
@@ -52,12 +37,6 @@ const activityQuerySchema = z.strictObject({
     )
     .optional(),
 });
-
-const cursorField = z
-  .string()
-  .regex(/^[1-9][0-9]{0,15}$/, 'cursor must be a positive integer')
-  .transform(Number)
-  .optional();
 
 const signInExportSchema = signInQuerySchema.omit({ page: true, pageSize: true }).extend({
   cursor: cursorField,
@@ -79,15 +58,6 @@ module.exports = ({ strapi }) => {
   const log = createLogger(strapi);
   const service = () => strapi.plugin('magic-sessionmanager').service('security-log');
 
-  /**
-   * Validates a query, runs the handler and maps failures to a fixed 500.
-   *
-   * @param {Context} ctx Koa context.
-   * @param {import('zod').ZodType<any>} schema Query schema.
-   * @param {(query: any) => Promise<unknown>} run Handler.
-   * @param {string} operation Name for the log line.
-   * @returns {Promise<unknown>} Response body.
-   */
   /**
    * The reader as the service needs it: their ability (Content Manager
    * titles) and whether they may see admin names (`admin::users.read`).
@@ -124,23 +94,22 @@ module.exports = ({ strapi }) => {
     }
   };
 
-  const handle = async (ctx, schema, run, operation) => {
-    const parsed = parseInput(schema, ctx.query);
-    if (!parsed.ok) return sendValidationError(ctx, 'Invalid query', parsed.errors);
-    const query = parsed.value;
-    if (query.from && query.to && query.from > query.to) {
-      return sendValidationError(ctx, 'Invalid query', [
-        { path: ['from'], message: 'from must not be after to' },
-      ]);
-    }
-    try {
-      ctx.body = await run(query);
-      return ctx.body;
-    } catch (error) {
-      log.error(`Admin activity: ${operation} failed`, /** @type {any} */ (error)?.name || 'Error');
-      return sendServerError(ctx, 500, 'Admin activity could not be loaded.');
-    }
-  };
+  /**
+   * Validates a query, runs the handler and maps failures to a fixed 500.
+   *
+   * @param {Context} ctx Koa context.
+   * @param {import('zod').ZodType<any>} schema Query schema.
+   * @param {(query: any) => Promise<unknown>} run Handler.
+   * @param {string} operation Name for the log line.
+   * @returns {Promise<unknown>} Response body.
+   */
+  const handle = (ctx, schema, run, operation) =>
+    handleEventQuery(ctx, schema, run, {
+      log,
+      logPrefix: 'Admin activity',
+      operation,
+      failureMessage: 'Admin activity could not be loaded.',
+    });
 
   return {
     /**

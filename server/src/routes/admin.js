@@ -21,7 +21,9 @@
  * `admin-sessions.read`, and the sign-out routes `admin-sessions.revoke`
  * (`adminSessionsPolicy()`); `hasPermissions` needs ALL listed actions. The
  * admin sign-in history and Content Manager activity (`/admin-activity/...`)
- * require `admin-sessions.read` and `admin-activity.read`. Lifting a sign-in
+ * require `admin-sessions.read` and `admin-activity.read`. The app-user
+ * security activity (`/user-activity`, 4.22) requires `user-activity.read`.
+ * Lifting a sign-in
  * lock (`/lockouts/unlock`) requires `lockouts.unlock`. Sending a signed
  * webhook test (`/webhook/test`) requires `settings.update`. Starting,
  * listing and ending impersonations of app users (`/impersonation/...`,
@@ -44,6 +46,7 @@ const PLUGIN_ACCESS_ACTION = 'plugin::magic-sessionmanager.access';
 const ADMIN_SESSIONS_READ_ACTION = 'plugin::magic-sessionmanager.admin-sessions.read';
 const ADMIN_SESSIONS_REVOKE_ACTION = 'plugin::magic-sessionmanager.admin-sessions.revoke';
 const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
+const USER_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.user-activity.read';
 const LOCKOUTS_UNLOCK_ACTION = 'plugin::magic-sessionmanager.lockouts.unlock';
 const SETTINGS_UPDATE_ACTION = 'plugin::magic-sessionmanager.settings.update';
 const IMPERSONATE_USERS_ACTION = 'plugin::magic-sessionmanager.impersonate.users';
@@ -347,6 +350,28 @@ const baseRoutes = [
       policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_ACTIVITY_READ_ACTION]),
       middlewares: adminReadRateLimit(),
       description: 'Get one export batch of Content Manager activity of admins (admin)',
+    },
+  },
+
+  // ===================== APP-USER SECURITY ACTIVITY (4.22) =====================
+  {
+    method: 'GET',
+    path: '/user-activity',
+    handler: 'user-activity.list',
+    config: {
+      policies: adminSessionsPolicy([USER_ACTIVITY_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'List the security activity of app users (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/user-activity/export',
+    handler: 'user-activity.export',
+    config: {
+      policies: adminSessionsPolicy([USER_ACTIVITY_READ_ACTION]),
+      middlewares: adminReadRateLimit(),
+      description: 'Get one export batch of the security activity of app users (admin)',
     },
   },
 

@@ -69,6 +69,8 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['GET', '/admin-activity/sign-ins/export', 'admin-activity.exportSignIns'],
     ['GET', '/admin-activity/content', 'admin-activity.listContentActivity'],
     ['GET', '/admin-activity/content/export', 'admin-activity.exportContentActivity'],
+    ['GET', '/user-activity', 'user-activity.list'],
+    ['GET', '/user-activity/export', 'user-activity.export'],
     ['GET', '/lockouts', 'lockouts.list'],
     ['POST', '/lockouts/unlock', 'lockouts.unlock'],
     ['GET', '/roles', 'lockouts.roles'],
@@ -115,6 +117,29 @@ test('admin activity routes need access, admin-sessions.read and admin-activity.
   }
 });
 
+test('app-user activity routes need access and user-activity.read only, read limited', () => {
+  const routes = adminRoutes.filter(({ path }) => path.startsWith('/user-activity'));
+  assert.deepEqual(
+    routes.map(({ method, path }) => [method, path]),
+    [
+      ['GET', '/user-activity'],
+      ['GET', '/user-activity/export'],
+    ]
+  );
+  for (const route of routes) {
+    assert.equal(route.config.policies[0], 'admin::isAuthenticatedAdmin');
+    const actions = route.config.policies.find((policy) => policy?.name === 'admin::hasPermissions')
+      .config.actions;
+    // Not admin-sessions.read: app users are not the admin panel view.
+    assert.deepEqual(actions, [
+      'plugin::magic-sessionmanager.access',
+      'plugin::magic-sessionmanager.user-activity.read',
+    ]);
+    assert.equal(route.config.middlewares[0].name, 'plugin::magic-sessionmanager.rate-limit');
+    assert.equal(route.config.middlewares[0].config.profile, 'read');
+  }
+});
+
 test('admin panel session routes need their own actions, and sign-out is write rate limited', () => {
   const actionsOf = (route) =>
     route.config.policies.find((policy) => policy?.name === 'admin::hasPermissions').config.actions;
@@ -139,6 +164,7 @@ test('admin panel session routes need their own actions, and sign-out is write r
     ({ path }) =>
       !path.startsWith('/admin-sessions/') &&
       !path.startsWith('/admin-activity/') &&
+      !path.startsWith('/user-activity') &&
       path !== '/lockouts/unlock' &&
       path !== '/webhook/test' &&
       !(

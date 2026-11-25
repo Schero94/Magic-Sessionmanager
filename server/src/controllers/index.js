@@ -9,6 +9,7 @@ const lockouts = require('./lockouts');
 const selfService = require('./self-service');
 const webhooks = require('./webhooks');
 const impersonation = require('./impersonation');
+const userActivity = require('./user-activity');
 
 module.exports = {
   session,
@@ -20,4 +21,5 @@ module.exports = {
   'self-service': selfService,
   webhooks,
   impersonation,
+  'user-activity': userActivity,
 };
