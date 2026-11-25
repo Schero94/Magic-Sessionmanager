@@ -12,6 +12,7 @@ import { SELECT_PRESETS } from './settingsTabs.mjs';
 import { IntroText, PresetSelect, ProtectedNotice } from './SettingsBlocks';
 import { useOptionLabels } from './hooks/useOptionLabels';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
+import SecurityLogSettings from './SecurityLogSettings';
 
 /**
  * The danger action keeps its label on one line. Beside the description it
@@ -25,7 +26,9 @@ const DangerButton = styled(Button)`
 
 /**
  * Tab "Data and retention" (IA F Tab 5): how long session history is kept,
- * and the danger card that deletes all ended sessions now (IA E.1).
+ * the privacy of session IPs, the security log settings (4.23.1, for admins
+ * with "View admin activity"), and last the danger card that deletes all
+ * ended sessions now (IA E.1).
  *
  * @param {{ form: ReturnType<typeof import('./hooks/useSettingsForm').useSettingsForm> }} props Settings form.
  * @returns {import('react').ReactElement} Tab content.
@@ -135,6 +138,9 @@ const DataRetentionTab = ({ form }) => {
         />
         {locked ? <ProtectedNotice /> : null}
       </SectionCard>
+
+      {/* Security log (4.23.1, before its own tab): only with "View admin activity". */}
+      {canReadLog ? <SecurityLogSettings form={form} /> : null}
 
       <SectionCard
         title={t('settings.config.deleteEnded.title', 'Delete ended sessions')}

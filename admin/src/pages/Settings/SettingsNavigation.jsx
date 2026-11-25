@@ -8,8 +8,14 @@ import { buildTabSearch } from './settingsTabs.mjs';
  * target height (spacing token 6) instead of the 20 px text line.
  */
 const TabLink = styled(Link)`
-  min-height: ${({ theme }) => theme.spaces[6]};
+  display: inline-flex;
   align-items: center;
+  /* Touch target: 32 px below the DS medium breakpoint, 24 px from there on (4.23.1). */
+  min-height: ${({ theme }) => theme.spaces[7]};
+
+  ${({ theme }) => theme.breakpoints.medium} {
+    min-height: ${({ theme }) => theme.spaces[6]};
+  }
 `;
 
 const SettingsNavigationContext = createContext({ selectTab: () => {} });

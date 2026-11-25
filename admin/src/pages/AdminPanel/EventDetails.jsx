@@ -195,6 +195,19 @@ export const signInDetails = (t, formatDate, row) => {
       }
     );
   }
+  // An admin lockout is Strapi's own sign-in limit, not a plugin lock: say
+  // what it means and that it ends by itself, so nobody looks for an Unlock
+  // button that cannot exist (4.23.1).
+  if (row.event === 'admin.lockout') {
+    items.push({
+      id: 'lockoutHelp',
+      label: t('adminPanel.activity.details.lockoutHelp.label', 'What this means'),
+      value: t(
+        'adminPanel.activity.details.lockoutHelp',
+        'Strapi’s own sign-in limit refused more attempts from this browser. It ends by itself after a few minutes; Session Manager cannot lift it. Locks of app users are under Settings › Login protection › Locked now.'
+      ),
+    });
+  }
   if (Number.isInteger(row.attempts) && row.attempts > 1) {
     items.push({
       id: 'attempts',

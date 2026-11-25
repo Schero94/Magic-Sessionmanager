@@ -354,24 +354,42 @@ test('View as: reason first, then a read-only preview with banner, countdown and
           expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
         },
         preview: {
-          admin: { id: 7, name: 'Ben Muster', active: true, roles: [{ name: 'Editor' }] },
+          admin: { id: 7, name: 'Ben Muster', active: true, roles: [{ id: 3, name: 'Editor' }] },
           contentTypes: [
             {
               uid: 'api::article.article',
               name: 'Article',
               kind: 'collection',
+              draftAndPublish: true,
               actions: [
                 { action: 'read', fields: null, locales: null, conditions: [] },
-                { action: 'update', fields: 2, locales: null, conditions: ['admin::is-creator'] },
+                {
+                  action: 'update',
+                  fields: 2,
+                  fieldNames: ['title', 'body'],
+                  locales: null,
+                  conditions: ['admin::is-creator'],
+                },
               ],
             },
           ],
+          unavailableContentTypes: [
+            {
+              uid: 'api::category.category',
+              name: 'Category',
+              kind: 'collection',
+              draftAndPublish: false,
+            },
+          ],
+          conditionNames: { 'admin::is-creator': 'Is creator' },
           otherPermissions: [
             {
               action: 'plugin::upload.read',
               name: 'Access the Media Library',
               section: 'plugins',
               scope: 'upload',
+              category: null,
+              subCategory: null,
             },
           ],
         },
@@ -384,7 +402,7 @@ test('View as: reason first, then a read-only preview with banner, countdown and
   let closed = 0;
   const handle = await renderStrict(
     <PreviewAdminModal admin={{ id: 7, name: 'Ben Muster' }} onClose={() => (closed += 1)} />,
-    { permissions: [ACCESS] }
+    { permissions: [ACCESS, permission('admin::roles.read')] }
   );
   try {
     const dialog = document.querySelector('[role="dialog"]');
@@ -397,16 +415,36 @@ test('View as: reason first, then a read-only preview with banner, countdown and
     const body = JSON.parse(network.calls.find((call) => call.method === 'POST').body);
     assert.deepEqual(body, { reason: 'Check what the editor sees', durationMinutes: 15 });
     const banner = document.querySelector('[data-preview-banner]');
-    assert.match(
-      banner.textContent,
-      /You are viewing as Ben Muster · read-only · ends in 1[45]:\d\d/
-    );
+    assert.match(banner.textContent, /Permissions of Ben Muster · read-only · ends in 1[45]:\d\d/);
     const preview = document.querySelector('[data-preview-body]');
-    assert.match(preview.textContent, /Article/);
-    assert.match(preview.textContent, /Update \(restricted\)/);
-    assert.match(preview.textContent, /Update: 2 fields/);
-    assert.match(preview.textContent, /only entries they created/);
-    assert.match(preview.textContent, /Access the Media Library/);
+    // Summary at the top: 1 of 2 content types, edit 1, publish 0, no settings.
+    assert.match(
+      preview.querySelector('[data-preview-summary]').textContent,
+      /Can open 1 of 2 content types · can edit 1 · can publish 0 · no settings access/
+    );
+    // Roles as badges; with admin::roles.read they link to the role.
+    const roleLink = preview.querySelector('[data-preview-roles] a');
+    assert.equal(roleLink.getAttribute('href'), '/settings/roles/3');
+    assert.match(roleLink.textContent, /Editor/);
+    // One matrix row per content type, the inaccessible one included.
+    const article = preview.querySelector('[data-preview-type="api::article.article"]');
+    const category = preview.querySelector('[data-preview-type="api::category.category"]');
+    assert.ok(article && category);
+    assert.equal(article.querySelectorAll('[data-preview-cell="full"]').length, 1);
+    assert.equal(article.querySelectorAll('[data-preview-cell="limited"]').length, 1);
+    assert.equal(category.querySelectorAll('[data-preview-cell="none"]').length, 4);
+    assert.match(category.textContent, /Not applicable/, 'no Publish without Draft & Publish');
+    // The limits open per row.
+    assert.equal(preview.querySelector('[data-preview-details]'), null);
+    await click(article.querySelector('button[aria-expanded="false"]'));
+    const details = document.querySelector('[data-preview-details="api::article.article"]');
+    assert.match(
+      details.textContent,
+      /Update: only the fields title, body; only entries they created/
+    );
+    // Plugins and settings grouped by plugin with Strapi's display names.
+    const other = preview.querySelector('[data-preview-other]');
+    assert.match(other.textContent, /Media Library/);
     network.clearCalls();
     await click(buttonByText(banner, 'End'));
     assert.ok(
@@ -579,6 +617,57 @@ test('Sign in as: reason, duration and Allow changes (with warning), then a one-
     assert.equal(href.includes('?'), false, 'never in the query');
     assert.equal(link.getAttribute('target'), '_blank');
     assert.match(link.getAttribute('rel'), /noopener/);
+  } finally {
+    await handle.unmount();
+  }
+});
+
+test('View as: an admin without a role gets an explanation, not "Roles: —"', async () => {
+  network.on('POST', '/magic-sessionmanager/impersonation/admins/9/preview', {
+    status: 201,
+    body: {
+      data: {
+        impersonation: {
+          ...ROW,
+          id: 'impersonation00000000099',
+          targetType: 'admin',
+          targetId: '9',
+          handoff: 'preview',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        },
+        preview: {
+          admin: { id: 9, name: 'Agent Admin', active: true, roles: [] },
+          contentTypes: [],
+          unavailableContentTypes: [
+            {
+              uid: 'api::article.article',
+              name: 'Article',
+              kind: 'collection',
+              draftAndPublish: true,
+            },
+          ],
+          conditionNames: {},
+          otherPermissions: [],
+        },
+      },
+    },
+  });
+  const handle = await renderStrict(
+    <PreviewAdminModal admin={{ id: 9, name: 'Agent Admin' }} onClose={() => {}} />,
+    { permissions: [ACCESS, permission('admin::users.read')] }
+  );
+  try {
+    const dialog = document.querySelector('[role="dialog"]');
+    await type(dialog.querySelector('textarea'), 'Why can Agent not sign in');
+    await click(buttonByText(dialog, 'View permissions'));
+    const preview = document.querySelector('[data-preview-body]');
+    const notice = preview.querySelector('[data-preview-no-role]');
+    assert.ok(notice, 'explains the missing role');
+    assert.match(notice.textContent, /This admin has no role, so they cannot use the admin panel/);
+    assert.equal(notice.querySelector('a').getAttribute('href'), '/settings/users/9');
+    assert.doesNotMatch(preview.textContent, /Roles: —/);
+    assert.equal(preview.querySelector('[data-preview-matrix]'), null);
+    assert.equal(preview.querySelector('[data-preview-summary]'), null);
   } finally {
     await handle.unmount();
   }

@@ -807,6 +807,97 @@ test(
       adminPreview = impersonation;
     });
 
+    await t.test(
+      'View as admin: roles come back for one or several roles; an admin without a role gets none',
+      async () => {
+        // Regression for the "Roles: —" report: roles are read with the
+        // target, sorted by name, with ids only for callers who may read roles.
+        const uploadRole = await createRoleWith('imp-uploads', [{ action: 'plugin::upload.read' }]);
+        const subsetRoleId = (
+          await app.db.query('admin::user').findOne({
+            where: { id: subsetAdmin.id },
+            populate: { roles: true },
+          })
+        ).roles[0].id;
+        const multi = await app.db.query('admin::user').create({
+          data: {
+            email: 'imp-multi@example.invalid',
+            firstname: 'Synthetic',
+            lastname: 'multi',
+            isActive: true,
+            roles: [uploadRole.id, subsetRoleId],
+          },
+        });
+        const noRole = await app.db.query('admin::user').create({
+          data: {
+            email: 'imp-norole@example.invalid',
+            firstname: 'Synthetic',
+            lastname: 'norole',
+            isActive: true,
+            roles: [],
+          },
+        });
+        const end = (started, token) =>
+          request(
+            'POST',
+            `/magic-sessionmanager/impersonation/${started.body.data.impersonation.id}/end`,
+            { token }
+          );
+
+        const bySuper = await preview({ id: multi.id }, {}, superC.token);
+        assert.equal(bySuper.status, 201, JSON.stringify(bySuper.body?.error));
+        const superView = bySuper.body.data.preview;
+        assert.deepEqual(
+          superView.admin.roles.map((role) => role.name),
+          ['Synthetic imp-subset', 'Synthetic imp-uploads']
+        );
+        assert.ok(superView.admin.roles.every((role) => Number.isInteger(role.id)));
+        const users = superView.contentTypes.find((type) => type.uid === UP_USER);
+        assert.deepEqual(users.actions[0].fieldNames, ['username', 'email']);
+        assert.equal(typeof users.draftAndPublish, 'boolean');
+        const upload = superView.otherPermissions.find(
+          (permission) => permission.action === 'plugin::upload.read'
+        );
+        assert.equal(upload.section, 'plugins');
+        assert.equal(upload.scope, 'upload');
+        assert.ok(upload.name && upload.name !== upload.action, 'Strapi display name');
+        await end(bySuper, superC.token);
+
+        // Without admin::roles.read the names stay, the ids do not. (Own
+        // previewer: each admin may start ten previews per ten minutes.)
+        const rolesBlind = await createAdmin(
+          (
+            await createRoleWith('imp-roles-blind', [
+              ACCESS,
+              PREVIEW,
+              readUsers(),
+              { action: 'plugin::upload.read' },
+            ])
+          ).id,
+          'imp-roles-blind'
+        );
+        const byPreviewer = await preview({ id: multi.id }, {}, rolesBlind.token);
+        assert.equal(byPreviewer.status, 201, JSON.stringify(byPreviewer.body?.error));
+        assert.deepEqual(byPreviewer.body.data.preview.admin.roles, [
+          { name: 'Synthetic imp-subset' },
+          { name: 'Synthetic imp-uploads' },
+        ]);
+        await end(byPreviewer, rolesBlind.token);
+
+        const empty = await preview({ id: noRole.id }, {}, superC.token);
+        assert.equal(empty.status, 201, JSON.stringify(empty.body?.error));
+        const emptyView = empty.body.data.preview;
+        assert.deepEqual(emptyView.admin.roles, []);
+        assert.deepEqual(emptyView.contentTypes, []);
+        assert.deepEqual(emptyView.otherPermissions, []);
+        assert.ok(
+          emptyView.unavailableContentTypes.some((type) => type.uid === UP_USER),
+          'every content type the role editor offers is listed as unavailable'
+        );
+        await end(empty, superC.token);
+      }
+    );
+
     await t.test('View as admin: listed for impersonate.admins only, and End works', async () => {
       const forUsersOnly = await request('GET', '/magic-sessionmanager/impersonation/active', {
         token: granted.token,

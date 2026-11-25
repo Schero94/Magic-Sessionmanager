@@ -167,7 +167,7 @@ test('App users tab: latest events in the shared table, plain labels, details wi
     async whileMounted(handle) {
       const section = handle.container.querySelector('[data-recent-user-activity]');
       assert.ok(section, 'the section is shown');
-      assert.equal(section.querySelector('h2')?.textContent, 'Security activity');
+      assert.equal(section.querySelector('h2')?.textContent, 'Recent security activity');
       assert.ok(section.querySelector('table[role="grid"]'), 'a DS table');
       // The DS grid makes the cell at its current coordinates the one Tab stop; the header
       // cells must pass the coordinates on, or Tab skips the table.

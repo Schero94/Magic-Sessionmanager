@@ -212,6 +212,7 @@ module.exports = ({ strapi: app }) => {
           adminId,
           body: ctx.request.body,
           canReadAdmins: callerCan(ctx, 'admin::users.read'),
+          canReadRoles: callerCan(ctx, 'admin::roles.read'),
         });
         ctx.status = 201;
         ctx.body = { data: result };
@@ -234,6 +235,7 @@ module.exports = ({ strapi: app }) => {
             id: ctx.params.id,
             viewer: ctx.state.user,
             canReadAdmins: callerCan(ctx, 'admin::users.read'),
+            canReadRoles: callerCan(ctx, 'admin::roles.read'),
           }),
         };
       });

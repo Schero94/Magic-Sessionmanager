@@ -124,7 +124,7 @@ const AdminActivityPage = () => {
     impersonation: t('adminPanel.activity.filter.impersonation', 'Impersonation'),
     changes: t('adminPanel.activity.filter.changes', 'Settings and log access'),
   };
-  const title = t('adminPanel.activity.page.title', 'Security activity');
+  const title = t('adminPanel.activity.page.title', 'Security activity of admins');
   const total = pagination.total;
 
   return (

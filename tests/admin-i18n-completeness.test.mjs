@@ -158,6 +158,7 @@ test('every t() call whose message has placeholders passes values (I18N-1, SET-0
 // names, protocols, examples and established loanwords or cognates.
 const SAME_AS_ENGLISH = {
   shared: new Set([
+    'Content Manager',
     '403 SESSION_LIMIT_REACHED',
     'Session Manager',
     'Geofencing',
@@ -264,7 +265,11 @@ test('German uses Sitzung, Im Leerlauf, Beendet, Abgemeldet and sperren consiste
   for (const [id, raw] of Object.entries(de)) {
     // Ignore code-like tokens: URLs, paths and environment variable names.
     const message = raw.replace(/\S*(?:https?:\/\/|\/|_)\S*/g, '');
-    const withoutProduct = message.replace(/(Magic )?Session[- ]Manager\w*/g, '');
+    // The product name, also as Strapi's role editor writes it ("Magic sessionmanager").
+    const withoutProduct = message.replace(
+      /(Magic )?(?:Session[- ]Manager|sessionmanager)\w*/g,
+      ''
+    );
     if (/Session/i.test(withoutProduct))
       problems.push(`${id}: "Session" instead of "Sitzung": ${message}`);
     if (/\b(?:End)?[Nn]utzer/.test(message))

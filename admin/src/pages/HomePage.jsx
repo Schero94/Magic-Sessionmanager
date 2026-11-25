@@ -775,7 +775,7 @@ const HomePage = () => {
                 value={stats.ended}
                 description={t(
                   'homepage.stats.endedBreakdown',
-                  '{loggedOut, number} logged out · {timedOut, number} timed out · {other, number} other reasons',
+                  '{loggedOut, number} signed out · {timedOut, number} timed out · {other, number} other reasons',
                   {
                     loggedOut: stats.loggedOut,
                     timedOut: stats.timedOut,

@@ -10,6 +10,7 @@ const table = read('pages/Dashboard/SessionTable.jsx');
 const cards = read('pages/Dashboard/SessionCardList.jsx');
 const search = read('pages/Dashboard/SessionSearch.jsx');
 const howItWorks = read('pages/Dashboard/HowSessionsWork.jsx');
+const disclosure = read('components/ui/Disclosure.jsx');
 const badge = read('components/ui/StatusBadge.jsx');
 
 function getHandler(name) {
@@ -310,10 +311,16 @@ test('native-only notice, Last updated line and polite caption (IA D1.2, D1.5, D
 
 test('"How sessions work" is a collapsed disclosure with the three-state legend (IA D1.3)', () => {
   assert.match(source, /<HowSessionsWork \/>/);
-  assert.match(howItWorks, /aria-expanded=\{open\}/);
-  assert.match(howItWorks, /aria-controls=\{contentId\}/);
-  assert.match(howItWorks, /useState\(\(\) => readDisclosureOpen\(getBrowserStorage\(\)\)\)/);
-  assert.match(howItWorks, /writeDisclosureOpen\(getBrowserStorage\(\), next\)/);
+  // 4.23.1: the shared Disclosure (also used by the admin panel view).
+  assert.match(howItWorks, /<Disclosure\b/);
+  assert.match(howItWorks, /storageKey=\{HOW_IT_WORKS_STORAGE_KEY\}/);
+  assert.match(disclosure, /aria-expanded=\{open\}/);
+  assert.match(disclosure, /aria-controls=\{contentId\}/);
+  assert.match(
+    disclosure,
+    /useState\(\(\) => readDisclosureOpen\(getBrowserStorage\(\), storageKey\)\)/
+  );
+  assert.match(disclosure, /writeDisclosureOpen\(getBrowserStorage\(\), next, storageKey\)/);
   assert.match(howItWorks, /SESSION_STATES\.map/);
   assert.match(howItWorks, /'Ended sessions stay in the history until they are deleted\.'/);
 });
@@ -380,7 +387,7 @@ test('four clickable KPI cards set the status filter (IA D1.4, I.1 item 6)', () 
   );
   assert.match(
     source,
-    /'\{loggedOut, number\} logged out · \{timedOut, number\} timed out · \{other, number\} other reasons'/
+    /'\{loggedOut, number\} signed out · \{timedOut, number\} timed out · \{other, number\} other reasons'/
   );
   assert.match(source, /<Typography tag="h2">\{t\('homepage\.stats\.label'/);
   assert.match(source, /<Typography variant="delta" tag="h2">\s*\{t\('homepage\.list\.heading'/);

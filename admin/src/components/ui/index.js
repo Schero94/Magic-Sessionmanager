@@ -10,3 +10,4 @@ export { default as DeviceIcon, getDeviceIconComponent } from './DeviceIcon';
 export { default as TargetLink } from './TargetLink';
 export { default as ActionStack } from './ActionStack';
 export { default as RowActions } from './RowActions';
+export { default as Disclosure } from './Disclosure';

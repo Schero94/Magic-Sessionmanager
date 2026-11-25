@@ -42,7 +42,7 @@ test('changed settings are grouped by Settings tab in tab order; unknown keys co
     groups.map((group) => [group.tab, group.fields.map((field) => field.key)]),
     [
       ['login-protection', ['maxFailedLogins', 'lockoutDurationMinutes', 'blockedCountries']],
-      ['admin-activity', ['adminSignInHistory']],
+      ['data-retention', ['adminSignInHistory']],
       [null, ['futureKey']],
     ],
     'tab order, duplicates and same-label keys (allowed/blocked countries) once'
@@ -56,15 +56,15 @@ test('English: labels of the Settings page, grouped, raw key only when unknown',
   const t = translator(catalogue('en'));
   assert.equal(
     changedSettingsText(t, KEYS),
-    'Login protection: Lock an IP address after, Lock for · Admin activity: Record admin sign-ins · futureKey'
+    'Login protection: Lock an IP address after, Lock for · Data and retention: Record admin sign-ins · futureKey'
   );
   assert.equal(
     changedSettingsText(t, KEYS, { limit: 3 }),
-    'Login protection: Lock an IP address after, Lock for · Admin activity: Record admin sign-ins and 1 more'
+    'Login protection: Lock an IP address after, Lock for · Data and retention: Record admin sign-ins and 1 more'
   );
   assert.deepEqual(changedSettingsLines(t, KEYS), [
     'Login protection: Lock an IP address after, Lock for',
-    'Admin activity: Record admin sign-ins',
+    'Data and retention: Record admin sign-ins',
     'futureKey',
   ]);
   assert.equal(changedSettingsText(t, []), '');
@@ -73,7 +73,7 @@ test('English: labels of the Settings page, grouped, raw key only when unknown',
 test('German and French use their own labels and punctuation', () => {
   assert.equal(
     changedSettingsText(translator(catalogue('de')), KEYS.slice(0, 3)),
-    'Anmeldeschutz: IP-Adresse sperren nach, Sperren für · Admin-Aktivität: Admin-Anmeldungen speichern'
+    'Anmeldeschutz: IP-Adresse sperren nach, Sperren für · Daten und Aufbewahrung: Admin-Anmeldungen speichern'
   );
   assert.match(changedSettingsText(translator(catalogue('fr')), ['maxFailedLogins']), /^\S.* : /);
 });
@@ -83,6 +83,6 @@ test('the event cell names at most three settings', () => {
   const row = { event: 'settings.updated', change: { keys: KEYS, viaToken: true } };
   assert.equal(
     eventDetailText(t, row, getSignInEventPresentation(row), false),
-    'With an admin API token · Login protection: Lock an IP address after, Lock for · Admin activity: Record admin sign-ins and 1 more'
+    'With an admin API token · Login protection: Lock an IP address after, Lock for · Data and retention: Record admin sign-ins and 1 more'
   );
 });

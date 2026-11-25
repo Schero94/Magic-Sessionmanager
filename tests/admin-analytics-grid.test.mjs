@@ -93,9 +93,10 @@ test('KPIs are named after what they count, with rolling windows (IA D6, I.1-24)
       .join('\n')
       .matchAll(/label=\{t\('([\w.]+)',\s*'([^']*)'\)\}/g),
   ].map((match) => match[2]);
+  // Same order as the dashboard cards: Active before All (4.23.1).
   assert.deepEqual(labels, [
-    'All sessions',
     'Active sessions',
+    'All sessions',
     'Sign-ins in the last 24 hours',
     'Sign-ins in the last 7 days',
   ]);

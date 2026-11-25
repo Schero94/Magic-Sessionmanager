@@ -220,7 +220,7 @@ export function getEventPresentation(row) {
         key: 'revoked',
         tone: 'warning',
         icon: 'revoked',
-        label: message('adminPanel.activity.event.revoked', 'Signed out by an admin'),
+        label: message('adminPanel.activity.event.revoked', 'Session ended by an admin'),
         detail:
           row.scope === 'one_browser'
             ? message('adminPanel.activity.scope.oneBrowser', 'One browser')
@@ -318,7 +318,7 @@ export function getEventPresentation(row) {
         'warning',
         'password',
         'adminPanel.activity.event.userPassword',
-        'Signed out after a password change'
+        'Sessions ended after a password change'
       );
     case 'user.sign-in.new-device':
       return appUserEvent(

@@ -4,7 +4,7 @@ import { getTranslation } from '../../utils/getTranslation';
 import { getEndReasonPresentation, getSessionEndReason } from '../../utils/sessionStatus.mjs';
 
 /**
- * Translated end reason of an ended session (IA A.4): Logged out, Timed out,
+ * Translated end reason of an ended session (IA A.4): Signed out, Timed out,
  * Expired, Ended manually, User blocked or Reason not recorded. Renders
  * nothing for an open session. Used by the table, the cards, the dialog and
  * the End reason filter (through the same descriptors).

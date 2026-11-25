@@ -36,7 +36,7 @@ const assertSpaced = (container, buttons) => {
   assert.equal(container.querySelectorAll(':scope > button, :scope > a').length >= buttons, true);
 };
 
-test('admin panel table: view and sign-out actions are spaced, not grouped', async () => {
+test('admin panel table: view and end-sessions actions are spaced, not grouped', async () => {
   const handle = await renderStrict(
     <AdminTable
       admins={[ADMIN]}
@@ -52,7 +52,7 @@ test('admin panel table: view and sign-out actions are spaced, not grouped', asy
     const names = [...container.querySelectorAll('button')].map((node) => node.textContent.trim());
     assert.deepEqual(names, [
       'View sessions of Anna Beispiel',
-      'Sign out Anna Beispiel everywhere',
+      'End all sessions of Anna Beispiel',
     ]);
   } finally {
     await handle.unmount();
@@ -154,7 +154,7 @@ test('event tables: the details button keeps Enter and Space, opens the details 
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
     const dialog = document.querySelector('[role="dialog"]');
     assert.ok(dialog, 'details dialog is open');
-    assert.match(dialog.textContent, /Signed out by an admin: Anna Beispiel/);
+    assert.match(dialog.textContent, /Session ended by an admin: Anna Beispiel/);
     assert.match(dialog.textContent, /Done byBen Muster/);
     assert.match(dialog.textContent, /Every browser \(2 sessions ended\)/);
     assert.match(dialog.textContent, /SyntheticFox\/133\.0/);

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Badge,
   Box,
   Button,
   Field,
@@ -11,7 +10,8 @@ import {
   Textarea,
   Typography,
 } from '@strapi/design-system';
-import { useFetchClient, useNotification } from '@strapi/strapi/admin';
+import { useFetchClient, useNotification, useRBAC } from '@strapi/strapi/admin';
+import styled from 'styled-components';
 import pluginId from '../../pluginId';
 import Alert from '../PersistentAlert';
 import ReadableText from '../ReadableText';
@@ -19,6 +19,21 @@ import { formatClock, validateReason, REASON_MAX } from '../../utils/impersonati
 import { isCancelledRequest, logSafeAdminError } from '../../utils/safeAdminLog.mjs';
 import { useSettingsTranslate } from '../../pages/Settings/hooks/useSettingsTranslate';
 import { useSecondsLeft } from './ImpersonateUserModal';
+import AdminPreviewDetails from './AdminPreviewDetails';
+
+/**
+ * The "Permissions of … · read-only" banner stays at the top of the scrolling dialog
+ * body, so the read-only state, the timer and End are always in view.
+ */
+const StickyBanner = styled(Box)`
+  position: sticky;
+  top: 0;
+  z-index: 1;
+`;
+
+/** Admin permissions that decide whether the preview links to roles and users. */
+const READ_ROLES = Object.freeze([{ action: 'admin::roles.read', subject: null }]);
+const READ_USERS = Object.freeze([{ action: 'admin::users.read', subject: null }]);
 
 /** Durations of an admin preview in minutes (server: ADMIN_DURATIONS). */
 const ADMIN_PREVIEW_DURATIONS = Object.freeze([15, 30]);
@@ -38,99 +53,13 @@ const REFUSALS = Object.freeze({
   'api-token': ['impersonation.error.apiToken', 'API tokens cannot impersonate.'],
 });
 
-/** Content Manager actions with their label. */
-const ACTION_LABELS = Object.freeze({
-  create: ['impersonation.preview.action.create', 'Create'],
-  read: ['impersonation.preview.action.read', 'Read'],
-  update: ['impersonation.preview.action.update', 'Update'],
-  delete: ['impersonation.preview.action.delete', 'Delete'],
-  publish: ['impersonation.preview.action.publish', 'Publish'],
-});
-
-/** Strapi's built-in conditions with their label. */
-const CONDITION_LABELS = Object.freeze({
-  'admin::is-creator': ['impersonation.preview.condition.creator', 'entries they created'],
-  'admin::has-same-role-as-creator': [
-    'impersonation.preview.condition.sameRole',
-    'entries created by someone with the same role',
-  ],
-});
-
-/**
- * One content type of the preview: its name and the actions with their
- * restrictions.
- *
- * @param {{type: object}} props Content type from the preview.
- * @returns {import('react').ReactElement} Row.
- */
-const ContentTypeRow = ({ type }) => {
-  const { t } = useSettingsTranslate();
-  return (
-    <Box tag="li" padding={3} hasRadius borderColor="neutral150" data-preview-type={type.uid}>
-      <Flex direction="column" alignItems="stretch" gap={2}>
-        <Typography variant="omega" fontWeight="semiBold" textColor="neutral800">
-          {type.name}
-        </Typography>
-        <Flex gap={2} wrap="wrap">
-          {type.actions.map((action) => {
-            const label = ACTION_LABELS[action.action]
-              ? t(...ACTION_LABELS[action.action])
-              : action.action;
-            const restricted =
-              action.fields !== null || action.locales !== null || action.conditions.length > 0;
-            return (
-              <Badge
-                key={action.action}
-                backgroundColor={restricted ? 'warning100' : 'success100'}
-                textColor="neutral800"
-              >
-                {restricted
-                  ? t('impersonation.preview.restricted', '{action} (restricted)', {
-                      action: label,
-                    })
-                  : label}
-              </Badge>
-            );
-          })}
-        </Flex>
-        {type.actions
-          .filter((action) => action.fields !== null || action.conditions.length > 0)
-          .map((action) => {
-            const label = ACTION_LABELS[action.action]
-              ? t(...ACTION_LABELS[action.action])
-              : action.action;
-            return (
-              <Typography key={action.action} variant="pi" textColor="neutral600" tag="p">
-                {action.fields !== null
-                  ? t(
-                      'impersonation.preview.fields',
-                      '{action}: {count, plural, one {# field} other {# fields}}',
-                      { action: label, count: action.fields }
-                    )
-                  : null}
-                {action.fields !== null && action.conditions.length ? ' ' : null}
-                {action.conditions.length
-                  ? t('impersonation.preview.conditions', '{action}: only {conditions}', {
-                      action: label,
-                      conditions: action.conditions
-                        .map((id) => (CONDITION_LABELS[id] ? t(...CONDITION_LABELS[id]) : id))
-                        .join(', '),
-                    })
-                  : null}
-              </Typography>
-            );
-          })}
-      </Flex>
-    </Box>
-  );
-};
-
 /**
  * "View as admin" (4.20): a read-only permission preview of another admin.
  * Step one asks for the reason and the duration (at most 30 minutes); step
- * two shows, under a persistent "You are viewing as … · read-only · ends in
- * mm:ss · End" banner, which content types and actions the admin can use
- * and their other permissions, computed by the server from their roles. No
+ * two shows, under a persistent "Permissions of … · read-only · ends in
+ * mm:ss · End" banner, a summary, the roles (linked), a Content Manager
+ * matrix like Strapi's role editor and the plugin and settings permissions,
+ * computed by the server from their roles (4.23.1: `AdminPreviewDetails`). No
  * session is created and nothing can be changed. The preview hides itself
  * when it ends, and closing the dialog ends it. The parent mounts it per
  * opening.
@@ -147,6 +76,12 @@ const PreviewAdminModal = ({ admin, onClose, onCloseAutoFocus, onChanged }) => {
   const { t, tError } = useSettingsTranslate();
   const { post } = useFetchClient();
   const { toggleNotification } = useNotification();
+  const {
+    allowedActions: { canRead: canReadRoles },
+  } = useRBAC(READ_ROLES);
+  const {
+    allowedActions: { canRead: canReadUsers },
+  } = useRBAC(READ_USERS);
   const [reason, setReason] = useState('');
   const [minutes, setMinutes] = useState(15);
   const [touched, setTouched] = useState(false);
@@ -294,7 +229,7 @@ const PreviewAdminModal = ({ admin, onClose, onCloseAutoFocus, onChanged }) => {
             ) : null}
 
             {result ? (
-              <Box
+              <StickyBanner
                 padding={3}
                 hasRadius
                 background={ended ? 'neutral150' : 'primary100'}
@@ -307,7 +242,7 @@ const PreviewAdminModal = ({ admin, onClose, onCloseAutoFocus, onChanged }) => {
                       ? t('impersonation.preview.banner.ended', 'The preview ended.')
                       : t(
                           'impersonation.preview.banner',
-                          'You are viewing as {name} · read-only · ends in {time}',
+                          'Permissions of {name} · read-only · ends in {time}',
                           { name: name || `#${admin.id}`, time: formatClock(secondsLeft) }
                         )}
                   </Typography>
@@ -322,70 +257,17 @@ const PreviewAdminModal = ({ admin, onClose, onCloseAutoFocus, onChanged }) => {
                     </Button>
                   ) : null}
                 </Flex>
-              </Box>
+              </StickyBanner>
             ) : null}
 
             {preview && !ended ? (
-              <Flex direction="column" alignItems="stretch" gap={4} data-preview-body="">
-                <Typography variant="pi" textColor="neutral600" tag="p">
-                  {t('impersonation.preview.roles', 'Roles: {roles}', {
-                    roles: preview.admin.roles.map((role) => role.name).join(', ') || '—',
-                  })}
-                </Typography>
-                <Flex direction="column" alignItems="stretch" gap={2}>
-                  <Typography variant="delta" tag="h3" textColor="neutral800">
-                    {t('impersonation.preview.contentTypes', 'Content types')}
-                  </Typography>
-                  {preview.contentTypes.length ? (
-                    <Flex
-                      tag="ul"
-                      direction="column"
-                      alignItems="stretch"
-                      gap={2}
-                      margin={0}
-                      padding={0}
-                      style={{ listStyle: 'none' }}
-                    >
-                      {preview.contentTypes.map((type) => (
-                        <ContentTypeRow key={type.uid} type={type} />
-                      ))}
-                    </Flex>
-                  ) : (
-                    <Typography variant="omega" textColor="neutral800" tag="p">
-                      {t(
-                        'impersonation.preview.noContentTypes',
-                        'This admin cannot open any content type in the Content Manager.'
-                      )}
-                    </Typography>
-                  )}
-                </Flex>
-                {preview.otherPermissions.length ? (
-                  <Flex direction="column" alignItems="stretch" gap={2}>
-                    <Typography variant="delta" tag="h3" textColor="neutral800">
-                      {t('impersonation.preview.other', 'Other permissions')}
-                    </Typography>
-                    <Flex
-                      tag="ul"
-                      direction="column"
-                      alignItems="stretch"
-                      gap={1}
-                      margin={0}
-                      paddingLeft={5}
-                    >
-                      {preview.otherPermissions.map((permission) => (
-                        <Typography
-                          key={permission.action}
-                          tag="li"
-                          variant="pi"
-                          textColor="neutral800"
-                        >
-                          {permission.name}
-                        </Typography>
-                      ))}
-                    </Flex>
-                  </Flex>
-                ) : null}
-              </Flex>
+              <AdminPreviewDetails
+                preview={preview}
+                adminId={admin.id}
+                canReadRoles={Boolean(canReadRoles)}
+                canReadUsers={Boolean(canReadUsers)}
+                onLeave={close}
+              />
             ) : null}
           </Flex>
         </Modal.Body>
