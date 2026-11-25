@@ -1,4 +1,5 @@
 import { groupChangedSettings } from './adminActivityModel.mjs';
+import { getUserEventDetail } from '../UserActivity/userActivityModel.mjs';
 
 /**
  * Text of the admin event lists: who an event belongs to, address, device,
@@ -172,3 +173,65 @@ export const eventDetailText = (t, row, presentation, withActor) => {
  */
 export const contentTypeText = (row) =>
   [row.contentType?.name, row.entry?.locale].filter(Boolean).join(' · ');
+
+/**
+ * What happened in an app-user event, in plain words: "Account locked for
+ * 15 minutes after 5 failed sign-ins", "No account with this email or
+ * username", and, when "Done by" has no column, "by {name}".
+ *
+ * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
+ * @param {object} row App-user event row.
+ * @param {boolean} [withActor] Append "by {name}" for an admin actor.
+ * @returns {string} Text, or ''.
+ */
+export const userEventDetailText = (t, row, withActor = false) => {
+  const parts = getUserEventDetail(row).map((part) =>
+    t(part.messageId, part.defaultMessage, part.values)
+  );
+  if (withActor && row?.actor?.type === 'admin' && row.actor.name) {
+    parts.push(t('adminPanel.activity.byAdmin', 'by {name}', { name: row.actor.name }));
+  }
+  return parts.join(' · ');
+};
+
+/**
+ * Who an app-user event is about: the email (or username) when the reader
+ * may read the user, else "User #id"; "IP address" for a lifted IP lock;
+ * "Unknown account" for a sign-in with a name that matches no account.
+ *
+ * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
+ * @param {object} row App-user event row.
+ * @returns {string} Text.
+ */
+export const userText = (t, row) => {
+  const user = row?.user;
+  if (user) {
+    return (
+      user.email ||
+      user.username ||
+      t('userActivity.identity.placeholder', 'User #{id}', { id: user.id })
+    );
+  }
+  if (row?.target === 'ip') return t('userActivity.identity.ipLock', 'IP address');
+  return t('adminPanel.activity.unknownAccount', 'Unknown account');
+};
+
+/**
+ * Who did it: the admin (name, or "Admin #id" without `admin::users.read`),
+ * "Automatic" for the plugin itself, or '' when the user or an unknown
+ * client acted.
+ *
+ * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
+ * @param {object} row App-user event row.
+ * @returns {string} Text, or ''.
+ */
+export const doneByText = (t, row) => {
+  if (row?.actor?.type === 'system') return t('userActivity.doneBy.system', 'Automatic');
+  if (row?.actor?.type === 'admin') {
+    return (
+      row.actor.name ||
+      t('adminPanel.identity.placeholder', 'Admin #{id}', { id: row.actor.id ?? '?' })
+    );
+  }
+  return '';
+};

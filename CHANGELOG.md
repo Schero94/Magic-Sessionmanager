@@ -1,3 +1,39 @@
+## [Unreleased]
+
+Release type: minor (`feat`). Additive: one RBAC action (`user-activity.read`, "View app-user security activity"), two read-only admin routes and new admin screens; no stored data changes. Four app-user event labels are shorter (see Changed), and a refused request during an impersonation now names the impersonated user (see Changed).
+
+### Features
+
+* **Security activity of app users.** The app-user events the plugin has written to the security log since 4.17 (failed and refused sign-ins, lockouts and unlocks, session limits, the sign-out after a password change, new devices, impossible travel, "This wasn't me", personal data exports and impersonations of app users) were recorded but shown nowhere. They now have three places, all with the 4.19 event table, details dialog, colours, filters, pagination and CSV export:
+  * **App users tab › Security activity**: the latest eight events with **Show all**.
+  * **Full page** `/plugins/magic-sessionmanager/app-users/activity`: filters for the kind of event (Failed and refused sign-ins, Lockouts and unlocks, New devices / impossible travel / "This wasn't me", Session limit and password change, Personal data exports, Impersonation), the period and one user (**Show only events of …** in the details), Strapi's pagination and CSV export. Filters, page and user are in the URL.
+  * **Content Manager › user › Sessions panel › Security activity**: the latest three events of that user and **Show all security activity**, which opens the page filtered to the user.
+* **Plain words for every event.** Each event has its own label, colour and icon, and a second line that says what happened, for example "Account locked for 15 minutes after 5 failed sign-ins", "Session limit of 3 reached", "9100 km from the last sign-in, 4550 km/h · DE to US", "The user downloaded 4 sessions and 12 security events". The details dialog adds **What happened**, the user, who did it (an admin, or **Automatic**), the address, place, browser, operating system, user agent and event id, and **Open user** (Content Manager) when the reader may see the user. All text in English, German (Sie), French, Spanish and Portuguese.
+* **New permission "View app-user security activity"** (`plugin::magic-sessionmanager.user-activity.read`, Settings › Roles › Plugins › Session Manager › General). Super Admin holds it automatically; other roles only when granted. It guards both new routes and every new screen; without it nothing is requested.
+* **API.** `GET /magic-sessionmanager/user-activity` (`event` = `all`, `failed`, `lockouts`, `suspicious`, `sessions`, `privacy`, `impersonation`; `userId` = documentId; `from`, `to`, `page`, `pageSize` 1-100; unknown keys are a 400) and `GET /magic-sessionmanager/user-activity/export` (500-row keyset batches, `cursor`). Rows: `id`, `event`, `at`, `target`, `user` (`{ id, documentId, email, username }`), `actor` (`{ type: 'admin' | 'system', id, name }`), `details` (numbers and codes of the event), `ipAddress`, `ipAnonymized`, `location`, `browser`, `os`, `deviceType`, `userAgent`; `meta.identity` says what was visible.
+
+### Security and privacy
+
+* **Identities as in Strapi (4.16.1 rules).** A user's email and username are returned only when the reader may read that user in the Content Manager (`plugin::content-manager.explorer.read` on `plugin::users-permissions.user`, including conditions and field-level permissions on `email` and `username`); otherwise the screens show "User #id". Admin names need `admin::users.read` ("Admin #id" otherwise). The reason an admin gave for an impersonation is returned only to readers who hold **Impersonate app users**. No entry titles, typed identifiers, device hashes, socket addresses or tokens are ever returned.
+* **Export audit.** Every export of the app-user activity records an always-on `security-log.read` event (`list: 'user-activity'`, `exported: true`, `via: 'admin-panel'` or `'admin-token'`); reads with an admin API token are recorded as for the admin lists since 4.17 (once per token and list within 5 minutes). The admin **Security activity** page shows them as **Security log exported** / **Log read with an API token** under **Settings and log access**.
+* **Privacy settings apply when reading.** Events older than the security log retention are hidden at once (the daily retention run deletes them); with **Anonymise IP addresses** on, older full addresses are shown shortened; with **Store IP addresses** off, no address and no place is returned. No location is looked up when reading; a place appears only where the opt-in location lookup stored one.
+
+### Changed
+
+* The labels of four app-user events are shorter, because they only appear in the App users view: "Sign-in failed", "Sign-in refused", "Locked out", "Lock lifted" (were "App user sign-in failed", "App user sign-in refused", "App user locked out", "Lockout lifted"). Impersonation events have one label each (started, ended, timed out, request refused) instead of one shared label.
+* A request refused during an impersonation (`impersonation.refused`, `meta.refusal: call-*`) now stores the impersonated user as target instead of none, so it appears in that user's activity and is deleted with the account. Older rows keep `targetId: null` and show "Unknown account".
+* Internal: the three security log lists share one event table component and one query schema module (`server/src/utils/event-query.js`); the admin lists look and behave as before.
+
+### Migration
+
+* Nothing to do. Strapi adds the new permission to the Super Admin role at start-up. Grant **View app-user security activity** to other roles that should see the app-user events (it shows personal data: emails, IP addresses, devices).
+* Webhook deliveries are not written to the security log, so the new view has no webhook events.
+
+### Tests
+
+* `tests/isolated-user-activity-http.test.js` (real Strapi, SQLite and PostgreSQL in CI, and the 5.50 floor): RBAC (anonymous 401, Editor and access-only 403, Super Admin automatically 200, granted 200, revoked 403), a real failed sign-in, every event type and no admin event, email masking with field-level Content Manager permissions, admin names, the impersonation reason, filters and paging with 400s for bad input, keyset export with the export audit, admin API token audit, anonymise and IP-off at read time, retention at read time and deletion with the user.
+* Unit tests for the server model, the service rows and the controller audit; admin model tests for every label, the second lines, URL state and CSV; StrictMode tests for the App users section, the full page and the Sessions panel (with and without the permission).
+
 # [4.21.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.20.0...v4.21.0) (2026-11-25)
 
 

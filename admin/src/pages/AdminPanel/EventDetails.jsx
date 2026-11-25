@@ -8,11 +8,12 @@ import {
   ACTIVITY_ACTION_LABELS,
   getActivityTone,
   getEventPlace,
+  getEventPresentation,
   getSessionStatePresentation,
-  getSignInEventPresentation,
 } from './adminActivityModel.mjs';
 import { ActivityEntry, EventBadge, FULL_DATE, SHORT_DATE, useT } from './EventParts';
-import { changedSettingsLines, ipText, noAdminText } from './eventText.mjs';
+import { changedSettingsLines, doneByText, ipText, noAdminText, userText } from './eventText.mjs';
+import { getUserEventDetail } from '../UserActivity/userActivityModel.mjs';
 
 /**
  * Detail dialog of one event, like the log details of Strapi's Audit Logs:
@@ -88,7 +89,7 @@ export const useEventDetails = () => {
  * @returns {{title: string, items: object[]}} Dialog content.
  */
 export const signInDetails = (t, formatDate, row) => {
-  const presentation = getSignInEventPresentation(row);
+  const presentation = getEventPresentation(row);
   const label = t(presentation.label.messageId, presentation.label.defaultMessage);
   const state = getSessionStatePresentation(row.session);
   const revoked = presentation.key === 'revoked';
@@ -322,5 +323,121 @@ export const activityDetails = (t, formatDate, row) => {
         kind: 'id',
       },
     ],
+  };
+};
+
+/**
+ * Facts of an app-user event (4.22) for the details dialog: the event with
+ * what happened in plain words (one line per fact), the exact time, the user,
+ * who did it, the reason an admin gave for an impersonation (only returned
+ * to readers who may impersonate), then address, place, browser, operating
+ * system, user agent and event id like the admin events.
+ *
+ * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
+ * @param {(value: unknown, options?: object) => string} formatDate Date formatter.
+ * @param {object} row App-user event row.
+ * @returns {{title: string, items: object[]}} Dialog content.
+ */
+export const userEventDetails = (t, formatDate, row) => {
+  const presentation = getEventPresentation(row);
+  const label = t(presentation.label.messageId, presentation.label.defaultMessage);
+  const lines = getUserEventDetail(row).map((part) =>
+    t(part.messageId, part.defaultMessage, part.values)
+  );
+  const who = userText(t, row);
+  const doneBy = doneByText(t, row);
+  const items = [
+    {
+      id: 'event',
+      label: t('adminPanel.activity.column.event', 'Event'),
+      render: <EventBadge presentation={presentation} />,
+    },
+    {
+      id: 'time',
+      label: t('adminPanel.activity.details.exactTime', 'Exact time'),
+      value: row.at ? formatDate(row.at, FULL_DATE) : null,
+    },
+    {
+      id: 'what',
+      label: t('userActivity.details.what', 'What happened'),
+      ...(lines.length
+        ? {
+            render: (
+              <Flex direction="column" alignItems="flex-start" gap={1} data-event-facts="">
+                {lines.map((line) => (
+                  <Typography key={line} variant="omega" textColor="neutral800">
+                    {line}
+                  </Typography>
+                ))}
+              </Flex>
+            ),
+          }
+        : { value: null }),
+      fullWidth: true,
+    },
+    { id: 'user', label: t('userActivity.column.user', 'User'), value: who, kind: 'id' },
+  ];
+  if (doneBy) {
+    items.push({
+      id: 'doneBy',
+      label: t('adminPanel.activity.column.doneBy', 'Done by'),
+      value: doneBy,
+    });
+  }
+  if (row.details?.reason && presentation.key.startsWith('impersonation')) {
+    items.push({
+      id: 'reasonGiven',
+      label: t('userActivity.details.reasonGiven', 'Reason given'),
+      value: row.details.reason,
+      fullWidth: true,
+    });
+  }
+  items.push(
+    {
+      id: 'ip',
+      label: t('adminPanel.activity.details.ip', 'IP address'),
+      value: ipText(t, row) || null,
+      kind: 'id',
+    },
+    {
+      id: 'place',
+      label: t('adminPanel.activity.details.location', 'Location'),
+      value: getEventPlace(row) || null,
+    },
+    {
+      id: 'browser',
+      label: t('adminPanel.activity.details.browser', 'Browser'),
+      value: row.browser || null,
+    },
+    {
+      id: 'os',
+      label: t('adminPanel.activity.details.os', 'Operating system'),
+      value: row.os || null,
+    },
+    {
+      id: 'userAgent',
+      label: t('adminPanel.activity.details.userAgent', 'User agent'),
+      value: row.userAgent || null,
+      kind: 'id',
+      fullWidth: true,
+    },
+    {
+      id: 'eventId',
+      label: t('adminPanel.activity.details.eventId', 'Event ID'),
+      value: row.id,
+      kind: 'id',
+    }
+  );
+  // Events an admin caused (lock lifted, impersonation) record no browser of the user:
+  // their empty device rows would only add dashes.
+  const deviceFields = new Set(['ip', 'place', 'browser', 'os', 'userAgent']);
+  const byAdmin = row.actor?.type === 'admin' || row.actor?.type === 'system';
+  return {
+    title: t('adminPanel.activity.details.title', '{event}: {name}', { event: label, name: who }),
+    items: byAdmin
+      ? items.filter(
+          (item) => !deviceFields.has(item.id) || (item.value !== null && item.value !== '')
+        )
+      : items,
   };
 };

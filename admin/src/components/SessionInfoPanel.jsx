@@ -8,6 +8,7 @@ import Alert from './PersistentAlert';
 import ReadableText from './ReadableText';
 import { ActionStack, ConfirmAction, DeviceIcon, StatusBadge, TargetLink } from './ui';
 import ImpersonationPanelSection from './impersonation/ImpersonationPanelSection';
+import UserActivityPanelSection from './UserActivityPanelSection';
 import { requireSessionList, requireSuccessfulMutation } from '../utils/adminResponse.mjs';
 import { getManageableSessions } from '../utils/sessionFilters.mjs';
 import { getDevicePresentation } from '../utils/devicePresentation.mjs';
@@ -586,6 +587,11 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
         <TargetLink tag={NavLink} to={buildUserSessionsHref(document)}>
           {t('panel.sessions.showAllLink', 'Show all sessions')}
         </TargetLink>
+
+        {/* App-user security activity (4.22): only with "View app-user security activity" */}
+        {userId ? (
+          <UserActivityPanelSection documentId={String(userId)} userLabel={userLabel} />
+        ) : null}
       </Flex>
     ),
   };

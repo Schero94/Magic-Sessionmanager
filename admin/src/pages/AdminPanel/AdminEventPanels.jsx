@@ -222,16 +222,17 @@ export const EventList = ({
 /**
  * "Recording is off" notice with a link to the switch.
  *
- * @param {{children: import('react').ReactNode}} props Text.
+ * @param {{children: import('react').ReactNode, to?: string}} props Text, and the settings
+ *   tab with the switch (default: Admin activity).
  * @returns {import('react').ReactElement} Notice.
  */
-export const RecordingOff = ({ children }) => {
+export const RecordingOff = ({ children, to = ADMIN_ACTIVITY_SETTINGS_PATH }) => {
   const t = useT();
   return (
     <Alert
       variant="neutral"
       action={
-        <Link tag={RouterLink} to={ADMIN_ACTIVITY_SETTINGS_PATH}>
+        <Link tag={RouterLink} to={to}>
           {t('adminPanel.activity.openSettings', 'Open settings')}
         </Link>
       }
@@ -448,27 +449,32 @@ export const ContentActivityPanel = ({ admin }) => {
 };
 
 /**
- * The latest sign-in events of all admins (sign-ins, failed attempts,
- * lockouts, sign-outs) under the admin table, in the same table as the full
- * "Sign-in activity" page: a heading with "Show all" (that page, with
- * filters and paging), then the newest RECENT_EVENT_LIMIT events. A name
- * opens that admin's details at "Sign-in history"; a row opens the event's
- * details. Hidden while sign-in history is turned off.
+ * A "Recent security activity" section: a heading with "Show all" (the full
+ * page with filters and paging), then the newest events in the shared event
+ * table, with loading, error with retry and empty states. Used under the
+ * admin table (admin events) and on the App users tab (app-user events, 4.22).
  *
- * @param {{onOpenAdmin: (admin: object, trigger: HTMLElement) => void}} props
- * @returns {import('react').ReactElement|null} Section, or null while sign-in history is off.
+ * @param {object} props
+ * @param {string} props.title Heading.
+ * @param {string} props.subtitle One sentence under the heading.
+ * @param {string} props.showAllTo Path of the full page.
+ * @param {string} props.emptyText Text when nothing was recorded.
+ * @param {ReturnType<typeof useEventList>} props.list List state.
+ * @param {(title: string) => import('react').ReactNode} props.renderTable The table.
+ * @param {string} props.dataKey `data-*` marker of the section (tests, measurements).
+ * @returns {import('react').ReactElement} Section.
  */
-export const RecentSignInActivity = ({ onOpenAdmin }) => {
+export const RecentEvents = ({
+  title,
+  subtitle,
+  showAllTo,
+  emptyText,
+  list,
+  renderTable,
+  dataKey,
+}) => {
   const t = useT();
-  const headingId = `recent-sign-in-activity-${useId().replace(/:/g, '')}`;
-  const params = useMemo(() => buildSignInParams({ pageSize: RECENT_EVENT_LIMIT }), []);
-  const list = useEventList({
-    path: `/${pluginId}/admin-activity/sign-ins`,
-    params,
-    logKey: 'adminPanel.activity.recent',
-  });
-  if (list.meta?.recording && !list.meta.recording.signIns) return null;
-  const title = t('adminPanel.activity.recent.title', 'Recent security activity');
+  const headingId = `recent-events-${useId().replace(/:/g, '')}`;
   return (
     <Flex
       tag="section"
@@ -477,7 +483,7 @@ export const RecentSignInActivity = ({ onOpenAdmin }) => {
       alignItems="stretch"
       gap={4}
       minWidth={0}
-      data-recent-activity=""
+      {...{ [`data-${dataKey}`]: '' }}
     >
       <Flex justifyContent="space-between" alignItems="flex-end" gap={4} wrap="wrap">
         <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0} flex="1 1 32rem">
@@ -485,15 +491,12 @@ export const RecentSignInActivity = ({ onOpenAdmin }) => {
             {title}
           </Typography>
           <Typography variant="pi" textColor="neutral600">
-            {t(
-              'adminPanel.activity.recent.subtitle',
-              'The latest sign-ins, failed attempts, sign-outs and settings changes of all admins. Select an event for its details.'
-            )}
+            {subtitle}
           </Typography>
         </Flex>
         <LinkButton
           tag={RouterLink}
-          to={ADMIN_ACTIVITY_PAGE_PATH}
+          to={showAllTo}
           variant="tertiary"
           endIcon={<ArrowRight />}
           data-show-all-activity=""
@@ -519,11 +522,47 @@ export const RecentSignInActivity = ({ onOpenAdmin }) => {
         </Alert>
       ) : null}
       {!list.loading && !list.error && list.rows.length === 0 ? (
-        <Typography variant="omega" textColor="neutral600">
-          {t('adminPanel.activity.recent.empty', 'No events recorded yet.')}
+        <Typography variant="omega" textColor="neutral600" data-event-empty="">
+          {emptyText}
         </Typography>
       ) : null}
-      {list.rows.length > 0 ? (
+      {list.rows.length > 0 ? renderTable(title) : null}
+    </Flex>
+  );
+};
+
+/**
+ * The latest sign-in events of all admins (sign-ins, failed attempts,
+ * lockouts, sign-outs) under the admin table, in the same table as the full
+ * "Sign-in activity" page: a heading with "Show all" (that page, with
+ * filters and paging), then the newest RECENT_EVENT_LIMIT events. A name
+ * opens that admin's details at "Sign-in history"; a row opens the event's
+ * details. Hidden while sign-in history is turned off.
+ *
+ * @param {{onOpenAdmin: (admin: object, trigger: HTMLElement) => void}} props
+ * @returns {import('react').ReactElement|null} Section, or null while sign-in history is off.
+ */
+export const RecentSignInActivity = ({ onOpenAdmin }) => {
+  const t = useT();
+  const params = useMemo(() => buildSignInParams({ pageSize: RECENT_EVENT_LIMIT }), []);
+  const list = useEventList({
+    path: `/${pluginId}/admin-activity/sign-ins`,
+    params,
+    logKey: 'adminPanel.activity.recent',
+  });
+  if (list.meta?.recording && !list.meta.recording.signIns) return null;
+  return (
+    <RecentEvents
+      title={t('adminPanel.activity.recent.title', 'Recent security activity')}
+      subtitle={t(
+        'adminPanel.activity.recent.subtitle',
+        'The latest sign-ins, failed attempts, sign-outs and settings changes of all admins. Select an event for its details.'
+      )}
+      showAllTo={ADMIN_ACTIVITY_PAGE_PATH}
+      emptyText={t('adminPanel.activity.recent.empty', 'No events recorded yet.')}
+      list={list}
+      dataKey="recent-activity"
+      renderTable={(title) => (
         <SignInEventTable
           rows={list.rows}
           label={title}
@@ -531,7 +570,7 @@ export const RecentSignInActivity = ({ onOpenAdmin }) => {
           onOpenAdmin={onOpenAdmin}
           busy={list.loading}
         />
-      ) : null}
-    </Flex>
+      )}
+    />
   );
 };

@@ -25,6 +25,8 @@ import {
   Shield,
   SignOut,
   Stack,
+  Stop,
+  Clock,
   Trash,
   User,
   WarningCircle,
@@ -81,6 +83,8 @@ const EVENT_ICONS = Object.freeze({
   notMe: WarningCircle,
   export: Download,
   impersonation: User,
+  impersonationEnd: Stop,
+  expired: Clock,
   webhook: Webhooks,
   other: Information,
 });

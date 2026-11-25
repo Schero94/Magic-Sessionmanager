@@ -59,6 +59,7 @@ import SessionCardList from './Dashboard/SessionCardList';
 import SessionSearch from './Dashboard/SessionSearch';
 import HowSessionsWork from './Dashboard/HowSessionsWork';
 import UntrackedSessionsNotice from './Dashboard/UntrackedSessionsNotice';
+import RecentUserActivity from './UserActivity/RecentUserActivity';
 import {
   AUTO_REFRESH_INTERVAL_MS,
   DEFAULT_PAGE_SIZE,
@@ -876,6 +877,9 @@ const HomePage = () => {
             )}
           />
         )}
+
+        {/* App-user security activity (4.22): only with "View app-user security activity" */}
+        <RecentUserActivity />
 
         {showDetailModal && selectedSession && (
           <SessionDetailModal

@@ -116,9 +116,26 @@ const FAILURE_REASONS = Object.freeze({
   rate_limited: message('adminPanel.activity.reason.rateLimited', 'Too many attempts'),
 });
 
+/** Detail of a `security-log.read` row per list: [listed, exported]. */
+const LOG_READ_DETAILS = Object.freeze({
+  'sign-ins': [
+    message('adminPanel.activity.read.signIns', 'Sign-in history listed'),
+    message('adminPanel.activity.read.signInsExport', 'Sign-in history exported'),
+  ],
+  content: [
+    message('adminPanel.activity.read.content', 'Content Manager activity listed'),
+    message('adminPanel.activity.read.contentExport', 'Content Manager activity exported'),
+  ],
+  'user-activity': [
+    message('adminPanel.activity.read.userActivity', 'App-user security activity listed'),
+    message('adminPanel.activity.read.userActivityExport', 'App-user security activity exported'),
+  ],
+});
+
 /**
  * Presentation of an event without a reason line (app-user, impersonation
- * and webhook events).
+ * and webhook events); the app-user view adds its own second line
+ * (eventText.mjs `userEventDetailText`).
  *
  * @param {string} key Stable key (data attribute).
  * @param {string} tone Badge tone.
@@ -137,8 +154,8 @@ const appUserEvent = (key, tone, icon, messageId, defaultMessage) => ({
 });
 
 /**
- * One presentation per sign-in history event: label, badge tone, icon and an
- * optional detail. The tones are semantic and the same in every list:
+ * One presentation per security event (admin and app-user events alike):
+ * label, badge tone, icon and an optional detail. The tones are semantic and the same in every list:
  * success = signed in, danger = sign-in failed or locked out (a security
  * signal), warning = signed out by another admin, secondary (blue) = a
  * settings change or a read of the log with an API token, neutral = the
@@ -150,7 +167,7 @@ const appUserEvent = (key, tone, icon, messageId, defaultMessage) => ({
  *   label: {messageId: string, defaultMessage: string},
  *   detail: {messageId: string, defaultMessage: string}|null}} Presentation.
  */
-export function getSignInEventPresentation(row) {
+export function getEventPresentation(row) {
   switch (row?.event) {
     case 'admin.sign-in':
       return {
@@ -217,19 +234,14 @@ export function getSignInEventPresentation(row) {
       return {
         key: 'log-read',
         tone: 'secondary',
-        icon: 'logRead',
-        label: message('adminPanel.activity.event.logRead', 'Log read with an API token'),
+        icon: row.read?.via === 'admin-panel' ? 'export' : 'logRead',
+        // 4.22: exports of the app-user activity from the admin panel are recorded too.
+        label:
+          row.read?.via === 'admin-panel'
+            ? message('adminPanel.activity.event.logExported', 'Security log exported')
+            : message('adminPanel.activity.event.logRead', 'Log read with an API token'),
         detail:
-          row.read?.list === 'content'
-            ? row.read?.exported
-              ? message(
-                  'adminPanel.activity.read.contentExport',
-                  'Content Manager activity exported'
-                )
-              : message('adminPanel.activity.read.content', 'Content Manager activity listed')
-            : row.read?.exported
-              ? message('adminPanel.activity.read.signInsExport', 'Sign-in history exported')
-              : message('adminPanel.activity.read.signIns', 'Sign-in history listed'),
+          LOG_READ_DETAILS[row.read?.list || 'sign-ins']?.[row.read?.exported ? 1 : 0] || null,
       };
     case 'security-log.retention.purged':
       return {
@@ -239,15 +251,16 @@ export function getSignInEventPresentation(row) {
         label: message('adminPanel.activity.event.purged', 'Old events deleted'),
         detail: null,
       };
-    // App-user events (4.17 / 4.18). The admin lists of this view do not return them
-    // today; they get their own label and colour so any list that does shows them clearly.
+    // App-user events (4.17 / 4.18), listed by the app-user Security activity (4.22) only.
+    // The admin lists never return them; the labels are plain because that view is about app
+    // users already.
     case 'user.sign-in.failed':
       return appUserEvent(
         'user-failed',
         'danger',
         'failed',
         'adminPanel.activity.event.userFailed',
-        'App user sign-in failed'
+        'Sign-in failed'
       );
     case 'user.sign-in.refused':
       return appUserEvent(
@@ -255,7 +268,7 @@ export function getSignInEventPresentation(row) {
         'danger',
         'refused',
         'adminPanel.activity.event.userRefused',
-        'App user sign-in refused'
+        'Sign-in refused'
       );
     case 'user.lockout':
       return appUserEvent(
@@ -263,7 +276,7 @@ export function getSignInEventPresentation(row) {
         'danger',
         'lockout',
         'adminPanel.activity.event.userLockout',
-        'App user locked out'
+        'Locked out'
       );
     case 'user.lockout.lifted':
       return appUserEvent(
@@ -271,7 +284,7 @@ export function getSignInEventPresentation(row) {
         'secondary',
         'unlock',
         'adminPanel.activity.event.userUnlock',
-        'Lockout lifted'
+        'Lock lifted'
       );
     case 'user.session.limit':
       return appUserEvent(
@@ -321,6 +334,38 @@ export function getSignInEventPresentation(row) {
         'adminPanel.activity.event.userExport',
         'Personal data exported'
       );
+    case 'impersonation.started':
+      return appUserEvent(
+        'impersonation-started',
+        'warning',
+        'impersonation',
+        'adminPanel.activity.event.impersonationStarted',
+        'Impersonation started'
+      );
+    case 'impersonation.ended':
+      return appUserEvent(
+        'impersonation-ended',
+        'neutral',
+        'impersonationEnd',
+        'adminPanel.activity.event.impersonationEnded',
+        'Impersonation ended'
+      );
+    case 'impersonation.expired':
+      return appUserEvent(
+        'impersonation-expired',
+        'neutral',
+        'expired',
+        'adminPanel.activity.event.impersonationExpired',
+        'Impersonation timed out'
+      );
+    case 'impersonation.refused':
+      return appUserEvent(
+        'impersonation-refused',
+        'danger',
+        'refused',
+        'adminPanel.activity.event.impersonationRefused',
+        'Impersonation request refused'
+      );
     default:
       if (typeof row?.event === 'string' && row.event.startsWith('impersonation.')) {
         return appUserEvent(
@@ -349,6 +394,14 @@ export function getSignInEventPresentation(row) {
       };
   }
 }
+
+/**
+ * The sign-in history's name for getEventPresentation (4.19 API of this module).
+ *
+ * @param {{event: string, reason?: string|null, scope?: string|null}} row Event row.
+ * @returns {ReturnType<typeof getEventPresentation>} Presentation.
+ */
+export const getSignInEventPresentation = (row) => getEventPresentation(row);
 
 /**
  * Session state of a sign-in, or null when it is not known.
@@ -401,17 +454,25 @@ export const EVENT_TABLE_FULL_WIDTH = 1000;
 
 /**
  * Layout of an event list for its container width: `stacked` rows (phones,
- * narrow dialogs), a `table` whose "Done by" folds into the event cell, or
- * the `full` table with every column. 0 (not measured yet) counts as wide,
- * so the first paint on desktop is the table.
+ * narrow dialogs, the Content Manager side panel), a `table` whose "Done by"
+ * folds into the event cell, or the `full` table with every column. 0 (not
+ * measured yet) counts as wide, so the first paint on desktop is the table.
+ * A list with an extra subject column (Admin, or User in the app-user view)
+ * needs the wider minimum; `minWidth` overrides both.
  *
  * @param {number} width Container width in px; 0 when unknown.
- * @param {{showAdmin?: boolean}} [options] Whether the Admin column is shown.
+ * @param {{showAdmin?: boolean, wide?: boolean, minWidth?: number}} [options] Whether a
+ *   subject column is shown (`showAdmin` and `wide` are the same), or an own minimum.
  * @returns {'stacked'|'table'|'full'} Layout.
  */
-export function getEventListLayout(width, { showAdmin = false } = {}) {
+export function getEventListLayout(width, { showAdmin = false, wide = false, minWidth } = {}) {
   if (!width) return 'full';
-  const min = showAdmin ? EVENT_TABLE_MIN_WIDTH.withAdmin : EVENT_TABLE_MIN_WIDTH.withoutAdmin;
+  const min =
+    Number.isFinite(minWidth) && minWidth > 0
+      ? minWidth
+      : showAdmin || wide
+        ? EVENT_TABLE_MIN_WIDTH.withAdmin
+        : EVENT_TABLE_MIN_WIDTH.withoutAdmin;
   if (width < min) return 'stacked';
   return width >= EVENT_TABLE_FULL_WIDTH ? 'full' : 'table';
 }

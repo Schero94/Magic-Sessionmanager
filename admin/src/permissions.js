@@ -14,6 +14,12 @@ const pluginPermissions = {
    * The server also requires `access` (and `admin-activity.read` for the log).
    */
   settingsUpdate: [{ action: `plugin::${pluginId}.settings.update`, subject: null }],
+  /**
+   * App-user security activity (4.22): failed sign-ins, lockouts, new devices,
+   * impersonations ... of Users & Permissions accounts, and its export. The
+   * server also requires `access`.
+   */
+  userActivityRead: [{ action: `plugin::${pluginId}.user-activity.read`, subject: null }],
   /** Lifting a sign-in lock. The server also requires `access`. */
   lockoutsUnlock: [{ action: `plugin::${pluginId}.lockouts.unlock`, subject: null }],
   /**
