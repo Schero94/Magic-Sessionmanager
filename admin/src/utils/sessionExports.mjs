@@ -30,14 +30,20 @@ export const CSV_HEADERS = Object.freeze([
 ]);
 
 /**
- * Cells that spreadsheet apps would run as a formula (`=`, `+`, `-`, `@`,
- * tab, carriage return) get a leading apostrophe (OWASP CSV injection).
+ * Cells that spreadsheet apps would run as a formula get a leading
+ * apostrophe (OWASP CSV injection): `=`, `+`, `-`, `@`, tab, carriage return
+ * and line feed, their full-width forms (`＝` U+FF1D, `＋` U+FF0B,
+ * `－` U+FF0D, `＠` U+FF20, which some spreadsheet apps normalise), also when
+ * zero-width or other invisible format characters (U+200B-U+200F,
+ * U+2060-U+2064, U+FEFF, U+00AD) or spaces come first (4.17).
  */
-const FORMULA_START = /^[=+\-@\t\r]/;
+const FORMULA_START =
+  /^[\s\u00ad\u200b-\u200f\u2060-\u2064\ufeff]*[=+\-@\uff1d\uff0b\uff0d\uff20\t\r\n]/;
 
 /**
  * Quotes one CSV field, escapes embedded double quotes and neutralises
- * formula-like text from user-controlled values (user agent, user name).
+ * formula-like text from user-controlled values (user agent, user name,
+ * entry title).
  *
  * @param {unknown} value Cell value.
  * @returns {string} Quoted CSV cell.
