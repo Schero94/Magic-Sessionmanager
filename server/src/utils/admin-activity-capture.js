@@ -221,6 +221,19 @@ function observeContentManager(strapi, getService, ctx, route) {
     responseBody: ctx.body,
   });
   if (!entry) return;
+  // During "Sign in as another admin" the request runs as the other admin;
+  // the action is recorded for the real admin, with the other admin in
+  // `meta.impersonating` (red-team review: no read is attributed to the
+  // wrong person).
+  const impersonation = ctx.state?.magicAdminImpersonation;
+  if (impersonation && typeof impersonation.id === 'string') {
+    getService()?.recordContentAction({
+      ...entry,
+      adminUserId: impersonation.actorId,
+      impersonation: { id: impersonation.id, targetId: String(adminId) },
+    });
+    return;
+  }
   getService()?.recordContentAction({ ...entry, adminUserId: adminId });
 }
 

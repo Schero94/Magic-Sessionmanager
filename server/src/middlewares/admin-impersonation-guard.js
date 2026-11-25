@@ -9,13 +9,15 @@
  * whose bearer token is a validly signed Strapi admin access token of an
  * impersonation session it:
  * - answers 401 once the impersonation ended or expired (and ends an
- *   expired one, deleting its session);
+ *   expired one, deleting its session), and ends it when the starting admin
+ *   or the target no longer qualifies (`stillAuthorized`);
  * - answers `POST /admin/logout` itself by ending the impersonation, so
  *   Strapi's logout, which deletes every session of the signed-in admin
  *   when no device id is sent, never runs for the target;
  * - lets reads through; refuses every other request with 403 unless "Allow
  *   changes" was chosen; refuses identity, admin-account, token and plugin
- *   changes always (`classifyAdminImpersonationRequest`);
+ *   changes always, and every request to a token route, reads included
+ *   (`classifyAdminImpersonationRequest`);
  * - records every allowed change with the real admin as the actor;
  * - sets `X-Magic-Impersonation: true` and exposes the impersonation to the
  *   plugin's own self routes as `ctx.state.magicAdminImpersonation`.
@@ -95,6 +97,28 @@ module.exports = (_config, { strapi }) => {
         return undefined;
       }
       return reply(ctx, 401, 'UnauthorizedError', 'Impersonation ended', 'impersonation-expired');
+    }
+    // The starting admin and the target must still qualify (red-team
+    // review, F3/F4): a role change, a deactivation, a lost action or the
+    // starter signing out ends the sign-in.
+    let authorized;
+    try {
+      authorized = await service().stillAuthorized(impersonation);
+    } catch {
+      return reply(
+        ctx,
+        503,
+        'ServiceUnavailableError',
+        'Session check unavailable',
+        'impersonation-check'
+      );
+    }
+    if (!authorized) {
+      if (kind === 'logout') {
+        ctx.body = { data: {} };
+        return undefined;
+      }
+      return reply(ctx, 401, 'UnauthorizedError', 'Impersonation ended', 'impersonation-revoked');
     }
 
     if (kind === 'logout') {

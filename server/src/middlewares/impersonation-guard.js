@@ -11,7 +11,9 @@
  * For a request whose bearer token (or, on `POST /auth/refresh`, refresh
  * token) belongs to an impersonation it:
  * - answers 401 once the impersonation ended or expired (and ends an expired
- *   one at once, revoking its credential);
+ *   one at once, revoking its credential), and ends it when the starting
+ *   admin was deactivated, lost the action or signed out
+ *   (`stillAuthorized`);
  * - refuses with 403 what an impersonation may not do: credential, email and
  *   account changes, signing in or out, ending or listing-and-ending
  *   sessions, the data export and "This wasn't me" links (see
@@ -127,6 +129,22 @@ module.exports = (_config, { strapi }) => {
         // The sweep ends it; the request is refused either way.
       }
       return reply(ctx, 401, 'UnauthorizedError', 'Impersonation ended', 'impersonation-expired');
+    }
+    // The starting admin must still qualify (red-team review, F4).
+    let authorized;
+    try {
+      authorized = await service().stillAuthorized(impersonation);
+    } catch {
+      return reply(
+        ctx,
+        503,
+        'ServiceUnavailableError',
+        'Session check unavailable',
+        'impersonation-check'
+      );
+    }
+    if (!authorized) {
+      return reply(ctx, 401, 'UnauthorizedError', 'Impersonation ended', 'impersonation-revoked');
     }
 
     const restricted = isGraphql

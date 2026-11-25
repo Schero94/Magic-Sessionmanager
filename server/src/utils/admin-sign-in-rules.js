@@ -131,6 +131,7 @@ const READ_ONLY_POSTS = Object.freeze(['/admin/permissions/check']);
  */
 const IDENTITY_PREFIXES = Object.freeze([
   '/admin/users',
+  '/admin/admin-tokens',
   '/admin/roles',
   '/admin/api-tokens',
   '/admin/transfer',
@@ -144,6 +145,23 @@ const IDENTITY_PREFIXES = Object.freeze([
   '/admin/login',
   '/admin/sessions',
   '/magic-sessionmanager',
+]);
+
+/**
+ * Credential routes refused for every method, reads included (red-team
+ * review, F1). `GET /admin/admin-tokens/:id` returns the decrypted key of an
+ * admin token to its owner only, so an impersonation session, which is the
+ * target to Strapi, could read the target's personal admin token: a
+ * credential that outlives the impersonation and that the starting admin
+ * cannot read themselves (installed 5.64.0,
+ * `@strapi/admin/dist/server/server/src/controllers/admin-token.js`, `get`).
+ * API and transfer token reads are refused the same way: an impersonation
+ * never needs a token key.
+ */
+const CREDENTIAL_PREFIXES = Object.freeze([
+  '/admin/admin-tokens',
+  '/admin/api-tokens',
+  '/admin/transfer/tokens',
 ]);
 
 /** The plugin's own routes of the impersonation tab. */
@@ -169,7 +187,8 @@ function under(path, prefix) {
  * - `self`: the plugin's state and end routes of the impersonation tab.
  * - `logout`: `POST /admin/logout`; ends the impersonation only.
  * - `read`: safe method or a read-only POST.
- * - `identity`: refused even with "Allow changes".
+ * - `identity`: refused even with "Allow changes"; on credential routes
+ *   (`CREDENTIAL_PREFIXES`) also for reads.
  * - `write`: allowed only with "Allow changes", and recorded.
  *
  * @param {string} method HTTP method.
@@ -181,6 +200,7 @@ function classifyAdminImpersonationRequest(method, rawPath) {
   const path = normalizePath(rawPath);
   if (path === SELF_PATHS.state || path === SELF_PATHS.end) return 'self';
   if (verb === 'POST' && path === '/admin/logout') return 'logout';
+  if (CREDENTIAL_PREFIXES.some((prefix) => under(path, prefix))) return 'identity';
   if (SAFE_METHODS.includes(verb)) return 'read';
   if (verb === 'POST' && READ_ONLY_POSTS.includes(path)) return 'read';
   if (IDENTITY_PREFIXES.some((prefix) => under(path, prefix))) return 'identity';
@@ -203,6 +223,7 @@ module.exports = {
   ADMIN_DEVICE_PREFIX,
   ADMIN_SIGN_IN_ACTION,
   ADMIN_SIGN_IN_DURATIONS,
+  CREDENTIAL_PREFIXES,
   IDENTITY_PREFIXES,
   LANDING_PATH,
   READ_ONLY_POSTS,

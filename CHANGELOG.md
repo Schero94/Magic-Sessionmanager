@@ -1,3 +1,20 @@
+## [Unreleased]
+
+Release type: patch (`fix`). Red-team review of every impersonation feature (app users, View permissions, Sign in as another admin). Proven against Strapi 5.64.0 (packed tarball on an isolated host, SQLite and PostgreSQL, legacy and refresh mode) and 5.50.0; none of the findings is reachable without an admin account that holds an impersonation permission.
+
+### Security
+
+* **F1 (high): Sign in as could read and mint the other admin's admin tokens.** Strapi returns the decrypted key of an admin token to its owner only (`GET /admin/admin-tokens/:id`). The impersonation session is the owner to Strapi, so a read-only sign-in could read the other admin's personal admin token, a credential that keeps working after the impersonation ends and that the starting admin cannot read themselves; with **Allow changes** it could also create a new one (`/admin/admin-tokens` was missing from the identity routes). Every request of an impersonation session to `/admin/admin-tokens…`, `/admin/api-tokens…` and `/admin/transfer/tokens…` is now refused with 403 `impersonation-identity`, reads included.
+* **F2 (high): "own entries" permissions passed the subset check.** Conditions such as `admin::is-creator` ("only own entries") are evaluated for the signed-in admin. An admin with "read/update own entries" could sign in as another admin with the same permission and read and change that admin's entries, which their own permission never reaches. For **Sign in as**, a conditional permission of the other admin now counts as covered only when the starting admin holds it without conditions (403 `not-subset` otherwise). View permissions (no session) is unchanged.
+* **F3 (medium): a role change during a sign-in widened it.** The subset check ran at the start and the code exchange only; Strapi computes permissions on every request, so promoting the other admin (to Super Admin, or a permission the starting admin lacks) while a sign-in ran gave the impersonation those permissions. Every request of the session now re-checks the other admin (active, no Super Admin, still within the starting admin's permissions) and ends the sign-in otherwise.
+* **F4 (medium): impersonations outlived the starting admin.** Deactivating the starting admin, removing their impersonation permission or the starting admin signing out did not end a running impersonation of an app user or an admin (up to 60 or 30 minutes). Every request of an impersonation (Content API, GraphQL and admin) now re-checks that the starting admin is active, still holds plugin access and the start permission, and is still signed in on the device that started it; otherwise the impersonation ends (401 `impersonation-revoked`, `impersonation.ended` with `meta.endReason: 'revoked'`). A passed check is trusted for at most 5 seconds per process.
+* **Audit (low): Content Manager activity during a sign-in named the wrong admin.** With **Admin content activity** on, what was opened or changed while signed in as another admin was recorded for that other admin. It is now recorded for the real admin, with `meta.impersonating` (the other admin) and `meta.impersonation`.
+* **Hardening: the Strapi session of an app-user impersonation (refresh mode) now expires with the impersonation** (`expiresAt` and `absoluteExpiresAt`), so its refresh token stops working on its own even if the plugin is switched off or removed.
+
+### Migration
+
+* The impersonation table gets the private `actorDeviceId` column; Strapi adds it at start-up. Impersonations that run during the upgrade have none and keep running while the starting admin has any active admin session.
+* A role that should sign in as admins with "own entries only" permissions now needs those permissions without conditions.
 ## [4.23.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.23.0...v4.23.1) (2026-11-25)
 
 

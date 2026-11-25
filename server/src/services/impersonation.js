@@ -66,6 +66,10 @@ const NATIVE_ORIGIN = 'users-permissions';
 const DEVICE_PREFIX = 'msm-impersonation-';
 const MAX_CACHE = 10000;
 const RECORD_CACHE_MS = 5000;
+/** How long a passed starter and target re-check is trusted (red-team review, F3/F4). */
+const AUTHORIZATION_CACHE_MS = 5000;
+const PLUGIN_ACCESS_ACTION = 'plugin::magic-sessionmanager.access';
+const IMPERSONATE_USERS_ACTION = 'plugin::magic-sessionmanager.impersonate.users';
 const REFUSAL_DEDUP_MS = 60 * 1000;
 const ENDED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const SWEEP_BATCH = 100;
@@ -132,6 +136,8 @@ module.exports = ({ strapi }) => {
   const recordCache = new Map();
   /** `${id}|${reason}` -> time of the last refused-call event. */
   const refusals = new Map();
+  /** impersonation documentId -> time of the last passed authorization re-check. */
+  const authorizedAt = new Map();
 
   const query = () => strapi.db.query(UID);
   const securityLog = () => strapi.plugin('magic-sessionmanager').service('security-log');
@@ -279,7 +285,7 @@ module.exports = ({ strapi }) => {
      * @sideeffect Creates an impersonation row; with the token hand-off also a session; queues
      *   `impersonation.started`; may send an email to the user.
      */
-    async startForUser({ actor, userDocumentId, body, ctx }) {
+    async startForUser({ actor, userDocumentId, body, ctx, actorSessionId = null }) {
       const actorId = String(actor.id);
       const refuse = (reason, status, message) => {
         service.recordRefused({ actorId, targetType: 'user', targetId: userDocumentId, reason });
@@ -324,12 +330,14 @@ module.exports = ({ strapi }) => {
       const expiresAt = new Date(now.getTime() + value.durationMinutes * 60 * 1000);
       const frontend = service.frontendHandoff();
       const code = frontend ? crypto.randomBytes(32).toString('base64url') : null;
+      const actorDeviceId = await service.deviceOfAdminSession(actorId, actorSessionId);
 
       const row = await query().create({
         data: {
           targetType: 'user',
           targetId: user.documentId,
           actorId,
+          actorDeviceId,
           state: 'active',
           reason: value.reason,
           durationMinutes: value.durationMinutes,
@@ -550,7 +558,14 @@ module.exports = ({ strapi }) => {
      *   self, Super Admin, inactive, not a subset or already active; 404 unknown admin.
      * @sideeffect Creates an impersonation row; queues `impersonation.started` or `.refused`.
      */
-    async startAdminSignIn({ actor, adminId, body, canReadAdmins, nested = false }) {
+    async startAdminSignIn({
+      actor,
+      adminId,
+      body,
+      canReadAdmins,
+      nested = false,
+      actorSessionId = null,
+    }) {
       const actorId = String(actor.id);
       const refuse = (reason, status, message, extra = {}) => {
         service.recordRefused({
@@ -587,7 +602,7 @@ module.exports = ({ strapi }) => {
         loadAdmin(strapi, Number(adminId)),
       ]);
       if (!target) throw new ImpersonationError(404, 'Admin not found');
-      const refusal = await previewRefusal(strapi, caller || actor, target);
+      const refusal = await previewRefusal(strapi, caller || actor, target, { signIn: true });
       if (refusal?.reason === 'super-admin' && !canReadAdmins) {
         service.recordRefused({
           actorId,
@@ -632,11 +647,13 @@ module.exports = ({ strapi }) => {
       const expiresAt = new Date(now.getTime() + value.durationMinutes * 60 * 1000);
       const code = crypto.randomBytes(32).toString('base64url');
       const codeExpiresAt = new Date(now.getTime() + CODE_TTL_MS);
+      const actorDeviceId = await service.deviceOfAdminSession(actorId, actorSessionId);
       const row = await query().create({
         data: {
           targetType: 'admin',
           targetId: String(target.id),
           actorId,
+          actorDeviceId,
           state: 'active',
           reason: value.reason,
           durationMinutes: value.durationMinutes,
@@ -726,7 +743,11 @@ module.exports = ({ strapi }) => {
       if (Number(claimed?.count) !== 1) return null;
 
       const target = await loadAdmin(strapi, Number(row.targetId));
-      if (!target || target.isActive !== true || (await previewRefusal(strapi, actor, target))) {
+      if (
+        !target ||
+        target.isActive !== true ||
+        (await previewRefusal(strapi, actor, target, { signIn: true }))
+      ) {
         await service.end(row.documentId, { reason: 'failed', silent: true });
         return null;
       }
@@ -868,6 +889,109 @@ module.exports = ({ strapi }) => {
     },
 
     /**
+     * The device id of the starting admin's own Strapi admin session, so the
+     * impersonation can end with that sign-in (red-team review, F4). Null
+     * when the session has no device id; the re-check then needs any active
+     * admin session of the starter.
+     *
+     * @param {string} actorId Starting admin id.
+     * @param {unknown} sessionId Strapi session id of the start request.
+     * @returns {Promise<string|null>}
+     */
+    async deviceOfAdminSession(actorId, sessionId) {
+      if (typeof sessionId !== 'string' || !/^[a-f0-9]{16,64}$/i.test(sessionId)) return null;
+      const session = await strapi.db.query(NATIVE_SESSION_UID).findOne({
+        where: { sessionId, origin: 'admin', userId: String(actorId) },
+        select: ['deviceId'],
+      });
+      const deviceId = session?.deviceId;
+      return typeof deviceId === 'string' && deviceId.length > 0 && deviceId.length <= 255
+        ? deviceId
+        : null;
+    },
+
+    /**
+     * Whether an active impersonation may go on (red-team review, F3/F4). A
+     * start is checked once, but an impersonation runs for up to an hour, so
+     * every guarded request re-checks (a passed check is trusted for five
+     * seconds per process):
+     * - the starting admin still exists, is active, still holds plugin access
+     *   and the start action (`impersonate.users` or
+     *   `impersonate.admins.sign-in`), and is still signed in on the device
+     *   that started it (any device when none was recorded); signing out,
+     *   being signed out or deactivated ends the impersonation;
+     * - for a sign-in as another admin, the target is still active and still
+     *   no Super Admin and no wider than the starter (a role change during
+     *   the sign-in ends it).
+     * When a rule fails the impersonation is ended (`revoked`).
+     *
+     * @param {{id: string, targetType: 'user'|'admin', actorId: string,
+     *   actorDeviceId?: string|null, targetId?: string|null}} impersonation Guard record.
+     * @returns {Promise<boolean>} Whether it may go on.
+     * @throws {Error} When a lookup fails (the guards answer 503).
+     * @sideeffect Ends the impersonation when a rule fails.
+     */
+    async stillAuthorized(impersonation) {
+      const last = authorizedAt.get(impersonation.id);
+      if (last !== undefined && Date.now() - last < AUTHORIZATION_CACHE_MS) return true;
+      const allowed = await service.authorizationHolds(impersonation);
+      if (allowed) {
+        remember(authorizedAt, impersonation.id, Date.now());
+        return true;
+      }
+      authorizedAt.delete(impersonation.id);
+      await service.end(impersonation.id, { reason: 'revoked' });
+      log.info('[IMPERSONATION] Ended: the starting admin or the target no longer qualifies');
+      return false;
+    },
+
+    /**
+     * The rules of {@link stillAuthorized}, uncached.
+     *
+     * @param {{targetType: 'user'|'admin', actorId: string, actorDeviceId?: string|null,
+     *   targetId?: string|null}} impersonation Guard record.
+     * @returns {Promise<boolean>}
+     */
+    async authorizationHolds(impersonation) {
+      const actorId = Number(impersonation.actorId);
+      if (!Number.isInteger(actorId) || actorId < 1) return false;
+      const actor = await loadAdmin(strapi, actorId);
+      if (!actor || actor.isActive !== true) return false;
+      const ability = await strapi.admin.services.permission.engine.generateUserAbility(actor);
+      const startAction =
+        impersonation.targetType === 'admin' ? ADMIN_SIGN_IN_ACTION : IMPERSONATE_USERS_ACTION;
+      if (ability?.can?.(PLUGIN_ACCESS_ACTION) !== true || ability?.can?.(startAction) !== true) {
+        return false;
+      }
+      const signedIn = await strapi.db.query(NATIVE_SESSION_UID).findOne({
+        where: {
+          userId: String(actor.id),
+          origin: 'admin',
+          status: 'active',
+          expiresAt: { $gt: new Date() },
+          // Without a recorded device, any own sign-in of the starter counts,
+          // but never a sign-in someone else holds as them.
+          ...(impersonation.actorDeviceId
+            ? { deviceId: impersonation.actorDeviceId }
+            : {
+                $or: [
+                  { deviceId: { $null: true } },
+                  { deviceId: { $notContains: ADMIN_DEVICE_PREFIX } },
+                ],
+              }),
+        },
+        select: ['id'],
+      });
+      if (!signedIn) return false;
+      if (impersonation.targetType !== 'admin') return true;
+      const targetId = Number(impersonation.targetId);
+      if (!Number.isInteger(targetId) || targetId < 1) return false;
+      const target = await loadAdmin(strapi, targetId);
+      if (!target || target.isActive !== true) return false;
+      return (await previewRefusal(strapi, actor, target, { signIn: true })) === null;
+    },
+
+    /**
      * Whether a token is a validly signed Strapi admin access token.
      *
      * @param {string} token Bearer token.
@@ -894,12 +1018,22 @@ module.exports = ({ strapi }) => {
       if (cached && Date.now() - cached.at < RECORD_CACHE_MS) return cached.value;
       const row = await query().findOne({
         where: { documentId, targetType: 'admin', handoff: 'admin-session' },
-        select: ['documentId', 'actorId', 'targetId', 'state', 'expiresAt', 'allowChanges'],
+        select: [
+          'documentId',
+          'actorId',
+          'actorDeviceId',
+          'targetId',
+          'state',
+          'expiresAt',
+          'allowChanges',
+        ],
       });
       const value = row
         ? {
             id: row.documentId,
+            targetType: 'admin',
             actorId: String(row.actorId),
+            actorDeviceId: row.actorDeviceId || null,
             targetId: String(row.targetId),
             state: row.state,
             expiresAt: new Date(row.expiresAt).getTime(),
@@ -1011,6 +1145,14 @@ module.exports = ({ strapi }) => {
             msmImpersonation: row.documentId,
           },
         });
+        // The session ends with the impersonation on its own, also when the
+        // plugin is switched off or removed: Strapi refuses a refresh past
+        // `expiresAt`/`absoluteExpiresAt`, and a rotated child keeps the
+        // absolute end (red-team review, hardening).
+        await strapi.db.query(NATIVE_SESSION_UID).update({
+          where: { sessionId: refresh.sessionId },
+          data: { expiresAt, absoluteExpiresAt: expiresAt },
+        });
         const access = await manager.generateAccessToken(refresh.token);
         if (!access || 'error' in access) throw new Error('Access token could not be minted');
         jwt = access.token;
@@ -1102,7 +1244,7 @@ module.exports = ({ strapi }) => {
      * marks the row ended once (atomic), so one event is recorded.
      *
      * @param {string} documentId Impersonation id.
-     * @param {{reason?: 'ended'|'expired'|'disabled'|'failed', endedBy?: string|null,
+     * @param {{reason?: 'ended'|'expired'|'disabled'|'failed'|'revoked', endedBy?: string|null,
      *   silent?: boolean}} [options] Why and by whom.
      * @returns {Promise<boolean>} Whether this call ended it.
      * @sideeffect Revokes sessions and tokens; updates the row; queues an event.
@@ -1123,6 +1265,7 @@ module.exports = ({ strapi }) => {
         },
       });
       recordCache.delete(documentId);
+      authorizedAt.delete(documentId);
       if (Number(claimed?.count) !== 1) return false;
       if (!silent) {
         record({
@@ -1340,12 +1483,14 @@ module.exports = ({ strapi }) => {
       if (cached && Date.now() - cached.at < RECORD_CACHE_MS) return cached.value;
       const row = await query().findOne({
         where: { documentId, targetType: 'user' },
-        select: ['documentId', 'actorId', 'targetId', 'state', 'expiresAt'],
+        select: ['documentId', 'actorId', 'actorDeviceId', 'targetId', 'state', 'expiresAt'],
       });
       const value = row
         ? {
             id: row.documentId,
+            targetType: 'user',
             actorId: row.actorId,
+            actorDeviceId: row.actorDeviceId || null,
             targetId: typeof row.targetId === 'string' ? row.targetId : null,
             state: row.state,
             expiresAt: new Date(row.expiresAt).getTime(),

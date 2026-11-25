@@ -6,7 +6,8 @@
  * envelope; messages are fixed and never echo input.
  */
 
-const { DOCUMENT_ID_PATTERN } = require('../utils/impersonation-rules');
+const { DOCUMENT_ID_PATTERN, decodeJwtPayload } = require('../utils/impersonation-rules');
+const { extractBearerToken } = require('../utils/extract-token');
 const { ImpersonationError } = require('../services/impersonation');
 const { sendServerError } = require('../utils/http-errors');
 
@@ -42,6 +43,21 @@ function visibleTargetTypes(ctx) {
       ? ['admin']
       : []),
   ];
+}
+
+/**
+ * Strapi admin session id of the calling admin: `ctx.state.session` (set by
+ * Strapi's admin strategy), else the claim of the bearer token the request
+ * was authenticated with.
+ *
+ * @param {any} ctx Koa context.
+ * @returns {string|null}
+ */
+function callerSessionId(ctx) {
+  const fromState = ctx?.state?.session?.id;
+  if (typeof fromState === 'string') return fromState;
+  const claim = decodeJwtPayload(extractBearerToken(ctx))?.sessionId;
+  return typeof claim === 'string' ? claim : null;
 }
 
 /** `ctx` helper per expected status (Strapi's error envelope). */
@@ -133,6 +149,7 @@ module.exports = ({ strapi: app }) => {
           userDocumentId: userId,
           body: ctx.request.body,
           ctx,
+          actorSessionId: callerSessionId(ctx),
         });
         ctx.status = 201;
         ctx.body = { data: result };
@@ -267,6 +284,7 @@ module.exports = ({ strapi: app }) => {
           body: ctx.request.body,
           canReadAdmins: callerCan(ctx, 'admin::users.read'),
           nested: Boolean(ctx.state.magicAdminImpersonation),
+          actorSessionId: callerSessionId(ctx),
         });
         ctx.status = 201;
         ctx.body = { data: result };

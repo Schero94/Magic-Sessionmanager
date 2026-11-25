@@ -198,7 +198,7 @@ function userEventFacts(event, storedMeta, viewer = {}) {
       return {
         durationMinutes: count(meta.durationMinutes, 1440),
         handoff: oneOf(meta.handoff, ['frontend', 'token']),
-        endReason: oneOf(meta.endReason, ['ended', 'disabled', 'failed']),
+        endReason: oneOf(meta.endReason, ['ended', 'disabled', 'failed', 'revoked']),
         refusal: code(meta.refusal),
         reason,
       };
