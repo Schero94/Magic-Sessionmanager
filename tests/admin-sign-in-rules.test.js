@@ -94,6 +94,22 @@ test('read-only by default, identity and plugin changes never, logout ends only'
   ]) {
     assert.equal(kind(method, path), 'identity', `${method} ${path}`);
   }
+  // Red-team review F1: token routes are refused for every method, reads
+  // included (the decrypted key of the target's own admin token).
+  for (const [method, path] of [
+    ['GET', '/admin/admin-tokens'],
+    ['GET', '/admin/admin-tokens/1'],
+    ['GET', '/Admin//Admin-Tokens/1/'],
+    ['HEAD', '/admin/admin-tokens/1'],
+    ['POST', '/admin/admin-tokens'],
+    ['POST', '/admin/admin-tokens/1/regenerate'],
+    ['GET', '/admin/admin-tokens/1/owner-permissions'],
+    ['GET', '/admin/api-tokens/1'],
+    ['GET', '/admin/transfer/tokens/1'],
+  ]) {
+    assert.equal(kind(method, path), 'identity', `${method} ${path}`);
+  }
+  assert.equal(kind('GET', '/admin/admin-tokensx'), 'read');
   assert.equal(rules.recordedPath('/content-manager/x?secret=1'), '/content-manager/x');
   assert.equal(rules.recordedPath('/x'.repeat(200)).length, 200);
 });
@@ -119,14 +135,21 @@ async function run({
   },
   status = 200,
   lookupThrows = false,
+  authorized = true,
 } = {}) {
-  const calls = { ended: [], writes: [], refused: [] };
+  const calls = { ended: [], writes: [], refused: [], authorized: [] };
   const service = {
     adminImpersonationOfToken: async () => {
       if (lookupThrows) throw new Error('db');
       return impersonationId;
     },
     loadAdminForGuard: async () => impersonation,
+    stillAuthorized: async (imp) => {
+      calls.authorized.push(imp.id);
+      if (authorized === 'throws') throw new Error('db');
+      if (!authorized) calls.ended.push([imp.id, { reason: 'revoked' }]);
+      return authorized;
+    },
     end: async (id, options) => {
       calls.ended.push([id, options]);
       return true;
@@ -235,4 +258,25 @@ test('guard: ended or expired impersonations answer 401; lookup failure 503', as
   assert.equal(endedLogout.nextCalled, false);
   const failed = await run({ lookupThrows: true });
   assert.equal(failed.ctx.status, 503);
+});
+
+test('guard: a starter or target that no longer qualifies ends the sign-in (red-team F3/F4)', async () => {
+  const read = await run();
+  assert.deepEqual(read.calls.authorized, ['imp1']);
+  const revoked = await run({ authorized: false });
+  assert.equal(revoked.nextCalled, false);
+  assert.equal(revoked.ctx.status, 401);
+  assert.equal(revoked.ctx.body.error.details.reason, 'impersonation-revoked');
+  assert.deepEqual(revoked.calls.ended, [['imp1', { reason: 'revoked' }]]);
+  const revokedLogout = await run({ authorized: false, method: 'POST', path: '/admin/logout' });
+  assert.equal(revokedLogout.nextCalled, false);
+  assert.deepEqual(revokedLogout.ctx.body, { data: {} });
+  const failed = await run({ authorized: 'throws' });
+  assert.equal(failed.ctx.status, 503);
+  assert.equal(failed.nextCalled, false);
+  // An ended or expired impersonation is answered before the re-check.
+  const ended = await run({
+    impersonation: { id: 'imp1', state: 'ended', expiresAt: Date.now() + 1000 },
+  });
+  assert.deepEqual(ended.calls.authorized, []);
 });

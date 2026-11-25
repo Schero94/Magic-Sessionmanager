@@ -767,13 +767,16 @@ module.exports = ({ strapi }) => {
      *
      * @param {{adminUserId: number|string, action: string, kind: 'collection'|'single',
      *   contentType: string, documentId: string|null, locale: string|null,
-     *   count: number|null}} input Action.
+     *   count: number|null, impersonation?: {id: string, targetId: string}}} input Action;
+     *   `impersonation` when it was made while signed in as another admin (`adminUserId` is
+     *   then the real admin).
      * @returns {boolean} Whether the action was queued.
      */
     recordContentAction(input) {
       if (stopped || !input || !CONTENT_ACTIONS.includes(input.action)) return false;
       const now = Date.now();
-      const key = `${input.adminUserId}|${input.contentType}|${input.documentId || ''}|${input.locale || ''}`;
+      const as = input.impersonation?.id ? `|${input.impersonation.id}` : '';
+      const key = `${input.adminUserId}${as}|${input.contentType}|${input.documentId || ''}|${input.locale || ''}`;
       if (input.documentId || input.kind === 'single') {
         if (input.action === 'view') {
           const last = viewed.get(key);
@@ -793,6 +796,12 @@ module.exports = ({ strapi }) => {
           kind: input.kind,
           locale: input.locale || null,
           ...(typeof input.count === 'number' ? { count: input.count } : {}),
+          ...(input.impersonation?.id
+            ? {
+                impersonation: String(input.impersonation.id),
+                impersonating: String(input.impersonation.targetId),
+              }
+            : {}),
         },
       });
     },

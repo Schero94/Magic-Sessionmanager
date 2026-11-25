@@ -95,14 +95,33 @@ async function effectivePermissions(strapi, user) {
 }
 
 /**
- * Why an actor may not preview a target, or null when allowed.
+ * A target permission as it must be held when the actor acts as the target
+ * (sign-in): without its conditions. Conditions such as `admin::is-creator`
+ * or `admin::has-same-role-as-creator` are evaluated against the signed-in
+ * admin, so "update own entries" of the target reaches the target's entries
+ * once the actor is signed in as them, which the actor's own "update own
+ * entries" never reaches (red-team review, F2). Only an unconditional held
+ * permission covers it.
+ *
+ * @param {any} permission Enforced permission.
+ * @returns {any} Permission without conditions.
+ */
+function asIdentity(permission) {
+  return { ...permission, conditions: [] };
+}
+
+/**
+ * Why an actor may not preview (or sign in as) a target, or null when
+ * allowed.
  *
  * @param {any} strapi Strapi.
  * @param {any} actor Calling admin (with roles).
  * @param {any} target Target admin (with roles).
+ * @param {{signIn?: boolean}} [options] `signIn`: the actor will act as the target, so
+ *   conditional target permissions need an unconditional held permission.
  * @returns {Promise<null|{reason: 'self'|'super-admin'|'not-subset', uncovered?: number}>}
  */
-async function previewRefusal(strapi, actor, target) {
+async function previewRefusal(strapi, actor, target, { signIn = false } = {}) {
   if (String(actor.id) === String(target.id)) return { reason: 'self' };
   if (isSuperAdmin(target)) return { reason: 'super-admin' };
   if (isSuperAdmin(actor)) return null;
@@ -110,7 +129,7 @@ async function previewRefusal(strapi, actor, target) {
     effectivePermissions(strapi, actor),
     effectivePermissions(strapi, target),
   ]);
-  const uncovered = uncoveredPermissions(wanted, held);
+  const uncovered = uncoveredPermissions(signIn ? wanted.map(asIdentity) : wanted, held);
   return uncovered.length > 0 ? { reason: 'not-subset', uncovered: uncovered.length } : null;
 }
 
@@ -292,6 +311,7 @@ async function buildPreview(strapi, target, { canReadRoles = false } = {}) {
 }
 
 module.exports = {
+  asIdentity,
   buildPreview,
   effectivePermissions,
   isSuperAdmin,

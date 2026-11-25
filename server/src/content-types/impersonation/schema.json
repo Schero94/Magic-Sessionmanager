@@ -49,6 +49,12 @@
       "maxLength": 64,
       "required": true
     },
+    "actorDeviceId": {
+      "type": "string",
+      "maxLength": 255,
+      "private": true,
+      "configurable": false
+    },
     "state": {
       "type": "enumeration",
       "enum": ["active", "ended", "expired"],
