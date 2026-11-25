@@ -185,6 +185,10 @@ const SAME_AS_ENGLISH = {
     'Edition',
     'Name',
     'Bot',
+    // Strapi's own German admin uses "Admin"; "System" is the German word.
+    'Admin',
+    'Admin: {name}',
+    'System',
   ]),
   fr: new Set([
     'minutes',
@@ -195,6 +199,7 @@ const SAME_AS_ENGLISH = {
     'Active',
     'Inactive',
     'Actions',
+    'Action',
     'Session',
     'Sessions',
     'Important',

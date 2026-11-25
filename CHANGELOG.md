@@ -1,3 +1,21 @@
+## [Unreleased]
+
+Release type: minor (`feat(admin)`: the admin activity lists become tables with event details and a full-page view). No route, permission or request changes; the sign-in list response gains fields and the `event` filter gains `changes`.
+
+### Features
+
+* **Activity lists as tables.** "Recent sign-in activity", the **Sign-in history** tab and the **Activity** tab of the admin details dialog were narrow boxes that left most of the page empty, with the time sometimes on its own line and every badge in the same grey. They are now Strapi Design System tables across the full width: **Time** (relative, with date and time on a second line), **Event**, **Admin**, **IP address and device**, **Session** (Still signed in / Signed out, when and by whom), **Done by** and an eye button. Below about 800 px of list width (740 px in the details dialog) the same fields become stacked rows: badge and time on the first line, the admin on the second, the details on the third.
+* **One colour per meaning**, as a badge and an icon (the DS dark theme draws every badge background in the same grey, so the icon carries the colour there too): green signed in, red sign-in failed or locked out, amber signed out by another admin, blue settings changed or log read with an API token, grey own sign-out and retention runs. Red badges use the `danger100` surface (5.4:1 in both themes; the DS danger variant measured 3.9:1 light and 2.6:1 dark).
+* **Event details.** Selecting a row, or its eye button, opens the details of the event, like Strapi's own Audit Logs: the exact time with seconds, the full user agent, the event id, the address, place, browser and operating system, and for a sign-out by an admin who did it, from how many browsers and how many sessions ended. Focus returns to the row's eye button; Escape closes only the details when they are open on top of the admin dialog.
+* **Security activity page** (`/plugins/magic-sessionmanager/admin-panel/activity`). The card under the admin table is now **Recent security activity** (the latest eight events) with **Show all**, which opens a full page with the same table, filters for event, period and one admin (**Show only events of …** in the details), Strapi's pagination and CSV export. Filters and page are in the URL. It needs the same permissions as the card (Read admin panel sessions and View admin activity).
+* **4.17 events are shown.** Settings changes (`settings.updated`, with the changed key names), reads of the log with an admin API token (`security-log.read`) and retention runs (`security-log.retention.purged`, with the number of deleted events) appear on the Security activity page and in Recent security activity (filter **Settings and log access**, also part of **All events**). Counted failed sign-ins of unknown accounts show as one row with "12 attempts within 5 minutes".
+* **Labels for the 4.17 and 4.18 events.** App-user events (failed and refused sign-ins, lockouts and their lifting, session limit, sign-out after a password change, new device, impossible travel, "This wasn’t me", personal data export) and future `impersonation.*` and `webhook.*` events have their own label, icon and colour in the event table. The admin lists of this view still return admin events only.
+* **API.** `GET /admin-activity/sign-ins` rows also return `userAgent` (as stored, at most 256 characters; admin-only and behind View admin activity like the IP address), `sessionsEnded` (sign-outs by an admin), `session.endedBy` (`{ id, name }` of the admin who ended a sign-in's session, name empty without `admin::users.read`) and `change`, `read` and `purge` for the three log events. `event=changes` lists only those; `event=all` includes them unless `adminId` is set, so one admin's history is unchanged.
+
+### Migration
+
+* Nothing to do. Clients that compare the exact key set of sign-in rows see six new keys. A client that sends `event=all` without `adminId` now also gets the three log events; send `succeeded`, `failed` or `signed-out` to keep sign-in events only.
+
 # [4.18.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.17.0...v4.18.0) (2026-11-25)
 
 

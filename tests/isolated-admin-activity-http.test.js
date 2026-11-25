@@ -425,6 +425,13 @@ test(
       assert.equal(secondIn.session.endedAt, own.at);
       assert.equal(firstIn.session.state, 'signed-out', 'signed out everywhere');
       assert.equal(firstIn.session.endedAt, byAdmin.at);
+      // Details dialog: who ended the session, how many sessions a revoke ended, the user agent.
+      assert.deepEqual(firstIn.session.endedBy, { id: owner.id, name: 'Ada Owner' });
+      assert.equal(secondIn.session.endedBy, null, 'own sign-out names nobody');
+      assert.equal(typeof byAdmin.sessionsEnded, 'number');
+      assert.equal(own.sessionsEnded, null);
+      assert.equal(firstIn.userAgent, UA);
+      assert.ok(firstIn.userAgent.length <= 256);
       for (const row of list.body.data) {
         assert.deepEqual(Object.keys(row).sort(), [
           'actor',
@@ -432,6 +439,7 @@ test(
           'at',
           'attempts',
           'browser',
+          'change',
           'deviceType',
           'event',
           'id',
@@ -440,9 +448,13 @@ test(
           'location',
           'os',
           'provider',
+          'purge',
+          'read',
           'reason',
           'scope',
           'session',
+          'sessionsEnded',
+          'userAgent',
         ]);
       }
       const serialized = JSON.stringify(list.body);
@@ -909,6 +921,22 @@ test(
           ]
         );
         assert.ok(!JSON.stringify(changes).includes('SYNTHETICsecret'), 'never the values');
+        // Listed with the activity of all admins (filter "changes"), never in one admin's history.
+        const listed = await request('GET', api('/sign-ins?event=changes&pageSize=50'), {
+          token: ada.token,
+        });
+        assert.equal(listed.status, 200);
+        const listedChange = listed.body.data.find((row) => row.event === 'settings.updated');
+        assert.deepEqual(listedChange.change, {
+          keys: ['enableGeolocation', 'discordWebhookUrl'],
+          viaToken: false,
+        });
+        assert.equal(listedChange.admin.id, owner.id, 'the admin who changed them');
+        assert.ok(!JSON.stringify(listed.body).includes('SYNTHETICsecret'));
+        const own = await request('GET', api(`/sign-ins?adminId=${owner.id}&pageSize=100`), {
+          token: ada.token,
+        });
+        assert.ok(own.body.data.every((row) => row.event.startsWith('admin.')));
 
         // 4.16 allowed 1 day: the start-up migration raises it to 7.
         await setSettings({ securityLogRetentionDays: 2 });

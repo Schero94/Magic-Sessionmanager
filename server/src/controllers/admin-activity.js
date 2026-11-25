@@ -151,12 +151,14 @@ module.exports = ({ strapi }) => {
      * @auth Admin JWT or admin API token; admin::hasPermissions access + admin-activity.read;
      *   read rate limit.
      * @param {Context} ctx Reads `ctx.query.adminId` (optional positive integer), `event`
-     *   (`all`|`succeeded`|`failed`|`signed-out`), `from`/`to` (ISO dates), `page`, `pageSize`
+     *   (`all`|`succeeded`|`failed`|`signed-out`|`changes`), `from`/`to` (ISO dates), `page`, `pageSize`
      *   (1..100, default 20).
      * @returns {Promise<unknown>} 200 `{ data: SignInRow[], meta: { pagination, recording,
      *   identity } }`; 400 ValidationError with field errors; 500 fixed message. Rows hold IP
-     *   address (possibly anonymised), location, browser, OS and session state; never the
-     *   device id, a typed email or a token. Admin names are empty without
+     *   address (possibly anonymised), location, browser, OS, the stored user agent (at most
+     *   256 characters) and session state; `event=changes` (also part of `all` without
+     *   `adminId`) lists settings changes (key names), token reads and retention runs. Never
+     *   the device id, a typed email or a token. Admin names are empty without
      *   `admin::users.read` (`meta.identity.names` false).
      * @sideeffect A read with an admin API token queues a `security-log.read` event.
      */

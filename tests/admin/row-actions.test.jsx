@@ -111,3 +111,60 @@ test('admin panel table: Enter and Space stay on the row button (the grid table 
     await handle.unmount();
   }
 });
+
+test('event tables: the details button keeps Enter and Space, opens the details and returns focus', async () => {
+  const { SignInEventTable } = await import('../../admin/src/pages/AdminPanel/EventTables');
+  const seen = [];
+  const row = {
+    id: 41,
+    event: 'admin.session.revoked',
+    scope: 'everywhere',
+    sessionsEnded: 2,
+    at: new Date(Date.now() - 60_000).toISOString(),
+    ipAddress: '203.0.113.5',
+    ipAnonymized: false,
+    location: null,
+    browser: 'Firefox 133',
+    os: 'Windows 10/11',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0) SyntheticFox/133.0',
+    admin: { id: 3, name: 'Anna Beispiel' },
+    actor: { id: 1, name: 'Ben Muster' },
+    session: null,
+  };
+  const handle = await renderStrict(
+    <div onKeyDown={(event) => seen.push(event.key)}>
+      <SignInEventTable rows={[row]} label="Synthetic activity" showAdmin />
+    </div>
+  );
+  try {
+    const grid = document.querySelector('table[role="grid"]');
+    assert.ok(grid, 'a DS table');
+    assert.equal(grid.getAttribute('aria-colcount'), '7', 'with Admin and Done by columns');
+    const details = document.querySelector('[data-event-id="41"] [data-event-details]');
+    for (const key of ['Enter', ' ', 'ArrowDown']) {
+      await act(async () => {
+        details.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }));
+      });
+    }
+    assert.deepEqual(seen, ['ArrowDown'], 'only navigation keys reach the table');
+    await act(async () => {
+      details.focus();
+      details.click();
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog, 'details dialog is open');
+    assert.match(dialog.textContent, /Signed out by an admin: Anna Beispiel/);
+    assert.match(dialog.textContent, /Done byBen Muster/);
+    assert.match(dialog.textContent, /Every browser \(2 sessions ended\)/);
+    assert.match(dialog.textContent, /SyntheticFox\/133\.0/);
+    await act(async () => {
+      dialog.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.equal(document.activeElement, details, 'focus returns to the details button');
+  } finally {
+    await handle.unmount();
+  }
+});

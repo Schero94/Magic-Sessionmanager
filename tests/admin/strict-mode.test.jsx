@@ -332,7 +332,8 @@ const SIGN_INS = {
       deviceType: 'desktop',
       admin: { id: 1, name: 'Ada Example' },
       actor: null,
-      session: { state: 'active', endedAt: null },
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) SyntheticAgent/1.0',
+      session: { state: 'active', endedAt: null, endedBy: null },
     },
     {
       id: 6,
@@ -389,9 +390,37 @@ test('admin panel with "View admin activity": recent list, dialog tabs and lists
     path: '/plugins/magic-sessionmanager/admin-panel',
     permissions: [...ALL, ACTIVITY_READ],
     async whileMounted(handle) {
-      assert.match(handle.container.textContent, /Recent sign-in activity/);
+      assert.match(handle.container.textContent, /Recent security activity/);
       assert.match(handle.container.textContent, /Unknown account/);
       assert.match(handle.container.textContent, /records every sign-in with time, browser and IP/);
+      const recent = handle.container.querySelector('[data-recent-activity] table[role="grid"]');
+      assert.ok(recent, 'recent activity is a DS table');
+      assert.ok(
+        handle.container.querySelector(
+          '[data-recent-activity] a[href="/plugins/magic-sessionmanager/admin-panel/activity"]'
+        ),
+        'Show all links to the full page'
+      );
+      assert.equal(
+        recent
+          .querySelector('[data-event-id="6"] [data-event-tone]')
+          ?.getAttribute('data-event-tone'),
+        'danger',
+        'a failed sign-in is a danger badge'
+      );
+      // Event details (Audit Logs pattern): exact time, user agent and event id.
+      await click(button(/^Details of Signed in/));
+      const details = document.querySelector('[role="dialog"]');
+      assert.match(details.textContent, /Signed in: Ada Example/);
+      assert.match(details.textContent, /SyntheticAgent\/1\.0/);
+      assert.match(details.textContent, /Event ID7/);
+      await act(async () => {
+        details.dispatchEvent(
+          new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+        );
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+      assert.equal(document.querySelector('[role="dialog"]'), null, 'Escape closes the details');
       await click(button('Open the details of Ada Example'));
       const dialog = document.querySelector('[role="dialog"]');
       assert.ok(dialog, 'details dialog is open');
@@ -399,7 +428,7 @@ test('admin panel with "View admin activity": recent list, dialog tabs and lists
       assert.equal(selected?.textContent, 'Sign-in history', 'opens at the history tab');
       assert.match(
         dialog.textContent,
-        /203\.0\.113\.10 · Sample City, Exampleland · Chrome 131 on macOS 10\.15/
+        /203\.0\.113\.10\s*Sample City, Exampleland · Chrome 131 on macOS 10\.15/
       );
       assert.match(dialog.textContent, /Still signed in/);
       await selectTab('Activity');
@@ -423,6 +452,53 @@ test('admin panel with "View admin activity": recent list, dialog tabs and lists
   );
 });
 
+test('security activity page: full-width table, filters in the URL, settings changes listed', async () => {
+  network.on('GET', '/magic-sessionmanager/admin-activity/sign-ins', {
+    ...SIGN_INS,
+    data: [
+      {
+        id: 12,
+        event: 'settings.updated',
+        reason: null,
+        provider: null,
+        scope: null,
+        at: minutesAgo(2),
+        ipAddress: null,
+        ipAnonymized: false,
+        location: null,
+        browser: null,
+        os: null,
+        deviceType: null,
+        userAgent: null,
+        admin: { id: 1, name: 'Ada Example' },
+        actor: null,
+        change: { keys: ['maxFailedLogins', 'lockoutDurationMinutes'], viaToken: false },
+        read: null,
+        purge: null,
+        session: null,
+      },
+      ...SIGN_INS.data,
+    ],
+  });
+  const result = await checkStrictEntry(<PluginPage />, {
+    path: '/plugins/magic-sessionmanager/admin-panel/activity?event=all&period=7',
+    permissions: [...ALL, ACTIVITY_READ],
+    async whileMounted(handle) {
+      assert.equal(handle.container.querySelector('h1')?.textContent, 'Security activity');
+      assert.ok(handle.container.querySelector('table[role="grid"]'), 'a DS table');
+      assert.match(handle.container.textContent, /Settings changed/);
+      assert.match(handle.container.textContent, /maxFailedLogins, lockoutDurationMinutes/);
+      assert.match(handle.container.textContent, /2 events/, 'the caption counts the server total');
+    },
+  });
+  const listCalls = live(result.calls, '/magic-sessionmanager/admin-activity/sign-ins');
+  assert.equal(listCalls.length, 1);
+  const query = new URL(listCalls[0].path, 'http://localhost').searchParams;
+  assert.equal(query.get('event'), 'all');
+  assert.ok(query.get('from'), 'the period from the URL is sent');
+  assert.equal(result.calls.filter((call) => call.method !== 'GET').length, 0, 'no mutation');
+});
+
 test('admin panel without "View admin activity": no activity requests, no tabs', async () => {
   adminListRoute();
   network.on('GET', '/magic-sessionmanager/admin-sessions/admins/1/sessions', {
@@ -433,7 +509,7 @@ test('admin panel without "View admin activity": no activity requests, no tabs',
     path: '/plugins/magic-sessionmanager/admin-panel',
     permissions: ALL,
     async whileMounted(handle) {
-      assert.doesNotMatch(handle.container.textContent, /Recent sign-in activity/);
+      assert.doesNotMatch(handle.container.textContent, /Recent security activity/);
       await click(button('View sessions of Ada Example'));
       assert.equal(document.querySelector('[role="dialog"] [role="tab"]'), null);
     },
