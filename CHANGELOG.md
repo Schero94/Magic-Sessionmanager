@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.19.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.19.0...v4.19.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **admin:** show changed settings with their Settings page labels ([#40](https://github.com/Schero94/Magic-Sessionmanager/issues/40)) ([6d5d197](https://github.com/Schero94/Magic-Sessionmanager/commit/6d5d19778fc10533efbf7e009373ba5b8bb02bdf))
+
 
 Release type: patch (`fix(admin)`). No API, route or permission change.
 
