@@ -26,6 +26,7 @@ const {
   validateImpersonationSettings,
 } = require('../utils/impersonation-rules');
 const { encryptToken } = require('../utils/encryption');
+const { normalizeTrustedProxies, validateTrustedProxies } = require('../utils/trusted-proxies');
 
 /** Webhook secret: 32-256 printable ASCII characters, no spaces. */
 const WEBHOOK_SECRET_PATTERN = /^[\x21-\x7e]{32,256}$/;
@@ -248,7 +249,9 @@ const DEFAULT_SETTINGS = {
   discordWebhookUrl: '',
   slackWebhookUrl: '',
   strictSessionEnforcement: false,
-  trustedProxies: false,
+  // A list of proxy addresses or CIDR ranges since 4.22.1; the legacy
+  // boolean is read as an empty list (Strapi's server.proxy settings decide).
+  trustedProxies: [],
   emailTemplates: DEFAULT_EMAIL_TEMPLATES,
   ...SECURITY_LOG_DEFAULTS,
   ...POLICY_DEFAULTS,
@@ -282,6 +285,7 @@ function mergeSettingsWithDefaults(stored) {
       ...storedTemplates,
     },
     geoIpDatabasePath: getSafeGeoIpFilename(safeStored.geoIpDatabasePath),
+    trustedProxies: normalizeTrustedProxies(safeStored.trustedProxies),
   };
 }
 
@@ -312,7 +316,6 @@ const BOOLEAN_SETTINGS = [
   'alertOnVpnProxy',
   'enableWebhooks',
   'strictSessionEnforcement',
-  'trustedProxies',
 ];
 
 const GEO_IP_PROVIDER_VALUES = ['auto', 'local-mmdb', 'ipapi', 'disabled'];
@@ -417,6 +420,12 @@ function validateSettingsUpdate(body, current) {
     } else {
       next[key] = body[key];
     }
+  }
+
+  if (has('trustedProxies')) {
+    const proxies = validateTrustedProxies(body.trustedProxies);
+    if (proxies.error) errors.push(proxies.error);
+    else next.trustedProxies = proxies.value;
   }
 
   for (const key of ['allowedCountries', 'blockedCountries']) {
@@ -547,6 +556,24 @@ function validateSettingsUpdate(body, current) {
     } else {
       next.genericWebhookSecret = encryptToken(secret);
     }
+  }
+
+  // A new webhook URL needs the secret entered again (security review 2,
+  // hardening 5): otherwise a settings editor could send the signed events,
+  // signed with the stored secret, to a host of their choice.
+  const urlChanges =
+    typeof next.genericWebhookUrl === 'string' &&
+    next.genericWebhookUrl !== '' &&
+    next.genericWebhookUrl !== (current.genericWebhookUrl || '');
+  const secretStored =
+    typeof current.genericWebhookSecret === 'string' && current.genericWebhookSecret !== '';
+  const secretGiven =
+    typeof next.genericWebhookSecret === 'string' && next.genericWebhookSecret !== '';
+  if (urlChanges && secretStored && !secretGiven) {
+    errors.push({
+      path: ['genericWebhookSecret'],
+      message: 'Enter the webhook secret again when you change the webhook URL',
+    });
   }
 
   if (errors.length > 0) return { errors };

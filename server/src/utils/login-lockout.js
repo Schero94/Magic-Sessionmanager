@@ -13,10 +13,17 @@
  *      request over a threshold gives its reservation back and gets a short
  *      "try again" (it may be one of several correct sign-ins at once from
  *      one office address); it does not lock.
- *   2. `settle()` after the handler: a success clears both counters, a
- *      failure keeps the hits and locks a counter that reached its
- *      threshold, anything else (5xx, 429 from another limiter) gives the
- *      hits back.
+ *   2. `settle()` after the handler: a success clears the account counter
+ *      and gives the IP hit back (it never clears the IP counter, so a
+ *      sign-in to an attacker's own account cannot reset the address,
+ *      security review 2, M2), a failure keeps the hits and locks a counter
+ *      that reached its threshold, anything else (5xx, 429 from another
+ *      limiter, a refused but correct sign-in) gives the hits back.
+ *
+ * A trusted address, and a request whose device the account has signed in
+ * with before (`accountExempt`), is neither counted nor refused by the
+ * account counter, so a stranger who knows the email cannot lock the owner
+ * out of their usual device or office (security review 2, L1).
  *
  * Counter keys are SHA-256 hashes (`lf:` IP, `la:` lower-cased account
  * identifier); the typed identifier is never stored. A lock also writes a
@@ -28,6 +35,7 @@
 
 const { hashedKey } = require('./coordination');
 const { isTrustedAddress } = require('./policy-settings');
+const { ipBucket } = require('./admin-request-info');
 
 const LOCK_PREFIX = 'lock:';
 const KEY_PATTERN = /^(lf|la):[a-f0-9]{48}$/;
@@ -48,8 +56,14 @@ function normalizeIdentifier(identifier) {
   return value;
 }
 
-/** @param {string} ip @returns {string} */
-const ipKey = (ip) => hashedKey('lf', ip);
+/**
+ * Counter key of a client address; IPv6 addresses count per /64 (security
+ * review 2, hardening 7).
+ *
+ * @param {string} ip Client address.
+ * @returns {string}
+ */
+const ipKey = (ip) => hashedKey('lf', ipBucket(ip) || ip);
 /** @param {string} identifier Normalised identifier. @returns {string} */
 const accountKey = (identifier) => hashedKey('la', identifier);
 
@@ -115,18 +129,23 @@ function createLoginLockout(coordinator, { now = () => Date.now() } = {}) {
      * Checks the locks and counts the attempt before the password check.
      *
      * @param {{ip: string|null, identifier: string|null, policy: LockoutPolicy,
-     *   accountMax: number}} input Client IP, normalised identifier, policy and the
-     *   account threshold for this account's role.
+     *   accountMax: number, accountExempt?: boolean}} input Client IP, normalised
+     *   identifier, policy, the account threshold for this account's role, and
+     *   whether the request comes from a device the account is known to use.
      * @returns {Promise<{outcome: 'allow'|'locked'|'busy', retryAfter: number,
      *   lockedKind: 'ip'|'account'|null, reservation: Reservation}>} Decision.
      * @sideeffect Increments the shared counters.
      */
-    async reserve({ ip, identifier, policy, accountMax }) {
-      const countIp =
-        policy.ipMax > 0 && typeof ip === 'string' && ip && ip !== 'unknown'
-          ? !isTrustedAddress(policy.trusted, ip)
-          : false;
-      const countAccount = accountMax > 0 && typeof identifier === 'string' && !!identifier;
+    async reserve({ ip, identifier, policy, accountMax, accountExempt = false }) {
+      const knownIp = typeof ip === 'string' && !!ip && ip !== 'unknown';
+      const trusted = knownIp && isTrustedAddress(policy.trusted, ip);
+      const countIp = policy.ipMax > 0 && knownIp && !trusted;
+      const countAccount =
+        accountMax > 0 &&
+        typeof identifier === 'string' &&
+        !!identifier &&
+        !trusted &&
+        accountExempt !== true;
       /** @type {Reservation} */
       const reservation = {
         ipKey: countIp ? ipKey(/** @type {string} */ (ip)) : null,
@@ -182,10 +201,8 @@ function createLoginLockout(coordinator, { now = () => Date.now() } = {}) {
      */
     async settle(reservation, result, { policy, accountMax, display = {} }) {
       if (result === 'success') {
-        for (const key of [reservation.ipKey, reservation.accountKey]) {
-          if (!key) continue;
-          await coordinator.clear(key);
-        }
+        if (reservation.ipKey) await coordinator.release(reservation.ipKey);
+        if (reservation.accountKey) await coordinator.clear(reservation.accountKey);
         return [];
       }
       if (result !== 'failure') {

@@ -30,6 +30,12 @@ const EVENT_HEADER = 'X-Magic-Sessionmanager-Event';
 const DELIVERY_HEADER = 'X-Magic-Sessionmanager-Delivery';
 const USER_AGENT = 'Strapi-Magic-SessionManager-Webhook/2.0';
 const TIMEOUT_MS = 5000;
+/**
+ * Whole-request deadline (connect, send, answer). `timeout` above is an idle
+ * timeout only, so a receiver trickling bytes could hold a delivery slot for
+ * ever (security review 2, hardening 2).
+ */
+const DEADLINE_MS = 10000;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const RETRY_DELAYS_MS = Object.freeze([0, 2000, 10000]);
 
@@ -56,8 +62,11 @@ const BLOCKED = (() => {
     list.addSubnet(address, prefix, 'ipv4');
   }
   for (const [address, prefix] of [
-    ['::', 128],
-    ['::1', 128],
+    // IPv4-compatible (::a.b.c.d, deprecated) and IPv4-translated
+    // (::ffff:0:a.b.c.d, RFC 2765) forms, which include the unspecified and
+    // loopback addresses (security review 2, hardening 1).
+    ['::', 96],
+    ['::ffff:0:0:0', 96],
     // IPv4-mapped addresses (::ffff:0:0/96) are not listed: BlockList
     // checks them against the IPv4 rules above, and a listed /96 would
     // match every IPv4 address.
@@ -154,10 +163,11 @@ const resolveAll = (hostname) => dns.promises.lookup(hostname, { all: true, verb
  * Sends one HTTPS POST to a pinned, checked address.
  *
  * @param {{url: URL, address: {address: string, family: number}, headers: Record<string, string>,
- *   body: string, timeoutMs: number}} input Request.
+ *   body: string, timeoutMs: number, deadlineMs?: number}} input Request; `timeoutMs` is the
+ *   idle timeout, `deadlineMs` the limit for the whole request.
  * @returns {Promise<number>} HTTP status.
  */
-function httpsPost({ url, address, headers, body, timeoutMs }) {
+function httpsPost({ url, address, headers, body, timeoutMs, deadlineMs = DEADLINE_MS }) {
   return new Promise((resolve, reject) => {
     const request = https.request(
       {
@@ -169,6 +179,7 @@ function httpsPost({ url, address, headers, body, timeoutMs }) {
         headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
         servername: net.isIP(url.hostname) ? undefined : url.hostname,
         timeout: timeoutMs,
+        signal: AbortSignal.timeout(deadlineMs),
         // Pinned to the address that passed the check: no second lookup.
         lookup: (_hostname, options, callback) => {
           if (options && options.all) callback(null, [address]);
@@ -188,7 +199,13 @@ function httpsPost({ url, address, headers, body, timeoutMs }) {
     );
     request.on('timeout', () => request.destroy(new DeliveryError('timeout', true)));
     request.on('error', (err) =>
-      reject(err instanceof DeliveryError ? err : new DeliveryError('network_error', true))
+      reject(
+        err instanceof DeliveryError
+          ? err
+          : err?.name === 'AbortError'
+            ? new DeliveryError('timeout', true)
+            : new DeliveryError('network_error', true)
+      )
     );
     request.end(body);
   });
@@ -198,7 +215,9 @@ function httpsPost({ url, address, headers, body, timeoutMs }) {
  * One delivery attempt: checks the URL and every resolved address, then posts.
  *
  * @param {{url: string, body: string, headers: Record<string, string>,
- *   resolve?: typeof resolveAll, post?: typeof httpsPost, timeoutMs?: number}} input Request and seams.
+ *   resolve?: typeof resolveAll, post?: typeof httpsPost, timeoutMs?: number,
+ *   deadlineMs?: number}} input Request and seams; `timeoutMs` is the idle timeout,
+ *   `deadlineMs` the limit for the whole request.
  * @returns {Promise<{status: number}>} Status of a 2xx answer.
  * @throws {DeliveryError} With a safe code: invalid_url, dns_failed, address_not_allowed,
  *   timeout, network_error, redirect_not_followed, http_<status>.
@@ -210,6 +229,7 @@ async function deliverOnce({
   resolve = resolveAll,
   post = httpsPost,
   timeoutMs = TIMEOUT_MS,
+  deadlineMs = DEADLINE_MS,
 }) {
   let parsed;
   try {
@@ -236,7 +256,14 @@ async function deliverOnce({
   if (addresses.some((entry) => isBlockedAddress(entry.address))) {
     throw new DeliveryError('address_not_allowed', false);
   }
-  const status = await post({ url: parsed, address: addresses[0], headers, body, timeoutMs });
+  const status = await post({
+    url: parsed,
+    address: addresses[0],
+    headers,
+    body,
+    timeoutMs,
+    deadlineMs,
+  });
   if (status >= 200 && status < 300) return { status };
   if (status >= 300 && status < 400)
     throw new DeliveryError('redirect_not_followed', false, status);
@@ -296,6 +323,7 @@ async function deliverWithRetries({
 }
 
 module.exports = {
+  DEADLINE_MS,
   DELIVERY_HEADER,
   DeliveryError,
   EVENT_HEADER,

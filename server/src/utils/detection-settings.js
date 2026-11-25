@@ -15,6 +15,9 @@
  * `utils/upgrade-defaults.js`).
  */
 
+const net = require('node:net');
+const { isBlockedAddress } = require('./webhook-delivery');
+
 /** Events that Discord, Slack and the signed webhook can receive. */
 const WEBHOOK_EVENTS = Object.freeze([
   'login.success',
@@ -132,6 +135,12 @@ function normalizeWebhookUrl(value) {
   if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) {
     return null;
   }
+  // An IP literal that delivery would refuse (loopback, private, link-local,
+  // ...) is refused when it is saved, not only at send time (security
+  // review 2, hardening 10). The URL parser already turned forms such as
+  // 0x7f000001 into 127.0.0.1.
+  const literal = host.replace(/^\[|\]$/g, '');
+  if (net.isIP(literal) && isBlockedAddress(literal)) return null;
   return parsed.toString();
 }
 

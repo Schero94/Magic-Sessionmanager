@@ -35,10 +35,12 @@ export const CSV_HEADERS = Object.freeze([
  * and line feed, their full-width forms (`＝` U+FF1D, `＋` U+FF0B,
  * `－` U+FF0D, `＠` U+FF20, which some spreadsheet apps normalise), also when
  * zero-width or other invisible format characters (U+200B-U+200F,
- * U+2060-U+2064, U+FEFF, U+00AD) or spaces come first (4.17).
+ * U+2060-U+2064, U+FEFF, U+00AD, and since 4.22.1 the Arabic letter mark
+ * U+061C and the Mongolian vowel separator U+180E) or spaces come first
+ * (4.17).
  */
 const FORMULA_START =
-  /^[\s\u00ad\u200b-\u200f\u2060-\u2064\ufeff]*[=+\-@\uff1d\uff0b\uff0d\uff20\t\r\n]/;
+  /^[\s\u00ad\u061c\u180e\u200b-\u200f\u2060-\u2064\ufeff]*[=+\-@\uff1d\uff0b\uff0d\uff20\t\r\n]/;
 
 /**
  * Quotes one CSV field, escapes embedded double quotes and neutralises

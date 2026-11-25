@@ -40,7 +40,9 @@ test('pre-auth GeoIP guard covers new-session routes but not authenticated rotat
 });
 
 test('failed-login lockout only counts credential verification routes', () => {
-  assert.equal(isFailedLoginTrackedPath('/api/auth/local', 'POST'), true);
+  // Users & Permissions' POST /auth/local is counted inside auth.callback
+  // (security review 2, M1); the path table keeps only other plugins' routes.
+  assert.equal(isFailedLoginTrackedPath('/api/auth/local', 'POST'), false);
   assert.equal(isFailedLoginTrackedPath('/api/magic-link/login-totp', 'POST'), true);
   assert.equal(isFailedLoginTrackedPath('/api/magic-link/login/challenge', 'GET'), true);
   assert.equal(isFailedLoginTrackedPath('/api/auth/local/register', 'POST'), false);
@@ -54,4 +56,28 @@ test('GA-04: identifies only the successful-reset route as a password reset', ()
   assert.equal(isPasswordResetRequest('/api/auth/reset-password', 'GET'), false);
   assert.equal(isPasswordResetRequest('/api/auth/forgot-password', 'POST'), false);
   assert.equal(isPasswordResetRequest('/api/auth/local', 'POST'), false);
+});
+
+test('M1: every path spelling the router accepts maps to the canonical route', () => {
+  const {
+    toCanonicalApiPath,
+    classifyJwtIssuingRequest,
+  } = require('../server/src/utils/auth-routes');
+  for (const variant of [
+    '/api/auth/local/',
+    '/API/auth/local',
+    '/api/Auth/Local',
+    '//api//auth/local',
+  ]) {
+    assert.equal(toCanonicalApiPath(variant, '/api'), '/api/auth/local', variant);
+    assert.equal(
+      classifyJwtIssuingRequest(toCanonicalApiPath(variant, '/api'), 'POST'),
+      'new-session'
+    );
+  }
+  assert.equal(toCanonicalApiPath('/V1/Auth/Local/', '/v1'), '/api/auth/local');
+  assert.equal(
+    isFailedLoginTrackedPath(toCanonicalApiPath('/API/magic-link/login-totp/', '/api'), 'POST'),
+    true
+  );
 });

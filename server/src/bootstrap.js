@@ -26,7 +26,12 @@ const { dispatchLoginAlerts } = require('./utils/login-alerts');
 const { REVOCATION_UID } = require('./utils/session-revocation');
 const { getNativeSessionManager } = require('./utils/native-session-manager');
 const { CONTENT_API_PERMISSIONS_VERSION } = require('./utils/content-api-permissions');
-const { getCoordinator, initCoordination, LockTimeoutError } = require('./utils/coordination');
+const {
+  getCoordinator,
+  hashedKey,
+  initCoordination,
+  LockTimeoutError,
+} = require('./utils/coordination');
 const { removeLegacyLicenseData, withPluginStoreKey } = require('./utils/plugin-store');
 const {
   normalizeApiPrefix,
@@ -75,8 +80,20 @@ const {
 } = require('./utils/sign-in-policies');
 const { SECURITY_EVENTS, USER_SIGN_IN_EVENTS } = require('./utils/security-log-model');
 const { applyUpgradeDefaults } = require('./utils/upgrade-defaults');
-const { deviceKeyOf, requestDeviceId, runSignInSignals } = require('./utils/sign-in-signals');
+const {
+  deviceKeyOf,
+  isRecognizedDevice,
+  requestDeviceId,
+  runSignInSignals,
+} = require('./utils/sign-in-signals');
 const { anonymizeIp, normalizeIp } = require('./utils/admin-request-info');
+const { migrateLegacyProxyTrust } = require('./utils/trusted-proxies');
+const { errors: utilsErrors } = require('@strapi/utils');
+const {
+  classifyCallbackOutcome,
+  setAuthControllerHandlers,
+} = require('./utils/auth-controller-guard');
+const { normalizePath } = require('./utils/impersonation-rules');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -147,6 +164,14 @@ module.exports = async ({ strapi }) => {
     const coordinator = await initCoordination(strapi, log);
 
     await checkEncryptionKeyConsistency(strapi, log);
+
+    // `trustedProxies: true` read client-set headers up to 4.22 (security
+    // review 2, H2); it is migrated to Strapi's server.proxy settings.
+    try {
+      await migrateLegacyProxyTrust(strapi, log);
+    } catch (err) {
+      log.warn('[CONFIG] trustedProxies could not be migrated:', err?.name || 'Error');
+    }
 
     // Keeps the previous behaviour of settings whose default changed
     // (existing installations only); see utils/upgrade-defaults.js.
@@ -324,12 +349,16 @@ module.exports = async ({ strapi }) => {
     strapi.sessionManagerIntervals.impersonationSweep = impersonationSweep;
     strapi.plugin('magic-sessionmanager').service('impersonation').checkHandoffSetup();
 
-    mountPreLoginGeoGuard({ strapi, log });
+    const geoCheck = mountPreLoginGeoGuard({ strapi, log });
 
     // Mounted BEFORE the login interceptor so a locked-out IP is short-
     // circuited before we hit the auth handler. The lockout is a no-op
     // when settings.maxFailedLogins is 0.
-    mountFailedLoginLockout({ strapi, log });
+    const lockoutGuard = mountFailedLoginLockout({ strapi, log });
+    // Users & Permissions `auth.callback` (REST on any path spelling and the
+    // GraphQL `login` mutation) and the other actions that start a session
+    // run the same checks inside the controller (security review 2, M1).
+    connectAuthControllerGuard({ strapi, geoCheck, lockoutGuard });
 
     mountLogoutRoute({ strapi, log, sessionService });
 
@@ -469,24 +498,29 @@ function mountPreLoginGeoGuard({ strapi, log }) {
     });
   };
 
-  strapi.server.use(async (ctx, next) => {
-    if (!shouldRunPreAuthGeoGuard(apiPathOf(strapi, ctx), ctx.method)) {
-      return next();
-    }
+  /**
+   * Runs the location rules for one sign-in once per request. Called by the
+   * path middleware below (REST routes that start a session, any spelling)
+   * and by the Users & Permissions `auth` controller wrapper (also GraphQL
+   * `login`, `register`, `resetPassword`, `emailConfirmation`).
+   *
+   * @param {object} ctx Koa context.
+   * @returns {Promise<{status: number, message: string}|null>} Refusal, or null to continue.
+   * @sideeffect May record a refused sign-in; stores the lookup on ctx.state.
+   */
+  const check = async (ctx) => {
+    if (ctx.state?.__magicSessionGeoChecked) return null;
+    if (ctx.state) ctx.state.__magicSessionGeoChecked = true;
 
     const settings = await getRequestSettings(strapi, ctx);
 
     const needsGeoCheck =
       settings.blockSuspiciousSessions || settings.enableGeofencing || settings.enableGeolocation;
 
-    if (!needsGeoCheck) {
-      return next();
-    }
+    if (!needsGeoCheck) return null;
 
     const ip = getClientIp(ctx);
-    if (!ip || ip === 'unknown') {
-      return next();
-    }
+    if (!ip || ip === 'unknown') return null;
 
     try {
       const geolocationService = strapi.plugin('magic-sessionmanager').service('geolocation');
@@ -496,18 +530,13 @@ function mountPreLoginGeoGuard({ strapi, log }) {
       if (decision.blocked) {
         log.warn(`[PRE-BLOCKED] Login rejected (${decision.reason})`);
         await recordRefusal(ctx, settings, ip, decision.reason);
-        ctx.status = 403;
-        ctx.body = {
-          error: {
-            status: 403,
-            name: 'ForbiddenError',
-            message: decision.reason?.startsWith('geo_lookup_unavailable:')
-              ? 'Login temporarily unavailable. Please contact support.'
-              : 'Login blocked for security reasons. Please contact support.',
-          },
-        };
         ctx.state.__magicSessionGeoData = geoData;
-        return;
+        return {
+          status: 403,
+          message: decision.reason?.startsWith('geo_lookup_unavailable:')
+            ? 'Login temporarily unavailable. Please contact support.'
+            : 'Login blocked for security reasons. Please contact support.',
+        };
       }
 
       if (decision.status === 'ok') {
@@ -518,23 +547,33 @@ function mountPreLoginGeoGuard({ strapi, log }) {
       if (failureDecision.blocked) {
         log.warn('[PRE-BLOCKED] Login rejected because GeoIP lookup failed');
         await recordRefusal(ctx, settings, ip, 'geo_lookup_unavailable:error');
-        ctx.status = 403;
-        ctx.body = {
-          error: {
-            status: 403,
-            name: 'ForbiddenError',
-            message: 'Login temporarily unavailable. Please contact support.',
-          },
+        return {
+          status: 403,
+          message: 'Login temporarily unavailable. Please contact support.',
         };
-        return;
       }
       log.debug('Pre-login geo guard error (allowing by configured policy):', err?.name || 'Error');
     }
+    return null;
+  };
 
+  strapi.server.use(async (ctx, next) => {
+    if (!shouldRunPreAuthGeoGuard(apiPathOf(strapi, ctx), ctx.method)) {
+      return next();
+    }
+    const refusal = await check(ctx);
+    if (refusal) {
+      ctx.status = refusal.status;
+      ctx.body = {
+        error: { status: refusal.status, name: 'ForbiddenError', message: refusal.message },
+      };
+      return;
+    }
     await next();
   });
 
   log.info('[SUCCESS] Pre-login geo guard mounted');
+  return check;
 }
 
 /**
@@ -820,6 +859,7 @@ async function compensateNativeSession({ nativeSessionManager, nativeSession, lo
  */
 function mountFailedLoginLockout({ strapi, log }) {
   const lockout = createLoginLockout(getCoordinator(strapi));
+  const coordinator = getCoordinator(strapi);
   const shouldRecordRefusal = createRefusalDedup();
   // Sign-ins naming an account that does not exist are aggregated: one
   // event per anonymised client address per 5 minutes (same rule as the
@@ -828,13 +868,25 @@ function mountFailedLoginLockout({ strapi, log }) {
   const underAddressCap = createAddressCap();
   const unknownAccountKey = (ip) => `unknown|${anonymizeIp(normalizeIp(ip || '')) || 'none'}`;
 
-  strapi.server.use(async (ctx, next) => {
-    if (!isFailedLoginTrackedPath(apiPathOf(strapi, ctx), ctx.method)) return next();
-
+  /**
+   * Counts one sign-in attempt, refuses it while its IP or account is
+   * locked, runs it, and settles the counters with its outcome.
+   *
+   * @param {object} ctx Koa context.
+   * @param {() => Promise<unknown>} run The sign-in (next middleware or controller action).
+   * @param {(thrown: unknown, ctx: object) => 'success'|'failure'|'neutral'} classify
+   *   Outcome of the sign-in.
+   * @param {(ctx: object, refusal: {status: number, name: string, message: string,
+   *   retryAfter: number}) => unknown} refuse Writes or throws the refusal.
+   * @returns {Promise<unknown>} What `run` returned, or what `refuse` returned.
+   * @throws {unknown} What `run` or `refuse` threw.
+   * @sideeffect Updates the shared lockout counters; may record events and send a lock email.
+   */
+  const guard = async (ctx, run, classify, refuse) => {
     const settings = await getRequestSettings(strapi, ctx);
     const policy = resolveLockoutPolicy(settings);
     const accountPossible = policy.accountMax > 0 || policy.accountMaxByRole;
-    if (policy.ipMax <= 0 && !accountPossible && !policy.record) return next();
+    if (policy.ipMax <= 0 && !accountPossible && !policy.record) return run();
 
     const rawIp = getClientIp(ctx);
     const ip = rawIp && rawIp !== 'unknown' ? rawIp : null;
@@ -842,8 +894,9 @@ function mountFailedLoginLockout({ strapi, log }) {
     const userAgent = ctx.request?.headers?.['user-agent'] || null;
 
     // The account is looked up only when needed: before the password check
-    // when a role rule decides the account threshold, otherwise after a
-    // failure (for the log entry, the lock list and the lock email).
+    // when a role rule decides the account threshold or the device may be
+    // a known one, otherwise after a failure (for the log entry, the lock
+    // list and the lock email).
     let account;
     const loadAccount = async () => {
       if (account !== undefined) return account;
@@ -860,6 +913,17 @@ function mountFailedLoginLockout({ strapi, log }) {
     };
     if (policy.accountMaxByRole) await loadAccount();
     const accountMax = accountThresholdFor(settings, account?.role || null);
+    // A device this account has signed in with before (app-supplied device
+    // id) is not refused or counted by the account lock (L1).
+    let accountExempt = false;
+    const deviceId = requestDeviceId(ctx);
+    if (accountMax > 0 && identifier && deviceId) {
+      await loadAccount();
+      accountExempt = await isRecognizedDevice(strapi, account?.documentId || null, {
+        userAgent,
+        deviceId,
+      }).catch(() => false);
+    }
     const event = (name, meta) => {
       const signInFamily = USER_SIGN_IN_EVENTS.includes(name);
       if (signInFamily && !policy.record) return false;
@@ -891,7 +955,7 @@ function mountFailedLoginLockout({ strapi, log }) {
 
     let decision;
     try {
-      decision = await lockout.reserve({ ip, identifier, policy, accountMax });
+      decision = await lockout.reserve({ ip, identifier, policy, accountMax, accountExempt });
     } catch (err) {
       log.debug('[LOCKOUT] Counter update failed:', err?.name || 'Error');
       decision = {
@@ -903,63 +967,45 @@ function mountFailedLoginLockout({ strapi, log }) {
     }
 
     if (decision.outcome === 'locked') {
-      ctx.set('Retry-After', String(decision.retryAfter));
       log.warn(
         `[LOCKOUT] Rejected sign-in from a locked client (${decision.retryAfter}s remaining)`
       );
       if (policy.record) await loadAccount();
       refusedOnce('lockout', { lock: decision.lockedKind });
-      ctx.status = 429;
-      ctx.body = {
-        error: {
-          status: 429,
-          name: 'TooManyRequestsError',
-          message: 'Too many failed login attempts. Please try again later.',
-          details: { retryAfter: decision.retryAfter },
-        },
-      };
-      return;
+      return refuse(ctx, {
+        status: 429,
+        name: 'TooManyRequestsError',
+        message: 'Too many failed login attempts. Please try again later.',
+        retryAfter: decision.retryAfter,
+      });
     }
     if (decision.outcome === 'busy') {
       // One of several sign-ins arriving at once from one address or for one
       // account: turned away briefly, never locked.
       if (policy.record) await loadAccount();
       refusedOnce('too-many-attempts', {});
-      ctx.set('Retry-After', '1');
-      ctx.status = 429;
-      ctx.body = {
-        error: {
-          status: 429,
-          name: 'TooManyRequestsError',
-          message: 'Too many login attempts at once. Please try again.',
-          details: { retryAfter: 1 },
-        },
-      };
-      return;
+      return refuse(ctx, {
+        status: 429,
+        name: 'TooManyRequestsError',
+        message: 'Too many login attempts at once. Please try again.',
+        retryAfter: 1,
+      });
     }
 
     // Users & Permissions reports a wrong password by THROWING a
     // ValidationError; Strapi's outer errors middleware turns it into the
     // 400 response. The outcome is therefore read from the thrown error as
-    // well as from ctx.status, and the error is re-thrown unchanged.
+    // well as from ctx, and the error is re-thrown unchanged.
     let thrown = null;
+    let returned;
     try {
-      await next();
+      returned = await run();
     } catch (err) {
       thrown = err;
     }
-    const status = thrown ? statusOfThrownError(thrown) : ctx.status;
-
-    // Every 4xx from a sign-in endpoint is a failure and keeps its reserved
-    // hit. 5xx (almost always a server bug) and 429 from another limiter
-    // give the hit back. 200 with a jwt resets the counters.
-    const result =
-      !thrown && status === 200 && ctx.body && ctx.body.jwt
-        ? 'success'
-        : status >= 400 && status < 500 && status !== 429
-          ? 'failure'
-          : 'neutral';
+    const result = classify(thrown, ctx);
     if (result === 'failure') {
+      const status = thrown ? statusOfThrownError(thrown) : ctx.status;
       if (policy.record || decision.reservation.accountKey) await loadAccount();
       if (account) {
         event(SECURITY_EVENTS.USER_SIGN_IN_FAILED, { status });
@@ -987,14 +1033,23 @@ function mountFailedLoginLockout({ strapi, log }) {
           minutes,
         });
         if (lock.kind === 'account' && policy.notifyUser && account?.email) {
-          const notifications = strapi.plugin('magic-sessionmanager').service('notifications');
-          notifications
-            .sendAccountLockedEmail({
-              user: account,
-              minutes,
-              until: lock.until,
-            })
-            .catch(() => {});
+          // One lock email per account per window (L1): a stranger who keeps
+          // renewing the lock cannot flood the owner's inbox.
+          const mailWindowMs = Math.max(policy.windowMs, policy.durationMs);
+          const sent = await coordinator
+            .hit(hashedKey('lm', lock.id), mailWindowMs)
+            .then((entry) => Number(entry?.hits) || 0)
+            .catch(() => 1);
+          if (sent === 1) {
+            const notifications = strapi.plugin('magic-sessionmanager').service('notifications');
+            notifications
+              .sendAccountLockedEmail({
+                user: account,
+                minutes,
+                until: lock.until,
+              })
+              .catch(() => {});
+          }
         }
       }
     } catch (err) {
@@ -1002,9 +1057,129 @@ function mountFailedLoginLockout({ strapi, log }) {
     }
 
     if (thrown) throw thrown;
+    return returned;
+  };
+
+  // Sign-in routes of other plugins (Magic Link). Users & Permissions'
+  // `auth.callback` is guarded inside the controller (any path, GraphQL);
+  // see utils/auth-controller-guard.js. Only a 400 or 401 is a failed
+  // guess here (L2): refusals by other rules (403) and 404s are not.
+  strapi.server.use(async (ctx, next) => {
+    if (!isFailedLoginTrackedPath(apiPathOf(strapi, ctx), ctx.method)) return next();
+    return guard(ctx, next, classifyRouteOutcome, refuseOverHttp);
   });
 
   log.info('[SUCCESS] Failed-login lockout middleware mounted');
+  return guard;
+}
+
+/**
+ * Outcome of a sign-in route of another plugin: 200 with a jwt is a
+ * success, 400 and 401 a failed guess, anything else neutral.
+ *
+ * @param {unknown} thrown Error the route threw, or null.
+ * @param {object} ctx Koa context.
+ * @returns {'success'|'failure'|'neutral'}
+ */
+function classifyRouteOutcome(thrown, ctx) {
+  const status = thrown ? statusOfThrownError(thrown) : ctx.status;
+  if (!thrown && status === 200 && ctx.body && ctx.body.jwt) return 'success';
+  return status === 400 || status === 401 ? 'failure' : 'neutral';
+}
+
+/**
+ * Writes a lockout refusal as the plugin's REST error body (unchanged since
+ * 4.10) with `Retry-After`.
+ *
+ * @param {object} ctx Koa context.
+ * @param {{status: number, name: string, message: string, retryAfter: number}} refusal Refusal.
+ * @returns {void}
+ */
+function refuseOverHttp(ctx, refusal) {
+  ctx.set('Retry-After', String(refusal.retryAfter));
+  ctx.status = refusal.status;
+  ctx.body = {
+    error: {
+      status: refusal.status,
+      name: refusal.name,
+      message: refusal.message,
+      details: { retryAfter: refusal.retryAfter },
+    },
+  };
+}
+
+/**
+ * Whether a request is a GraphQL operation (the GraphQL `login` mutation
+ * rewrites `ctx.request.path`, so the original URL is compared).
+ *
+ * @param {object} strapi Strapi instance.
+ * @param {object} ctx Koa context.
+ * @returns {boolean}
+ */
+function isGraphqlRequest(strapi, ctx) {
+  let endpoint = '/graphql';
+  try {
+    endpoint = strapi.plugin('graphql')?.config?.('endpoint') || endpoint;
+  } catch {
+    // default endpoint
+  }
+  const original = String(ctx.originalUrl || ctx.url || '').split('?')[0];
+  return normalizePath(original) === normalizePath(endpoint);
+}
+
+/**
+ * The checks the Users & Permissions `auth` controller wrapper runs: the
+ * location check and the lockout (M1, L2, hardening 3). Over REST a refusal
+ * keeps the plugin's error body; in GraphQL it is thrown as the matching
+ * Strapi error so the mutation fails with that error.
+ *
+ * @param {{strapi: object, geoCheck: Function, lockoutGuard: Function}} deps
+ * @returns {{callback: Function, newSession: Function}} Handlers.
+ */
+function createAuthControllerHandlers({ strapi, geoCheck, lockoutGuard }) {
+  const refuse = (ctx, refusal) => {
+    if (refusal.retryAfter) ctx.set('Retry-After', String(refusal.retryAfter));
+    if (isGraphqlRequest(strapi, ctx)) {
+      const details = refusal.retryAfter ? { retryAfter: refusal.retryAfter } : {};
+      throw refusal.status === 429
+        ? new utilsErrors.RateLimitError(refusal.message, details)
+        : new utilsErrors.ForbiddenError(refusal.message, details);
+    }
+    if (refusal.status === 429) return refuseOverHttp(ctx, refusal);
+    ctx.status = refusal.status;
+    ctx.body = {
+      error: { status: refusal.status, name: refusal.name, message: refusal.message },
+    };
+    return undefined;
+  };
+  const geoFirst = async (ctx) => {
+    const refusal = await geoCheck(ctx);
+    if (!refusal) return false;
+    refuse(ctx, { ...refusal, name: 'ForbiddenError', retryAfter: 0 });
+    return true;
+  };
+  return {
+    async callback(ctx, run) {
+      if (await geoFirst(ctx)) return undefined;
+      const provider = ctx.params?.provider || 'local';
+      if (provider !== 'local') return run();
+      return lockoutGuard(ctx, run, classifyCallbackOutcome, refuse);
+    },
+    async newSession(ctx, run) {
+      if (await geoFirst(ctx)) return undefined;
+      return run();
+    },
+  };
+}
+
+/**
+ * Hands the checks to the `auth` controller wrapper installed in register.
+ *
+ * @param {{strapi: object, geoCheck: Function, lockoutGuard: Function}} deps
+ * @returns {void}
+ */
+function connectAuthControllerGuard(deps) {
+  setAuthControllerHandlers(deps.strapi, createAuthControllerHandlers(deps));
 }
 
 /**
@@ -2644,6 +2819,7 @@ async function registerSessionAwareAuthStrategy(strapi) {
 }
 
 module.exports.__private = {
+  createAuthControllerHandlers,
   registerSessionAwareAuthStrategy,
   mountFailedLoginLockout,
   ensureSessionLookupIndexes,

@@ -39,7 +39,8 @@ test('every Settings switch uses a shared horizontal title-copy-control row', ()
   const row = readAdminFile('components/SettingsToggleRow.jsx');
   const instances = settings.match(/<SettingsToggleRow\b/g) || [];
 
-  assert.equal(instances.length, 20, 'all twenty settings switches use the shared row');
+  // 4.22.1: "Trust proxy headers" became the "Trusted proxies" address list (security review 2, H2).
+  assert.equal(instances.length, 19, 'all nineteen settings switches use the shared row');
   assert.ok(
     !/<ToggleCard\b|<GreenToggle\b|<Toggle\b/.test(settings),
     'no standalone vertical toggle cards remain'

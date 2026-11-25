@@ -49,6 +49,21 @@ try {
 /**
  * Opens two knex pools on one temporary SQLite file: two "processes".
  */
+/**
+ * The lockout as Users & Permissions' `auth.callback` runs it since 4.22.1
+ * (security review 2, M1): the guard mounted by bootstrap, called through the
+ * controller wrapper's handler. `run` stands for the original action.
+ */
+function mountCallbackLockout(strapi) {
+  const lockoutGuard = bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
+  const handlers = bootstrap.__private.createAuthControllerHandlers({
+    strapi,
+    geoCheck: async () => null,
+    lockoutGuard,
+  });
+  return (ctx, run) => handlers.callback(ctx, run);
+}
+
 async function createSharedSqlite() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'msm-unit-'));
   const filename = path.join(dir, 'db.sqlite');
@@ -284,8 +299,7 @@ test(
             dialect: 'better-sqlite3',
           })
         );
-        bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
-        return middlewares[0];
+        return mountCallbackLockout(strapi);
       };
       const processA = makeProcess(shared.processA);
       const processB = makeProcess(shared.processB);
@@ -301,10 +315,21 @@ test(
           status: 0,
           body: null,
         };
-        await middleware(ctx, async () => {
-          ctx.status = status;
-          ctx.body = status === 200 ? { jwt: 'x' } : { error: {} };
-        });
+        try {
+          await middleware(ctx, async () => {
+            if (status === 400) {
+              // Users & Permissions throws a wrong password (L2: only this counts).
+              const error = new Error('Invalid identifier or password');
+              error.name = 'ValidationError';
+              throw error;
+            }
+            ctx.status = status;
+            ctx.body = { jwt: 'x' };
+          });
+        } catch (err) {
+          assert.equal(err.name, 'ValidationError');
+          return 400;
+        }
         return ctx.status;
       };
 
@@ -393,9 +418,10 @@ function settingsCtx(body) {
 }
 
 test('settings PUT with a stale revision is rejected with 409 and writes nothing', async () => {
+  // inactivityTimeout needs only plugin access (maxFailedLogins is protected since 4.22.1).
   coordination.__resetMemoryForTests();
   const controller = require('../server/src/controllers/settings');
-  const { state, strapi } = createSettingsStrapi({ maxFailedLogins: 5 });
+  const { state, strapi } = createSettingsStrapi({ inactivityTimeout: 5 });
   global.strapi = strapi;
 
   const read = settingsCtx();
@@ -403,24 +429,24 @@ test('settings PUT with a stale revision is rejected with 409 and writes nothing
   const baseRevision = read.sent.revision;
   assert.equal(Number.isInteger(baseRevision), true);
 
-  const first = settingsCtx({ maxFailedLogins: 7, revision: baseRevision });
+  const first = settingsCtx({ inactivityTimeout: 7, revision: baseRevision });
   await controller.updateSettings(first);
   assert.equal(first.sent.success, true);
   assert.equal(first.sent.revision, baseRevision + 1);
 
-  const stale = settingsCtx({ maxFailedLogins: 9, revision: baseRevision });
+  const stale = settingsCtx({ inactivityTimeout: 9, revision: baseRevision });
   await controller.updateSettings(stale);
   assert.equal(stale.status, 409);
   assert.equal(stale.body.error.details.revision, baseRevision + 1);
-  assert.equal(state.stored.maxFailedLogins, 7);
+  assert.equal(state.stored.inactivityTimeout, 7);
   assert.equal(state.writes, 1);
 
-  const legacyClient = settingsCtx({ maxFailedLogins: 4 });
+  const legacyClient = settingsCtx({ inactivityTimeout: 4 });
   await controller.updateSettings(legacyClient);
   assert.equal(legacyClient.sent.success, true, 'clients without a revision keep working');
-  assert.equal(state.stored.maxFailedLogins, 4);
+  assert.equal(state.stored.inactivityTimeout, 4);
 
-  const invalid = settingsCtx({ maxFailedLogins: 1, revision: 'x' });
+  const invalid = settingsCtx({ inactivityTimeout: 1, revision: 'x' });
   await controller.updateSettings(invalid);
   assert.equal(invalid.status, 400);
 });
@@ -710,8 +736,7 @@ test('a wrong password thrown as ValidationError counts as a failed login', asyn
     store: () => ({ get: async () => ({ maxFailedLogins: 2 }) }),
     server: { use: (fn) => middlewares.push(fn) },
   };
-  bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
-  const [middleware] = middlewares;
+  const middleware = mountCallbackLockout(strapi);
   const ctxFor = () => ({
     path: '/api/auth/local',
     method: 'POST',
@@ -758,8 +783,7 @@ test(
         getCoordinator(strapi).attachDatabase(
           createDatabaseBackend({ knex, dialect: 'better-sqlite3' })
         );
-        bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
-        return middlewares[0];
+        return mountCallbackLockout(strapi);
       };
       const processes = [mount(shared.a), mount(shared.b)];
       let checks = 0;
@@ -808,8 +832,7 @@ test('parallel correct logins from one address are throttled briefly but never l
     store: () => ({ get: async () => ({ maxFailedLogins: 3 }) }),
     server: { use: (fn) => middlewares.push(fn) },
   };
-  bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
-  const [middleware] = middlewares;
+  const middleware = mountCallbackLockout(strapi);
   const login = async (delay) => {
     const ctx = {
       path: '/api/auth/local',
@@ -850,8 +873,7 @@ test('a login that fails with a server error gives its reserved attempt back', a
     store: () => ({ get: async () => ({ maxFailedLogins: 2 }) }),
     server: { use: (fn) => middlewares.push(fn) },
   };
-  bootstrap.__private.mountFailedLoginLockout({ strapi, log: silentLog });
-  const [middleware] = middlewares;
+  const middleware = mountCallbackLockout(strapi);
   const ctxFor = () => ({
     path: '/api/auth/local',
     method: 'POST',

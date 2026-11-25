@@ -166,7 +166,7 @@ jobs:
   admin-sessions:
     name: Real Strapi HTTP suites (SQLite + PostgreSQL)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -279,6 +279,20 @@ jobs:
           node --test tests/isolated-user-activity-http.test.js
           SESSION_HTTP_DB=postgres node --test tests/isolated-user-activity-http.test.js
 
+      # Second security review (4.22.1): GraphQL impersonation, client IP,
+      # lockout paths and GraphQL login, lock email, data export. Needs the
+      # GraphQL plugin (devDependency).
+      - name: Security review 2 on SQLite and PostgreSQL (legacy and refresh mode)
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+          MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_http
+        run: |
+          node --test tests/isolated-security-review2-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-security-review2-http.test.js
+          SESSION_HTTP_DB=postgres node --test tests/isolated-security-review2-http.test.js
+          SESSION_HTTP_DB=postgres SESSION_HTTP_MODE=refresh node --test tests/isolated-security-review2-http.test.js
+
       - name: Existing HTTP access suite (legacy and refresh mode)
         env:
           SESSION_HTTP_REQUIRED: '1'
@@ -290,7 +304,7 @@ jobs:
   strapi-floor:
     name: Real Strapi HTTP suites on the peer floor (Strapi 5.50.0)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -315,8 +329,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/strapi-floor"
           cd "$RUNNER_TEMP/strapi-floor"
           echo '{"name":"strapi-floor-host","version":"0.0.0","private":true}' > package.json
-          npm install --no-audit --no-fund --legacy-peer-deps @strapi/strapi@5.50.0 @strapi/plugin-users-permissions@5.50.0 better-sqlite3@13 jsonwebtoken
-          for pkg in strapi core admin plugin-users-permissions; do
+          npm install --no-audit --no-fund --legacy-peer-deps @strapi/strapi@5.50.0 @strapi/plugin-users-permissions@5.50.0 @strapi/plugin-graphql@5.50.0 better-sqlite3@13 jsonwebtoken
+          for pkg in strapi core admin plugin-users-permissions plugin-graphql; do
             version=$(node -p "require('./node_modules/@strapi/$pkg/package.json').version")
             echo "@strapi/$pkg $version"
             test "$version" = 5.50.0
@@ -340,3 +354,5 @@ jobs:
           node --test tests/isolated-impersonation-http.test.js
           SESSION_HTTP_MODE=refresh node --test tests/isolated-impersonation-http.test.js
           node --test tests/isolated-user-activity-http.test.js
+          node --test tests/isolated-security-review2-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-security-review2-http.test.js

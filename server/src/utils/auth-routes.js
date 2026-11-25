@@ -11,8 +11,11 @@ const NEW_SESSION_ROUTES = new Set([
   'POST /api/magic-link/login-totp',
 ]);
 
+// Sign-in routes of other plugins counted by the path-based lockout.
+// Users & Permissions' `POST /auth/local` is counted inside its `auth.callback`
+// controller instead (any path spelling and the GraphQL `login` mutation;
+// utils/auth-controller-guard.js), so it is not listed here.
 const FAILED_LOGIN_ROUTES = new Set([
-  'POST /api/auth/local',
   'POST /api/magic-link/login-totp',
   'POST /api/magic-link/otp/verify',
   'POST /api/magic-link/verify-mfa-totp',
@@ -94,12 +97,28 @@ function normalizeApiPrefix(prefix) {
 }
 
 /**
+ * Lower-cases a path, collapses repeated slashes and drops a trailing slash,
+ * so every spelling Strapi's router accepts (it matches case-insensitively and
+ * ignores a trailing slash) maps to one key (security review 2, M1).
+ *
+ * @param {string} path Request path.
+ * @returns {string} Normalised path.
+ */
+function normalizeRequestPath(path) {
+  const value = path.toLowerCase().replace(/\/{2,}/g, '/');
+  return value.length > 1 ? value.replace(/\/+$/, '') || '/' : value;
+}
+
+/**
  * Maps a request path served under the configured REST prefix to the same
  * path under `/api`, the form every route table in this module uses. Strapi
  * mounts Content API routes at `${api.rest.prefix}/...`, so with a custom
  * prefix such as `/v1` a login arrives as `/v1/auth/local`; without this
  * mapping none of the interceptors matched it and every session created on
  * such a host stayed untracked.
+ *
+ * The path is normalised first (case, repeated and trailing slashes), so
+ * `/API/auth/local/` is classified like `/api/auth/local`.
  *
  * Paths outside the prefix are returned unchanged when the prefix is `/api`,
  * and as `null` otherwise, so a stray `/api/...` path on a host whose API
@@ -111,17 +130,19 @@ function normalizeApiPrefix(prefix) {
  */
 function toCanonicalApiPath(path, prefix) {
   if (typeof path !== 'string') return null;
-  const normalized = normalizeApiPrefix(prefix);
-  if (normalized === DEFAULT_API_PREFIX) return path;
-  if (path === normalized) return DEFAULT_API_PREFIX;
-  if (path.startsWith(`${normalized}/`)) {
-    return `${DEFAULT_API_PREFIX}${path.slice(normalized.length)}`;
+  const normalizedPath = normalizeRequestPath(path);
+  const normalized = normalizeApiPrefix(prefix).toLowerCase();
+  if (normalized === DEFAULT_API_PREFIX) return normalizedPath;
+  if (normalizedPath === normalized) return DEFAULT_API_PREFIX;
+  if (normalizedPath.startsWith(`${normalized}/`)) {
+    return `${DEFAULT_API_PREFIX}${normalizedPath.slice(normalized.length)}`;
   }
   return null;
 }
 
 module.exports = {
   normalizeApiPrefix,
+  normalizeRequestPath,
   toCanonicalApiPath,
   classifyJwtIssuingRequest,
   isFailedLoginTrackedPath,

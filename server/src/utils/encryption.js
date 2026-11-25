@@ -22,6 +22,14 @@ const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
 let warnedMissingKey = false;
+let warnedShortKey = false;
+
+/**
+ * Shortest SESSION_ENCRYPTION_KEY accepted without a warning, in bytes
+ * (security review 2, hardening 9). The key is hashed with SHA-256 into the
+ * AES key, so a short key is only as strong as its own entropy.
+ */
+const MIN_KEY_BYTES = 32;
 
 const isProduction = () => process.env.NODE_ENV === 'production';
 
@@ -29,12 +37,28 @@ const isProduction = () => process.env.NODE_ENV === 'production';
  * Returns the 32-byte AES-256 key for session-token encryption.
  *
  * @returns {Buffer} 32 bytes
- * @throws {Error} In production when SESSION_ENCRYPTION_KEY is missing
+ * @throws {Error} In production when SESSION_ENCRYPTION_KEY is missing or shorter than 32 bytes
+ *   (elsewhere a short key logs one warning)
  */
 function getEncryptionKey() {
   const envKey = process.env.SESSION_ENCRYPTION_KEY;
 
   if (envKey && envKey.length > 0) {
+    if (Buffer.byteLength(envKey, 'utf8') < MIN_KEY_BYTES) {
+      if (isProduction()) {
+        throw new Error(
+          `[magic-sessionmanager] FATAL: SESSION_ENCRYPTION_KEY must be at least ${MIN_KEY_BYTES} bytes in production. ` +
+            "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+        );
+      }
+      if (!warnedShortKey) {
+        warnedShortKey = true;
+        console.warn(
+          `[magic-sessionmanager] SESSION_ENCRYPTION_KEY is shorter than ${MIN_KEY_BYTES} bytes. ` +
+            'Production refuses to start with it; use 32 random bytes (64 hex characters).'
+        );
+      }
+    }
     return crypto.createHash('sha256').update(envKey).digest();
   }
 
@@ -195,6 +219,7 @@ function derivePurposeKey(purpose) {
 }
 
 module.exports = {
+  MIN_KEY_BYTES,
   derivePurposeKey,
   getEncryptionKeyCheck,
   encryptToken,

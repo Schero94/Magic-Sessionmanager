@@ -16,7 +16,9 @@
  * - team notification webhooks (`enableWebhooks`, `discordWebhookUrl`,
  *   `slackWebhookUrl`): the URLs carry their own secret;
  * - every key of the security log (`adminSignInHistory`, ...), which also
- *   keeps needing `admin-activity.read` as in 4.15.
+ *   keeps needing `admin-activity.read` as in 4.15;
+ * - since 4.22.1 also `trustedProxies`, `maxFailedLogins` and
+ *   `emailTemplates`.
  * Sending a protected key back with its stored value is not a change, so a
  * role without the action can still save the whole form.
  *
@@ -61,6 +63,12 @@ const PROTECTED_SETTINGS_KEYS = Object.freeze([
   ...PROTECTED_DETECTION_KEYS,
   // Impersonation switch (4.20): whether admins can act as app users.
   ...IMPERSONATION_KEYS,
+  // Security review 2 (4.22.1): which proxies may name the client address
+  // (H2), the IP lockout threshold (H2) and the alert email texts, which go
+  // to app users from the site's own address (hardening 6).
+  'trustedProxies',
+  'maxFailedLogins',
+  'emailTemplates',
 ]);
 
 /** Secret webhook URL keys and the flag/hint keys returned instead. */

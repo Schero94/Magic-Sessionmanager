@@ -730,8 +730,14 @@ test(
     );
 
     await t.test('View as admin: every anti-escalation rule is enforced', async () => {
-      // Nobody previews a Super Admin, Super Admins included.
-      await refusedWith(await preview({ id: superAdmin.id }), 'super-admin');
+      // Nobody previews a Super Admin, Super Admins included. Without
+      // admin::users.read the answer is the same 404 as for an unknown id, so
+      // the preview does not reveal which admins are Super Admins (security
+      // review 2, L4); a Super Admin still sees the reason.
+      const hidden = await preview({ id: superAdmin.id });
+      const unknown = await preview({ id: 999998 });
+      assert.equal(hidden.status, 404);
+      assert.deepEqual(hidden.body, unknown.body);
       await refusedWith(await preview({ id: superAdmin.id }, {}, superC.token), 'super-admin');
       // Nobody previews themselves.
       await refusedWith(await preview({ id: previewer.id }), 'self');

@@ -30,6 +30,7 @@
 
 const { getPluginSettings } = require('../utils/settings-loader');
 const { getCoordinator, hashedKey, __resetMemoryForTests } = require('../utils/coordination');
+const { ipBucket } = require('../utils/admin-request-info');
 
 /**
  * Returns a stable key identifying the caller: user id when authenticated,
@@ -42,7 +43,9 @@ const callerKey = (ctx) => {
   if (userId) return `u:${userId}`;
   const tokenId = ctx.state?.auth?.credentials?.id ?? ctx.state?.auth?.credentials?.token ?? null;
   if (tokenId) return `t:${String(tokenId).slice(-16)}`;
-  return `ip:${ctx.request.ip || ctx.ip || 'unknown'}`;
+  // IPv6 clients count per /64 (security review 2, hardening 7).
+  const ip = ctx.request.ip || ctx.ip || '';
+  return `ip:${ipBucket(ip) || ip || 'unknown'}`;
 };
 
 /**

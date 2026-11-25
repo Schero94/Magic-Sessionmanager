@@ -367,7 +367,8 @@ module.exports = ({ strapi }) => {
      *   Caller (with roles), target id and request body.
      * @returns {Promise<object>} Impersonation DTO plus the preview.
      * @throws {ImpersonationError} 400 invalid body or id; 403 feature off, self, Super Admin
-     *   or not a subset of the caller's permissions; 404 unknown admin.
+     *   (callers with `admin::users.read`) or not a subset of the caller's permissions; 404
+     *   unknown admin, or a Super Admin for callers without `admin::users.read`.
      * @sideeffect Creates an impersonation row; queues `impersonation.started` or `.refused`.
      */
     async previewAdmin({ actor, adminId, body, canReadAdmins }) {
@@ -397,6 +398,19 @@ module.exports = ({ strapi }) => {
       ]);
       if (!target) throw new ImpersonationError(404, 'Admin not found');
       const refusal = await previewRefusal(strapi, caller || actor, target);
+      // Without `admin::users.read` a Super Admin target answers like an
+      // unknown id, so the preview cannot be used to find out which admin
+      // ids are Super Admins (security review 2, L4). The refusal is still
+      // recorded under its real reason.
+      if (refusal?.reason === 'super-admin' && !canReadAdmins) {
+        service.recordRefused({
+          actorId,
+          targetType: 'admin',
+          targetId: adminId,
+          reason: 'super-admin',
+        });
+        throw new ImpersonationError(404, 'Admin not found');
+      }
       if (refusal) {
         const messages = {
           self: 'You cannot view yourself as another admin',
@@ -844,7 +858,10 @@ module.exports = ({ strapi }) => {
     },
 
     /**
-     * Loads one impersonation for the request guard (5-second cache).
+     * Loads one impersonation for the request guard. Only a finished (or
+     * unknown) impersonation is cached for 5 seconds; an active one is read
+     * on every request, so ending it on one process takes effect on every
+     * other process at once (security review 2, hardening 4).
      *
      * @param {string} documentId Impersonation id.
      * @returns {Promise<{id: string, actorId: string, targetId: string|null, state: string,
@@ -866,7 +883,9 @@ module.exports = ({ strapi }) => {
             expiresAt: new Date(row.expiresAt).getTime(),
           }
         : null;
-      remember(recordCache, documentId, { value, at: Date.now() });
+      if (!value || value.state !== 'active') {
+        remember(recordCache, documentId, { value, at: Date.now() });
+      }
       return value;
     },
 

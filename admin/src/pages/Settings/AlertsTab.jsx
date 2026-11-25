@@ -92,7 +92,8 @@ const AlertsTab = ({ form }) => {
   const lookupOff = !settings.enableGeolocation;
   const emailTypesDisabled = lookupOff || !settings.enableEmailAlerts;
   const webhookFieldsDisabled = lookupOff || !settings.enableWebhooks;
-  // Webhooks are protected settings (4.17): changing them needs settings.update.
+  // Webhooks (4.17) and the email templates (4.22.1) are protected settings:
+  // changing them needs settings.update.
   const locked = form.canChangeProtected === false;
   const templateErrors = fieldHasError(errors, 'emailTemplates');
   const risk = getRiskAvailability(form.geoIp.status);
@@ -229,10 +230,11 @@ const AlertsTab = ({ form }) => {
           </EmailTypeGrid>
         </Flex>
 
+        {locked ? <ProtectedNotice /> : null}
         <AdvancedSection
           label={t('settings.config.email.templates.label', 'Edit email templates')}
           hasError={templateErrors}
-          disabled={emailTypesDisabled}
+          disabled={emailTypesDisabled || locked}
         >
           <Alert variant="warning" closeLabel={t('common.close', 'Close')} title="">
             {t(

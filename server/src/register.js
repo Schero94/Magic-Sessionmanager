@@ -5,6 +5,8 @@ const { createContentApiPermissionsLifecycle } = require('./utils/content-api-pe
 const { isCallerRevocationScope } = require('./utils/block-revocation-scope');
 const { checkStrapiVersion } = require('./utils/strapi-version');
 const { disableGraphqlShadowCrud } = require('./utils/security-log-hardening');
+const { installGraphqlImpersonationGuard } = require('./utils/graphql-impersonation-guard');
+const { installAuthControllerGuard } = require('./utils/auth-controller-guard');
 
 const USER_UID = 'plugin::users-permissions.user';
 
@@ -27,6 +29,10 @@ const USER_UID = 'plugin::users-permissions.user';
  *   permission preview of another admin.
  * - Disables GraphQL Shadow CRUD for the plugin's internal content types
  *   when the GraphQL plugin is installed (4.17).
+ * - Refuses every GraphQL mutation made with an impersonation credential
+ *   (Apollo plugin) and wraps the Users & Permissions `auth` controller
+ *   actions that start a session with the lockout and location checks
+ *   (4.22.1, security review 2).
  * - Removes the `sessions` relation field from the User content type so it
  *   doesn't clutter the default edit view (sessions are displayed via the
  *   SessionInfoPanel side panel).
@@ -136,6 +142,15 @@ module.exports = async ({ strapi }) => {
   ]);
 
   disableGraphqlShadowCrud(strapi, log);
+
+  // Security review 2 (4.22.1). Both must be installed here, before Strapi
+  // builds the router and before the GraphQL plugin creates its Apollo
+  // server: every GraphQL mutation is refused while impersonating (H1), and
+  // the lockout and location rules run inside the Users & Permissions
+  // `auth` controller, so every path spelling and the GraphQL `login`
+  // mutation are counted (M1).
+  installGraphqlImpersonationGuard(strapi, log);
+  installAuthControllerGuard(strapi, log);
 
   try {
     strapi.db.lifecycles.subscribe(createContentApiPermissionsLifecycle(strapi));

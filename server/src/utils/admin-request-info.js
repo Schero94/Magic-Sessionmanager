@@ -136,6 +136,28 @@ function anonymizeIp(ip) {
 }
 
 /**
+ * The counting identity of a client address for rate limits and the IP
+ * lockout (security review 2, hardening 7): an IPv4 address as is, an IPv6
+ * address as its /64 network, because one subscriber usually holds a whole
+ * /64 and could otherwise use a new address for every attempt.
+ *
+ * @param {unknown} ip Client address.
+ * @returns {string|null} `a.b.c.d`, `x:x:x:x::/64`, or null when not an IP address.
+ */
+function ipBucket(ip) {
+  const value = normalizeIp(typeof ip === 'string' ? ip : '');
+  if (!value) return null;
+  if (net.isIPv4(value)) return value;
+  if (net.isIPv6(value)) {
+    return `${ipv6Groups(value)
+      .slice(0, 4)
+      .map((group) => group.toString(16))
+      .join(':')}::/64`;
+  }
+  return null;
+}
+
+/**
  * User agent of a request, cut to the stored length.
  *
  * @param {any} ctx Koa context.
@@ -185,6 +207,7 @@ function hashDeviceId(deviceId) {
 module.exports = {
   MAX_USER_AGENT_LENGTH,
   anonymizeIp,
+  ipBucket,
   describeUserAgent,
   getRequestIp,
   getSocketIp,

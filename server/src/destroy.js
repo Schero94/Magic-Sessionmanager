@@ -1,6 +1,7 @@
 'use strict';
 
 const { createLogger } = require('./utils/logger');
+const { uninstallAuthControllerGuard } = require('./utils/auth-controller-guard');
 
 /**
  * Plugin destroy hook. Clears all known intervals and timers created during
@@ -46,6 +47,12 @@ module.exports = async ({ strapi }) => {
       log.warn('Failed to stop the admin activity capture:', err?.name || 'Error');
     }
     strapi.sessionManagerAdminActivityUninstall = null;
+  }
+
+  try {
+    uninstallAuthControllerGuard(strapi);
+  } catch (err) {
+    log.warn('Failed to restore the Users & Permissions auth controller:', err?.name || 'Error');
   }
 
   try {
