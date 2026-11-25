@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.21.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.20.0...v4.21.0) (2026-11-25)
+
+
+### Features
+
+* View as admin, a read-only permission preview with anti-escalation rules ([#42](https://github.com/Schero94/Magic-Sessionmanager/issues/42)) ([687bc32](https://github.com/Schero94/Magic-Sessionmanager/commit/687bc32bd027d961b3c7c1bb3aeddcb184bee3f7))
+
 
 Release type: minor (`feat`). Additive: one RBAC action (`impersonate.admins`, "View as admin") and two admin routes; no stored data changes.
 
