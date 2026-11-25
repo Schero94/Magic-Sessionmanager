@@ -6,8 +6,14 @@ import { escapeCsvValue } from '../../utils/sessionExports.mjs';
  * event, entry links and CSV export. No React, so `node --test` covers them.
  */
 
-/** Sign-in history filter (API values of `event`). */
+/** Sign-in history filter of one admin (API values of `event`). */
 export const SIGN_IN_FILTER_OPTIONS = Object.freeze(['all', 'succeeded', 'failed', 'signed-out']);
+
+/**
+ * Filter of the activity of all admins: adds settings changes, token reads
+ * and retention runs, which belong to no single admin's history.
+ */
+export const ALL_ADMINS_FILTER_OPTIONS = Object.freeze([...SIGN_IN_FILTER_OPTIONS, 'changes']);
 
 /** Content Manager action filter (API values of `action`). */
 export const ACTIVITY_ACTION_OPTIONS = Object.freeze([
@@ -55,7 +61,7 @@ export function buildSignInParams(filters, now) {
   const params = {
     page: filters.page || 1,
     pageSize: filters.pageSize || EVENT_PAGE_SIZE,
-    event: SIGN_IN_FILTER_OPTIONS.includes(filters.event) ? filters.event : 'all',
+    event: ALL_ADMINS_FILTER_OPTIONS.includes(filters.event) ? filters.event : 'all',
   };
   if (filters.adminId) params.adminId = String(filters.adminId);
   const from = periodStart(filters.period || 'all', now);
@@ -105,12 +111,37 @@ const FAILURE_REASONS = Object.freeze({
 });
 
 /**
- * One presentation per sign-in history event: label, badge tone and an
- * optional detail. Danger is not used: a failed attempt is a warning, a
- * sign-out is neutral.
+ * Presentation of an event without a reason line (app-user, impersonation
+ * and webhook events).
+ *
+ * @param {string} key Stable key (data attribute).
+ * @param {string} tone Badge tone.
+ * @param {string} icon Icon key.
+ * @param {string} messageId Label id.
+ * @param {string} defaultMessage English label.
+ * @returns {{key: string, tone: string, icon: string,
+ *   label: {messageId: string, defaultMessage: string}, detail: null}} Presentation.
+ */
+const appUserEvent = (key, tone, icon, messageId, defaultMessage) => ({
+  key,
+  tone,
+  icon,
+  label: message(messageId, defaultMessage),
+  detail: null,
+});
+
+/**
+ * One presentation per sign-in history event: label, badge tone, icon and an
+ * optional detail. The tones are semantic and the same in every list:
+ * success = signed in, danger = sign-in failed or locked out (a security
+ * signal), warning = signed out by another admin, secondary (blue) = a
+ * settings change or a read of the log with an API token, neutral = the
+ * admin's own sign-out and housekeeping (retention). The icon key repeats the meaning in a second channel, because
+ * the DS dark theme draws every badge background in the same grey.
  *
  * @param {{event: string, reason?: string|null, scope?: string|null}} row Event row.
- * @returns {{key: string, tone: string, label: {messageId: string, defaultMessage: string},
+ * @returns {{key: string, tone: string, icon: string,
+ *   label: {messageId: string, defaultMessage: string},
  *   detail: {messageId: string, defaultMessage: string}|null}} Presentation.
  */
 export function getSignInEventPresentation(row) {
@@ -119,6 +150,7 @@ export function getSignInEventPresentation(row) {
       return {
         key: 'sign-in',
         tone: 'success',
+        icon: 'signIn',
         label: message('adminPanel.activity.event.signIn', 'Signed in'),
         detail:
           row.reason === 'registration'
@@ -133,14 +165,16 @@ export function getSignInEventPresentation(row) {
     case 'admin.sign-in.failed':
       return {
         key: 'failed',
-        tone: 'warning',
+        tone: 'danger',
+        icon: 'failed',
         label: message('adminPanel.activity.event.failed', 'Sign-in failed'),
         detail: FAILURE_REASONS[row.reason] || null,
       };
     case 'admin.lockout':
       return {
         key: 'lockout',
-        tone: 'warning',
+        tone: 'danger',
+        icon: 'lockout',
         label: message('adminPanel.activity.event.lockout', 'Locked out'),
         detail: FAILURE_REASONS.rate_limited,
       };
@@ -148,23 +182,162 @@ export function getSignInEventPresentation(row) {
       return {
         key: 'sign-out',
         tone: 'neutral',
+        icon: 'signOut',
         label: message('adminPanel.activity.event.signOut', 'Signed out'),
         detail: null,
       };
     case 'admin.session.revoked':
       return {
         key: 'revoked',
-        tone: 'neutral',
+        tone: 'warning',
+        icon: 'revoked',
         label: message('adminPanel.activity.event.revoked', 'Signed out by an admin'),
         detail:
           row.scope === 'one_browser'
             ? message('adminPanel.activity.scope.oneBrowser', 'One browser')
             : message('adminPanel.activity.scope.everywhere', 'Every browser'),
       };
+    case 'settings.updated':
+      return {
+        key: 'settings',
+        tone: 'secondary',
+        icon: 'settings',
+        label: message('adminPanel.activity.event.settings', 'Settings changed'),
+        detail: row.change?.viaToken
+          ? message('adminPanel.activity.via.token', 'With an admin API token')
+          : null,
+      };
+    case 'security-log.read':
+      return {
+        key: 'log-read',
+        tone: 'secondary',
+        icon: 'logRead',
+        label: message('adminPanel.activity.event.logRead', 'Log read with an API token'),
+        detail:
+          row.read?.list === 'content'
+            ? row.read?.exported
+              ? message(
+                  'adminPanel.activity.read.contentExport',
+                  'Content Manager activity exported'
+                )
+              : message('adminPanel.activity.read.content', 'Content Manager activity listed')
+            : row.read?.exported
+              ? message('adminPanel.activity.read.signInsExport', 'Sign-in history exported')
+              : message('adminPanel.activity.read.signIns', 'Sign-in history listed'),
+      };
+    case 'security-log.retention.purged':
+      return {
+        key: 'purged',
+        tone: 'neutral',
+        icon: 'purged',
+        label: message('adminPanel.activity.event.purged', 'Old events deleted'),
+        detail: null,
+      };
+    // App-user events (4.17 / 4.18). The admin lists of this view do not return them
+    // today; they get their own label and colour so any list that does shows them clearly.
+    case 'user.sign-in.failed':
+      return appUserEvent(
+        'user-failed',
+        'danger',
+        'failed',
+        'adminPanel.activity.event.userFailed',
+        'App user sign-in failed'
+      );
+    case 'user.sign-in.refused':
+      return appUserEvent(
+        'user-refused',
+        'danger',
+        'refused',
+        'adminPanel.activity.event.userRefused',
+        'App user sign-in refused'
+      );
+    case 'user.lockout':
+      return appUserEvent(
+        'user-lockout',
+        'danger',
+        'lockout',
+        'adminPanel.activity.event.userLockout',
+        'App user locked out'
+      );
+    case 'user.lockout.lifted':
+      return appUserEvent(
+        'user-unlock',
+        'secondary',
+        'unlock',
+        'adminPanel.activity.event.userUnlock',
+        'Lockout lifted'
+      );
+    case 'user.session.limit':
+      return appUserEvent(
+        'user-limit',
+        'warning',
+        'limit',
+        'adminPanel.activity.event.userLimit',
+        'Session limit reached'
+      );
+    case 'user.password-change.ended-others':
+      return appUserEvent(
+        'user-password',
+        'warning',
+        'password',
+        'adminPanel.activity.event.userPassword',
+        'Signed out after a password change'
+      );
+    case 'user.sign-in.new-device':
+      return appUserEvent(
+        'user-device',
+        'secondary',
+        'device',
+        'adminPanel.activity.event.userNewDevice',
+        'Sign-in from a new device'
+      );
+    case 'user.sign-in.impossible-travel':
+      return appUserEvent(
+        'user-travel',
+        'danger',
+        'travel',
+        'adminPanel.activity.event.userTravel',
+        'Impossible travel'
+      );
+    case 'user.not-me':
+      return appUserEvent(
+        'user-not-me',
+        'danger',
+        'notMe',
+        'adminPanel.activity.event.userNotMe',
+        'Reported as "This wasn’t me"'
+      );
+    case 'user.data.exported':
+      return appUserEvent(
+        'user-export',
+        'secondary',
+        'export',
+        'adminPanel.activity.event.userExport',
+        'Personal data exported'
+      );
     default:
+      if (typeof row?.event === 'string' && row.event.startsWith('impersonation.')) {
+        return appUserEvent(
+          'impersonation',
+          'warning',
+          'impersonation',
+          'adminPanel.activity.event.impersonation',
+          'Impersonation'
+        );
+      }
+      if (typeof row?.event === 'string' && row.event.startsWith('webhook.')) {
+        return appUserEvent(
+          'webhook',
+          'neutral',
+          'webhook',
+          'adminPanel.activity.event.webhook',
+          'Webhook delivery'
+        );
+      }
       return {
         key: 'other',
         tone: 'neutral',
+        icon: 'other',
         label: message('adminPanel.activity.event.other', 'Security event'),
         detail: null,
       };
@@ -197,6 +370,93 @@ export function getSessionStatePresentation(session) {
     default:
       return null;
   }
+}
+
+/** Events in the "Recent security activity" table. */
+export const RECENT_EVENT_LIMIT = 8;
+
+/** Page sizes of the full "Sign-in activity" page. */
+export const ACTIVITY_PAGE_SIZE_OPTIONS = Object.freeze(['10', '20', '50', '100']);
+
+/**
+ * Narrowest list width (px) for the table, per list: the cross-admin list
+ * has an extra Admin column. Below it the list shows stacked rows. Widths are
+ * of the list container, not the viewport, because the same list sits in the
+ * page, in a card and in the admin details dialog. Measured on Strapi 5.63:
+ * the six-column table needs about 800 px (the page at a 768 px viewport
+ * gives 718 px, so it scrolled sideways there), the five-column table of
+ * one admin (details dialog) about 740 px; stacked rows read better than a
+ * table that scrolls.
+ */
+export const EVENT_TABLE_MIN_WIDTH = Object.freeze({ withAdmin: 800, withoutAdmin: 740 });
+
+/** List width (px) from which "Done by" gets its own column instead of a second line. */
+export const EVENT_TABLE_FULL_WIDTH = 1000;
+
+/**
+ * Layout of an event list for its container width: `stacked` rows (phones,
+ * narrow dialogs), a `table` whose "Done by" folds into the event cell, or
+ * the `full` table with every column. 0 (not measured yet) counts as wide,
+ * so the first paint on desktop is the table.
+ *
+ * @param {number} width Container width in px; 0 when unknown.
+ * @param {{showAdmin?: boolean}} [options] Whether the Admin column is shown.
+ * @returns {'stacked'|'table'|'full'} Layout.
+ */
+export function getEventListLayout(width, { showAdmin = false } = {}) {
+  if (!width) return 'full';
+  const min = showAdmin ? EVENT_TABLE_MIN_WIDTH.withAdmin : EVENT_TABLE_MIN_WIDTH.withoutAdmin;
+  if (width < min) return 'stacked';
+  return width >= EVENT_TABLE_FULL_WIDTH ? 'full' : 'table';
+}
+
+/**
+ * "City, Country" of an event, or '' when no location was recorded.
+ *
+ * @param {{location?: {city?: string|null, country?: string|null}|null}} row Event row.
+ * @returns {string} Place.
+ */
+export function getEventPlace(row) {
+  return [row?.location?.city, row?.location?.country].filter(Boolean).join(', ');
+}
+
+/**
+ * Filters of the full "Sign-in activity" page from the URL query. Unknown
+ * values fall back to the defaults, so a hand-edited URL never breaks the
+ * page.
+ *
+ * @param {Record<string, unknown>|null|undefined} query Parsed URL query.
+ * @returns {{event: string, period: string, adminId: number|null, page: number,
+ *   pageSize: number}} Filters.
+ */
+export function parseActivityPageQuery(query) {
+  const source = query || {};
+  const event = ALL_ADMINS_FILTER_OPTIONS.includes(String(source.event))
+    ? String(source.event)
+    : 'all';
+  const period = PERIOD_OPTIONS.includes(String(source.period)) ? String(source.period) : '30';
+  const adminId = /^[1-9][0-9]{0,11}$/.test(String(source.adminId ?? ''))
+    ? Number(source.adminId)
+    : null;
+  const page = Number.parseInt(String(source.page ?? ''), 10);
+  const pageSize = String(source.pageSize ?? '');
+  return {
+    event,
+    period,
+    adminId,
+    page: Number.isInteger(page) && page > 0 ? page : 1,
+    pageSize: ACTIVITY_PAGE_SIZE_OPTIONS.includes(pageSize) ? Number(pageSize) : EVENT_PAGE_SIZE,
+  };
+}
+
+/**
+ * Whether the page shows a narrowed list (for the "Clear filters" action).
+ *
+ * @param {{event: string, period: string, adminId: number|null}} view Parsed filters.
+ * @returns {boolean} True when a filter differs from the default.
+ */
+export function hasActivityPageFilters(view) {
+  return view.event !== 'all' || view.period !== '30' || view.adminId !== null;
 }
 
 /** Labels of Content Manager actions (activity rows and the filter). */

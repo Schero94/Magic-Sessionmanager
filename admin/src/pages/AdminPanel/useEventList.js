@@ -9,12 +9,13 @@ import { withEventAdminNames } from './adminPanelModel.mjs';
 /**
  * Loads a paged security-event list (sign-in history or activity) with
  * "Show more": the first page replaces the rows, later pages append. A
- * changed query starts again at page 1; an outdated or cancelled response
- * sets no state.
+ * changed query starts again at its first page (`params.page`, default 1:
+ * the full "Sign-in activity" page keeps its page in the URL and shows one
+ * page at a time); an outdated or cancelled response sets no state.
  *
  * @param {object} options
  * @param {string} options.path Admin API path of the list.
- * @param {Record<string, string|number>} options.params Query without the page.
+ * @param {Record<string, string|number>} options.params Query; `page` is the first page to load.
  * @param {string} options.logKey Key for the safe error log.
  * @returns {{rows: object[], meta: object|null, loading: boolean, loadingMore: boolean,
  *   error: boolean, hasMore: boolean, loadMore: () => void, reload: () => void,
@@ -47,19 +48,20 @@ export function useEventList({ path, params, logKey }) {
   const [error, setError] = useState(false);
   const requestRef = useRef(0);
   const key = JSON.stringify(params);
+  const firstPage = Number(params?.page) > 0 ? Number(params.page) : 1;
 
   const load = useCallback(
     async (nextPage) => {
       const requestId = requestRef.current + 1;
       requestRef.current = requestId;
-      if (nextPage === 1) setLoading(true);
+      if (nextPage === firstPage) setLoading(true);
       else setLoadingMore(true);
       try {
         const response = await get(path, { params: { ...JSON.parse(key), page: nextPage } });
         if (requestId !== requestRef.current) return;
         const body = response?.data || {};
         const data = fillNames(Array.isArray(body.data) ? body.data : []);
-        setRows((current) => (nextPage === 1 ? data : [...current, ...data]));
+        setRows((current) => (nextPage === firstPage ? data : [...current, ...data]));
         setMeta(body.meta || null);
         setPage(nextPage);
         setError(false);
@@ -74,16 +76,16 @@ export function useEventList({ path, params, logKey }) {
         }
       }
     },
-    [get, path, key, logKey, fillNames]
+    [get, path, key, logKey, fillNames, firstPage]
   );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after await; the compiler cannot see through the callback
-    load(1);
+    load(firstPage);
     return () => {
       requestRef.current += 1;
     };
-  }, [load]);
+  }, [load, firstPage]);
 
   const pagination = meta?.pagination;
   const hasMore = Boolean(pagination && page < pagination.pageCount);
@@ -120,7 +122,7 @@ export function useEventList({ path, params, logKey }) {
     error,
     hasMore,
     loadMore: () => load(page + 1),
-    reload: () => load(1),
+    reload: () => load(firstPage),
     exportAll,
   };
 }

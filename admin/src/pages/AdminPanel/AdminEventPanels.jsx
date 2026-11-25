@@ -1,29 +1,30 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Button,
   Flex,
   Link,
+  LinkButton,
   Loader,
   SingleSelect,
   SingleSelectOption,
   Typography,
 } from '@strapi/design-system';
-import { Download } from '@strapi/icons';
+import { ArrowRight, Download } from '@strapi/icons';
 import { useNotification } from '@strapi/strapi/admin';
 import pluginId from '../../pluginId';
 import { getTranslation } from '../../utils/getTranslation';
 import { isCancelledRequest, logSafeAdminError } from '../../utils/safeAdminLog.mjs';
 import Alert from '../../components/PersistentAlert';
-import { SectionCard } from '../../components/ui';
-import { ActivityEventRow, SignInEventRow } from './EventRows';
+import { ActivityEventTable, SignInEventTable } from './EventTables';
 import { downloadCsv, useEventList } from './useEventList';
 import {
   ACTIVITY_ACTION_LABELS,
   ACTIVITY_ACTION_OPTIONS,
   MAX_EVENT_EXPORT_ROWS,
   PERIOD_OPTIONS,
+  RECENT_EVENT_LIMIT,
   SIGN_IN_FILTER_OPTIONS,
   buildActivityParams,
   buildActivityCsv,
@@ -33,6 +34,9 @@ import {
 
 /** Settings tab with the recording switches. */
 export const ADMIN_ACTIVITY_SETTINGS_PATH = `/settings/${pluginId}/general?tab=admin-activity`;
+
+/** Full-page sign-in activity of all admins ("Show all" of the card). */
+export const ADMIN_ACTIVITY_PAGE_PATH = `/plugins/${pluginId}/admin-panel/activity`;
 
 /**
  * Translation helper bound to the plugin prefix.
@@ -51,7 +55,7 @@ const useT = () => {
  * @param {{value: string, onChange: (value: string) => void}} props
  * @returns {import('react').ReactElement} Select.
  */
-const PeriodSelect = ({ value, onChange }) => {
+export const PeriodSelect = ({ value, onChange }) => {
   const t = useT();
   const labels = {
     1: t('adminPanel.activity.period.day', 'Last 24 hours'),
@@ -83,38 +87,51 @@ const PeriodSelect = ({ value, onChange }) => {
  * @param {{children: import('react').ReactNode}} props
  * @returns {import('react').ReactElement} Wrapper.
  */
-const FilterSlot = ({ children }) => (
+export const FilterSlot = ({ children }) => (
   <Flex direction="column" alignItems="stretch" minWidth={0} flex="1 1 18rem">
     {children}
   </Flex>
 );
 
 /**
+ * "Nothing in this period" text of a list in the admin details dialog.
+ *
+ * @param {{children: import('react').ReactNode}} props Text.
+ * @returns {import('react').ReactElement} Text.
+ */
+const EmptyText = ({ children }) => (
+  <Typography variant="omega" textColor="neutral600" data-event-empty="">
+    {children}
+  </Typography>
+);
+
+/**
  * Shared list frame: filters and export, the recording notice, loading,
- * error with retry, empty text, the rows and "Show more".
+ * error with retry, empty state, the table and "Show more" (or the page's
+ * own pagination as `footer`).
  *
  * @param {object} props
  * @param {import('react').ReactNode} props.filters Filter controls.
  * @param {import('react').ReactNode} [props.notice] Notice above the list.
  * @param {ReturnType<typeof useEventList>} props.list List state.
- * @param {string} props.listLabel Accessible name of the list.
- * @param {string} props.emptyText Text when nothing matches.
- * @param {(row: object) => import('react').ReactNode} props.renderRow Row renderer.
+ * @param {import('react').ReactNode} props.empty Shown when nothing matches.
+ * @param {(rows: object[]) => import('react').ReactNode} props.renderList Table renderer.
  * @param {(rows: object[]) => string} props.toCsv CSV builder.
  * @param {string} props.fileName Download name prefix.
  * @param {string} props.exportLabel Accessible name of the export button.
+ * @param {import('react').ReactNode} [props.footer] Replaces "Show more" (page pagination).
  * @returns {import('react').ReactElement} List.
  */
-const EventList = ({
+export const EventList = ({
   filters,
   notice,
   list,
-  listLabel,
-  emptyText,
-  renderRow,
+  empty,
+  renderList,
   toCsv,
   fileName,
   exportLabel,
+  footer,
 }) => {
   const t = useT();
   const { toggleNotification } = useNotification();
@@ -185,24 +202,13 @@ const EventList = ({
           {t('adminPanel.activity.error', 'The events could not be loaded.')}
         </Alert>
       ) : null}
-      {!list.loading && !list.error && list.rows.length === 0 ? (
-        <Typography variant="omega" textColor="neutral600" data-event-empty="">
-          {emptyText}
-        </Typography>
-      ) : null}
-      {list.rows.length > 0 ? (
-        <Flex
-          tag="ul"
-          direction="column"
-          alignItems="stretch"
-          gap={2}
-          width="100%"
-          aria-label={listLabel}
-        >
-          {list.rows.map((row) => renderRow(row))}
-        </Flex>
-      ) : null}
-      {list.hasMore ? (
+      {!list.loading && !list.error && list.rows.length === 0 ? empty : null}
+      {list.rows.length > 0 ? renderList(list.rows) : null}
+      {footer !== undefined ? (
+        list.rows.length > 0 ? (
+          footer
+        ) : null
+      ) : list.hasMore ? (
         <Flex justifyContent="center">
           <Button variant="secondary" onClick={list.loadMore} loading={list.loadingMore}>
             {t('adminPanel.activity.showMore', 'Show more')}
@@ -219,7 +225,7 @@ const EventList = ({
  * @param {{children: import('react').ReactNode}} props Text.
  * @returns {import('react').ReactElement} Notice.
  */
-const RecordingOff = ({ children }) => {
+export const RecordingOff = ({ children }) => {
   const t = useT();
   return (
     <Alert
@@ -297,11 +303,20 @@ export const SignInHistoryPanel = ({ admin }) => {
           </RecordingOff>
         ) : null
       }
-      listLabel={t('adminPanel.activity.signIns.listLabel', 'Sign-in history of {name}', {
-        name: admin.name,
-      })}
-      emptyText={t('adminPanel.activity.signIns.empty', 'No sign-in events in this period.')}
-      renderRow={(row) => <SignInEventRow key={row.id} row={row} />}
+      empty={
+        <EmptyText>
+          {t('adminPanel.activity.signIns.empty', 'No sign-in events in this period.')}
+        </EmptyText>
+      }
+      renderList={(rows) => (
+        <SignInEventTable
+          rows={rows}
+          busy={list.loading}
+          label={t('adminPanel.activity.signIns.listLabel', 'Sign-in history of {name}', {
+            name: admin.name,
+          })}
+        />
+      )}
       toCsv={buildSignInCsv}
       fileName="admin-sign-in-history"
       exportLabel={t(
@@ -407,14 +422,20 @@ export const ContentActivityPanel = ({ admin }) => {
         </>
       }
       notice={notice}
-      listLabel={t('adminPanel.activity.content.listLabel', 'Content Manager activity of {name}', {
-        name: admin.name,
-      })}
-      emptyText={t(
-        'adminPanel.activity.content.empty',
-        'No Content Manager activity in this period.'
+      empty={
+        <EmptyText>
+          {t('adminPanel.activity.content.empty', 'No Content Manager activity in this period.')}
+        </EmptyText>
+      }
+      renderList={(rows) => (
+        <ActivityEventTable
+          rows={rows}
+          busy={list.loading}
+          label={t('adminPanel.activity.content.listLabel', 'Content Manager activity of {name}', {
+            name: admin.name,
+          })}
+        />
       )}
-      renderRow={(row) => <ActivityEventRow key={row.id} row={row} />}
       toCsv={buildActivityCsv}
       fileName="admin-content-activity"
       exportLabel={t(
@@ -428,31 +449,59 @@ export const ContentActivityPanel = ({ admin }) => {
 
 /**
  * The latest sign-in events of all admins (sign-ins, failed attempts,
- * lockouts, sign-outs) as a short list under the admin table. A name opens
- * that admin's details at "Sign-in history"; the full history and filters
- * live there.
+ * lockouts, sign-outs) under the admin table, in the same table as the full
+ * "Sign-in activity" page: a heading with "Show all" (that page, with
+ * filters and paging), then the newest RECENT_EVENT_LIMIT events. A name
+ * opens that admin's details at "Sign-in history"; a row opens the event's
+ * details. Hidden while sign-in history is turned off.
  *
  * @param {{onOpenAdmin: (admin: object, trigger: HTMLElement) => void}} props
  * @returns {import('react').ReactElement|null} Section, or null while sign-in history is off.
  */
 export const RecentSignInActivity = ({ onOpenAdmin }) => {
   const t = useT();
-  const params = useMemo(() => buildSignInParams({ pageSize: 5 }), []);
+  const headingId = `recent-sign-in-activity-${useId().replace(/:/g, '')}`;
+  const params = useMemo(() => buildSignInParams({ pageSize: RECENT_EVENT_LIMIT }), []);
   const list = useEventList({
     path: `/${pluginId}/admin-activity/sign-ins`,
     params,
     logKey: 'adminPanel.activity.recent',
   });
   if (list.meta?.recording && !list.meta.recording.signIns) return null;
+  const title = t('adminPanel.activity.recent.title', 'Recent security activity');
   return (
-    <SectionCard
-      title={t('adminPanel.activity.recent.title', 'Recent sign-in activity')}
-      subtitle={t(
-        'adminPanel.activity.recent.subtitle',
-        'The latest sign-ins, failed attempts and sign-outs of all admins. Open an admin for their full history.'
-      )}
+    <Flex
+      tag="section"
+      aria-labelledby={headingId}
+      direction="column"
+      alignItems="stretch"
+      gap={4}
+      minWidth={0}
+      data-recent-activity=""
     >
-      {list.loading ? (
+      <Flex justifyContent="space-between" alignItems="flex-end" gap={4} wrap="wrap">
+        <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0} flex="1 1 32rem">
+          <Typography id={headingId} variant="delta" tag="h2" textColor="neutral800">
+            {title}
+          </Typography>
+          <Typography variant="pi" textColor="neutral600">
+            {t(
+              'adminPanel.activity.recent.subtitle',
+              'The latest sign-ins, failed attempts, sign-outs and settings changes of all admins. Select an event for its details.'
+            )}
+          </Typography>
+        </Flex>
+        <LinkButton
+          tag={RouterLink}
+          to={ADMIN_ACTIVITY_PAGE_PATH}
+          variant="tertiary"
+          endIcon={<ArrowRight />}
+          data-show-all-activity=""
+        >
+          {t('adminPanel.activity.recent.showAll', 'Show all')}
+        </LinkButton>
+      </Flex>
+      {list.loading && list.rows.length === 0 ? (
         <Flex justifyContent="center" padding={2}>
           <Loader small>{t('adminPanel.activity.loading', 'Loading events')}</Loader>
         </Flex>
@@ -471,23 +520,18 @@ export const RecentSignInActivity = ({ onOpenAdmin }) => {
       ) : null}
       {!list.loading && !list.error && list.rows.length === 0 ? (
         <Typography variant="omega" textColor="neutral600">
-          {t('adminPanel.activity.recent.empty', 'No sign-in events yet.')}
+          {t('adminPanel.activity.recent.empty', 'No events recorded yet.')}
         </Typography>
       ) : null}
       {list.rows.length > 0 ? (
-        <Flex
-          tag="ul"
-          direction="column"
-          alignItems="stretch"
-          gap={2}
-          width="100%"
-          aria-label={t('adminPanel.activity.recent.title', 'Recent sign-in activity')}
-        >
-          {list.rows.map((row) => (
-            <SignInEventRow key={row.id} row={row} showAdmin onOpenAdmin={onOpenAdmin} />
-          ))}
-        </Flex>
+        <SignInEventTable
+          rows={list.rows}
+          label={title}
+          showAdmin
+          onOpenAdmin={onOpenAdmin}
+          busy={list.loading}
+        />
       ) : null}
-    </SectionCard>
+    </Flex>
   );
 };

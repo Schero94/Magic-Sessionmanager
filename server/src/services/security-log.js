@@ -222,6 +222,22 @@ function isUnknownAccountFailure(entry) {
   );
 }
 
+/**
+ * Changed setting names of a `settings.updated` event (key names only, never
+ * values), bounded to 50 identifier-shaped names.
+ *
+ * @param {unknown} value Stored comma-separated names.
+ * @returns {string[]} Names.
+ */
+function settingKeysOf(value) {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map((key) => key.trim())
+    .filter((key) => /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key))
+    .slice(0, 50);
+}
+
 module.exports = ({ strapi }) => {
   const log = createLogger(strapi);
   /** @type {SecurityEventInput[]} */
@@ -1118,23 +1134,43 @@ module.exports = ({ strapi }) => {
 
   /**
    * Response rows of the sign-in history (allowlisted fields; no device
-   * hash, no raw user agent).
+   * hash). The stored user agent (at most MAX_USER_AGENT_LENGTH characters,
+   * as the browser sent it) is returned for the event details dialog, next to its parsed
+   * browser and OS. A revoke row also says how many sessions it ended; a
+   * sign-in whose session another admin ended names that admin. Settings
+   * changes, token reads and retention runs (filter `changes`) carry their
+   * own facts: changed key names, which list was read, how many events were
+   * deleted.
    *
    * @param {Array<Record<string, any>>} rows Stored rows.
    * @param {Viewer} viewer Reader.
    * @returns {Promise<object[]>} DTOs.
    */
   async function shapeSignIns(rows, viewer) {
-    const admins = await loadAdmins(rows.flatMap((row) => [row.targetId, row.actorId]));
     const nameOf = (user) => (viewer.canReadAdmins === true ? adminName(user) : '');
     const states = await sessionStates(rows);
+    const admins = await loadAdmins([
+      ...rows.flatMap((row) => [row.targetId, row.actorId]),
+      ...[...states.values()].map((state) => state.endedBy),
+    ]);
     return rows.map((row) => {
       const meta = toObject(row.meta);
-      const admin = row.targetType === 'admin' ? admins.get(Number(row.targetId)) : undefined;
+      // Settings changes and token reads belong to the admin who did them.
+      const ownAction =
+        (row.event === SECURITY_EVENTS.SETTINGS_UPDATED ||
+          row.event === SECURITY_EVENTS.LOG_READ) &&
+        row.actorType === 'admin';
+      const admin =
+        row.targetType === 'admin'
+          ? admins.get(Number(row.targetId))
+          : ownAction
+            ? admins.get(Number(row.actorId))
+            : undefined;
       const revoked = row.event === SECURITY_EVENTS.ADMIN_SESSION_REVOKED;
       const actor = revoked ? admins.get(Number(row.actorId)) : undefined;
       const described = describeUserAgent(row.userAgent || null);
       const state = states.get(Number(row.id));
+      const endedBy = state?.endedBy ? admins.get(Number(state.endedBy)) : undefined;
       return {
         id: Number(row.id),
         event: row.event,
@@ -1150,11 +1186,39 @@ module.exports = ({ strapi }) => {
         browser: described.browserName,
         os: described.osName,
         deviceType: described.deviceType,
+        userAgent:
+          typeof row.userAgent === 'string' && row.userAgent
+            ? row.userAgent.slice(0, MAX_USER_AGENT_LENGTH)
+            : null,
         admin: admin ? { id: Number(admin.id), name: nameOf(admin) } : null,
         actor: actor ? { id: Number(actor.id), name: nameOf(actor) } : null,
+        sessionsEnded:
+          revoked && Number.isInteger(meta.ended) && meta.ended >= 0 ? meta.ended : null,
+        change:
+          row.event === SECURITY_EVENTS.SETTINGS_UPDATED
+            ? { keys: settingKeysOf(meta.keys), viaToken: meta.via === 'admin-token' }
+            : null,
+        read:
+          row.event === SECURITY_EVENTS.LOG_READ
+            ? {
+                list: meta.list === 'content' ? 'content' : 'sign-ins',
+                exported: meta.exported === true,
+              }
+            : null,
+        purge:
+          row.event === SECURITY_EVENTS.LOG_RETENTION_PURGED
+            ? {
+                count: Number.isInteger(meta.count) ? meta.count : null,
+                retentionDays: Number.isInteger(meta.retentionDays) ? meta.retentionDays : null,
+              }
+            : null,
         session:
           row.event === SECURITY_EVENTS.ADMIN_SIGN_IN && state
-            ? { state: state.state, endedAt: toIso(state.endedAt) }
+            ? {
+                state: state.state,
+                endedAt: toIso(state.endedAt),
+                endedBy: endedBy ? { id: Number(endedBy.id), name: nameOf(endedBy) } : null,
+              }
             : null,
       };
     });

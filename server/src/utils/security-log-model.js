@@ -119,12 +119,25 @@ const ADMIN_SIGN_IN_EVENTS = Object.freeze([
   SECURITY_EVENTS.ADMIN_SESSION_REVOKED,
 ]);
 
+/**
+ * Always-on events about the log and the settings (4.17): settings changes,
+ * reads of the log with an admin API token, retention runs. They are listed
+ * with the sign-in history of all admins (filter `changes`); a single
+ * admin's history (target = that admin) never contains them.
+ */
+const ADMIN_LOG_EVENTS = Object.freeze([
+  SECURITY_EVENTS.SETTINGS_UPDATED,
+  SECURITY_EVENTS.LOG_READ,
+  SECURITY_EVENTS.LOG_RETENTION_PURGED,
+]);
+
 /** Filter groups of the sign-in history (API values). */
 const SIGN_IN_FILTERS = Object.freeze({
-  all: ADMIN_SIGN_IN_EVENTS,
+  all: [...ADMIN_SIGN_IN_EVENTS, ...ADMIN_LOG_EVENTS],
   succeeded: [SECURITY_EVENTS.ADMIN_SIGN_IN],
   failed: [SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED, SECURITY_EVENTS.ADMIN_LOCKOUT],
   'signed-out': [SECURITY_EVENTS.ADMIN_SIGN_OUT, SECURITY_EVENTS.ADMIN_SESSION_REVOKED],
+  changes: ADMIN_LOG_EVENTS,
 });
 
 /** Content Manager actions (API values); the event is `admin.content.<action>`. */
@@ -460,6 +473,7 @@ module.exports = {
   USER_SIGN_IN_EVENTS,
   ACTOR_TYPES,
   ADMIN_CONTENT_EVENTS,
+  ADMIN_LOG_EVENTS,
   ADMIN_SIGN_IN_EVENTS,
   CONTENT_ACTIONS,
   CONTENT_MANAGER_HANDLERS,
