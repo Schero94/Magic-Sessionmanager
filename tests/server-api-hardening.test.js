@@ -422,6 +422,25 @@ test('F1/F5: geo settings need settings.update; plain settings keep working with
   });
 });
 
+test('F5: a role without settings.update can send back a legacy GeoIP path as GET shows it', async () => {
+  const { strapi, state } = createSettingsStrapi({
+    ...settingsController.DEFAULT_SETTINGS,
+    // A custom read path from an older version; GET shows no download filename for it.
+    geoIpDatabasePath: '/srv/legacy-geoip/GeoLite2-City.mmdb',
+  });
+  await withGlobalStrapi(strapi, async () => {
+    const get = createCtx({ state: holding([]) });
+    await settingsController.getSettings(get);
+    const ctx = createCtx({
+      body: { ...get.body.settings, inactivityTimeout: 31 },
+      state: holding([]),
+    });
+    await settingsController.updateSettings(ctx);
+    assert.equal(ctx.status, 200);
+    assert.equal(state.stored.inactivityTimeout, 31);
+  });
+});
+
 test('F5: security log keys need admin-activity.read and settings.update', async () => {
   for (const [actions, status, reason] of [
     [[], 403, 'admin-activity-permission'],

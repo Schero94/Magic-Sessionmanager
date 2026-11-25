@@ -697,7 +697,16 @@ module.exports = {
         // Protected keys change only with the matching permission. Sending
         // the stored values back unchanged is allowed, so the whole form can
         // still be saved by roles without it.
-        const changed = changedKeys(sanitizedSettings, current, Object.keys(DEFAULT_SETTINGS));
+        // GET shows only the filename of a (legacy) GeoIP path, so the path
+        // is compared the same way: sending it back is not a change.
+        const changed = changedKeys(
+          {
+            ...sanitizedSettings,
+            geoIpDatabasePath: getSafeGeoIpFilename(sanitizedSettings.geoIpDatabasePath),
+          },
+          { ...current, geoIpDatabasePath: getSafeGeoIpFilename(current.geoIpDatabasePath) },
+          Object.keys(DEFAULT_SETTINGS)
+        );
         const missing = missingSettingsPermission(ctx, changed);
         if (missing) return { forbidden: missing };
 
