@@ -19,6 +19,7 @@ const {
 } = require('../../../scripts/geoip-updater.cjs');
 const { calculateSecurityScore, getRiskLevel, noRiskData } = require('../utils/risk-data');
 const { lookupRiskData } = require('../utils/risk-databases');
+const { isSpecialPurposeIp } = require('../utils/special-ip-ranges');
 
 const GEO_API_TIMEOUT_MS = 4000;
 const IPAPI_SUCCESS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -460,53 +461,28 @@ function parseIpv4(ip) {
   return parts;
 }
 
+/**
+ * IPv4 in a special-purpose range (see utils/special-ip-ranges.js).
+ *
+ * @param {string} ip Address.
+ * @returns {boolean}
+ */
 function isPrivateIpv4(ip) {
-  const parts = parseIpv4(ip);
-  if (!parts) return false;
-
-  const [a, b, c] = parts;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 192 && b === 0 && c === 0) ||
-    (a === 192 && b === 0 && c === 2) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    (a === 198 && b === 51 && c === 100) ||
-    (a === 203 && b === 0 && c === 113) ||
-    a >= 224
-  );
+  return Boolean(parseIpv4(ip)) && isSpecialPurposeIp(ip);
 }
 
-function getFirstHextet(ip) {
-  const first = ip.split(':')[0];
-  if (!first) return 0;
-
-  const parsed = Number.parseInt(first, 16);
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
+/**
+ * IPv6 in a special-purpose range (4.17: every IANA block that is not
+ * globally reachable, plus documentation and multicast; before, only
+ * fc00::/7 and fe80::/10). IPv4-mapped addresses use the IPv4 rules.
+ *
+ * @param {string} ip Address.
+ * @returns {boolean}
+ */
 function isPrivateIpv6(ip) {
-  let lower = ip.toLowerCase();
-  try {
-    lower = new URL(`http://[${lower}]/`).hostname.slice(1, -1);
-  } catch {
-    // Preserve handling for IPv6 literals URL cannot parse, such as zone IDs.
-  }
-
-  if (lower === '::' || lower === '::1') return true;
-  if (/^(?:0:){7}0$/.test(lower) || /^(?:0:){7}1$/.test(lower)) return true;
-
-  if (lower.startsWith('::ffff:')) {
-    return isPrivateIpv4(normalizeLookupIp(lower));
-  }
-
-  const firstHextet = getFirstHextet(lower);
-  return (firstHextet & 0xfe00) === 0xfc00 || (firstHextet & 0xffc0) === 0xfe80;
+  const mapped = normalizeLookupIp(ip);
+  if (net.isIP(mapped) === 4) return isPrivateIpv4(mapped);
+  return isSpecialPurposeIp(ip);
 }
 
 module.exports = ({ strapi }) => ({
@@ -577,6 +553,44 @@ module.exports = ({ strapi }) => ({
     }
 
     return this.withRiskData(await this.getIpapiIpInfo(lookupIp), lookupIp);
+  },
+
+  /**
+   * Location of a security log event (4.17, security review F1). Stricter
+   * than getIpInfo:
+   * - the caller passes the anonymised address (/24, /48); it is never the
+   *   full address of an admin;
+   * - with the provider `auto` (the default) or `local-mmdb` only the local
+   *   MMDB file is read; there is no fallback to ipapi.co;
+   * - ipapi.co is used only when the host explicitly chose `ipapi`;
+   * - special-purpose addresses and a disabled lookup return null.
+   *
+   * @param {string} anonymizedIp Anonymised address.
+   * @returns {Promise<{country: string|null, country_code: string|null, city: string|null}|null>}
+   *   Location, or null when there is none.
+   * @sideeffect Reads the local MMDB file; with the explicit `ipapi` provider, sends the
+   *   anonymised address to ipapi.co.
+   */
+  async getSecurityLogLocation(anonymizedIp) {
+    const lookupIp = normalizeLookupIp(anonymizedIp);
+    if (!lookupIp || net.isIP(lookupIp) === 0 || this.isPrivateIp(lookupIp)) return null;
+    const settings = await this.getGeoSettings();
+    const provider = normalizeProvider(settings.geoIpProvider);
+    if (settings.enableGeolocation === false || provider === 'disabled') return null;
+    let info;
+    if (provider === 'ipapi') {
+      info = await this.getIpapiIpInfo(lookupIp);
+    } else {
+      const databasePath = resolveExistingDatabasePath(settings);
+      if (!databasePath || !fs.existsSync(databasePath)) return null;
+      info = await this.getLocalMmdbIpInfo(lookupIp, settings);
+    }
+    if (!info || info._status !== 'ok') return null;
+    return {
+      country: info.country || null,
+      country_code: info.country_code || null,
+      city: info.city || null,
+    };
   },
 
   /**
@@ -876,8 +890,9 @@ module.exports = ({ strapi }) => ({
   },
 
   /**
-   * Returns true for IPs that belong to private or local ranges (RFC 1918,
-   * RFC 4193, loopback, link-local).
+   * Returns true for IPs that belong to special-purpose ranges (private,
+   * loopback, link-local, CGNAT, documentation, multicast, reserved; see
+   * utils/special-ip-ranges.js).
    * @param {string} ip
    * @returns {boolean}
    */

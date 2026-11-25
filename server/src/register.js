@@ -4,6 +4,7 @@ const { createLogger } = require('./utils/logger');
 const { createContentApiPermissionsLifecycle } = require('./utils/content-api-permissions');
 const { isCallerRevocationScope } = require('./utils/block-revocation-scope');
 const { checkStrapiVersion } = require('./utils/strapi-version');
+const { disableGraphqlShadowCrud } = require('./utils/security-log-hardening');
 
 const USER_UID = 'plugin::users-permissions.user';
 
@@ -18,6 +19,8 @@ const USER_UID = 'plugin::users-permissions.user';
  *   sign-in history and Content Manager activity, and `settings.update`
  *   (4.17) for the protected settings (location lookup, webhooks, security
  *   log).
+ * - Disables GraphQL Shadow CRUD for the plugin's internal content types
+ *   when the GraphQL plugin is installed (4.17).
  * - Removes the `sessions` relation field from the User content type so it
  *   doesn't clutter the default edit view (sessions are displayed via the
  *   SessionInfoPanel side panel).
@@ -82,6 +85,8 @@ module.exports = async ({ strapi }) => {
       pluginName: 'magic-sessionmanager',
     },
   ]);
+
+  disableGraphqlShadowCrud(strapi, log);
 
   try {
     strapi.db.lifecycles.subscribe(createContentApiPermissionsLifecycle(strapi));

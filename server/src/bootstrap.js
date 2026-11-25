@@ -56,6 +56,11 @@ const {
 } = require('./utils/native-session-capture');
 const { ensureNativeTrackingSince } = require('./utils/native-only-insight');
 const { installAdminActivityCapture } = require('./utils/admin-activity-capture');
+const {
+  createInternalTypeGuard,
+  migrateSecurityLog,
+  warnUnboundedProxyTrust,
+} = require('./utils/security-log-hardening');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -304,15 +309,32 @@ module.exports = async ({ strapi }) => {
     strapi.server.use(require('./middlewares/last-seen')({ strapi, sessionService }));
     log.info('[SUCCESS] LastSeen middleware mounted');
 
+    // The plugin's internal types answer 404 in the Content Manager admin
+    // API, also for roles a Super Admin granted explorer permissions (4.17).
+    strapi.server.use(createInternalTypeGuard());
+    warnUnboundedProxyTrust(strapi, log);
+
     // Admin sign-in history and Content Manager activity (4.15). The
     // retention job runs on one process per day (lease).
+    const runExclusive = async (name, leaseMs, job) => {
+      if (await coordinator.tryAcquireLease(name, leaseMs)) await job();
+    };
     strapi.sessionManagerAdminActivityUninstall = installAdminActivityCapture(strapi, {
       log,
-      runExclusive: async (name, leaseMs, job) => {
-        if (await coordinator.tryAcquireLease(name, leaseMs)) await job();
-      },
+      runExclusive,
     });
     log.info('[SUCCESS] Admin activity capture mounted');
+
+    // One-time security log migrations (4.17): retention below 7 days is
+    // raised to 7; stored entry titles are removed. Idempotent; the daily
+    // retention job finishes what one run leaves.
+    try {
+      await runExclusive('job:security-log-migrations', 10 * 60 * 1000, async () => {
+        await migrateSecurityLog(strapi, log);
+      });
+    } catch (err) {
+      log.warn('[security-log] Migration failed:', err?.name || 'Error');
+    }
 
     const contentApiPermissionsReady = await ensureContentApiPermissions(strapi, log);
     mountDeferredContentApiPermissionRetry({
