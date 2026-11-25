@@ -77,6 +77,10 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['GET', '/geoip/status', 'geoip.getStatus'],
     ['PUT', '/geoip/credentials', 'geoip.storeCredentials'],
     ['POST', '/geoip/update', 'geoip.updateDatabase'],
+    ['GET', '/impersonation/status', 'impersonation.status'],
+    ['POST', '/impersonation/users/:userId', 'impersonation.startUser'],
+    ['GET', '/impersonation/active', 'impersonation.listActive'],
+    ['POST', '/impersonation/:id/end', 'impersonation.end'],
     ['GET', '/settings', 'settings.getSettings'],
     ['PUT', '/settings', 'settings.updateSettings'],
   ];
@@ -134,10 +138,30 @@ test('admin panel session routes need their own actions, and sign-out is write r
       !path.startsWith('/admin-sessions/') &&
       !path.startsWith('/admin-activity/') &&
       path !== '/lockouts/unlock' &&
-      path !== '/webhook/test'
+      path !== '/webhook/test' &&
+      !(path.startsWith('/impersonation/') && path !== '/impersonation/status')
   )) {
     assert.deepEqual(actionsOf(route), ['plugin::magic-sessionmanager.access']);
   }
+});
+
+test('impersonation routes need impersonate.users; starting is rate limited per admin', () => {
+  const actionsOf = (route) =>
+    route.config.policies.find((policy) => policy?.name === 'admin::hasPermissions').config.actions;
+  const routes = adminRoutes.filter(
+    ({ path }) => path.startsWith('/impersonation/') && path !== '/impersonation/status'
+  );
+  assert.equal(routes.length, 3);
+  for (const route of routes) {
+    assert.equal(route.config.policies[0], 'admin::isAuthenticatedAdmin');
+    assert.deepEqual(actionsOf(route), [
+      'plugin::magic-sessionmanager.access',
+      'plugin::magic-sessionmanager.impersonate.users',
+    ]);
+    assert.equal(route.config.middlewares[0].name, 'plugin::magic-sessionmanager.rate-limit');
+  }
+  const start = routes.find(({ path }) => path === '/impersonation/users/:userId');
+  assert.deepEqual(start.config.middlewares[0].config, { max: 10, window: 10 * 60 * 1000 });
 });
 
 test('the signed webhook test needs settings.update and is write rate limited', () => {
@@ -177,7 +201,12 @@ test('lifting a sign-in lock needs lockouts.unlock and is write rate limited', (
 });
 
 /** Public on purpose (4.17): the "This wasn't me" email link; a signed single-use token authorises. */
-const PUBLIC_CONTENT_ROUTES = new Set(['GET /not-me', 'POST /not-me']);
+const PUBLIC_CONTENT_ROUTES = new Set([
+  'GET /not-me',
+  'POST /not-me',
+  // The one-time impersonation code is the credential (4.20).
+  'POST /impersonation/exchange',
+]);
 
 test('every content API route has a real controller action and JWT protection', () => {
   for (const route of contentRoutes) {

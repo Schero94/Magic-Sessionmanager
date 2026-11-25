@@ -20,6 +20,7 @@
 const { getCoordinator } = require('./coordination');
 const { normalizePolicySettings } = require('./policy-settings');
 const { normalizeDetectionSettings } = require('./detection-settings');
+const { normalizeImpersonationSettings } = require('./impersonation-rules');
 
 const PLUGIN_ID = 'magic-sessionmanager';
 const SETTINGS_KEY = 'settings';
@@ -223,6 +224,8 @@ function normalizeStoredSettings(stored) {
   if (typeof stored.genericWebhookSecret === 'string') {
     out.genericWebhookSecret = stored.genericWebhookSecret;
   }
+  // Impersonation switch (4.20); off unless stored as true.
+  Object.assign(out, normalizeImpersonationSettings(stored));
 
   return out;
 }

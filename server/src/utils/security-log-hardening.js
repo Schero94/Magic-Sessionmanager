@@ -42,6 +42,7 @@ const INTERNAL_TYPES = Object.freeze([
   `plugin::${PLUGIN_ID}.session`,
   `plugin::${PLUGIN_ID}.revoked-token`,
   EVENT_UID,
+  `plugin::${PLUGIN_ID}.impersonation`,
 ]);
 /** Store key of the one-time migrations. */
 const MIGRATIONS_KEY = 'migrations';

@@ -1,3 +1,21 @@
+## [Unreleased]
+
+Release type: minor (`feat`: impersonation of app users). Additive: a new RBAC action, four admin routes, one public Content API route, a new internal content type and a settings key that is off by default. No existing route, response or permission changes.
+
+### Features
+
+* **Impersonate app users.** Admins whose role holds the new permission **Impersonate app users** (Settings › Roles › Plugins › Session Manager › Impersonation; Super Admin holds it automatically) can act as a Users & Permissions user for 15, 30 or 60 minutes to reproduce a problem. **Impersonate…** in the user's Sessions panel in the Content Manager asks for a reason (3 to 255 characters), the duration and whether to email the user, then hands over a short-lived credential once.
+* **Short-lived credential only.** In refresh mode (`jwtManagement: 'refresh'`) a Strapi session is created through `strapi.sessionManager('users-permissions')` on its own device id and marked in the session metadata, which Strapi keeps across refresh; in legacy mode a JWT whose `exp` is the end of the impersonation. Both get a Magic session row. The user's password is never touched or shown, and no long-lived token is issued.
+* **Frontend hand-off.** With `impersonation.frontendUrl` in the plugin config (https only, origin on `impersonation.allowedFrontendOrigins`), the admin panel posts a one-time code to that URL in a new tab (HTTP POST, never in a URL). The frontend exchanges it at `POST /api/magic-sessionmanager/impersonation/exchange` within 60 seconds; the code is stored as a hash and works once (atomic). Without the setting the token is shown once with a copy button and a warning.
+* **What an impersonation cannot do.** A global middleware refuses, with 403 and `details.reason` `impersonation-credentials`, `-account` or `-sessions`: every `/auth/*` route except `POST /auth/refresh` and `GET /auth/sessions` (password change and reset, email confirmation, sign-in, register, providers, logout, ending sessions), `/connect/*`, writes to `/users`, the plugin's own write routes (logout, ending own sessions), the data export (`GET /my-data`), "This wasn't me" links, Magic Link and passwordless sign-in, and GraphQL mutations of that kind. Every response carries `X-Magic-Impersonation: true`.
+* **Ending.** Impersonations end at their time (request check plus a sweep every 30 seconds), with **End impersonation** in the dialog, in the Sessions panel, or in the new list **Settings › Session Manager › Impersonation › Active impersonations**, and all at once when the switch is turned off.
+* **Switch and security log.** The new **Impersonation** settings tab has **Allow impersonation**, off by default and a protected setting (`settings.update`). `impersonation.started`, `.ended`, `.expired` and `.refused` go to the security log with the real admin as actor, the user as target, the reason and the duration; no code or token. The events stay when the admin's account is deleted.
+* **Limits.** Ten starts per admin per ten minutes; ten code exchanges per minute per IP address. Admin API tokens cannot impersonate.
+
+### Migration
+
+* Nothing to do. The feature stays off until a Super Admin turns on **Allow impersonation**. A new table `magic_sessions_impersonations` is created at start-up. To use the frontend hand-off, add `impersonation.frontendUrl` to the plugin config and expose the `X-Magic-Impersonation` header through `strapi::cors` (see README › Impersonation).
+
 ## [4.19.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.19.0...v4.19.1) (2026-11-25)
 
 

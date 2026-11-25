@@ -208,6 +208,7 @@ test('F8: GraphQL Shadow CRUD is disabled for every plugin type when GraphQL is 
     'plugin::magic-sessionmanager.session',
     'plugin::magic-sessionmanager.revoked-token',
     'plugin::magic-sessionmanager.security-event',
+    'plugin::magic-sessionmanager.impersonation',
   ]);
   assert.deepEqual(disableGraphqlShadowCrud({ plugin: () => undefined }, silentLog), []);
 });

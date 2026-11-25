@@ -42,6 +42,7 @@ Live docs: [https://schero94.github.io/Magic-Sessionmanager/](https://schero94.g
 - [Optional route policy: `session-required`](#optional-route-policy-session-required)
 - [Admin API and permissions](#admin-api-and-permissions)
 - [Admin activity and sign-in history](#admin-activity-and-sign-in-history)
+- [Impersonation](#impersonation)
 - [Running several instances (Railway replicas, pm2 cluster)](#running-several-instances-railway-replicas-pm2-cluster)
 - [Performance](#performance)
 - [Security and privacy](#security-and-privacy)
@@ -626,6 +627,7 @@ Prefix `/api/magic-sessionmanager`. Every route requires a Users & Permissions J
 | DELETE    | `/my-sessions/:sessionId` | End one own session that is not the current one (reason `manual`)                                                                                          | `{ message, success, alreadyTerminated }`; 400 for the current session, 404 for unknown or foreign IDs                    |
 | GET       | `/my-data`                | Own sessions and security events as a JSON download (GDPR Art. 15); 3 per hour                                                                             | `{ exportedAt, user, sessions, securityEvents }` with `Content-Disposition: attachment`; no tokens, hashes or device keys |
 | GET, POST | `/not-me`                 | **Public** (no JWT): the "This wasn't me" link of the security emails; GET shows a confirmation, POST `{ token, scope: 'session' \| 'all' }` ends sessions | HTML page, or `{ data: { ended, scope } }` with `Accept: application/json`; 410 when the link is invalid, expired or used |
+| POST      | `/impersonation/exchange` | **Public** (no JWT): exchanges the one-time code of the [impersonation](#impersonation) hand-off, `{ code }`; 10 per minute per IP                         | `{ data: { jwt, refreshToken?, expiresAt, user, impersonation } }`; 400 for any unusable code                             |
 
 `POST /api/auth/logout` also ends the current session; the plugin mounts it when Users & Permissions does not provide it.
 
@@ -761,10 +763,11 @@ The **Admin panel sessions** routes need two more permissions, which only the Su
 | `plugin::magic-sessionmanager.admin-activity.read`   | View admin activity                                                                   | Sign-in history, Activity, Recent security activity and the Security activity page, CSV exports and changing the Admin activity settings (also needs read)                                                                                                                                                                                                                                                                                  |
 | `plugin::magic-sessionmanager.settings.update`       | Change protected settings (location lookup, webhooks, security log, sign-in policies) | Changing IP location lookup, provider, lookup failure mode and database file, team notification webhooks, the sign-in and session policies (lockout, trusted addresses, session limit, password-change sign-out, role rules), the signed webhook and its **Send test**, the event selection, impossible travel and shortened session IPs, and (with View admin activity) the security log settings. Since 4.17; Super Admin only by default |
 | `plugin::magic-sessionmanager.lockouts.unlock`       | Unlock locked sign-ins                                                                | **Unlock** in Login protection › Locked now (also needs `access`)                                                                                                                                                                                                                                                                                                                                                                           |
+| `plugin::magic-sessionmanager.impersonate.users`     | Impersonate app users                                                                 | Starting, listing and ending impersonations of app users (also needs `access` and the **Allow impersonation** switch); see [Impersonation](#impersonation). Since 4.20                                                                                                                                                                                                                                                                      |
 
 **What the admin panel view shows about other admins (4.17).** Names, emails and roles of admins are Strapi's own user data. The Admin panel view and the sign-in history return them only to roles that may also read them in Settings › Users: email and name need Strapi's **Read** permission on Users (`admin::users.read`), role names need it or **Read** on Roles (`admin::roles.read`). Without them the list shows "Admin #12", "Email hidden" and "Hidden" (roles), and the search matches the admin id only. Every admin always sees their own row. Grant `admin::users.read` to roles that should keep seeing names and emails.
 
-**Protected settings (4.17).** `PUT /settings` still needs only `access`, so roles that change the session, login-protection, alert-email and retention options keep working. Changing a protected key needs **Change protected settings** as well, else 403 with `error.details.reason: "settings-update-permission"`: `enableGeolocation`, `geoIpProvider`, `geoLookupFailureMode`, `geoIpDatabasePath`, `enableWebhooks`, `discordWebhookUrl`, `slackWebhookUrl`, every security log key (those also keep needing **View admin activity**, reason `admin-activity-permission`) and the sign-in and session policy keys (`maxFailedLoginsPerAccount`, `lockoutWindowMinutes`, `lockoutDurationMinutes`, `lockoutTrustedAddresses`, `lockoutNotifyUser`, `recordUserSignInEvents`, `maxSessionsPerUser`, `sessionLimitPolicy`, `endOtherSessionsOnPasswordChange`, `roleRules`), and the detection and integration keys (`impossibleTravelEnabled`, `impossibleTravelSpeedKmh`, `impossibleTravelMinDistanceKm`, `impossibleTravelAction`, `webhookEvents`, `genericWebhookEnabled`, `genericWebhookUrl`, `genericWebhookSecret`, `sessionIpAnonymize`). The new-device and impossible-travel email switches stay with `access`, like the other alert emails. Sending a protected key back with its stored value is not a change, so these roles can still save the whole form. The admin UI shows these controls read-only for them.
+**Protected settings (4.17).** `PUT /settings` still needs only `access`, so roles that change the session, login-protection, alert-email and retention options keep working. Changing a protected key needs **Change protected settings** as well, else 403 with `error.details.reason: "settings-update-permission"`: `enableGeolocation`, `geoIpProvider`, `geoLookupFailureMode`, `geoIpDatabasePath`, `enableWebhooks`, `discordWebhookUrl`, `slackWebhookUrl`, every security log key (those also keep needing **View admin activity**, reason `admin-activity-permission`) and the sign-in and session policy keys (`maxFailedLoginsPerAccount`, `lockoutWindowMinutes`, `lockoutDurationMinutes`, `lockoutTrustedAddresses`, `lockoutNotifyUser`, `recordUserSignInEvents`, `maxSessionsPerUser`, `sessionLimitPolicy`, `endOtherSessionsOnPasswordChange`, `roleRules`), and the detection and integration keys (`impossibleTravelEnabled`, `impossibleTravelSpeedKmh`, `impossibleTravelMinDistanceKm`, `impossibleTravelAction`, `webhookEvents`, `genericWebhookEnabled`, `genericWebhookUrl`, `genericWebhookSecret`, `sessionIpAnonymize`), and `impersonationEnabled` (4.20). The new-device and impossible-travel email switches stay with `access`, like the other alert emails. Sending a protected key back with its stored value is not a change, so these roles can still save the whole form. The admin UI shows these controls read-only for them.
 
 | Method   | Path                                                           | Admin UI action                                                                                                                                                                                                                                     |
 | -------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -799,6 +802,10 @@ The **Admin panel sessions** routes need two more permissions, which only the Su
 | GET      | `/lockouts`                                                    | **Locked now**: `{ data: [{ id, kind: 'ip' \| 'account', ip, user, failures, lockedAt, until }] }`; read rate limit                                                                                                                                 |
 | POST     | `/lockouts/unlock`                                             | **Unlock**: body `{ id }` from the list; needs `lockouts.unlock`; 404 when the lock already ended; 10 per minute                                                                                                                                    |
 | GET      | `/roles`                                                       | Users & Permissions roles (without Public) for **Different rules for some roles**                                                                                                                                                                   |
+| GET      | `/impersonation/status`                                        | `{ data: { enabled, handoff: 'frontend' \| 'token', frontendOrigin, durations, mode } }`                                                                                                                                                            |
+| POST     | `/impersonation/users/:userId`                                 | **Start impersonation**: body `{ reason, durationMinutes: 15 \| 30 \| 60, notifyUser? }`; needs `impersonate.users`; signed-in admins only; 201 `{ data: { impersonation, handoff } }` (`Cache-Control: no-store`); 10 per 10 minutes               |
+| GET      | `/impersonation/active`                                        | **Active impersonations**: `{ data: [{ id, targetType, targetId, targetLabel, actorId, actorLabel, startedByYou, reason, durationMinutes, handoff, credentialIssued, startedAt, expiresAt, state }] }`; needs `impersonate.users`                   |
+| POST     | `/impersonation/:id/end`                                       | **End impersonation**: `{ data: { ended } }`; needs `impersonate.users`; 404 for unknown ids                                                                                                                                                        |
 
 **Session list parameters.** `page` (from 1), `pageSize` (1-100), `status` (`all`, `open`, `active`, `idle`, `ended`), `reason` (with `status=ended`: `logout`, `idle`, `expired`, `manual`, `blocked`, `unrecorded`), `search` (up to 100 characters; matches email, username, IP address, browser, operating system and device type) and `sort` (`loginTime:desc`, `loginTime:asc`, `lastActive:desc`, `lastActive:asc`). The response is `{ data, meta: { pagination: { page, pageSize, total, pageCount } } }` with exact totals. Unknown or out-of-range parameters return 400. Pages that start after the first 50,000 matching sessions return 400; narrow the filter or use the export, which walks every row with a cursor. Without `page` and `pageSize`, `GET /sessions` keeps the 4.x response (latest 1,000 rows, `meta.truncated`) for existing scripts.
 
@@ -895,6 +902,132 @@ Measured with `scripts/bench-admin-activity.cjs` (Strapi 5.63, SQLite, Node 22, 
 | On                       | 4.65-4.82 ms | 4.69-4.85 ms | 6.16-6.35 ms | 8.06-8.58 ms | 500-575               |
 
 The difference is within the run-to-run noise: recording adds no measurable latency, because the request only pushes an object onto the queue.
+
+## Impersonation
+
+Support staff sometimes need to see the app exactly as a user sees it. Since 4.20 an admin can act as a Users & Permissions user for a limited time, with a reason that is recorded. Off by default.
+
+**Turn it on.** Settings › Session Manager › **Impersonation** › **Allow impersonation** (a protected setting: needs **Change protected settings**). Then grant **Impersonate app users** (`plugin::magic-sessionmanager.impersonate.users`) to the roles that may use it under Settings › Administration Panel › Roles › Plugins › Session Manager › Impersonation. The Super Admin role holds it automatically, like every plugin permission; other roles get 403 until it is granted. Turning the switch off ends every running impersonation at once.
+
+**Start one.** Open the user in the Content Manager. The Sessions panel shows **Impersonate…** (only with the permission and the switch on). Enter a reason (3 to 255 characters; stored in the security log), choose 15, 30 or 60 minutes (default 15) and, if you like, **Email the user that their account was opened** (through Strapi's email plugin, with the reason and the duration; no admin name). Blocked users cannot be impersonated, and one user has at most one running impersonation.
+
+**What you get.** A short-lived credential for that user and nothing else; the password is never read, shown or changed.
+
+- `jwtManagement: 'refresh'`: a Strapi session created with `strapi.sessionManager('users-permissions').generateRefreshToken(userId, deviceId, { type: 'session', metadata })` on its own device id, marked in the session metadata (Strapi keeps the metadata when the refresh token rotates), plus an access token. `POST /api/auth/refresh` keeps working until the end; at the end the plugin deletes the session (`invalidateRefreshToken(userId, deviceId)`), so access and refresh tokens stop at once.
+- `legacy-support`: a JWT with an `msmImp` claim whose `exp` is the end of the impersonation. Ending it puts the token on the plugin's revocation list.
+- Either way the user's session list shows a Magic session row for it, and the plugin's own session checks apply.
+
+**Frontend hand-off (recommended).** Configure where the frontend accepts it:
+
+```js
+// config/plugins.js
+'magic-sessionmanager': {
+  config: {
+    impersonation: {
+      frontendUrl: 'https://app.example.com/impersonate',
+      allowedFrontendOrigins: ['https://app.example.com'], // optional allow-list; default: the URL's origin
+    },
+  },
+},
+```
+
+`frontendUrl` must be https (plain http only for `localhost` outside production), without user info, query or fragment, and its origin must be on `allowedFrontendOrigins`; otherwise Strapi refuses to start with a message naming the key. Admins cannot change it in the UI. After **Start impersonation** the dialog shows **Open frontend**: the admin panel sends a one-time code to `frontendUrl` with an HTTP **POST** form in a new tab (field `code`), so the code never appears in a URL, the browser history, a `Referer` header or an access log. The frontend's server exchanges it within **60 seconds**:
+
+```js
+// Next.js route handler (app/impersonate/route.js), as an example
+export async function POST(request) {
+  const form = await request.formData();
+  const response = await fetch(
+    `${process.env.STRAPI_URL}/api/magic-sessionmanager/impersonation/exchange`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: form.get('code') }),
+    }
+  );
+  if (!response.ok) return new Response('This link has expired.', { status: 400 });
+  const { data } = await response.json(); // { jwt, refreshToken?, expiresAt, user, impersonation }
+  // Store the credential the way your app stores a normal sign-in (for example an httpOnly cookie
+  // that expires at data.expiresAt), then redirect to the app.
+}
+```
+
+Strapi's default Content-Security-Policy for the admin panel only lets forms post to Strapi itself (`form-action 'self'`), so allow the frontend origin, and only that one:
+
+```js
+// config/middlewares.js
+{
+  name: 'strapi::security',
+  config: {
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: { 'form-action': ["'self'", 'https://app.example.com'] },
+    },
+  },
+},
+```
+
+Strapi logs a warning at start-up while `frontendUrl` is set but its origin is missing from `form-action`, and the dialog explains the block when the browser reports it.
+
+The code is 32 random bytes, stored only as a SHA-256 hash, valid for 60 seconds and usable once (an atomic update, so two parallel exchanges give one credential). Every unknown, used, expired or malformed code gets the same `400 Invalid or expired code`. The exchange route is public on purpose (the code is the credential) and limited to 10 requests per minute per IP address. Because the frontend accepts a cross-site POST, only start a session from it after a successful exchange, and never on GET.
+
+**Without `frontendUrl`** the dialog shows the access token (and, in refresh mode, the refresh token) once, read-only, with a copy button and a warning. Use it in a private browser window or an API client and do not store it.
+
+**What an impersonation cannot do.** A global middleware recognises impersonation credentials (the claim or the session marker; Strapi checks the signature afterwards, so a forged token can only add restrictions) and refuses with 403, `error.details.reason` `impersonation-credentials`, `impersonation-account` or `impersonation-sessions`:
+
+- every `/api/auth/*` route except `POST /api/auth/refresh` and `GET /api/auth/sessions`: password change, reset and forgot-password, email confirmation, sign-in, registration, provider sign-in, logout and ending sessions; also `/api/connect/*`;
+- `POST`, `PUT` and `DELETE` on `/api/users` and `/api/users/:id` (email, password and account changes, account deletion);
+- the plugin's own routes except the three reads (`/my-sessions`, `/current-session`, `/user/:userId/sessions`): logout, ending own sessions, the data export `GET /my-data`, "This wasn't me" links and the exchange itself (no nesting);
+- Magic Link and passwordless sign-in routes, and GraphQL mutations that sign in, register or change the password or the user (`login`, `register`, `changePassword`, `updateUsersPermissionsUser`, …).
+
+Everything else of your API works as for the user. An ended or expired impersonation gets 401 with `impersonation-ended` or `impersonation-expired`.
+
+**Show a banner in your frontend.** Every response to an impersonation request carries `X-Magic-Impersonation: true`. Browsers let cross-origin JavaScript read it only when CORS exposes it:
+
+```js
+// config/middlewares.js
+{ name: 'strapi::cors', config: { expose: ['X-Magic-Impersonation', 'X-Session-Terminated-Reason'] } },
+```
+
+```js
+// A small fetch wrapper
+export async function api(path, init) {
+  const response = await fetch(`${STRAPI_URL}${path}`, init);
+  const impersonating = response.headers.get('X-Magic-Impersonation') === 'true';
+  document.body.toggleAttribute('data-impersonating', impersonating);
+  return response;
+}
+```
+
+```css
+body[data-impersonating]::before {
+  content: 'Support is signed in as this user. Changes are recorded.';
+  position: sticky;
+  top: 0;
+  display: block;
+  padding: 8px 16px;
+  background: #fdf4dc;
+  color: #3d2e00;
+  font: 14px/1.4 system-ui;
+  z-index: 1000;
+}
+```
+
+**Ending.** An impersonation ends by itself at its time (checked on every request and by a sweep every 30 seconds), with **End impersonation** in the dialog or in the user's Sessions panel, in **Settings › Impersonation › Active impersonations** (who, started by, reason, end time), or for all of them when the switch is turned off. Admins with **Impersonate app users** see and can end every running impersonation of an app user.
+
+**Security log.** `impersonation.started` (actor: the real admin; target: the user; `meta`: reason, duration, hand-off, whether the user was emailed), `impersonation.ended` (actor: the admin who ended it, `meta.startedBy`), `impersonation.expired` (actor: system) and `impersonation.refused` (`meta.refusal`: `disabled`, `blocked`, `already-active`, `api-token`, or `call-credentials` / `call-account` / `call-sessions` for a refused request, at most one per minute and reason). No code, token or hash is ever logged. The events stay when the admin's account is deleted (the actor reference is cleared) and are deleted with the user. Rows of the impersonation table (`magic_sessions_impersonations`) are deleted 7 days after the impersonation ended.
+
+**Limits.** 10 starts per admin per 10 minutes; 10 code exchanges per minute per IP address. Admin API tokens cannot impersonate (403 `api-token`); only a signed-in admin can.
+
+**Security model.**
+
+- Who: only roles granted **Impersonate app users**, only while the switch (a protected setting) is on, only signed-in admins.
+- What: a credential of the user's own permissions, never more; credential, account and session changes are refused.
+- How long: at most 60 minutes, enforced server-side; codes 60 seconds and single use.
+- Accountability: reason, duration, actor and target in the security log; optional email to the user.
+- Not covered: requests your own routes make on the user's behalf are not restricted unless they match the list above; review custom routes that change credentials or emails. Admins of the admin panel cannot be impersonated (see below).
+
+**Works councils and GDPR (information, not legal advice).** Acting as a user processes that user's personal data. A typical basis is a legitimate interest in support and in fixing faults (Art. 6(1)(f) GDPR) or the contract with the user; tell users in your privacy information (Art. 13) and consider turning on the email notice. The security log shows which admin did what and when; in Germany a technical system that can monitor employees' behaviour or performance is subject to the works council's co-determination (Section 87(1) no. 6 BetrVG), and comparable rules exist elsewhere. Agree the feature with the works council where there is one before you turn it on, keep the circle of roles small, and check whether a data protection impact assessment (Art. 35 GDPR) is needed.
 
 ## Running several instances (Railway replicas, pm2 cluster)
 
@@ -1084,6 +1217,7 @@ The plugin sits in the request path of every authenticated Content API call, so 
 - **Reporting a vulnerability.** Please do not post exploit details in a public issue. Open an issue that asks for a private contact, or use the email address on the maintainer's GitHub profile, and you will get a reply before anything is published.
 - **Secrets.** MaxMind license keys are never returned to the browser. Webhook URLs grant posting rights to your channel; treat them as secrets. Exports never contain tokens.
 - **Admin panel sessions.** The Admin panel view reads Strapi's own `admin::session` records (origin `admin`). Only Super Admin can see or sign out admins until another role is granted `admin-sessions.read` / `admin-sessions.revoke`; a delegated role cannot sign out a Super Admin. Sign-outs need a signed-in administrator (not an admin API token), are rate limited and logged with admin ids and counts only.
+- **Impersonation.** Off by default; only roles with **Impersonate app users**, only signed-in admins, at most 60 minutes, credential and account changes refused, every start, end, expiry and refusal in the security log. Details: [Impersonation](#impersonation).
 - **Admin activity and sign-in history.** The plugin's security log stores admin sign-ins with IP address and user agent (on by default; IP anonymisation and retention configurable) and, only when you turn it on, Content Manager activity. Only Super Admin sees it until another role gets `admin-activity.read`. Typed emails of failed sign-ins, passwords and request bodies are never stored. Details and legal notes: [Admin activity and sign-in history](#admin-activity-and-sign-in-history).
 
 ---
@@ -1102,6 +1236,7 @@ Information for your records of processing, a data protection impact assessment 
 | Lock counters                                                                                                                                                                                | During the counting window and the lock                   | `magic_sm_counters` (SHA-256 hashes of IP and identifier) | Until the lock ends                                                          | Nobody (hashes)                                                                     | Lockout thresholds; 0 turns a lock off                                                                          |
 | "Locked now" entries                                                                                                                                                                         | While a lock lasts                                        | `magic_sm_cache`                                          | Until the lock ends                                                          | Admins with plugin access                                                           | Follows the log's IP options                                                                                    |
 | Admin sign-ins and, opt-in, Content Manager activity                                                                                                                                         | See [Admin activity](#admin-activity-and-sign-in-history) | Security log                                              | `securityLogRetentionDays`                                                   | Admins with **View admin activity**                                                 | **Record admin sign-ins** (on), **Record Content Manager activity** (off)                                       |
+| Impersonations: admin, user, reason, duration, start and end; refused starts and refused requests                                                                                            | When an admin impersonates a user                         | `magic_sessions_impersonations` and the security log      | Table: 7 days after the end; log: `securityLogRetentionDays`                 | Admins with **Impersonate app users** (list), **View admin activity** (log)         | **Allow impersonation** (off)                                                                                   |
 
 What leaves the server, only when you turn it on: security emails through Strapi's email provider; Discord, Slack and the signed webhook with the selected events (user documentId, IP as the log stores it, browser, country, city, event details; never email addresses or passwords); IP lookups at ipapi.co only with the `auto`/`ipapi` provider. No telemetry.
 

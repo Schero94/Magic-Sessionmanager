@@ -23,7 +23,9 @@
  * admin sign-in history and Content Manager activity (`/admin-activity/...`)
  * require `admin-sessions.read` and `admin-activity.read`. Lifting a sign-in
  * lock (`/lockouts/unlock`) requires `lockouts.unlock`. Sending a signed
- * webhook test (`/webhook/test`) requires `settings.update`.
+ * webhook test (`/webhook/test`) requires `settings.update`. Starting,
+ * listing and ending impersonations of app users (`/impersonation/...`,
+ * 4.20) require `impersonate.users`; starting also refuses admin API tokens.
  *
  * The permissions are registered in `server/src/register.js`.
  * By Strapi convention:
@@ -42,6 +44,7 @@ const ADMIN_SESSIONS_REVOKE_ACTION = 'plugin::magic-sessionmanager.admin-session
 const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
 const LOCKOUTS_UNLOCK_ACTION = 'plugin::magic-sessionmanager.lockouts.unlock';
 const SETTINGS_UPDATE_ACTION = 'plugin::magic-sessionmanager.settings.update';
+const IMPERSONATE_USERS_ACTION = 'plugin::magic-sessionmanager.impersonate.users';
 
 /**
  * Returns the policy chain that every admin route in this plugin must use.
@@ -422,6 +425,50 @@ const baseRoutes = [
   },
 
   // ============================ SETTINGS ============================
+  // ================== IMPERSONATION (4.20) ==================
+  {
+    method: 'GET',
+    path: '/impersonation/status',
+    handler: 'impersonation.status',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+    },
+  },
+  {
+    method: 'POST',
+    path: '/impersonation/users/:userId',
+    handler: 'impersonation.startUser',
+    config: {
+      policies: adminSessionsPolicy([IMPERSONATE_USERS_ACTION]),
+      // Ten starts per ten minutes per admin.
+      middlewares: [
+        {
+          name: 'plugin::magic-sessionmanager.rate-limit',
+          config: { max: 10, window: 10 * 60 * 1000 },
+        },
+      ],
+    },
+  },
+  {
+    method: 'GET',
+    path: '/impersonation/active',
+    handler: 'impersonation.listActive',
+    config: {
+      policies: adminSessionsPolicy([IMPERSONATE_USERS_ACTION]),
+      middlewares: adminReadRateLimit(),
+    },
+  },
+  {
+    method: 'POST',
+    path: '/impersonation/:id/end',
+    handler: 'impersonation.end',
+    config: {
+      policies: adminSessionsPolicy([IMPERSONATE_USERS_ACTION]),
+      middlewares: adminSignOutRateLimit(),
+    },
+  },
+
   {
     method: 'GET',
     path: '/settings',

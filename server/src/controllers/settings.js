@@ -21,6 +21,10 @@ const {
 } = require('../utils/settings-access');
 const { POLICY_DEFAULTS, validatePolicySettings } = require('../utils/policy-settings');
 const { DETECTION_DEFAULTS, validateDetectionSettings } = require('../utils/detection-settings');
+const {
+  IMPERSONATION_DEFAULTS,
+  validateImpersonationSettings,
+} = require('../utils/impersonation-rules');
 const { encryptToken } = require('../utils/encryption');
 
 /** Webhook secret: 32-256 printable ASCII characters, no spaces. */
@@ -253,6 +257,7 @@ const DEFAULT_SETTINGS = {
   ...DETECTION_DEFAULTS,
   webhookEvents: [...DETECTION_DEFAULTS.webhookEvents],
   genericWebhookSecret: '',
+  ...IMPERSONATION_DEFAULTS,
 };
 
 /**
@@ -526,6 +531,10 @@ function validateSettingsUpdate(body, current) {
   errors.push(...detection.errors);
   Object.assign(next, detection.values);
 
+  const impersonation = validateImpersonationSettings(body);
+  errors.push(...impersonation.errors);
+  Object.assign(next, impersonation.values);
+
   if (has('genericWebhookSecret')) {
     const secret = body.genericWebhookSecret;
     if (secret === '') {
@@ -792,6 +801,17 @@ module.exports = {
       }
 
       recordSettingsChange(ctx, outcome.changed);
+      // Turning impersonation off ends every active impersonation now.
+      if (
+        outcome.changed.includes('impersonationEnabled') &&
+        !outcome.settings.impersonationEnabled
+      ) {
+        strapi
+          .plugin('magic-sessionmanager')
+          .service('impersonation')
+          .sweep()
+          .catch(() => {});
+      }
       strapi.log.info(
         `[magic-sessionmanager/settings] Settings updated (${outcome.changed.length} keys changed)`
       );

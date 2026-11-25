@@ -45,6 +45,13 @@ const SECURITY_EVENTS = Object.freeze({
   USER_IMPOSSIBLE_TRAVEL: 'user.sign-in.impossible-travel',
   USER_NOT_ME: 'user.not-me',
   USER_DATA_EXPORTED: 'user.data.exported',
+  // Impersonation (4.20): always recorded while the feature is on; the actor
+  // is the real admin, the target the app user. `meta` holds the reason and
+  // the duration, never a code or token.
+  IMPERSONATION_STARTED: 'impersonation.started',
+  IMPERSONATION_ENDED: 'impersonation.ended',
+  IMPERSONATION_EXPIRED: 'impersonation.expired',
+  IMPERSONATION_REFUSED: 'impersonation.refused',
 });
 
 /**
@@ -56,6 +63,10 @@ const KEEP_WITHOUT_ACTOR_EVENTS = Object.freeze([
   SECURITY_EVENTS.ADMIN_SESSION_REVOKED,
   SECURITY_EVENTS.SETTINGS_UPDATED,
   SECURITY_EVENTS.LOG_READ,
+  SECURITY_EVENTS.IMPERSONATION_STARTED,
+  SECURITY_EVENTS.IMPERSONATION_ENDED,
+  SECURITY_EVENTS.IMPERSONATION_EXPIRED,
+  SECURITY_EVENTS.IMPERSONATION_REFUSED,
 ]);
 
 /**

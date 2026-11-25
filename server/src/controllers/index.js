@@ -8,6 +8,7 @@ const adminActivity = require('./admin-activity');
 const lockouts = require('./lockouts');
 const selfService = require('./self-service');
 const webhooks = require('./webhooks');
+const impersonation = require('./impersonation');
 
 module.exports = {
   session,
@@ -18,4 +19,5 @@ module.exports = {
   lockouts,
   'self-service': selfService,
   webhooks,
+  impersonation,
 };

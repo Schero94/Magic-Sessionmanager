@@ -20,6 +20,7 @@ const TAB_FILES = {
   'location-data': 'LocationDataTab.jsx',
   alerts: 'AlertsTab.jsx',
   'data-retention': 'DataRetentionTab.jsx',
+  impersonation: 'ImpersonationTab.jsx',
   'admin-activity': 'AdminActivityTab.jsx',
 };
 
@@ -88,10 +89,18 @@ test('settings are split into a page, one module per tab and the useSettingsForm
   }
 });
 
-test('five DS tabs in IA order with sentence-case labels, plus Admin activity (IA I.1-16, F)', () => {
+test('six DS tabs in IA order with sentence-case labels, plus Admin activity (IA I.1-16, F)', () => {
   assert.deepEqual(
     [...SETTINGS_TAB_IDS],
-    ['sessions', 'login-protection', 'location-data', 'alerts', 'data-retention', 'admin-activity']
+    [
+      'sessions',
+      'login-protection',
+      'location-data',
+      'alerts',
+      'data-retention',
+      'impersonation',
+      'admin-activity',
+    ]
   );
   assert.deepEqual(
     SETTINGS_TAB_IDS.map((tab) => SETTINGS_TAB_LABELS[tab][1]),
@@ -101,11 +110,12 @@ test('five DS tabs in IA order with sentence-case labels, plus Admin activity (I
       'Location data',
       'Alerts',
       'Data and retention',
+      'Impersonation',
       'Admin activity',
     ]
   );
   // Admin activity is only shown to admins with "View admin activity".
-  assert.deepEqual(getVisibleSettingsTabs(false), SETTINGS_TAB_IDS.slice(0, 5));
+  assert.deepEqual(getVisibleSettingsTabs(false), SETTINGS_TAB_IDS.slice(0, 6));
   assert.deepEqual(getVisibleSettingsTabs(true), [...SETTINGS_TAB_IDS]);
   assert.equal(resolveSettingsTab('admin-activity', getVisibleSettingsTabs(false)), 'sessions');
   assert.equal(

@@ -19,6 +19,8 @@ const USER_UID = 'plugin::users-permissions.user';
  *   sign-in history and Content Manager activity, and `settings.update`
  *   (4.17) for the protected settings (location lookup, webhooks, security
  *   log).
+ * - Registers `impersonate.users` (4.20) for starting, listing and ending
+ *   impersonations of app users.
  * - Disables GraphQL Shadow CRUD for the plugin's internal content types
  *   when the GraphQL plugin is installed (4.17).
  * - Removes the `sessions` relation field from the User content type so it
@@ -92,6 +94,17 @@ module.exports = async ({ strapi }) => {
       displayName: 'Unlock locked sign-ins',
       uid: 'lockouts.unlock',
       subCategory: 'General',
+      pluginName: 'magic-sessionmanager',
+    },
+    // Impersonation of app users (4.20): a short-lived credential for one
+    // Users & Permissions user, with a reason, logged. Super Admin holds it
+    // automatically; other roles only when granted. Works only while the
+    // Impersonation switch in the settings is on.
+    {
+      section: 'plugins',
+      displayName: 'Impersonate app users',
+      uid: 'impersonate.users',
+      subCategory: 'Impersonation',
       pluginName: 'magic-sessionmanager',
     },
   ]);

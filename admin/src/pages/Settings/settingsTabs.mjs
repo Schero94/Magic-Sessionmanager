@@ -11,6 +11,7 @@ export const SETTINGS_TAB_IDS = Object.freeze([
   'location-data',
   'alerts',
   'data-retention',
+  'impersonation',
   'admin-activity',
 ]);
 
@@ -26,6 +27,7 @@ export const SETTINGS_TAB_LABELS = Object.freeze({
   'location-data': ['settings.config.tab.locationData', 'Location data'],
   alerts: ['settings.config.tab.alerts', 'Alerts'],
   'data-retention': ['settings.config.tab.dataRetention', 'Data and retention'],
+  impersonation: ['settings.config.tab.impersonation', 'Impersonation'],
   'admin-activity': ['settings.config.tab.adminActivity', 'Admin activity'],
 });
 
@@ -86,6 +88,7 @@ export const SETTINGS_TAB_FIELDS = Object.freeze({
     'genericWebhookSecret',
   ],
   'data-retention': ['retentionDays', 'sessionIpAnonymize'],
+  impersonation: ['impersonationEnabled'],
   'admin-activity': [
     'adminSignInHistory',
     'adminContentActivity',
@@ -174,6 +177,7 @@ export const SETTINGS_FIELD_LABELS = Object.freeze({
   discordWebhookUrl: ['settings.config.webhooks.discord.label', 'Discord webhook URL'],
   slackWebhookUrl: ['settings.config.webhooks.slack.label', 'Slack webhook URL'],
   retentionDays: ['settings.config.retention.keep.label', 'Keep ended sessions for'],
+  impersonationEnabled: ['settings.impersonation.enable.label', 'Allow impersonation'],
   adminSignInHistory: ['settings.config.adminActivity.signIns.label', 'Record admin sign-ins'],
   adminContentActivity: [
     'settings.config.adminActivity.content.label',

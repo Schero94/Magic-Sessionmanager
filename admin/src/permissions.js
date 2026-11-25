@@ -16,6 +16,11 @@ const pluginPermissions = {
   settingsUpdate: [{ action: `plugin::${pluginId}.settings.update`, subject: null }],
   /** Lifting a sign-in lock. The server also requires `access`. */
   lockoutsUnlock: [{ action: `plugin::${pluginId}.lockouts.unlock`, subject: null }],
+  /**
+   * Impersonating app users (4.20): start, list and end. The server also
+   * requires `access` and the Impersonation switch.
+   */
+  impersonateUsers: [{ action: `plugin::${pluginId}.impersonate.users`, subject: null }],
 };
 
 export default pluginPermissions;

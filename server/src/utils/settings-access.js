@@ -29,6 +29,7 @@
 const { SECURITY_LOG_KEYS } = require('./security-log-settings');
 const { POLICY_KEYS } = require('./policy-settings');
 const { PROTECTED_DETECTION_KEYS } = require('./detection-settings');
+const { IMPERSONATION_KEYS } = require('./impersonation-rules');
 
 const SETTINGS_UPDATE_ACTION = 'plugin::magic-sessionmanager.settings.update';
 const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
@@ -58,6 +59,8 @@ const PROTECTED_SETTINGS_KEYS = Object.freeze([
   ...POLICY_KEYS,
   // Signed webhook, event selection, impossible travel and shortened IPs.
   ...PROTECTED_DETECTION_KEYS,
+  // Impersonation switch (4.20): whether admins can act as app users.
+  ...IMPERSONATION_KEYS,
 ]);
 
 /** Secret webhook URL keys and the flag/hint keys returned instead. */

@@ -308,6 +308,22 @@ module.exports = async ({ strapi }) => {
 
     log.info('[TIME] Dynamic cleanup + retention scheduled');
 
+    // Impersonation (4.20): first, so a request made with an impersonation
+    // credential is refused before any sign-in interceptor acts on it. The
+    // sweep ends expired impersonations (and all of them while the switch is
+    // off); ending is atomic, so several processes can run it.
+    strapi.server.use(require('./middlewares/impersonation-guard')({}, { strapi }));
+    const impersonationSweep = setInterval(() => {
+      strapi
+        .plugin('magic-sessionmanager')
+        .service('impersonation')
+        .sweep()
+        .catch((err) => log.warn('[IMPERSONATION] Sweep failed:', err?.name || 'Error'));
+    }, 30 * 1000);
+    impersonationSweep.unref?.();
+    strapi.sessionManagerIntervals.impersonationSweep = impersonationSweep;
+    strapi.plugin('magic-sessionmanager').service('impersonation').checkHandoffSetup();
+
     mountPreLoginGeoGuard({ strapi, log });
 
     // Mounted BEFORE the login interceptor so a locked-out IP is short-
