@@ -363,6 +363,9 @@ test(
             actorType: 'admin',
             actorId: String(owner.id),
             ...aboutAnn,
+            // The admin's own request, as lockouts.unlock stores it.
+            ip: '198.51.100.250',
+            userAgent: UA,
             meta: { kind: 'account' },
             createdAt: at(28),
           },
@@ -491,6 +494,12 @@ test(
         action: 'alert',
       });
       assert.equal(travel.location.city, 'Sample City');
+      const lifted = result.body.data.find((row) => row.event === 'user.lockout.lifted');
+      assert.deepEqual(
+        [lifted.ipAddress, lifted.userAgent, lifted.browser],
+        [null, null, null],
+        'the admin who unlocked keeps their address to the admin activity view'
+      );
       const limit = result.body.data.find((row) => row.event === 'user.session.limit');
       assert.deepEqual(limit.actor, { type: 'system', id: null, name: '' });
       const raw = JSON.stringify(result.body);

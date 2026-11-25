@@ -155,9 +155,10 @@ function setupService({ settings = {}, readable = { email: true, username: true 
       actorId: '9',
       targetType: 'user',
       targetId: 'usrann',
-      ip: null,
-      userAgent: null,
-      geo: null,
+      // The admin's own request: never shown in the app-user view.
+      ip: '198.51.100.250',
+      userAgent: 'Mozilla/5.0 (Macintosh) AdminBrowser/1.0',
+      geo: { country: 'Adminland' },
       meta: { kind: 'account', socketIp: '127.0.0.0' },
       createdAt: at,
     },
@@ -235,6 +236,11 @@ test('service: rows carry the user only as far as the reader may read users', as
   });
   assert.match(lockout.browser, /^Firefox/);
   assert.deepEqual(lifted.actor, { type: 'admin', id: 9, name: 'Ada Owner' });
+  assert.deepEqual(
+    [lifted.ipAddress, lifted.userAgent, lifted.browser, lifted.location],
+    [null, null, null, null],
+    'an admin-caused row carries no address or browser (they are the admin’s)'
+  );
   assert.deepEqual(full.meta.identity, {
     users: true,
     names: true,

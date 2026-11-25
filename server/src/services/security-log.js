@@ -1579,6 +1579,8 @@ module.exports = ({ strapi }) => {
    * the app user as far as the reader may see them, the admin who acted
    * (lifted a lock, impersonated) with their name only for
    * `admin::users.read`, and the address as the current switches allow it.
+   * Rows an admin caused carry no address, browser or user agent: those
+   * would be the admin's own.
    * Never the device hash, the socket address, a typed identifier or a token.
    *
    * @param {Array<Record<string, any>>} rows Stored rows.
@@ -1596,8 +1598,16 @@ module.exports = ({ strapi }) => {
       list.filter((row) => row.actorType === 'admin').map((row) => row.actorId)
     );
     const data = list.map((row) => {
-      const described = describeUserAgent(row.userAgent || null);
-      const address = userEventAddress(row, options, (ip) => anonymizeIp(normalizeIp(ip)));
+      // Events an admin caused (lock lifted, impersonation) store the admin's own request: their
+      // address and browser belong to the admin sign-in data (`admin-activity.read`), not to the
+      // app user, so this view never returns them.
+      const byAdmin = row.actorType === 'admin';
+      const userAgent =
+        !byAdmin && typeof row.userAgent === 'string' && row.userAgent ? row.userAgent : null;
+      const described = describeUserAgent(userAgent);
+      const address = byAdmin
+        ? { ipAddress: null, ipAnonymized: false, keepLocation: false }
+        : userEventAddress(row, options, (ip) => anonymizeIp(normalizeIp(ip)));
       const user =
         row.targetType === 'user' && typeof row.targetId === 'string'
           ? users.get(row.targetId) || null
@@ -1626,10 +1636,7 @@ module.exports = ({ strapi }) => {
         browser: described.browserName,
         os: described.osName,
         deviceType: described.deviceType,
-        userAgent:
-          typeof row.userAgent === 'string' && row.userAgent
-            ? row.userAgent.slice(0, MAX_USER_AGENT_LENGTH)
-            : null,
+        userAgent: userAgent ? userAgent.slice(0, MAX_USER_AGENT_LENGTH) : null,
       };
     });
     return { data, usersVisible: visible };

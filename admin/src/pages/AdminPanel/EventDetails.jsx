@@ -357,11 +357,12 @@ export const userEventDetails = (t, formatDate, row) => {
       label: t('adminPanel.activity.details.exactTime', 'Exact time'),
       value: row.at ? formatDate(row.at, FULL_DATE) : null,
     },
-    {
-      id: 'what',
-      label: t('userActivity.details.what', 'What happened'),
-      ...(lines.length
-        ? {
+    // Only events with facts get "What happened"; a dash there would say nothing.
+    ...(lines.length
+      ? [
+          {
+            id: 'what',
+            label: t('userActivity.details.what', 'What happened'),
             render: (
               <Flex direction="column" alignItems="flex-start" gap={1} data-event-facts="">
                 {lines.map((line) => (
@@ -371,10 +372,10 @@ export const userEventDetails = (t, formatDate, row) => {
                 ))}
               </Flex>
             ),
-          }
-        : { value: null }),
-      fullWidth: true,
-    },
+            fullWidth: true,
+          },
+        ]
+      : []),
     { id: 'user', label: t('userActivity.column.user', 'User'), value: who, kind: 'id' },
   ];
   if (doneBy) {

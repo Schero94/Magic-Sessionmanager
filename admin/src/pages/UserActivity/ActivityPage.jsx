@@ -7,16 +7,20 @@ import {
   Flex,
   SingleSelect,
   SingleSelectOption,
-  Tag,
   Typography,
 } from '@strapi/design-system';
-import { Cross } from '@strapi/icons';
 import { EmptyDocuments } from '@strapi/icons/symbols';
 import styled from 'styled-components';
 import { getTranslation } from '../../utils/getTranslation';
 import { PageShell } from '../../components/ui';
 import { SESSION_VIEW_PATHS } from '../../components/SessionViewNav';
-import { EventList, FilterSlot, PeriodSelect, RecordingOff } from '../AdminPanel/AdminEventPanels';
+import {
+  EventList,
+  FilterSlot,
+  FilterTag,
+  PeriodSelect,
+  RecordingOff,
+} from '../AdminPanel/AdminEventPanels';
 import { UserEventTable } from '../AdminPanel/EventTables';
 import { useEventList } from '../AdminPanel/useEventList';
 import { ACTIVITY_PAGE_SIZE_OPTIONS, EVENT_PAGE_SIZE } from '../AdminPanel/adminActivityModel.mjs';
@@ -151,14 +155,13 @@ const UserActivityPage = () => {
               />
             </FilterSlot>
             {view.userId !== null ? (
-              <Tag
-                icon={<Cross aria-hidden="true" />}
+              <FilterTag
                 label={t('userActivity.page.removeUser', 'Show all users again')}
-                onClick={() => setFilters({ userId: undefined })}
+                onRemove={() => setFilters({ userId: undefined })}
                 data-user-filter={view.userId}
               >
                 {t('userActivity.page.userFilter', 'User: {name}', { name: userName })}
-              </Tag>
+              </FilterTag>
             ) : null}
           </>
         }

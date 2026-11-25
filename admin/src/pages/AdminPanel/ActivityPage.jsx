@@ -7,17 +7,15 @@ import {
   Flex,
   SingleSelect,
   SingleSelectOption,
-  Tag,
   Typography,
 } from '@strapi/design-system';
-import { Cross } from '@strapi/icons';
 import { EmptyDocuments } from '@strapi/icons/symbols';
 import styled from 'styled-components';
 import pluginId from '../../pluginId';
 import { getTranslation } from '../../utils/getTranslation';
 import { PageShell } from '../../components/ui';
 import { SESSION_VIEW_PATHS } from '../../components/SessionViewNav';
-import { EventList, FilterSlot, PeriodSelect, RecordingOff } from './AdminEventPanels';
+import { EventList, FilterSlot, FilterTag, PeriodSelect, RecordingOff } from './AdminEventPanels';
 import { SignInEventTable } from './EventTables';
 import { useEventList } from './useEventList';
 import {
@@ -165,14 +163,13 @@ const AdminActivityPage = () => {
               />
             </FilterSlot>
             {view.adminId !== null ? (
-              <Tag
-                icon={<Cross aria-hidden="true" />}
+              <FilterTag
                 label={t('adminPanel.activity.page.removeAdmin', 'Show all admins again')}
-                onClick={() => setFilters({ adminId: undefined })}
+                onRemove={() => setFilters({ adminId: undefined })}
                 data-admin-filter={view.adminId}
               >
                 {t('adminPanel.activity.page.adminFilter', 'Admin: {name}', { name: adminName })}
-              </Tag>
+              </FilterTag>
             ) : null}
           </>
         }

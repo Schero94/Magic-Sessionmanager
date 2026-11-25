@@ -15,8 +15,14 @@ Release type: minor (`feat`). Additive: one RBAC action (`user-activity.read`, "
 ### Security and privacy
 
 * **Identities as in Strapi (4.16.1 rules).** A user's email and username are returned only when the reader may read that user in the Content Manager (`plugin::content-manager.explorer.read` on `plugin::users-permissions.user`, including conditions and field-level permissions on `email` and `username`); otherwise the screens show "User #id". Admin names need `admin::users.read` ("Admin #id" otherwise). The reason an admin gave for an impersonation is returned only to readers who hold **Impersonate app users**. No entry titles, typed identifiers, device hashes, socket addresses or tokens are ever returned.
+* **No admin data through the app-user view.** Events an admin caused (lock lifted, impersonation) store the admin's own request; their IP address, browser and user agent stay with the admin activity (**View admin activity**) and are never returned here.
 * **Export audit.** Every export of the app-user activity records an always-on `security-log.read` event (`list: 'user-activity'`, `exported: true`, `via: 'admin-panel'` or `'admin-token'`); reads with an admin API token are recorded as for the admin lists since 4.17 (once per token and list within 5 minutes). The admin **Security activity** page shows them as **Security log exported** / **Log read with an API token** under **Settings and log access**.
 * **Privacy settings apply when reading.** Events older than the security log retention are hidden at once (the daily retention run deletes them); with **Anonymise IP addresses** on, older full addresses are shown shortened; with **Store IP addresses** off, no address and no place is returned. No location is looked up when reading; a place appears only where the opt-in location lookup stored one.
+
+### Fixed
+
+* **Keyboard access to the event tables (also the 4.19 admin lists).** The column headers did not pass on the grid coordinates the DS table gives its cells, so no cell had `tabIndex=0` and Tab skipped every Security activity, Sign-in history and Activity table; only a mouse could open an event's details. Tab now enters the table once, the arrow keys move between cells and Enter or Space on the eye opens the details, as in Strapi's own tables.
+* **Filter chips.** The removable "Admin: …" / "User: …" filter used the DS Tag, whose remove button is 28 × 28 px; it is now a DS IconButton of 32 px (WCAG 2.5.8, the plugin's mobile rule).
 
 ### Changed
 

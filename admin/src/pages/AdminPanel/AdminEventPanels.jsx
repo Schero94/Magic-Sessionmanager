@@ -8,10 +8,11 @@ import {
   LinkButton,
   Loader,
   SingleSelect,
+  IconButton,
   SingleSelectOption,
   Typography,
 } from '@strapi/design-system';
-import { ArrowRight, Download } from '@strapi/icons';
+import { ArrowRight, Cross, Download } from '@strapi/icons';
 import { useNotification } from '@strapi/strapi/admin';
 import pluginId from '../../pluginId';
 import { getTranslation } from '../../utils/getTranslation';
@@ -79,6 +80,37 @@ export const PeriodSelect = ({ value, onChange }) => {
     </SingleSelect>
   );
 };
+
+/**
+ * A removable filter (one admin, one user): the value on a tinted surface and
+ * a DS IconButton with a cross that removes it. Built from DS parts instead of
+ * the DS Tag, whose remove button is 28 x 28 px; the IconButton is 32 px, the
+ * touch target of the plugin's mobile rule (WCAG 2.5.8).
+ *
+ * @param {{label: string, onRemove: () => void, children: import('react').ReactNode}} props
+ *   Accessible name of the remove action, the handler and the visible text; other props (data
+ *   attributes) are passed on.
+ * @returns {import('react').ReactElement} Filter chip.
+ */
+export const FilterTag = ({ label, onRemove, children, ...rest }) => (
+  <Flex
+    gap={1}
+    alignItems="center"
+    background="primary100"
+    borderColor="primary200"
+    hasRadius
+    paddingLeft={3}
+    minWidth={0}
+    {...rest}
+  >
+    <Typography variant="pi" fontWeight="semiBold" textColor="primary700">
+      {children}
+    </Typography>
+    <IconButton label={label} variant="ghost" size="S" onClick={onRemove}>
+      <Cross />
+    </IconButton>
+  </Flex>
+);
 
 /**
  * One filter control: at least 180 px wide, sharing the row; on phones each
