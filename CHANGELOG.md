@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.23.2](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.23.1...v4.23.2) (2026-11-25)
+
+
+### Bug Fixes
+
+* impersonation red-team findings (token routes blocked, own-entries subset, live re-checks of starter and target, bounded sessions, audit attribution) ([#49](https://github.com/Schero94/Magic-Sessionmanager/issues/49)) ([6bd460f](https://github.com/Schero94/Magic-Sessionmanager/commit/6bd460f1ab5694a4d2732f4b84ece91705cbdbf9))
+
 
 Release type: patch (`fix`). Red-team review of every impersonation feature (app users, View permissions, Sign in as another admin). Proven against Strapi 5.64.0 (packed tarball on an isolated host, SQLite and PostgreSQL, legacy and refresh mode) and 5.50.0; none of the findings is reachable without an admin account that holds an impersonation permission.
 
@@ -15,6 +21,7 @@ Release type: patch (`fix`). Red-team review of every impersonation feature (app
 
 * The impersonation table gets the private `actorDeviceId` column; Strapi adds it at start-up. Impersonations that run during the upgrade have none and keep running while the starting admin has any active admin session.
 * A role that should sign in as admins with "own entries only" permissions now needs those permissions without conditions.
+
 ## [4.23.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.23.0...v4.23.1) (2026-11-25)
 
 
