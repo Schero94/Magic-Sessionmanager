@@ -1001,5 +1001,6 @@
   "adminPanel.activity.event.userNotMe": "Reported as \"This wasn’t me\"",
   "adminPanel.activity.event.userExport": "Personal data exported",
   "adminPanel.activity.event.impersonation": "Impersonation",
-  "adminPanel.activity.event.webhook": "Webhook delivery"
+  "adminPanel.activity.event.webhook": "Webhook delivery",
+  "adminPanel.activity.settingsGroup": "{tab}: {fields}"
 }

@@ -1,3 +1,11 @@
+## [Unreleased]
+
+Release type: patch (`fix(admin)`). No API, route or permission change.
+
+### Bug Fixes
+
+* **Changed settings in plain words.** "Settings changed" rows and their details showed raw keys ("maxFailedLogins, lockoutDurationMinutes, adminSignInHistory and 2 more"). They now use the labels of the Configuration page in the admin language, grouped by tab, for example "Login protection: Lock an IP address after, Lock for · Admin activity: Record admin sign-ins". The table names at most three settings; the details list every tab on its own line. Only a key the Configuration page does not know keeps its raw name.
+
 # [4.19.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.18.0...v4.19.0) (2026-11-25)
 
 

@@ -11,15 +11,8 @@ import {
   getSessionStatePresentation,
   getSignInEventPresentation,
 } from './adminActivityModel.mjs';
-import {
-  ActivityEntry,
-  EventBadge,
-  FULL_DATE,
-  SHORT_DATE,
-  ipText,
-  noAdminText,
-  useT,
-} from './EventParts';
+import { ActivityEntry, EventBadge, FULL_DATE, SHORT_DATE, useT } from './EventParts';
+import { changedSettingsLines, ipText, noAdminText } from './eventText.mjs';
 
 /**
  * Detail dialog of one event, like the log details of Strapi's Audit Logs:
@@ -163,14 +156,23 @@ export const signInDetails = (t, formatDate, row) => {
     });
   }
   if (row.change) {
+    const lines = changedSettingsLines(t, row.change.keys);
     items.push({
       id: 'settings',
       label: t('adminPanel.activity.details.changedSettings', 'Changed settings'),
-      value:
-        Array.isArray(row.change.keys) && row.change.keys.length
-          ? row.change.keys.join(', ')
-          : null,
-      kind: 'id',
+      ...(lines.length
+        ? {
+            render: (
+              <Flex direction="column" alignItems="flex-start" gap={1} data-changed-settings="">
+                {lines.map((line) => (
+                  <Typography key={line} variant="omega" textColor="neutral800">
+                    {line}
+                  </Typography>
+                ))}
+              </Flex>
+            ),
+          }
+        : { value: null }),
       fullWidth: true,
     });
   }

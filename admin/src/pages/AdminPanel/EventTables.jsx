@@ -25,13 +25,10 @@ import {
   StackedItem,
   StackedList,
   WrapCell,
-  contentTypeText,
-  deviceText,
-  eventDetailText,
-  ipText,
   stopCellKeys,
   useT,
 } from './EventParts';
+import { contentTypeText, deviceText, eventDetailText, ipText } from './eventText.mjs';
 import { EventDetailsModal, activityDetails, signInDetails, useEventDetails } from './EventDetails';
 
 /**

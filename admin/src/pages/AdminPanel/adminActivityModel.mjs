@@ -1,4 +1,10 @@
 import { escapeCsvValue } from '../../utils/sessionExports.mjs';
+import {
+  SETTINGS_FIELD_LABELS,
+  SETTINGS_TAB_FIELDS,
+  SETTINGS_TAB_IDS,
+  SETTINGS_TAB_LABELS,
+} from '../Settings/settingsTabs.mjs';
 
 /**
  * Pure helpers of the admin sign-in history and Content Manager activity
@@ -457,6 +463,48 @@ export function parseActivityPageQuery(query) {
  */
 export function hasActivityPageFilters(view) {
   return view.event !== 'all' || view.period !== '30' || view.adminId !== null;
+}
+
+/**
+ * Changed settings of a `settings.updated` event, grouped by the Configuration
+ * tab that shows them, in tab order, with the labels the Settings page uses
+ * (`SETTINGS_TAB_LABELS`, `SETTINGS_FIELD_LABELS`). Keys keep their recorded
+ * order inside a tab; two keys with the same label (allowed and blocked
+ * countries) appear once. A key the Settings page does not know (an older or
+ * newer plugin version, a preserved key) goes to a last group without a tab
+ * and keeps its raw name.
+ *
+ * @param {unknown} keys Changed key names from the API.
+ * @returns {Array<{tab: string|null, label: {messageId: string, defaultMessage: string}|null,
+ *   fields: Array<{key: string, label: {messageId: string, defaultMessage: string}|null}>}>}
+ *   Groups.
+ */
+export function groupChangedSettings(keys) {
+  const list = Array.isArray(keys) ? keys.filter((key) => typeof key === 'string' && key) : [];
+  /** @type {Map<string, Array<{key: string, label: {messageId: string, defaultMessage: string}}>>} */
+  const byTab = new Map();
+  const unknown = [];
+  const seen = new Set();
+  for (const key of list) {
+    const tab = SETTINGS_TAB_IDS.find((id) => SETTINGS_TAB_FIELDS[id]?.includes(key));
+    const entry = SETTINGS_FIELD_LABELS[key];
+    if (!tab || !entry) {
+      if (!seen.has(`raw:${key}`)) unknown.push({ key, label: null });
+      seen.add(`raw:${key}`);
+      continue;
+    }
+    if (seen.has(`label:${entry[0]}`)) continue;
+    seen.add(`label:${entry[0]}`);
+    if (!byTab.has(tab)) byTab.set(tab, []);
+    byTab.get(tab).push({ key, label: message(entry[0], entry[1]) });
+  }
+  const groups = SETTINGS_TAB_IDS.filter((tab) => byTab.has(tab)).map((tab) => ({
+    tab,
+    label: message(SETTINGS_TAB_LABELS[tab][0], SETTINGS_TAB_LABELS[tab][1]),
+    fields: byTab.get(tab),
+  }));
+  if (unknown.length) groups.push({ tab: null, label: null, fields: unknown });
+  return groups;
 }
 
 /** Labels of Content Manager actions (activity rows and the filter). */
