@@ -1,4 +1,10 @@
-## [Unreleased]
+## [4.22.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.22.0...v4.22.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* second security review (GraphQL mutations while impersonating, socket-based client IP, lockout via auth callback, success resets only the account counter, smaller fixes) ([#45](https://github.com/Schero94/Magic-Sessionmanager/issues/45)) ([c208702](https://github.com/Schero94/Magic-Sessionmanager/commit/c2087025d098ab1c64022123af2caaa477307953))
+
 
 Release type: patch (`fix`). Fixes every finding of the second security review of 4.21.0 (two High, two Medium, five Low, eight hardening items). The settings API stays compatible: `trustedProxies: true` is still accepted. Read the migration notes: three settings now need **Change protected settings**, `trustedProxies: true` no longer reads proxy headers, and a `SESSION_ENCRYPTION_KEY` shorter than 32 bytes now logs an error at every start (it still starts; the next major version will refuse it).
 
