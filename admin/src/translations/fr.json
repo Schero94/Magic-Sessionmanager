@@ -1001,5 +1001,6 @@
   "adminPanel.activity.event.userNotMe": "Signalé comme « Ce n’était pas moi »",
   "adminPanel.activity.event.userExport": "Données personnelles exportées",
   "adminPanel.activity.event.impersonation": "Usurpation d’identité",
-  "adminPanel.activity.event.webhook": "Envoi de webhook"
+  "adminPanel.activity.event.webhook": "Envoi de webhook",
+  "adminPanel.activity.settingsGroup": "{tab} : {fields}"
 }

@@ -37,6 +37,7 @@ import { useSessionFormatters } from '../../utils/useSessionFormatters';
 import { getBadgeColors } from '../../components/ui/StatusBadge';
 import { MissingValue, TargetLink } from '../../components/ui';
 import { getEntryPath, getEventPlace, getSessionStatePresentation } from './adminActivityModel.mjs';
+import { deviceText, ipText, noAdminText } from './eventText.mjs';
 
 /**
  * Building blocks of the admin event lists (EventTables.jsx) and their
@@ -245,20 +246,6 @@ export const EventTime = ({ value, compact = false }) => {
 };
 
 /**
- * Text when an event belongs to no admin account: "System" for retention
- * runs, otherwise "Unknown account" (a failed sign-in with an email that is
- * not an admin, or a deleted admin).
- *
- * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
- * @param {object} [row] Event row.
- * @returns {string} Text.
- */
-export const noAdminText = (t, row) =>
-  row?.event === 'security-log.retention.purged'
-    ? t('adminPanel.activity.system', 'System')
-    : t('adminPanel.activity.unknownAccount', 'Unknown account');
-
-/**
  * Name of the admin an event belongs to. With `onOpenAdmin` it opens that
  * admin's details; an event without an admin account is plain text.
  *
@@ -297,91 +284,6 @@ export const AdminName = ({ admin, row, onOpenAdmin }) => {
       {admin.name}
     </NameButton>
   );
-};
-
-/**
- * Translated "Chrome 131 on macOS", one of them, or ''.
- *
- * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
- * @param {{browser?: string|null, os?: string|null}} row Event row.
- * @returns {string} Device text.
- */
-export const deviceText = (t, row) => {
-  if (row.browser && row.os) {
-    return t('adminPanel.activity.browserOnOs', '{browser} on {os}', {
-      browser: row.browser,
-      os: row.os,
-    });
-  }
-  return row.browser || row.os || '';
-};
-
-/**
- * IP address with the "(anonymised)" note, or ''.
- *
- * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
- * @param {{ipAddress?: string|null, ipAnonymized?: boolean}} row Event row.
- * @returns {string} Address text.
- */
-export const ipText = (t, row) => {
-  if (!row.ipAddress) return '';
-  return row.ipAnonymized
-    ? t('adminPanel.activity.ipAnonymized', '{ip} (anonymised)', { ip: row.ipAddress })
-    : row.ipAddress;
-};
-
-/**
- * Second line of the event cell: the reason or scope, the number of
- * counted attempts and, when "Done by" has no column, who did it.
- *
- * @param {(id: string, defaultMessage: string, values?: object) => string} t Translator.
- * @param {object} row Sign-in row.
- * @param {object} presentation Event presentation.
- * @param {boolean} withActor Append "by {name}".
- * @returns {string} Text, or ''.
- */
-export const eventDetailText = (t, row, presentation, withActor) => {
-  const parts = [];
-  if (presentation.detail) {
-    parts.push(t(presentation.detail.messageId, presentation.detail.defaultMessage));
-  }
-  if (Number.isInteger(row.attempts) && row.attempts > 1) {
-    parts.push(
-      t(
-        'adminPanel.activity.attempts',
-        '{count, plural, one {# attempt} other {# attempts}} within 5 minutes',
-        { count: row.attempts }
-      )
-    );
-  }
-  const keys = Array.isArray(row.change?.keys) ? row.change.keys : [];
-  if (keys.length) {
-    parts.push(
-      keys.length > 3
-        ? t('adminPanel.activity.settingsMore', '{names} and {count, number} more', {
-            names: keys.slice(0, 3).join(', '),
-            count: keys.length - 3,
-          })
-        : keys.join(', ')
-    );
-  }
-  if (Number.isInteger(row.purge?.count)) {
-    parts.push(
-      Number.isInteger(row.purge?.retentionDays)
-        ? t(
-            'adminPanel.activity.purgedDetail',
-            '{count, plural, one {# event} other {# events}}, older than {days, plural, one {# day} other {# days}}',
-            { count: row.purge.count, days: row.purge.retentionDays }
-          )
-        : t('adminPanel.activity.purgedCount', '{count, plural, one {# event} other {# events}}', {
-            count: row.purge.count,
-          })
-    );
-  }
-  if (withActor && row.actor?.name) {
-    parts.push(t('adminPanel.activity.byAdmin', 'by {name}', { name: row.actor.name }));
-  }
-  return parts.join(' · ');
 };
 
 /**
@@ -534,12 +436,3 @@ export const ActivityEntry = ({ row }) => {
     </TargetLink>
   );
 };
-
-/**
- * "Article · de" (content type and locale), or ''.
- *
- * @param {object} row Activity row.
- * @returns {string} Text.
- */
-export const contentTypeText = (row) =>
-  [row.contentType?.name, row.entry?.locale].filter(Boolean).join(' · ');

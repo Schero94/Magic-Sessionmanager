@@ -1001,5 +1001,6 @@
   "adminPanel.activity.event.userNotMe": "Notificado como «No fui yo»",
   "adminPanel.activity.event.userExport": "Datos personales exportados",
   "adminPanel.activity.event.impersonation": "Suplantación de identidad",
-  "adminPanel.activity.event.webhook": "Envío de webhook"
+  "adminPanel.activity.event.webhook": "Envío de webhook",
+  "adminPanel.activity.settingsGroup": "{tab}: {fields}"
 }

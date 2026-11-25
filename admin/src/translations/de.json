@@ -1001,5 +1001,6 @@
   "adminPanel.activity.event.userNotMe": "Als „Das war ich nicht“ gemeldet",
   "adminPanel.activity.event.userExport": "Personenbezogene Daten exportiert",
   "adminPanel.activity.event.impersonation": "Als anderer Benutzer angemeldet",
-  "adminPanel.activity.event.webhook": "Webhook-Zustellung"
+  "adminPanel.activity.event.webhook": "Webhook-Zustellung",
+  "adminPanel.activity.settingsGroup": "{tab}: {fields}"
 }

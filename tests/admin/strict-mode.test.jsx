@@ -472,7 +472,10 @@ test('security activity page: full-width table, filters in the URL, settings cha
         userAgent: null,
         admin: { id: 1, name: 'Ada Example' },
         actor: null,
-        change: { keys: ['maxFailedLogins', 'lockoutDurationMinutes'], viaToken: false },
+        change: {
+          keys: ['maxFailedLogins', 'lockoutDurationMinutes', 'adminSignInHistory', 'futureKey'],
+          viaToken: false,
+        },
         read: null,
         purge: null,
         session: null,
@@ -487,7 +490,12 @@ test('security activity page: full-width table, filters in the URL, settings cha
       assert.equal(handle.container.querySelector('h1')?.textContent, 'Security activity');
       assert.ok(handle.container.querySelector('table[role="grid"]'), 'a DS table');
       assert.match(handle.container.textContent, /Settings changed/);
-      assert.match(handle.container.textContent, /maxFailedLogins, lockoutDurationMinutes/);
+      // The Settings page's own labels, grouped by tab; at most 3 named in the table.
+      assert.match(
+        handle.container.textContent,
+        /Login protection: Lock an IP address after, Lock for · Admin activity: Record admin sign-ins and 1 more/
+      );
+      assert.doesNotMatch(handle.container.textContent, /maxFailedLogins/);
       assert.match(handle.container.textContent, /2 events/, 'the caption counts the server total');
     },
   });
