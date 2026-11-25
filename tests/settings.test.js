@@ -12,6 +12,8 @@ const settingsController = require('../server/src/controllers/settings');
 
 function createSettingsCtx(body) {
   return {
+    // A Super Admin: holds every action, including settings.update (4.17).
+    state: { userAbility: { can: () => true }, user: { id: 1 } },
     request: { body },
     sent: null,
     send(payload) {

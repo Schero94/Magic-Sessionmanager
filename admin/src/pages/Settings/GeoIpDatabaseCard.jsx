@@ -79,6 +79,8 @@ const GeoIpDatabaseCard = ({ form }) => {
     );
   };
   const lookupOff = !settings.enableGeolocation;
+  // Provider and database file are protected settings (4.17).
+  const locked = form.canChangeProtected === false;
   const localDatabase = usesLocalDatabase(settings.geoIpProvider);
   const databaseDisabled = lookupOff || !localDatabase;
   const credentialSource = geoIpStatus?.credentialSource;
@@ -123,7 +125,7 @@ const GeoIpDatabaseCard = ({ form }) => {
         >
           <SingleSelect
             value={settings.geoIpProvider || 'auto'}
-            disabled={lookupOff}
+            disabled={lookupOff || locked}
             onChange={(value) => handleChange('geoIpProvider', value)}
           >
             <SingleSelectOption value="auto">
@@ -364,7 +366,7 @@ const GeoIpDatabaseCard = ({ form }) => {
             <TextInput
               name="geoIpDatabasePath"
               value={settings.geoIpDatabasePath || ''}
-              disabled={databaseDisabled && !errors.geoIpDatabasePath}
+              disabled={(databaseDisabled || locked) && !errors.geoIpDatabasePath}
               onChange={(event) => handleChange('geoIpDatabasePath', event.target.value)}
               placeholder="GeoLite2-City.mmdb"
               autoComplete="off"

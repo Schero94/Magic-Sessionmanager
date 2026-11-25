@@ -73,6 +73,7 @@ test('settingsForm exports only what the admin uses (no stale helpers)', () => {
   assert.deepEqual(Object.keys(settingsForm).sort(), [
     'MAX_FAILED_LOGINS_RANGE',
     'SETTINGS_DEFAULTS',
+    'WRITE_ONLY_SETTINGS_KEYS',
     'getAdjustedFields',
     'normalizeSettings',
     'validateCountryCode',
@@ -158,19 +159,29 @@ test('country codes are validated and duplicates are reported', () => {
 
 test('the saved baseline is what the server stored, not the submitted draft (SET-01 browser)', () => {
   const previous = normalizeSettings({
-    discordWebhookUrl: '',
+    geoIpDatabasePath: '',
     enableWebhooks: false,
     emailTemplates: {},
   });
-  const submitted = { ...previous, enableWebhooks: true, discordWebhookUrl: 'not-a-url' };
-  const stored = normalizeSettings({ ...submitted, discordWebhookUrl: '' });
+  const submitted = {
+    ...previous,
+    enableWebhooks: true,
+    geoIpDatabasePath: '../x.mmdb',
+    discordWebhookUrl: 'https://discord.com/api/webhooks/synthetic',
+  };
+  const stored = normalizeSettings({ ...submitted, geoIpDatabasePath: '' });
+  delete stored.discordWebhookUrl; // the server never returns it (4.17, F6)
 
-  assert.equal(stored.discordWebhookUrl, '');
-  assert.deepEqual(getAdjustedFields(submitted, stored, previous), ['discordWebhookUrl']);
+  assert.equal(stored.geoIpDatabasePath, '');
+  assert.deepEqual(
+    getAdjustedFields(submitted, stored, previous),
+    ['geoIpDatabasePath'],
+    'a write-only webhook URL is never reported as adjusted'
+  );
   // Server-side sanitising of a value the admin did not edit is not reported.
   const sanitized = {
     ...stored,
-    discordWebhookUrl: submitted.discordWebhookUrl,
+    geoIpDatabasePath: submitted.geoIpDatabasePath,
     emailTemplates: {
       ...stored.emailTemplates,
       vpnProxy: { ...stored.emailTemplates.vpnProxy, html: '<p>clean</p>' },

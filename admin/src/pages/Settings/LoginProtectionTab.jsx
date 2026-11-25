@@ -32,6 +32,8 @@ const LoginProtectionTab = ({ form }) => {
   const maxFailedError = tError(errors.maxFailedLogins);
   const maxFailedValue = Number(settings.maxFailedLogins);
   const lookupOff = !settings.enableGeolocation;
+  // The lookup failure mode is a protected setting (4.17).
+  const locked = form.canChangeProtected === false;
   const risk = getRiskAvailability(form.geoIp.status);
   const reject = riskDependentControl(settings.blockSuspiciousSessions, risk.state);
   // A saved "Reject suspicious sign-ins" still makes the Automatic failure
@@ -179,7 +181,7 @@ const LoginProtectionTab = ({ form }) => {
             >
               <SingleSelect
                 value={settings.geoLookupFailureMode || 'auto'}
-                disabled={lookupOff}
+                disabled={lookupOff || locked}
                 onChange={(value) => handleChange('geoLookupFailureMode', value)}
               >
                 <SingleSelectOption value="auto">

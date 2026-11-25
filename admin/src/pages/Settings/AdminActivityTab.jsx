@@ -3,7 +3,7 @@ import { EqualGrid, SectionCard } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import { SELECT_PRESETS } from './settingsTabs.mjs';
-import { IntroText, PresetSelect, RequiresNotice } from './SettingsBlocks';
+import { IntroText, PresetSelect, ProtectedNotice, RequiresNotice } from './SettingsBlocks';
 import { useOptionLabels } from './hooks/useOptionLabels';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
@@ -21,6 +21,8 @@ const AdminActivityTab = ({ form }) => {
   const { t } = useSettingsTranslate();
   const units = useOptionLabels();
   const { settings, handleChange } = form;
+  // The security log settings are protected (4.17): admin-activity.read and settings.update.
+  const locked = form.canChangeProtected === false;
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
@@ -30,6 +32,7 @@ const AdminActivityTab = ({ form }) => {
           'The security log records sign-ins and work in this admin panel. Each admin’s history is under Session Manager > Admin panel; only admins with “View admin activity” can open it.'
         )}
       </IntroText>
+      {locked ? <ProtectedNotice /> : null}
 
       <SectionCard title={t('settings.config.adminActivity.recording.title', 'What is recorded')}>
         <SettingsToggleRow
@@ -40,6 +43,7 @@ const AdminActivityTab = ({ form }) => {
             'Every sign-in, failed attempt, lockout and sign-out, and who signed out whom, with time, browser and operating system.'
           )}
           checked={settings.adminSignInHistory}
+          disabled={locked}
           onChange={(checked) => handleChange('adminSignInHistory', checked)}
         />
         <SettingsToggleRow
@@ -50,9 +54,10 @@ const AdminActivityTab = ({ form }) => {
           )}
           description={t(
             'settings.config.adminActivity.content.hint',
-            'Which entries each admin opens, creates, edits, publishes, unpublishes or deletes, with content type, title, locale and time.'
+            'Which entries each admin opens, creates, edits, publishes, unpublishes or deletes, with content type, locale and time. Entry titles are not stored; the list shows them only to admins who may open the entry.'
           )}
           checked={settings.adminContentActivity}
+          disabled={locked}
           onChange={(checked) => handleChange('adminContentActivity', checked)}
         >
           <ReadableText variant="pi" textColor="neutral700" tag="p" data-privacy-note="">
@@ -79,6 +84,7 @@ const AdminActivityTab = ({ form }) => {
             'The address comes from Strapi’s client IP (server.proxy settings). The location uses the IP location lookup under Location data.'
           )}
           checked={settings.securityLogStoreIp}
+          disabled={locked}
           onChange={(checked) => handleChange('securityLogStoreIp', checked)}
         />
         <SettingsToggleRow
@@ -92,8 +98,28 @@ const AdminActivityTab = ({ form }) => {
             'Stores 203.0.113.0 instead of 203.0.113.42 (IPv6: the first 48 bits only).'
           )}
           checked={settings.securityLogAnonymizeIp}
-          disabled={!settings.securityLogStoreIp}
+          disabled={locked || !settings.securityLogStoreIp}
           onChange={(checked) => handleChange('securityLogAnonymizeIp', checked)}
+        >
+          {!settings.securityLogStoreIp ? (
+            <RequiresNotice>
+              {t('settings.config.adminActivity.requiresIp', 'Requires Store IP addresses')}
+            </RequiresNotice>
+          ) : null}
+        </SettingsToggleRow>
+        <SettingsToggleRow
+          id="security-log-geo-lookup"
+          title={t(
+            'settings.config.adminActivity.geoLookup.label',
+            'Look up the location of security events'
+          )}
+          description={t(
+            'settings.config.adminActivity.geoLookup.hint',
+            'Shows country and city next to each sign-in. Only the anonymised address is looked up, in the local GeoIP database; it goes to ipapi.co only if you chose ipapi.co as provider under Location data.'
+          )}
+          checked={settings.securityLogGeoLookup}
+          disabled={locked || !settings.securityLogStoreIp}
+          onChange={(checked) => handleChange('securityLogGeoLookup', checked)}
         >
           {!settings.securityLogStoreIp ? (
             <RequiresNotice>
@@ -108,11 +134,12 @@ const AdminActivityTab = ({ form }) => {
             label={t('settings.config.adminActivity.retention.label', 'Keep security events for')}
             description={t(
               'settings.config.adminActivity.retention.hint',
-              'Older events are deleted once a day. Events of a deleted admin are deleted with the account.'
+              'At least 7 days. Older events are deleted once a day; each deletion is itself recorded. Events of a deleted admin are deleted with the account.'
             )}
             value={settings.securityLogRetentionDays}
             presets={SELECT_PRESETS.securityLogRetentionDays}
             format={units.days}
+            disabled={locked}
             onChange={(value) => handleChange('securityLogRetentionDays', value)}
           />
         </EqualGrid>

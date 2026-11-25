@@ -71,6 +71,7 @@ export const SETTINGS_TAB_FIELDS = Object.freeze({
     'adminContentActivity',
     'securityLogStoreIp',
     'securityLogAnonymizeIp',
+    'securityLogGeoLookup',
     'securityLogRetentionDays',
   ],
 });
@@ -132,6 +133,10 @@ export const SETTINGS_FIELD_LABELS = Object.freeze({
   securityLogAnonymizeIp: [
     'settings.config.adminActivity.anonymize.label',
     'Anonymise the last part of IP addresses',
+  ],
+  securityLogGeoLookup: [
+    'settings.config.adminActivity.geoLookup.label',
+    'Look up the location of security events',
   ],
   securityLogRetentionDays: [
     'settings.config.adminActivity.retention.label',

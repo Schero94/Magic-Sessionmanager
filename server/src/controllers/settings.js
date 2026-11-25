@@ -12,12 +12,13 @@ const { resolveDatabaseTarget } = require('../../../scripts/geoip-updater.cjs');
 const { sendServerError, sendValidationError } = require('../utils/http-errors');
 const {
   SECURITY_LOG_DEFAULTS,
-  SECURITY_LOG_KEYS,
   validateSecurityLogSettings,
 } = require('../utils/security-log-settings');
-
-/** Needed (besides plugin access) to change the security log settings. */
-const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
+const {
+  changedKeys,
+  missingSettingsPermission,
+  toPublicSettings,
+} = require('../utils/settings-access');
 const path = require('node:path');
 
 /**
@@ -546,18 +547,43 @@ function sendSettingsConflict(ctx, currentRevision) {
   return ctx.body;
 }
 
+/** 403 messages per missing permission (fixed text, no values). */
+const FORBIDDEN_MESSAGES = Object.freeze({
+  'admin-activity-permission': 'Changing the security log settings needs "View admin activity".',
+  'settings-update-permission':
+    'Changing location lookup, webhook or security log settings needs "Change protected settings".',
+});
+
 /**
- * Whether the caller holds `admin-activity.read` (checked with the same
- * ability Strapi's `admin::hasPermissions` policy uses).
+ * Queues the always-on `settings.updated` security event: who changed which
+ * keys. Never the values (webhook URLs, templates and addresses stay out of
+ * the log).
  *
  * @param {object} ctx Koa context
- * @returns {boolean}
+ * @param {string[]} keys Changed key names
+ * @returns {void}
+ * @sideeffect Queues one security event.
  */
-function canChangeAdminActivity(ctx) {
+function recordSettingsChange(ctx, keys) {
+  if (!keys.length) return;
   try {
-    return ctx.state?.userAbility?.can?.(ADMIN_ACTIVITY_READ_ACTION) === true;
+    const strategy = ctx.state?.auth?.strategy?.name;
+    strapi
+      .plugin('magic-sessionmanager')
+      ?.service('security-log')
+      ?.record({
+        event: 'settings.updated',
+        actorType: 'admin',
+        actorId: ctx.state?.user?.id ?? null,
+        targetType: 'settings',
+        meta: {
+          keys: keys.join(','),
+          count: keys.length,
+          ...(strategy === 'admin-token' ? { via: 'admin-token' } : {}),
+        },
+      });
   } catch {
-    return false;
+    // Recording must not undo a saved change.
   }
 }
 
@@ -569,9 +595,13 @@ function canChangeAdminActivity(ctx) {
 module.exports = {
   /**
    * Returns current plugin settings in user-facing units. Legacy custom MMDB
-   * read paths are not returned as download destinations.
+   * read paths are not returned as download destinations. Webhook URLs are
+   * never returned: `hasDiscordWebhook` / `hasSlackWebhook` say whether one
+   * is stored and `discordWebhookHint` / `slackWebhookHint` show only scheme
+   * and host (4.17, F6).
    *
    * @route GET /magic-sessionmanager/settings
+   * @auth Admin JWT or admin API token; admin::hasPermissions access.
    * @returns {Promise<void>}
    */
   async getSettings(ctx) {
@@ -582,7 +612,7 @@ module.exports = {
       });
 
       const storedSettings = await pluginStore.get({ key: 'settings' });
-      const settings = mergeSettingsWithDefaults(storedSettings);
+      const settings = toPublicSettings(mergeSettingsWithDefaults(storedSettings));
       const revision = await readRevision();
 
       ctx.send({
@@ -609,10 +639,18 @@ module.exports = {
    * or written in that case. Store failures return a 500 with a safe message.
    * Changing a security log setting (`adminSignInHistory`,
    * `adminContentActivity`, `securityLogStoreIp`, `securityLogAnonymizeIp`,
-   * `securityLogRetentionDays`) also needs `admin-activity.read`, else 403.
+   * `securityLogGeoLookup`, `securityLogRetentionDays`) also needs
+   * `admin-activity.read` (403 `admin-activity-permission`). Changing a
+   * protected key (location lookup, webhooks, security log; see
+   * utils/settings-access.js) needs `settings.update` (403
+   * `settings-update-permission`). A webhook URL missing from the body keeps
+   * its stored value; an empty string removes it.
    *
    * @route PUT /magic-sessionmanager/settings
+   * @auth Admin JWT or admin API token; admin::hasPermissions access, plus the actions above.
    * @returns {Promise<void>}
+   * @sideeffect Writes the plugin store; queues an always-on `settings.updated` security event
+   *   with the actor id and the changed key names (no values).
    */
   async updateSettings(ctx) {
     try {
@@ -656,25 +694,24 @@ module.exports = {
         const { settings: sanitizedSettings, errors } = validateSettingsUpdate(body, current);
         if (errors.length > 0) return { errors };
 
-        // What the security log records is changed only by admins who may
-        // see it (admin-activity.read). Sending the stored values back
-        // unchanged is allowed, so the whole form can still be saved.
-        const changesAdminActivity = SECURITY_LOG_KEYS.some(
-          (key) => sanitizedSettings[key] !== current[key]
-        );
-        if (changesAdminActivity && !canChangeAdminActivity(ctx)) return { forbidden: true };
+        // Protected keys change only with the matching permission. Sending
+        // the stored values back unchanged is allowed, so the whole form can
+        // still be saved by roles without it.
+        const changed = changedKeys(sanitizedSettings, current, Object.keys(DEFAULT_SETTINGS));
+        const missing = missingSettingsPermission(ctx, changed);
+        if (missing) return { forbidden: missing };
 
         await pluginStore.set({
           key: 'settings',
           value: sanitizedSettings,
         });
         const revision = await notifySettingsChanged(strapi);
-        return { settings: sanitizedSettings, revision };
+        return { settings: sanitizedSettings, revision, changed };
       });
 
       if (outcome.forbidden) {
-        return ctx.forbidden('Changing the security log settings needs "View admin activity".', {
-          reason: 'admin-activity-permission',
+        return ctx.forbidden(FORBIDDEN_MESSAGES[outcome.forbidden], {
+          reason: outcome.forbidden,
         });
       }
       if (outcome.conflict) {
@@ -684,13 +721,16 @@ module.exports = {
         return sendValidationError(ctx, 'Invalid settings', outcome.errors);
       }
 
-      strapi.log.info('[magic-sessionmanager/settings] Settings updated successfully');
+      recordSettingsChange(ctx, outcome.changed);
+      strapi.log.info(
+        `[magic-sessionmanager/settings] Settings updated (${outcome.changed.length} keys changed)`
+      );
 
       ctx.send({
-        settings: {
+        settings: toPublicSettings({
           ...outcome.settings,
           geoIpDatabasePath: getSafeGeoIpFilename(outcome.settings.geoIpDatabasePath),
-        },
+        }),
         ...(outcome.revision === null || outcome.revision === undefined
           ? {}
           : { revision: outcome.revision }),

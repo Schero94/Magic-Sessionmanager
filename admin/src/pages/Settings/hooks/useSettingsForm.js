@@ -215,7 +215,16 @@ export function useSettingsForm() {
     if (key === 'strictSessionEnforcement') {
       setRelaxedWarningDismissed(false);
     }
-    setSettings((previousSettings) => ({ ...previousSettings, [key]: value }));
+    setSettings((previousSettings) => {
+      // `undefined` removes the key: a webhook URL that is not being
+      // replaced is not sent, so the server keeps the stored one (4.17).
+      if (value === undefined) {
+        const next = { ...previousSettings };
+        delete next[key];
+        return next;
+      }
+      return { ...previousSettings, [key]: value };
+    });
   }, []);
 
   /**
