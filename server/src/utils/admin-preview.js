@@ -126,28 +126,85 @@ function contentAction(action) {
 }
 
 /**
+ * Content types the Content Manager offers for permissions (the rows of
+ * Strapi's role editor): the subjects of the `explorer.read` action.
+ *
+ * @param {any} strapi Strapi.
+ * @returns {string[]} Content type uids.
+ */
+function permissionSubjects(strapi) {
+  try {
+    const definition = strapi.admin.services.permission.actionProvider.get(
+      'plugin::content-manager.explorer.read'
+    );
+    return Array.isArray(definition?.subjects) ? definition.subjects.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Whether the Content Manager lists a content type (Strapi hides internal
+ * types such as admin users, tokens or upload folders with
+ * `pluginOptions['content-manager'].visible: false`).
+ *
+ * @param {any} contentType Content type schema.
+ * @returns {boolean}
+ */
+function isVisibleInContentManager(contentType) {
+  if (!contentType) return false;
+  return contentType.pluginOptions?.['content-manager']?.visible !== false;
+}
+
+/**
+ * Display data of one content type for the preview.
+ *
+ * @param {string} uid Content type uid.
+ * @param {any} contentType Content type schema.
+ * @returns {{uid: string, name: string, kind: 'single'|'collection', draftAndPublish: boolean}}
+ */
+function describeContentType(uid, contentType) {
+  return {
+    uid,
+    name: String(contentType?.info?.displayName || uid).slice(0, 120),
+    kind: contentType?.kind === 'singleType' ? 'single' : 'collection',
+    draftAndPublish: contentType?.options?.draftAndPublish === true,
+  };
+}
+
+/**
  * The preview of an admin: roles, content types with their actions and
- * restrictions, and the other permissions by section. Names only; no
- * entries, no data.
+ * restrictions, the content types they cannot open, and the other
+ * permissions by section, category and plugin, with Strapi's display names
+ * (also for the conditions).
+ * Names only; no entries, no data. Role ids are included only for callers
+ * who may read roles, so the dialog can link to each role.
+ *
+ * An admin can exist without any role (created through the API or the
+ * database). Strapi then grants nothing: `roles` is empty, there are no
+ * permissions, and the dialog explains that instead of showing an empty
+ * list (the "Roles: —" report of 4.22.1).
  *
  * @param {any} strapi Strapi.
  * @param {any} target Target admin (with roles).
+ * @param {{canReadRoles?: boolean}} [options] What the caller may see.
  * @returns {Promise<object>} Preview DTO.
  */
-async function buildPreview(strapi, target) {
+async function buildPreview(strapi, target, { canReadRoles = false } = {}) {
   const permissions = await effectivePermissions(strapi, target);
   const provider = strapi.admin.services.permission.actionProvider;
   /** @type {Map<string, any>} */
   const types = new Map();
-  /** @type {Array<{action: string, name: string, section: string, scope: string|null}>} */
+  /**
+   * @type {Array<{action: string, name: string, section: string, scope: string|null,
+   *   category: string|null, subCategory: string|null}>}
+   */
   const other = [];
   for (const permission of permissions) {
     const contentType = permission.subject ? strapi.contentTypes?.[permission.subject] : null;
     if (contentType && permission.action.startsWith('plugin::content-manager.explorer.')) {
       const entry = types.get(permission.subject) || {
-        uid: permission.subject,
-        name: String(contentType.info?.displayName || permission.subject).slice(0, 120),
-        kind: contentType.kind === 'singleType' ? 'single' : 'collection',
+        ...describeContentType(permission.subject, contentType),
         actions: [],
       };
       const fields = permission.properties?.fields;
@@ -155,6 +212,7 @@ async function buildPreview(strapi, target) {
       entry.actions.push({
         action: contentAction(permission.action),
         fields: Array.isArray(fields) ? fields.length : null,
+        fieldNames: Array.isArray(fields) ? fields.slice(0, 100).map(String) : null,
         locales: Array.isArray(locales) ? locales.slice(0, 20) : null,
         conditions: (permission.conditions || []).slice(0, 10),
       });
@@ -172,6 +230,8 @@ async function buildPreview(strapi, target) {
       name: String(definition?.displayName || permission.action).slice(0, 160),
       section: String(definition?.section || 'other'),
       scope: definition?.pluginName ? String(definition.pluginName) : null,
+      category: definition?.category ? String(definition.category).slice(0, 120) : null,
+      subCategory: definition?.subCategory ? String(definition.subCategory).slice(0, 120) : null,
     });
   }
   const order = ['create', 'read', 'update', 'delete', 'publish'];
@@ -185,7 +245,33 @@ async function buildPreview(strapi, target) {
       ),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  other.sort((a, b) => a.section.localeCompare(b.section) || a.name.localeCompare(b.name));
+  const unavailableContentTypes = permissionSubjects(strapi)
+    .filter((uid) => !types.has(uid) && isVisibleInContentManager(strapi.contentTypes?.[uid]))
+    .map((uid) => describeContentType(uid, strapi.contentTypes[uid]))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 500);
+  /** @type {Record<string, string>} */
+  const conditionNames = {};
+  for (const type of contentTypes) {
+    for (const action of type.actions) {
+      for (const id of action.conditions) {
+        if (conditionNames[id]) continue;
+        let condition;
+        try {
+          condition = strapi.admin.services.permission.conditionProvider.get(id);
+        } catch {
+          condition = null;
+        }
+        conditionNames[id] = String(condition?.displayName || id).slice(0, 120);
+      }
+    }
+  }
+  other.sort(
+    (a, b) =>
+      a.section.localeCompare(b.section) ||
+      String(a.category || a.scope || '').localeCompare(String(b.category || b.scope || '')) ||
+      a.name.localeCompare(b.name)
+  );
   return {
     admin: {
       id: target.id,
@@ -194,9 +280,13 @@ async function buildPreview(strapi, target) {
         target.username ||
         '',
       active: target.isActive === true,
-      roles: (target.roles || []).map((role) => ({ name: role.name })),
+      roles: (target.roles || [])
+        .map((role) => (canReadRoles ? { id: role.id, name: role.name } : { name: role.name }))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name))),
     },
     contentTypes,
+    unavailableContentTypes,
+    conditionNames,
     otherPermissions: other.slice(0, 500),
   };
 }

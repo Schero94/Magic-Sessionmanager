@@ -391,7 +391,8 @@ module.exports = ({ strapi }) => {
      * admin"). No session or token is created; the preview can be read by
      * the admin who started it until it ends.
      *
-     * @param {{actor: any, adminId: unknown, body: unknown, canReadAdmins: boolean}} input
+     * @param {{actor: any, adminId: unknown, body: unknown, canReadAdmins: boolean,
+     *   canReadRoles?: boolean}} input
      *   Caller (with roles), target id and request body.
      * @returns {Promise<object>} Impersonation DTO plus the preview.
      * @throws {ImpersonationError} 400 invalid body or id; 403 feature off, self, Super Admin
@@ -399,7 +400,7 @@ module.exports = ({ strapi }) => {
      *   unknown admin, or a Super Admin for callers without `admin::users.read`.
      * @sideeffect Creates an impersonation row; queues `impersonation.started` or `.refused`.
      */
-    async previewAdmin({ actor, adminId, body, canReadAdmins }) {
+    async previewAdmin({ actor, adminId, body, canReadAdmins, canReadRoles = false }) {
       const actorId = String(actor.id);
       const refuse = (reason, status, message, extra = {}) => {
         service.recordRefused({ actorId, targetType: 'admin', targetId: adminId, reason });
@@ -482,7 +483,7 @@ module.exports = ({ strapi }) => {
           handoff: 'preview',
         },
       });
-      const preview = await buildPreview(strapi, target);
+      const preview = await buildPreview(strapi, target, { canReadRoles });
       if (!canReadAdmins) preview.admin.name = '';
       return {
         impersonation: service.toDto(row, {
@@ -500,11 +501,11 @@ module.exports = ({ strapi }) => {
      * The preview of a running admin preview, for the admin who started it.
      * An expired one is ended and answers 404 like an unknown one.
      *
-     * @param {{id: unknown, viewer: any, canReadAdmins: boolean}} input Preview id and caller.
+     * @param {{id: unknown, viewer: any, canReadAdmins: boolean, canReadRoles?: boolean}} input Preview id and caller.
      * @returns {Promise<object>} Impersonation DTO plus the preview.
      * @throws {ImpersonationError} 404 unknown, ended, expired or started by someone else.
      */
-    async getPreview({ id, viewer, canReadAdmins }) {
+    async getPreview({ id, viewer, canReadAdmins, canReadRoles = false }) {
       if (typeof id !== 'string' || !DOCUMENT_ID_PATTERN.test(id)) {
         throw new ImpersonationError(404, 'Preview not found');
       }
@@ -523,7 +524,7 @@ module.exports = ({ strapi }) => {
         await service.end(row.documentId, { reason: 'failed', silent: true });
         throw new ImpersonationError(404, 'Preview not found');
       }
-      const preview = await buildPreview(strapi, target);
+      const preview = await buildPreview(strapi, target, { canReadRoles });
       if (!canReadAdmins) preview.admin.name = '';
       return {
         impersonation: service.toDto(row, {

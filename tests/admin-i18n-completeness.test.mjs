@@ -158,6 +158,7 @@ test('every t() call whose message has placeholders passes values (I18N-1, SET-0
 // names, protocols, examples and established loanwords or cognates.
 const SAME_AS_ENGLISH = {
   shared: new Set([
+    'Content Manager',
     '403 SESSION_LIMIT_REACHED',
     'Session Manager',
     'Geofencing',
