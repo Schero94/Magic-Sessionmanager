@@ -11,6 +11,7 @@ const { ImpersonationError } = require('../services/impersonation');
 const { sendServerError } = require('../utils/http-errors');
 
 const IMPERSONATE_USERS_ACTION = 'plugin::magic-sessionmanager.impersonate.users';
+const IMPERSONATE_ADMINS_ACTION = 'plugin::magic-sessionmanager.impersonate.admins';
 
 /**
  * Whether the caller's ability holds an action.
@@ -34,7 +35,10 @@ function callerCan(ctx, action) {
  * @returns {Array<'user'|'admin'>}
  */
 function visibleTargetTypes(ctx) {
-  return callerCan(ctx, IMPERSONATE_USERS_ACTION) ? ['user'] : [];
+  return [
+    ...(callerCan(ctx, IMPERSONATE_USERS_ACTION) ? ['user'] : []),
+    ...(callerCan(ctx, IMPERSONATE_ADMINS_ACTION) ? ['admin'] : []),
+  ];
 }
 
 /** `ctx` helper per expected status (Strapi's error envelope). */
@@ -134,10 +138,11 @@ module.exports = ({ strapi: app }) => {
 
     /**
      * Active impersonations the caller may see: app users with
-     * `impersonate.users`.
+     * `impersonate.users`, admin previews with `impersonate.admins`. Admin
+     * names need `admin::users.read`, as in the Admin panel view.
      *
      * @route GET /magic-sessionmanager/impersonation/active
-     * @auth Admin JWT or admin API token; `access` + `impersonate.users`.
+     * @auth Admin JWT or admin API token; `access` + one of the impersonate actions.
      * @returns {Promise<void>} `{ data: Impersonation[] }` (at most 100).
      */
     async listActive(ctx) {
@@ -145,6 +150,7 @@ module.exports = ({ strapi: app }) => {
         const data = await service().listActive({
           targetTypes: visibleTargetTypes(ctx),
           viewer: ctx.state.user,
+          canReadAdmins: callerCan(ctx, 'admin::users.read'),
         });
         ctx.body = { data };
       });
@@ -154,7 +160,8 @@ module.exports = ({ strapi: app }) => {
      * Ends an active impersonation now.
      *
      * @route POST /magic-sessionmanager/impersonation/:id/end
-     * @auth Admin JWT or admin API token; `access` + the impersonate action of its kind.
+     * @auth Admin JWT or admin API token; `access` + the impersonate action of its kind
+     *   (`impersonate.users` for app users, `impersonate.admins` for admin previews).
      * @returns {Promise<void>} `{ data: { ended: boolean } }`.
      * Answers 404 for an unknown id or a kind the caller may not see.
      * @sideeffect Revokes the credential; logs `impersonation.ended`.
@@ -176,6 +183,56 @@ module.exports = ({ strapi: app }) => {
             ? await service().end(id, { reason: 'ended', endedBy: ctx.state.user.id })
             : false;
         ctx.body = { data: { ended } };
+      });
+    },
+
+    /**
+     * Starts a read-only permission preview of another admin ("View as
+     * admin"): which content types and actions they can use. No session or
+     * token is created.
+     *
+     * @route POST /magic-sessionmanager/impersonation/admins/:adminId/preview
+     * @auth Admin JWT only (admin API tokens are refused); `access` + `impersonate.admins`.
+     * @param {any} ctx Body `{ reason: string(3..255), durationMinutes: 15|30 }`.
+     * @returns {Promise<void>} 201 `{ data: { impersonation, preview } }`. Answers 403 with
+     *   `details.reason` `disabled`, `api-token`, `self`, `super-admin` or `not-subset`,
+     *   400 for an invalid body and 404 for an unknown admin.
+     * @sideeffect Creates a preview row; logs `impersonation.started` or `.refused`.
+     */
+    async previewAdmin(ctx) {
+      ctx.set('Cache-Control', 'no-store');
+      return respond(ctx, 'preview', async () => {
+        const { adminId } = ctx.params;
+        requirePerson(ctx, 'admin', adminId);
+        const result = await service().previewAdmin({
+          actor: ctx.state.user,
+          adminId,
+          body: ctx.request.body,
+          canReadAdmins: callerCan(ctx, 'admin::users.read'),
+        });
+        ctx.status = 201;
+        ctx.body = { data: result };
+      });
+    },
+
+    /**
+     * Reads a running admin preview; only the admin who started it.
+     *
+     * @route GET /magic-sessionmanager/impersonation/previews/:id
+     * @auth Admin JWT or admin API token; `access` + `impersonate.admins`.
+     * @returns {Promise<void>} `{ data: { impersonation, preview } }`; 404 when unknown, ended,
+     *   expired or started by someone else.
+     */
+    async getPreview(ctx) {
+      ctx.set('Cache-Control', 'no-store');
+      return respond(ctx, 'preview', async () => {
+        ctx.body = {
+          data: await service().getPreview({
+            id: ctx.params.id,
+            viewer: ctx.state.user,
+            canReadAdmins: callerCan(ctx, 'admin::users.read'),
+          }),
+        };
       });
     },
 
@@ -211,3 +268,4 @@ module.exports = ({ strapi: app }) => {
 };
 
 module.exports.IMPERSONATE_USERS_ACTION = IMPERSONATE_USERS_ACTION;
+module.exports.IMPERSONATE_ADMINS_ACTION = IMPERSONATE_ADMINS_ACTION;

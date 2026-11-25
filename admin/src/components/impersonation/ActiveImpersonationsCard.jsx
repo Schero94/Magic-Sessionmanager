@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Badge,
   Box,
   Button,
   EmptyStateLayout,
@@ -37,8 +38,9 @@ const keepActionKeys = (event) => {
 
 /**
  * "Active impersonations" (Settings > Impersonation, 4.20): who is acting as
- * which app user, why and until when, with End for each. Only admins with
- * "Impersonate app users" see it; the server lists only what they may end.
+ * which app user (or previews which admin), why and until when, with End for
+ * each. Only admins with an impersonate permission see it; the server lists
+ * only what they may end.
  *
  * States: loading, empty, error with retry, list (table from 720 px card
  * width, else a list), refresh keeps the list mounted.
@@ -114,7 +116,7 @@ const ActiveImpersonationsCard = () => {
       key={row.id}
       fallbackFocusRef={refreshRef}
       title={t('impersonation.confirm.title', 'End the impersonation of {user}?', {
-        user: row.targetLabel,
+        user: label(row),
       })}
       body={t(
         'impersonation.confirm.body',
@@ -126,7 +128,7 @@ const ActiveImpersonationsCard = () => {
         <IconButton
           variant="ghost"
           label={t('impersonation.endLabel', 'End impersonation of {user}', {
-            user: row.targetLabel,
+            user: label(row),
           })}
         >
           <SignOut />
@@ -134,6 +136,18 @@ const ActiveImpersonationsCard = () => {
       }
     />
   );
+
+  const label = (row) =>
+    row.targetLabel ||
+    (row.targetType === 'admin'
+      ? t('impersonation.list.adminFallback', 'Admin #{id}', { id: row.targetId })
+      : row.targetId);
+  const kind = (row) =>
+    row.targetType === 'admin' ? (
+      <Badge backgroundColor="primary100" textColor="neutral800">
+        {t('impersonation.list.kind.admin', 'Admin, view only')}
+      </Badge>
+    ) : null;
 
   const time = (iso) => (
     <Typography tag="time" dateTime={iso} variant="omega" textColor="neutral800">
@@ -213,9 +227,12 @@ const ActiveImpersonationsCard = () => {
             {rows.map((row) => (
               <Tr key={row.id} data-impersonation-row="">
                 <Td>
-                  <Typography variant="omega" textColor="neutral800" fontWeight="semiBold">
-                    {row.targetLabel}
-                  </Typography>
+                  <Flex gap={2} wrap="wrap" alignItems="center">
+                    <Typography variant="omega" textColor="neutral800" fontWeight="semiBold">
+                      {label(row)}
+                    </Typography>
+                    {kind(row)}
+                  </Flex>
                 </Td>
                 <Td>
                   <Typography variant="omega" textColor="neutral800">
@@ -249,9 +266,12 @@ const ActiveImpersonationsCard = () => {
           <Box key={row.id} tag="li" padding={4} hasRadius borderColor="neutral150">
             <Flex justifyContent="space-between" alignItems="flex-start" gap={3}>
               <Flex direction="column" alignItems="flex-start" gap={1} minWidth={0}>
-                <Typography variant="omega" textColor="neutral800" fontWeight="semiBold">
-                  {row.targetLabel}
-                </Typography>
+                <Flex gap={2} wrap="wrap" alignItems="center">
+                  <Typography variant="omega" textColor="neutral800" fontWeight="semiBold">
+                    {label(row)}
+                  </Typography>
+                  {kind(row)}
+                </Flex>
                 <Typography
                   variant="pi"
                   textColor="neutral800"

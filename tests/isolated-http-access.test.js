@@ -261,7 +261,7 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 37);
+        assert.equal(routes.length, 39);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)
@@ -1361,6 +1361,8 @@ test(
         const expectedStatus = {
           'POST /lockouts/unlock': 404,
           'POST /impersonation/users/:userId': 403,
+          'POST /impersonation/admins/:adminId/preview': 403,
+          'GET /impersonation/previews/:id': 404,
           'POST /impersonation/:id/end': 404,
         };
         const routes = require('../server/src/routes/admin').routes;

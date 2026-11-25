@@ -643,6 +643,252 @@ test(
       setFrontend(undefined);
     });
 
+    // ---- View as admin: read-only permission preview ----
+    const UP_USER = 'plugin::users-permissions.user';
+    const createRoleWith = async (code, permissions) => {
+      const role = await adminRoles.create({ data: { name: `Synthetic ${code}`, code } });
+      for (const permission of permissions) {
+        await app.db.query('admin::permission').create({
+          data: {
+            conditions: [],
+            properties: {},
+            ...permission,
+            role: role.id,
+          },
+        });
+      }
+      return role;
+    };
+    const ACCESS = { action: 'plugin::magic-sessionmanager.access' };
+    const PREVIEW = { action: 'plugin::magic-sessionmanager.impersonate.admins' };
+    const readUsers = (extra = {}) => ({
+      action: 'plugin::content-manager.explorer.read',
+      subject: UP_USER,
+      ...extra,
+    });
+    const previewer = await createAdmin(
+      (
+        await createRoleWith('imp-previewer', [
+          ACCESS,
+          PREVIEW,
+          readUsers(),
+          { action: 'plugin::upload.read' },
+        ])
+      ).id,
+      'imp-previewer'
+    );
+    const narrowPreviewer = await createAdmin(
+      (
+        await createRoleWith('imp-narrow-previewer', [
+          ACCESS,
+          PREVIEW,
+          readUsers({ conditions: ['admin::is-creator'] }),
+        ])
+      ).id,
+      'imp-narrow-previewer'
+    );
+    const subsetAdmin = await createAdmin(
+      (
+        await createRoleWith('imp-subset', [
+          readUsers({ properties: { fields: ['username', 'email'] } }),
+        ])
+      ).id,
+      'imp-subset'
+    );
+    const widerAdmin = await createAdmin(
+      (
+        await createRoleWith('imp-wider', [
+          readUsers(),
+          { action: 'plugin::content-manager.explorer.update', subject: UP_USER },
+        ])
+      ).id,
+      'imp-wider'
+    );
+    const preview = (target, body = {}, token = previewer.token) =>
+      request('POST', `/magic-sessionmanager/impersonation/admins/${target.id}/preview`, {
+        token,
+        body: { reason: 'Check what the editor sees', durationMinutes: 15, ...body },
+      });
+    const refusedWith = async (result, reason) => {
+      assert.equal(result.status, 403, JSON.stringify(result.body?.error));
+      assert.equal(result.body.error.details.reason, reason);
+    };
+
+    await t.test(
+      'View as admin: RBAC (Super Admin automatically, others only when granted)',
+      async () => {
+        const ungranted = await preview(subsetAdmin, {}, granted.token);
+        assert.equal(ungranted.status, 403, 'impersonate.users alone does not allow previews');
+        const bySuper = await preview(subsetAdmin, {}, superC.token);
+        assert.equal(bySuper.status, 201, JSON.stringify(bySuper.body?.error));
+        await request(
+          'POST',
+          `/magic-sessionmanager/impersonation/${bySuper.body.data.impersonation.id}/end`,
+          { token: superC.token }
+        );
+      }
+    );
+
+    await t.test('View as admin: every anti-escalation rule is enforced', async () => {
+      // Nobody previews a Super Admin, Super Admins included.
+      await refusedWith(await preview({ id: superAdmin.id }), 'super-admin');
+      await refusedWith(await preview({ id: superAdmin.id }, {}, superC.token), 'super-admin');
+      // Nobody previews themselves.
+      await refusedWith(await preview({ id: previewer.id }), 'self');
+      await refusedWith(await preview({ id: superC.id }, {}, superC.token), 'self');
+      // A non-Super-Admin only previews a subset of their own permissions.
+      const wider = await preview(widerAdmin);
+      await refusedWith(wider, 'not-subset');
+      assert.equal(wider.body.error.details.uncovered, 1);
+      // Conditions are OR-ed: a conditional holder does not cover an unconditional permission.
+      await refusedWith(await preview(subsetAdmin, {}, narrowPreviewer.token), 'not-subset');
+      // Unknown admins and invalid bodies.
+      assert.equal((await preview({ id: 999999 })).status, 404);
+      assert.equal((await preview(subsetAdmin, { durationMinutes: 60 })).status, 400);
+      assert.equal((await preview(subsetAdmin, { notifyUser: true })).status, 400);
+      const refused = await flushedEvents({ event: 'impersonation.refused', targetType: 'admin' });
+      const reasons = new Set(refused.map((event) => event.meta.refusal));
+      for (const reason of ['super-admin', 'self', 'not-subset']) assert.ok(reasons.has(reason));
+    });
+
+    let adminPreview;
+    await t.test('View as admin: a subset admin can be previewed, read-only', async () => {
+      const sessionsBefore = await app.db
+        .query('admin::session')
+        .count({ where: { userId: String(subsetAdmin.id) } });
+      const started = await preview(subsetAdmin);
+      assert.equal(started.status, 201, JSON.stringify(started.body?.error));
+      assert.equal(started.headers.get('cache-control'), 'no-store');
+      const { impersonation, preview: summary } = started.body.data;
+      assert.equal(impersonation.targetType, 'admin');
+      assert.equal(impersonation.handoff, 'preview');
+      assert.equal(impersonation.durationMinutes, 15);
+      const users = summary.contentTypes.find((type) => type.uid === UP_USER);
+      assert.ok(users, 'the content type is listed');
+      assert.deepEqual(
+        users.actions.map((action) => [action.action, action.fields]),
+        [['read', 2]]
+      );
+      // Read-only by construction: no session, no token for the target admin.
+      const text = JSON.stringify(started.body);
+      assert.equal(/"(jwt|token|accessToken|refreshToken|code)":/.test(text), false);
+      assert.equal(
+        await app.db.query('admin::session').count({ where: { userId: String(subsetAdmin.id) } }),
+        sessionsBefore
+      );
+      // Only the admin who started it can read it.
+      const own = await request(
+        'GET',
+        `/magic-sessionmanager/impersonation/previews/${impersonation.id}`,
+        { token: previewer.token }
+      );
+      assert.equal(own.status, 200);
+      assert.equal(own.body.data.preview.contentTypes[0].uid, UP_USER);
+      const other = await request(
+        'GET',
+        `/magic-sessionmanager/impersonation/previews/${impersonation.id}`,
+        { token: superAdmin.token }
+      );
+      assert.equal(other.status, 404);
+      const started_ = await flushedEvents({
+        event: 'impersonation.started',
+        targetType: 'admin',
+        targetId: String(subsetAdmin.id),
+      });
+      assert.equal(started_.at(-1).actorId, String(previewer.id));
+      assert.equal(started_.at(-1).meta.handoff, 'preview');
+      assert.equal(started_.at(-1).meta.reason, 'Check what the editor sees');
+      adminPreview = impersonation;
+    });
+
+    await t.test('View as admin: listed for impersonate.admins only, and End works', async () => {
+      const forUsersOnly = await request('GET', '/magic-sessionmanager/impersonation/active', {
+        token: granted.token,
+      });
+      assert.equal(forUsersOnly.status, 200);
+      assert.equal(
+        forUsersOnly.body.data.some((row) => row.id === adminPreview.id),
+        false
+      );
+      const endByUsersOnly = await request(
+        'POST',
+        `/magic-sessionmanager/impersonation/${adminPreview.id}/end`,
+        { token: granted.token }
+      );
+      assert.equal(endByUsersOnly.status, 404);
+      const list = await request('GET', '/magic-sessionmanager/impersonation/active', {
+        token: previewer.token,
+      });
+      assert.equal(list.status, 200);
+      const row = list.body.data.find((item) => item.id === adminPreview.id);
+      assert.ok(row);
+      assert.equal(row.startedByYou, true);
+      assert.equal(row.targetLabel, '', 'admin names need admin::users.read');
+      const ended = await request(
+        'POST',
+        `/magic-sessionmanager/impersonation/${adminPreview.id}/end`,
+        { token: previewer.token }
+      );
+      assert.equal(ended.body.data.ended, true);
+      const after = await request(
+        'GET',
+        `/magic-sessionmanager/impersonation/previews/${adminPreview.id}`,
+        { token: previewer.token }
+      );
+      assert.equal(after.status, 404);
+      const endedEvents = await flushedEvents({
+        event: 'impersonation.ended',
+        targetType: 'admin',
+      });
+      assert.equal(endedEvents.at(-1).actorId, String(previewer.id));
+    });
+
+    await t.test('View as admin: expiry ends the preview', async () => {
+      const started = await preview(subsetAdmin, { durationMinutes: 30 });
+      assert.equal(started.status, 201);
+      const { impersonation } = started.body.data;
+      await app.db.query(IMPERSONATION_UID).update({
+        where: { documentId: impersonation.id },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      const read = await request(
+        'GET',
+        `/magic-sessionmanager/impersonation/previews/${impersonation.id}`,
+        { token: previewer.token }
+      );
+      assert.equal(read.status, 404);
+      assert.equal((await impersonationRow(impersonation.id)).state, 'expired');
+      const expired = await flushedEvents({
+        event: 'impersonation.expired',
+        targetType: 'admin',
+      });
+      assert.ok(expired.length >= 1);
+    });
+
+    await t.test(
+      'impersonation cannot be nested: an app-user credential cannot reach admin routes',
+      async () => {
+        const started = await start(anna, {}, superC.token);
+        assert.equal(started.status, 201);
+        const { handoff, impersonation } = started.body.data;
+        const nested = await request(
+          'POST',
+          `/magic-sessionmanager/impersonation/admins/${subsetAdmin.id}/preview`,
+          { token: handoff.jwt, body: { reason: 'Nested', durationMinutes: 15 } }
+        );
+        assert.equal(nested.status, 401);
+        const nestedUser = await request(
+          'POST',
+          `/magic-sessionmanager/impersonation/users/${ben.documentId}`,
+          { token: handoff.jwt, body: { reason: 'Nested', durationMinutes: 15 } }
+        );
+        assert.equal(nestedUser.status, 401);
+        await request('POST', `/magic-sessionmanager/impersonation/${impersonation.id}/end`, {
+          token: superC.token,
+        });
+      }
+    );
+
     await t.test('admin API tokens cannot impersonate', async () => {
       const created = await request('POST', '/admin/admin-tokens', {
         token: superAdmin.token,
@@ -651,6 +897,7 @@ test(
           adminPermissions: [
             { action: 'plugin::magic-sessionmanager.access' },
             { action: 'plugin::magic-sessionmanager.impersonate.users' },
+            { action: 'plugin::magic-sessionmanager.impersonate.admins' },
           ],
         },
       });
@@ -665,6 +912,12 @@ test(
       const result = await start(ben, {}, accessKey);
       assert.equal(result.status, 403);
       assert.equal(result.body.error.details.reason, 'api-token');
+      const tokenPreview = await request(
+        'POST',
+        `/magic-sessionmanager/impersonation/admins/${subsetAdmin.id}/preview`,
+        { token: accessKey, body: { reason: 'Token preview', durationMinutes: 15 } }
+      );
+      assert.equal(tokenPreview.status, 403);
       const events = await flushedEvents({ event: 'impersonation.refused' });
       assert.equal(events.at(-1).meta.refusal, 'api-token');
     });
@@ -692,6 +945,7 @@ test(
         body: { code: crypto.randomBytes(32).toString('base64url') },
       });
       assert.equal(exchange.status, 400);
+      await refusedWith(await preview(subsetAdmin), 'disabled');
     });
   }
 );

@@ -1,8 +1,10 @@
 /**
- * Impersonation of app users in the admin panel (4.20): the side-panel entry point is shown only
+ * Impersonation in the admin panel (4.20): the side-panel entry point is shown only
  * with the permission and the switch on, the dialog validates the reason before any request,
  * the credential is handed over once (token or one-time code by POST to the frontend), End works
- * from the dialog and from the Settings list, and the list's row action works by keyboard.
+ * from the dialog and from the Settings list, and the list's row action works by keyboard. View as
+ * admin is offered only where allowed, asks for a reason, and shows a read-only preview with a
+ * banner, a countdown and End.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -10,6 +12,8 @@ import { act } from 'react';
 import { network, permission, renderStrict, settle } from './harness/index.jsx';
 import ImpersonationPanelSection from '../../admin/src/components/impersonation/ImpersonationPanelSection';
 import ActiveImpersonationsCard from '../../admin/src/components/impersonation/ActiveImpersonationsCard';
+import PreviewAdminModal from '../../admin/src/components/impersonation/PreviewAdminModal';
+import { AdminTable } from '../../admin/src/pages/AdminPanel/AdminList';
 
 const IMPERSONATE = permission('plugin::magic-sessionmanager.impersonate.users');
 const ACCESS = permission('plugin::magic-sessionmanager.access');
@@ -249,6 +253,198 @@ test('the active list ends an impersonation by keyboard (Enter on the row action
     const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]');
     assert.ok(dialog, 'confirmation opened');
     assert.match(dialog.textContent, /End the impersonation of ben\.muster\?/);
+  } finally {
+    await handle.unmount();
+  }
+});
+
+const ADMIN_ROW = {
+  id: 7,
+  name: 'Ben Muster',
+  email: 'ben.muster@example.test',
+  roles: [{ name: 'Editor', superAdmin: false }],
+  account: 'active',
+  self: false,
+  sessionCount: 0,
+  lastActiveAt: null,
+  canSignOut: false,
+  protectedReason: null,
+};
+
+test('View as: offered only with the permission, never for oneself or a Super Admin', async () => {
+  const seen = [];
+  const opened = [];
+  const rows = [
+    ADMIN_ROW,
+    { ...ADMIN_ROW, id: 8, name: 'Self Admin', self: true },
+    {
+      ...ADMIN_ROW,
+      id: 9,
+      name: 'Super Admin',
+      roles: [{ name: 'Super Admin', superAdmin: true }],
+    },
+  ];
+  const handle = await renderStrict(
+    <div onKeyDown={(event) => seen.push(event.key)}>
+      <AdminTable
+        admins={rows}
+        labelledBy="caption"
+        canRevoke={false}
+        canPreview
+        onView={() => {}}
+        onSignOutEverywhere={() => {}}
+        onPreview={(admin) => opened.push(admin.id)}
+      />
+    </div>
+  );
+  try {
+    const names = [...document.querySelectorAll('[data-row-actions] button')].map((node) =>
+      node.textContent.trim()
+    );
+    assert.ok(names.includes('View as Ben Muster'));
+    assert.equal(names.includes('View as Self Admin'), false);
+    assert.equal(names.includes('View as Super Admin'), false);
+    const action = [
+      ...document.querySelectorAll('[data-admin-row="7"] [data-row-actions] button'),
+    ].find((node) => node.textContent.trim() === 'View as Ben Muster');
+    for (const key of ['Enter', ' ', 'ArrowDown']) {
+      await act(async () => {
+        action.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }));
+      });
+    }
+    assert.deepEqual(seen, ['ArrowDown'], 'only navigation keys reach the table');
+    await act(async () => action.click());
+    assert.deepEqual(opened, [7]);
+  } finally {
+    await handle.unmount();
+  }
+  const without = await renderStrict(
+    <AdminTable
+      admins={[ADMIN_ROW]}
+      labelledBy="caption"
+      canRevoke={false}
+      onView={() => {}}
+      onSignOutEverywhere={() => {}}
+    />
+  );
+  try {
+    assert.equal(
+      [...document.querySelectorAll('[data-row-actions] button')].some((node) =>
+        node.textContent.includes('View as')
+      ),
+      false
+    );
+  } finally {
+    await without.unmount();
+  }
+});
+
+test('View as: reason first, then a read-only preview with banner, countdown and End', async () => {
+  network.on('POST', '/magic-sessionmanager/impersonation/admins/7/preview', {
+    status: 201,
+    body: {
+      data: {
+        impersonation: {
+          ...ROW,
+          id: 'impersonation00000000077',
+          targetType: 'admin',
+          targetId: '7',
+          handoff: 'preview',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        },
+        preview: {
+          admin: { id: 7, name: 'Ben Muster', active: true, roles: [{ name: 'Editor' }] },
+          contentTypes: [
+            {
+              uid: 'api::article.article',
+              name: 'Article',
+              kind: 'collection',
+              actions: [
+                { action: 'read', fields: null, locales: null, conditions: [] },
+                { action: 'update', fields: 2, locales: null, conditions: ['admin::is-creator'] },
+              ],
+            },
+          ],
+          otherPermissions: [
+            {
+              action: 'plugin::upload.read',
+              name: 'Access the Media Library',
+              section: 'plugins',
+              scope: 'upload',
+            },
+          ],
+        },
+      },
+    },
+  });
+  network.on('POST', '/magic-sessionmanager/impersonation/impersonation00000000077/end', {
+    data: { ended: true },
+  });
+  let closed = 0;
+  const handle = await renderStrict(
+    <PreviewAdminModal admin={{ id: 7, name: 'Ben Muster' }} onClose={() => (closed += 1)} />,
+    { permissions: [ACCESS] }
+  );
+  try {
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.match(dialog.textContent, /View as Ben Muster/);
+    network.clearCalls();
+    await click(buttonByText(dialog, 'View permissions'));
+    assert.equal(network.calls.filter((call) => call.method === 'POST').length, 0);
+    await type(dialog.querySelector('textarea'), 'Check what the editor sees');
+    await click(buttonByText(dialog, 'View permissions'));
+    const body = JSON.parse(network.calls.find((call) => call.method === 'POST').body);
+    assert.deepEqual(body, { reason: 'Check what the editor sees', durationMinutes: 15 });
+    const banner = document.querySelector('[data-preview-banner]');
+    assert.match(
+      banner.textContent,
+      /You are viewing as Ben Muster · read-only · ends in 1[45]:\d\d/
+    );
+    const preview = document.querySelector('[data-preview-body]');
+    assert.match(preview.textContent, /Article/);
+    assert.match(preview.textContent, /Update \(restricted\)/);
+    assert.match(preview.textContent, /Update: 2 fields/);
+    assert.match(preview.textContent, /only entries they created/);
+    assert.match(preview.textContent, /Access the Media Library/);
+    network.clearCalls();
+    await click(buttonByText(banner, 'End'));
+    assert.ok(
+      network.calls.some(
+        (call) => call.path === '/magic-sessionmanager/impersonation/impersonation00000000077/end'
+      )
+    );
+    assert.equal(closed, 1);
+  } finally {
+    await handle.unmount();
+  }
+});
+
+test('View as: a refused preview explains why and keeps the dialog open', async () => {
+  network.on('POST', '/magic-sessionmanager/impersonation/admins/7/preview', {
+    status: 403,
+    body: {
+      data: null,
+      error: {
+        status: 403,
+        name: 'ForbiddenError',
+        message: 'x',
+        details: { reason: 'not-subset' },
+      },
+    },
+  });
+  const handle = await renderStrict(
+    <PreviewAdminModal admin={{ id: 7, name: 'Ben Muster' }} onClose={() => {}} />,
+    { permissions: [ACCESS] }
+  );
+  try {
+    const dialog = document.querySelector('[role="dialog"]');
+    await type(dialog.querySelector('textarea'), 'Ticket 99');
+    await click(buttonByText(dialog, 'View permissions'));
+    assert.match(
+      document.querySelector('[role="dialog"]').textContent,
+      /This admin has permissions that you do not have/
+    );
+    assert.equal(document.querySelector('[data-preview-banner]'), null);
   } finally {
     await handle.unmount();
   }

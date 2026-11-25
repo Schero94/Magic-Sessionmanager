@@ -1,3 +1,11 @@
+## [Unreleased]
+
+Release type: minor (`feat`). Additive: one RBAC action (`impersonate.admins`, "View as admin") and two admin routes; no stored data changes.
+
+### Features
+
+* **View as admin (read-only permission preview).** A new row action **View as** in Session Manager › Admin panel (permission **View as admin**, `impersonate.admins`) shows, after a reason and a duration of 15 or 30 minutes, which content types and actions another admin can use, their roles and their other permissions, under a banner "You are viewing as … · read-only · ends in mm:ss · End". It creates no session and no token. Anti-escalation on the server: nobody views themselves, nobody views a Super Admin (Super Admins included), and a non-Super-Admin only views an admin whose effective permissions are a subset of their own, compared with Strapi's permission ceiling rules (a test checks parity with Strapi 5.63's `isPermissionWithinCeiling`). Strapi 5.63 offers no documented way to sign a browser in as another admin, so no admin session is created; README › View as admin explains why.
+
 # [4.20.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.19.1...v4.20.0) (2026-11-25)
 
 
