@@ -3,6 +3,7 @@
 const session = require('./session/schema.json');
 const revokedToken = require('./revoked-token/schema.json');
 const securityEvent = require('./security-event/schema.json');
+const impersonation = require('./impersonation/schema.json');
 
 module.exports = {
   session: {
@@ -17,5 +18,11 @@ module.exports = {
   // Content-Type Builder.
   'security-event': {
     schema: securityEvent,
+  },
+  // Time-limited impersonations (4.20): who opened which account, why and
+  // until when. Ended rows are deleted after 7 days; the security log keeps
+  // the record. Hidden from the Content Manager and the Content-Type Builder.
+  impersonation: {
+    schema: impersonation,
   },
 };

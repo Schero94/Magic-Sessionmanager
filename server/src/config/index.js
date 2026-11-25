@@ -1,5 +1,7 @@
 'use strict';
 
+const { validateImpersonationConfig } = require('../utils/impersonation-rules');
+
 /**
  * Default plugin configuration.
  *
@@ -97,6 +99,10 @@ module.exports = {
     ) {
       throw new Error('geoLookupFailureMode must be one of: auto, allow, block');
     }
+    // Frontend hand-off of impersonation (4.20): https URL on an allow-list.
+    validateImpersonationConfig(config.impersonation, {
+      production: process.env.NODE_ENV === 'production',
+    });
     if (config.coordination !== undefined && config.coordination !== null) {
       const coordination = config.coordination;
       if (typeof coordination !== 'object' || Array.isArray(coordination)) {

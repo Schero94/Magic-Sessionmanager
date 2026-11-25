@@ -261,7 +261,7 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 33);
+        assert.equal(routes.length, 37);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)
@@ -1355,7 +1355,14 @@ test(
         };
         // The handler answers 404 for a lock that does not exist; lifting a
         // real lock is covered by tests/isolated-policies-http.test.js.
-        const expectedStatus = { 'POST /lockouts/unlock': 404 };
+        // Impersonation is off by default (403) and an unknown impersonation
+        // answers 404; both flows are covered by
+        // tests/isolated-impersonation-http.test.js.
+        const expectedStatus = {
+          'POST /lockouts/unlock': 404,
+          'POST /impersonation/users/:userId': 403,
+          'POST /impersonation/:id/end': 404,
+        };
         const routes = require('../server/src/routes/admin').routes;
         // Missing credentials prove the protected updater is reached without any download.
         const updater = await request('POST', '/magic-sessionmanager/geoip/update', adminToken);

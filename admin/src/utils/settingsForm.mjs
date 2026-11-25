@@ -48,6 +48,8 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   securityLogRetentionDays: 90,
   ...POLICY_FORM_DEFAULTS,
   ...SIGNALS_FORM_DEFAULTS,
+  // Impersonation of app users (4.20), off by default.
+  impersonationEnabled: false,
 });
 
 /** Keys the server accepts but never returns (write-only secrets, 4.17). */

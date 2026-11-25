@@ -153,6 +153,26 @@ module.exports = {
       },
     },
 
+    // ================== IMPERSONATION HAND-OFF (4.20) ==================
+    {
+      method: 'POST',
+      path: '/impersonation/exchange',
+      handler: 'impersonation.exchange',
+      config: {
+        // Public on purpose: the one-time code is the credential (32 random
+        // bytes, stored hashed, 60 seconds, single use). Every invalid code
+        // gets the same 400.
+        auth: false,
+        middlewares: [
+          {
+            name: 'plugin::magic-sessionmanager.rate-limit',
+            config: { max: 10, window: 60_000 },
+          },
+        ],
+        description: 'Exchange a one-time impersonation code for a short-lived credential',
+      },
+    },
+
     // ================== OWN SESSION MANAGEMENT ==================
     {
       method: 'DELETE',

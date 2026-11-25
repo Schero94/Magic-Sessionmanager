@@ -7,6 +7,7 @@ import { useFetchClient, useForm, useNotification, useRBAC } from '@strapi/strap
 import Alert from './PersistentAlert';
 import ReadableText from './ReadableText';
 import { ActionStack, ConfirmAction, DeviceIcon, StatusBadge, TargetLink } from './ui';
+import ImpersonationPanelSection from './impersonation/ImpersonationPanelSection';
 import { requireSessionList, requireSuccessfulMutation } from '../utils/adminResponse.mjs';
 import { getManageableSessions } from '../utils/sessionFilters.mjs';
 import { getDevicePresentation } from '../utils/devicePresentation.mjs';
@@ -535,6 +536,11 @@ const SessionInfoPanel = ({ documentId, model, document }) => {
             )}
           </ReadableText>
         </Flex>
+
+        {/* Impersonation (4.20): only with the permission and the switch on */}
+        {userId ? (
+          <ImpersonationPanelSection documentId={String(userId)} userLabel={userLabel} />
+        ) : null}
 
         {/* Open sessions */}
         {loading ? null : (

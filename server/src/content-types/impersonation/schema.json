@@ -1,0 +1,141 @@
+{
+  "kind": "collectionType",
+  "collectionName": "magic_sessions_impersonations",
+  "info": {
+    "singularName": "impersonation",
+    "pluralName": "impersonations",
+    "displayName": "Impersonation",
+    "description": "Time-limited impersonations of app users and permission previews of admins, started by an admin with a reason"
+  },
+  "options": {
+    "draftAndPublish": false,
+    "comment": ""
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": false
+    },
+    "content-type-builder": {
+      "visible": false
+    }
+  },
+  "indexes": [
+    {
+      "name": "msm_impersonations_state",
+      "columns": ["state", "expires_at"]
+    },
+    {
+      "name": "msm_impersonations_code",
+      "columns": ["code_hash"]
+    },
+    {
+      "name": "msm_impersonations_target",
+      "columns": ["target_type", "target_id", "state"]
+    }
+  ],
+  "attributes": {
+    "targetType": {
+      "type": "enumeration",
+      "enum": ["user", "admin"],
+      "required": true
+    },
+    "targetId": {
+      "type": "string",
+      "maxLength": 64,
+      "required": true
+    },
+    "actorId": {
+      "type": "string",
+      "maxLength": 64,
+      "required": true
+    },
+    "state": {
+      "type": "enumeration",
+      "enum": ["active", "ended", "expired"],
+      "required": true,
+      "default": "active"
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 255,
+      "required": true
+    },
+    "durationMinutes": {
+      "type": "integer",
+      "min": 1,
+      "max": 60,
+      "required": true
+    },
+    "handoff": {
+      "type": "enumeration",
+      "enum": ["frontend", "token", "preview"],
+      "required": true
+    },
+    "notifyUser": {
+      "type": "boolean",
+      "default": false
+    },
+    "startedAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "expiresAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "endedAt": {
+      "type": "datetime"
+    },
+    "endReason": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "endedBy": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "codeHash": {
+      "type": "string",
+      "maxLength": 64,
+      "private": true,
+      "configurable": false
+    },
+    "codeExpiresAt": {
+      "type": "datetime",
+      "private": true,
+      "configurable": false
+    },
+    "credentialIssuedAt": {
+      "type": "datetime"
+    },
+    "sessionDocumentId": {
+      "type": "string",
+      "maxLength": 64,
+      "private": true,
+      "configurable": false
+    },
+    "nativeUserId": {
+      "type": "string",
+      "maxLength": 64,
+      "private": true,
+      "configurable": false
+    },
+    "nativeDeviceId": {
+      "type": "string",
+      "maxLength": 80,
+      "private": true,
+      "configurable": false
+    },
+    "tokenHash": {
+      "type": "string",
+      "maxLength": 64,
+      "private": true,
+      "configurable": false
+    },
+    "tokenExpiresAt": {
+      "type": "datetime",
+      "private": true,
+      "configurable": false
+    }
+  }
+}

@@ -20,6 +20,7 @@ import LocationDataTab from './LocationDataTab';
 import AlertsTab from './AlertsTab';
 import DataRetentionTab from './DataRetentionTab';
 import AdminActivityTab from './AdminActivityTab';
+import ImpersonationTab from './ImpersonationTab';
 import { SettingsNavigationProvider } from './SettingsNavigation';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
@@ -84,6 +85,7 @@ const TAB_COMPONENTS = {
   'location-data': LocationDataTab,
   alerts: AlertsTab,
   'data-retention': DataRetentionTab,
+  impersonation: ImpersonationTab,
   'admin-activity': AdminActivityTab,
 };
 
@@ -122,7 +124,7 @@ const writeTabToAddressBar = (tab) => {
 
 /**
  * Settings › Session Manager › Configuration (IA D5): header with Save and
- * Discard changes, five deep-linkable tabs (six with "View admin activity"), unsaved-changes guard and the
+ * Discard changes, six deep-linkable tabs (seven with "View admin activity"), unsaved-changes guard and the
  * storage note.
  *
  * @returns {import('react').ReactElement} Configuration page.
