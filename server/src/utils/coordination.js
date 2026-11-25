@@ -287,6 +287,12 @@ function createMemoryBackend() {
       registry.delete(key);
     },
 
+    async registryTake(key, now = Date.now()) {
+      const entry = registry.get(key);
+      registry.delete(key);
+      return entry && entry.expiresAt > now ? entry.value : null;
+    },
+
     async prune(now = Date.now()) {
       let removed = 0;
       for (const [k, v] of registry) {
@@ -677,6 +683,27 @@ function createDatabaseBackend({ knex, dialect }) {
         .del();
     },
 
+    /**
+     * Reads and deletes an entry. Only the caller whose DELETE removed the
+     * row gets the value, so parallel takes of one key yield it once.
+     */
+    async registryTake(key, now = Date.now()) {
+      const row = await knex(TABLES.cache)
+        .select('v', 'expires_at')
+        .where({ k: `reg:${key}` })
+        .first();
+      if (!row) return null;
+      const deleted = await knex(TABLES.cache)
+        .where({ k: `reg:${key}`, expires_at: row.expires_at })
+        .del();
+      if (toNumber(deleted) !== 1 || toNumber(row.expires_at) <= now) return null;
+      try {
+        return JSON.parse(row.v);
+      } catch {
+        return null;
+      }
+    },
+
     async prune(now = Date.now()) {
       const counters = await knex(TABLES.counters)
         .where('expires_at', '<', now)
@@ -942,6 +969,22 @@ function createCoordinator({
         'registry read',
         (backend) => backend.registryList(prefix, limit),
         () => sharedMemory.registryList(prefix, limit)
+      );
+    },
+
+    /**
+     * Takes a listable entry once: returns its value and removes it. Of
+     * several concurrent takes (any process) at most one gets the value.
+     *
+     * @param {string} key Entry key.
+     * @returns {Promise<any|null>} Value, or null when absent, expired or taken.
+     */
+    registryTake(key) {
+      assertRegistryKey(key);
+      return run(
+        'registry take',
+        (backend) => backend.registryTake(key),
+        () => sharedMemory.registryTake(key)
       );
     },
 

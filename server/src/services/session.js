@@ -7,6 +7,9 @@ const { resolveUserDocumentId } = require('../utils/resolve-user');
 const { enhanceSessions, shouldResolveGeoData } = require('../utils/enhance-session');
 const { getPluginSettings } = require('../utils/settings-loader');
 const { hasRoleOverride, inactivityTimeoutFor } = require('../utils/policy-settings');
+const { resolveDetectionSettings } = require('../utils/detection-settings');
+const { anonymizeIp, normalizeIp } = require('../utils/admin-request-info');
+const { pointOf } = require('../utils/sign-in-signals');
 const {
   cleanupExpiredAccessTokenRevocations,
   persistAccessTokenRevocation,
@@ -540,6 +543,7 @@ module.exports = ({ strapi }) => {
      * @param {string} [params.refreshToken] - Refresh token (will be encrypted)
      * @param {string} [params.nativeSessionId] - Native Users & Permissions session ID.
      * @param {object} [params.geoData]
+     * @param {string} [params.deviceKey] Device key from utils/sign-in-signals.js.
      * @returns {Promise<object>} Created session
      * @throws {Error} When userId is missing
      */
@@ -551,10 +555,17 @@ module.exports = ({ strapi }) => {
       refreshToken,
       nativeSessionId,
       geoData,
+      deviceKey,
     }) {
       if (!userId) {
         throw new Error('createSession: userId is required');
       }
+      // Privacy options (4.17): shortened IP addresses for app-user
+      // sessions, and coordinates (rounded) only while impossible-travel
+      // detection needs them.
+      const privacy = await getPluginSettings(strapi)
+        .then(resolveDetectionSettings)
+        .catch(() => ({}));
 
       try {
         const now = new Date();
@@ -569,7 +580,12 @@ module.exports = ({ strapi }) => {
 
         const parsedUA = parseUserAgent(userAgent);
 
-        const safeIp = (typeof ip === 'string' ? ip : 'unknown').substring(0, 45);
+        const rawIp = (typeof ip === 'string' ? ip : 'unknown').substring(0, 45);
+        const safeIp =
+          privacy.sessionIpAnonymize && normalizeIp(rawIp)
+            ? anonymizeIp(normalizeIp(rawIp)) || rawIp
+            : rawIp;
+        const point = privacy.impossibleTravelEnabled ? pointOf(geoData) : null;
         const safeUa = (typeof userAgent === 'string' ? userAgent : 'unknown').substring(0, 500);
 
         const session = await strapi.documents(SESSION_UID).create({
@@ -604,8 +620,12 @@ module.exports = ({ strapi }) => {
                   // Marks the stored score as real risk data; without a
                   // risk source the score is null (not a fake 100).
                   ...(geoData.riskSource ? { riskSource: geoData.riskSource } : {}),
+                  ...(point ? { latitude: point.lat, longitude: point.lon } : {}),
                 }
               : null,
+            ...(typeof deviceKey === 'string' && /^[a-f0-9]{32}$/.test(deviceKey)
+              ? { deviceKey }
+              : {}),
             securityScore: geoData?.riskSource ? (geoData.securityScore ?? null) : null,
           },
         });

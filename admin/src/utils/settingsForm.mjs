@@ -1,6 +1,7 @@
 import { areSettingsEqual } from './settingsEquality.mjs';
 import { TEMPLATE_KEYS, TEMPLATE_LIMITS, fillMissingTemplates } from './emailTemplateDraft.mjs';
 import { POLICY_FORM_DEFAULTS, validatePolicyFields } from './policyForm.mjs';
+import { SIGNALS_FORM_DEFAULTS, validateSignalFields } from './signalsForm.mjs';
 
 /**
  * Client defaults. They mirror DEFAULT_SETTINGS in
@@ -46,10 +47,16 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   securityLogGeoLookup: false,
   securityLogRetentionDays: 90,
   ...POLICY_FORM_DEFAULTS,
+  ...SIGNALS_FORM_DEFAULTS,
 });
 
 /** Keys the server accepts but never returns (write-only secrets, 4.17). */
-export const WRITE_ONLY_SETTINGS_KEYS = Object.freeze(['discordWebhookUrl', 'slackWebhookUrl']);
+export const WRITE_ONLY_SETTINGS_KEYS = Object.freeze([
+  'discordWebhookUrl',
+  'slackWebhookUrl',
+  'genericWebhookUrl',
+  'genericWebhookSecret',
+]);
 
 /** Bounds enforced by the server (it clamps; the form reports instead). */
 export const MAX_FAILED_LOGINS_RANGE = Object.freeze({ min: 0, max: 100 });
@@ -90,6 +97,9 @@ export function normalizeSettings(loaded) {
       ? loaded.lockoutTrustedAddresses
       : [],
     roleRules: Array.isArray(loaded.roleRules) ? loaded.roleRules : [],
+    webhookEvents: Array.isArray(loaded.webhookEvents)
+      ? loaded.webhookEvents
+      : [...SIGNALS_FORM_DEFAULTS.webhookEvents],
     emailTemplates: fillMissingTemplates(loaded.emailTemplates),
   };
 }
@@ -172,6 +182,7 @@ export function validateSettings(settings) {
   const maxFailed = validateMaxFailedLogins(source.maxFailedLogins);
   if (maxFailed) errors.maxFailedLogins = maxFailed;
   Object.assign(errors, validatePolicyFields(source));
+  Object.assign(errors, validateSignalFields(source));
 
   if (!isAllowedWebhookUrl(source.discordWebhookUrl, WEBHOOK_HOSTS.discordWebhookUrl)) {
     errors.discordWebhookUrl = message(

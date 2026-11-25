@@ -261,7 +261,7 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 32);
+        assert.equal(routes.length, 33);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)
@@ -327,7 +327,12 @@ test(
         },
       });
       const restrictedToken = await jwt.issue({ id: restricted.id });
-      const routes = require('../server/src/routes/content-api').routes;
+      // The seven session routes; the 4.17 self-service routes (own-data
+      // export, public "This wasn't me") are covered by
+      // tests/isolated-signals-http.test.js.
+      const routes = require('../server/src/routes/content-api').routes.filter(({ handler }) =>
+        handler.startsWith('session.')
+      );
       assert.equal(routes.length, 7);
       for (const route of routes) {
         const pathname = route.path
@@ -349,7 +354,9 @@ test(
     await t.test(
       'all seven content routes accept an authorized owner with disposable sessions',
       async () => {
-        const routes = require('../server/src/routes/content-api').routes;
+        const routes = require('../server/src/routes/content-api').routes.filter(({ handler }) =>
+          handler.startsWith('session.')
+        );
         for (const [index, route] of routes.entries()) {
           const user = await createUser(`case-${index}`);
           const token = await jwt.issue({ id: user.id });
@@ -1771,7 +1778,11 @@ test(
       async () => {
         const issue = async (user, index) =>
           jwt.issue({ id: user.id, n: `${index}-${crypto.randomBytes(4).toString('hex')}` });
-        const routes = require('../server/src/routes/content-api').routes;
+        // Session routes; the self-service routes' limits are covered by
+        // tests/isolated-signals-http.test.js.
+        const routes = require('../server/src/routes/content-api').routes.filter(({ handler }) =>
+          handler.startsWith('session.')
+        );
         for (const [index, route] of routes.entries()) {
           const max = route.config.middlewares[0].config.max;
           const user = await createUser(`limit-${index}`);

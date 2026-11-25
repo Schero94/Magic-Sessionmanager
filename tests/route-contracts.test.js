@@ -72,6 +72,7 @@ test('all Session Manager admin API paths and handlers stay in the reviewed inve
     ['GET', '/lockouts', 'lockouts.list'],
     ['POST', '/lockouts/unlock', 'lockouts.unlock'],
     ['GET', '/roles', 'lockouts.roles'],
+    ['POST', '/webhook/test', 'webhooks.sendTest'],
     ['GET', '/geolocation/:ipAddress', 'session.getIpGeolocation'],
     ['GET', '/geoip/status', 'geoip.getStatus'],
     ['PUT', '/geoip/credentials', 'geoip.storeCredentials'],
@@ -132,10 +133,26 @@ test('admin panel session routes need their own actions, and sign-out is write r
     ({ path }) =>
       !path.startsWith('/admin-sessions/') &&
       !path.startsWith('/admin-activity/') &&
-      path !== '/lockouts/unlock'
+      path !== '/lockouts/unlock' &&
+      path !== '/webhook/test'
   )) {
     assert.deepEqual(actionsOf(route), ['plugin::magic-sessionmanager.access']);
   }
+});
+
+test('the signed webhook test needs settings.update and is write rate limited', () => {
+  const route = adminRoutes.find(({ path }) => path === '/webhook/test');
+  assert.equal(route.method, 'POST');
+  assert.equal(route.config.policies[0], 'admin::isAuthenticatedAdmin');
+  assert.deepEqual(
+    route.config.policies.find((policy) => policy?.name === 'admin::hasPermissions').config.actions,
+    ['plugin::magic-sessionmanager.access', 'plugin::magic-sessionmanager.settings.update']
+  );
+  assert.deepEqual(route.config.middlewares[0].config, {
+    profile: 'write',
+    max: 5,
+    window: 60_000,
+  });
 });
 
 test('lifting a sign-in lock needs lockouts.unlock and is write rate limited', () => {
@@ -159,22 +176,49 @@ test('lifting a sign-in lock needs lockouts.unlock and is write rate limited', (
   }
 });
 
+/** Public on purpose (4.17): the "This wasn't me" email link; a signed single-use token authorises. */
+const PUBLIC_CONTENT_ROUTES = new Set(['GET /not-me', 'POST /not-me']);
+
 test('every content API route has a real controller action and JWT protection', () => {
   for (const route of contentRoutes) {
     assertHandlerExists(route);
-    assert.deepEqual(route.config?.auth?.strategies, ['users-permissions']);
+    if (PUBLIC_CONTENT_ROUTES.has(`${route.method} ${route.path}`)) {
+      assert.equal(route.config?.auth, false);
+    } else {
+      assert.deepEqual(route.config?.auth?.strategies, ['users-permissions']);
+    }
     assert.ok(route.config?.middlewares?.length > 0, `${route.path} lacks rate limiting`);
   }
 });
 
+test('the public "This wasn\'t me" routes and the own-data export are rate limited per caller', () => {
+  const find = (method, path) =>
+    contentRoutes.find((route) => route.method === method && route.path === path);
+  assert.deepEqual(find('GET', '/not-me').config.middlewares[0].config, {
+    max: 30,
+    window: 60_000,
+  });
+  assert.deepEqual(find('POST', '/not-me').config.middlewares[0].config, {
+    max: 10,
+    window: 60_000,
+  });
+  assert.deepEqual(find('GET', '/my-data').config.middlewares[0].config, {
+    max: 3,
+    window: 60 * 60 * 1000,
+  });
+  assert.equal(find('GET', '/my-data').handler, 'self-service.exportOwnData');
+});
+
 test('content API session routes retain their paths, methods, handlers and rate-limit profiles', () => {
-  const sessionRoutes = contentRoutes.map(({ method, path, handler, config }) => ({
-    method,
-    path,
-    handler,
-    strategies: config?.auth?.strategies,
-    rateLimit: config?.middlewares?.[0]?.config?.profile,
-  }));
+  const sessionRoutes = contentRoutes
+    .filter(({ handler }) => handler.startsWith('session.'))
+    .map(({ method, path, handler, config }) => ({
+      method,
+      path,
+      handler,
+      strategies: config?.auth?.strategies,
+      rateLimit: config?.middlewares?.[0]?.config?.profile,
+    }));
 
   assert.deepEqual(sessionRoutes, [
     {

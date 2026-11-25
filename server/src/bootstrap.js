@@ -75,6 +75,7 @@ const {
 } = require('./utils/sign-in-policies');
 const { SECURITY_EVENTS, USER_SIGN_IN_EVENTS } = require('./utils/security-log-model');
 const { applyUpgradeDefaults } = require('./utils/upgrade-defaults');
+const { deviceKeyOf, requestDeviceId, runSignInSignals } = require('./utils/sign-in-signals');
 const { anonymizeIp, normalizeIp } = require('./utils/admin-request-info');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
@@ -1019,6 +1020,22 @@ function statusOfThrownError(err) {
 }
 
 /**
+ * A plugin service, or null when it is not available (it never fails the
+ * caller; used for optional integrations such as webhooks).
+ *
+ * @param {object} strapi Strapi instance.
+ * @param {string} name Service name.
+ * @returns {object|null} Service.
+ */
+function optionalService(strapi, name) {
+  try {
+    return strapi.plugin('magic-sessionmanager').service(name) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Answers a sign-in refused by the concurrent session limit (policy
  * "Refuse the new sign-in"): 403 with the stable code
  * `SESSION_LIMIT_REACHED`, and no tokens or refresh cookie.
@@ -1291,6 +1308,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
       const requestSettings = await getPluginSettings(strapi);
       const isReset = isPasswordResetRequest(apiPath, ctx.method);
 
+      const deviceKey = deviceKeyOf(userAgent, requestDeviceId(ctx));
       const create = () =>
         sessionService.createSession({
           userId: userDocId,
@@ -1299,6 +1317,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
           token: ctx.body.jwt,
           refreshToken: getOutgoingRefreshToken(ctx, refreshCookieName),
           geoData,
+          deviceKey,
           ...(nativeSession ? { nativeSessionId: nativeSession.sessionId } : {}),
         });
       // The concurrent session limit (off by default) is applied while the
@@ -1364,9 +1383,53 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
 
       log.info('[SUCCESS] End-user session metadata created');
 
+      // New device and impossible travel (4.17, off by default). A failure
+      // here never fails the sign-in, except the opt-in re-sign-in below.
+      let signals = { reauthenticate: false };
+      if (!isReset) {
+        try {
+          signals = await runSignInSignals({
+            strapi,
+            settings: requestSettings,
+            user,
+            userDocumentId: userDocId,
+            session: newSession,
+            geoData,
+            deviceKey,
+            userAgent: userAgent === 'unknown' ? null : userAgent,
+            ip,
+            record: (input) => recordUserEvent(strapi, input),
+          });
+        } catch (signalErr) {
+          log.warn('[SIGNALS] Sign-in signals failed (non-fatal):', signalErr?.name || 'Error');
+        }
+      }
+      if (signals.reauthenticate) {
+        // "Require a new sign-in" after impossible travel: every session of
+        // the user ends, including this one, and the response carries no token.
+        await sessionService.terminateSession({ userId: userDocId, reason: 'manual' });
+        stripAuthTokensFromResponse(ctx, getRefreshCookieName(strapi));
+        ctx.status = 401;
+        ctx.body = {
+          data: null,
+          error: {
+            status: 401,
+            name: 'UnauthorizedError',
+            message: 'Please sign in again.',
+            details: { code: 'REAUTHENTICATION_REQUIRED' },
+          },
+        };
+        log.info('[SIGNALS] Impossible travel: every session ended, a new sign-in is required');
+        return;
+      }
+
       try {
         const settings = await getPluginSettings(strapi);
-        if (!geoData || !(settings.enableEmailAlerts || settings.enableWebhooks)) {
+        const genericWebhook = settings.genericWebhookEnabled === true;
+        if (
+          !geoData ||
+          !(settings.enableEmailAlerts || settings.enableWebhooks || genericWebhook)
+        ) {
           return;
         }
 
@@ -1439,6 +1502,7 @@ function mountLoginInterceptor({ strapi, log, sessionService }) {
           session: newSession,
           geoData,
           isNewLocation,
+          webhooks: optionalService(strapi, 'webhooks'),
         });
       } catch (notifErr) {
         log.warn('Notification failed:', notifErr?.name || 'Error');
@@ -1905,7 +1969,7 @@ async function ensureContentApiPermissionsLocked(strapi, log, pluginStore) {
     return false;
   }
 
-  const requiredActions = [
+  const baseActions = [
     'plugin::magic-sessionmanager.session.logout',
     'plugin::magic-sessionmanager.session.logoutAll',
     'plugin::magic-sessionmanager.session.logoutOthers',
@@ -1914,6 +1978,12 @@ async function ensureContentApiPermissionsLocked(strapi, log, pluginStore) {
     'plugin::magic-sessionmanager.session.getCurrentSession',
     'plugin::magic-sessionmanager.session.terminateOwnSession',
   ];
+  // Version 3 (4.17) adds the own-data export. An installation already at
+  // version 2 gets only this action, so actions an administrator removed
+  // from the Authenticated role stay removed.
+  const version3Actions = ['plugin::magic-sessionmanager.self-service.exportOwnData'];
+  const requiredActions =
+    Number(effectiveVersion) === 2 ? version3Actions : [...baseActions, ...version3Actions];
 
   const existingPermissions = await strapi.documents(PERMISSION_UID).findMany({
     filters: {

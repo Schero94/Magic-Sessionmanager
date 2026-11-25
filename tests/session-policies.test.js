@@ -369,25 +369,45 @@ function storeStrapi(initial = {}) {
   return { strapi, values, coordinator };
 }
 
-test('upgrade defaults: existing installs keep the old password-change behaviour, new ones get the new default', async () => {
+test('upgrade defaults: existing installs keep the old behaviour, new ones get the new defaults', async () => {
   const existing = storeStrapi({
     contentApiPermissionsVersion: 3,
     settings: { maxFailedLogins: 5 },
   });
   const outcome = await applyUpgradeDefaults(existing.strapi, silentLog);
-  assert.deepEqual(outcome, { existing: true, applied: ['endOtherSessionsOnPasswordChange'] });
-  assert.equal(existing.values.get('settings').endOtherSessionsOnPasswordChange, false);
-  assert.equal(existing.values.get('settings').maxFailedLogins, 5);
-  assert.equal(existing.values.get('defaultsProfile'), 1);
+  assert.deepEqual(outcome, {
+    existing: true,
+    applied: ['endOtherSessionsOnPasswordChange', 'webhookEvents'],
+  });
+  const stored = existing.values.get('settings');
+  assert.equal(stored.endOtherSessionsOnPasswordChange, false);
+  assert.deepEqual(stored.webhookEvents, [
+    'login.success',
+    'login.suspicious',
+    'login.new_location',
+  ]);
+  assert.equal(stored.maxFailedLogins, 5);
+  assert.equal(existing.values.get('defaultsProfile'), 2);
   // Runs once.
   assert.deepEqual(await applyUpgradeDefaults(existing.strapi, silentLog), {
     existing: true,
     applied: [],
   });
 
-  const chosen = storeStrapi({ settings: { endOtherSessionsOnPasswordChange: true } });
+  // An installation that already ran the policies release (profile 1) gets only step 2.
+  const policies = storeStrapi({
+    defaultsProfile: 1,
+    settings: { endOtherSessionsOnPasswordChange: true },
+  });
+  assert.deepEqual(await applyUpgradeDefaults(policies.strapi, silentLog), {
+    existing: true,
+    applied: ['webhookEvents'],
+  });
+  assert.equal(policies.values.get('settings').endOtherSessionsOnPasswordChange, true);
+
+  const chosen = storeStrapi({ settings: { webhookEvents: ['lockout'] } });
   await applyUpgradeDefaults(chosen.strapi, silentLog);
-  assert.equal(chosen.values.get('settings').endOtherSessionsOnPasswordChange, true);
+  assert.deepEqual(chosen.values.get('settings').webhookEvents, ['lockout']);
 
   const fresh = storeStrapi();
   assert.deepEqual(await applyUpgradeDefaults(fresh.strapi, silentLog), {
@@ -395,7 +415,7 @@ test('upgrade defaults: existing installs keep the old password-change behaviour
     applied: [],
   });
   assert.equal(fresh.values.has('settings'), false, 'a new install keeps the new defaults');
-  assert.equal(fresh.values.get('defaultsProfile'), 1);
+  assert.equal(fresh.values.get('defaultsProfile'), 2);
 });
 
 /** Session rows plus a fake session service for the limit. */

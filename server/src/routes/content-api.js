@@ -101,6 +101,58 @@ module.exports = {
       },
     },
 
+    // ================== SELF-SERVICE (4.17) ==================
+    {
+      method: 'GET',
+      path: '/my-data',
+      handler: 'self-service.exportOwnData',
+      config: {
+        auth: { strategies: ['users-permissions'] },
+        // An export reads every own session and event: 3 per hour per user.
+        middlewares: [
+          {
+            name: 'plugin::magic-sessionmanager.rate-limit',
+            config: { max: 3, window: 60 * 60 * 1000 },
+          },
+        ],
+        description: 'Download own sessions and security events as JSON (GDPR Art. 15)',
+      },
+    },
+    {
+      method: 'GET',
+      path: '/not-me',
+      handler: 'self-service.notMePage',
+      config: {
+        // Public on purpose: opened from the "This wasn't me" email. Only
+        // shows a confirmation; the signed token is checked, nothing changes.
+        auth: false,
+        middlewares: [
+          {
+            name: 'plugin::magic-sessionmanager.rate-limit',
+            config: { max: 30, window: 60_000 },
+          },
+        ],
+        description: 'Confirmation page of the "This wasn\'t me" email link (public)',
+      },
+    },
+    {
+      method: 'POST',
+      path: '/not-me',
+      handler: 'self-service.notMeConfirm',
+      config: {
+        // Public on purpose: the signed, expiring, single-use token from the
+        // email is the authorisation.
+        auth: false,
+        middlewares: [
+          {
+            name: 'plugin::magic-sessionmanager.rate-limit',
+            config: { max: 10, window: 60_000 },
+          },
+        ],
+        description: 'End the session of a "This wasn\'t me" link (public, single-use token)',
+      },
+    },
+
     // ================== OWN SESSION MANAGEMENT ==================
     {
       method: 'DELETE',

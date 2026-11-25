@@ -19,6 +19,7 @@
 
 const { getCoordinator } = require('./coordination');
 const { normalizePolicySettings } = require('./policy-settings');
+const { normalizeDetectionSettings } = require('./detection-settings');
 
 const PLUGIN_ID = 'magic-sessionmanager';
 const SETTINGS_KEY = 'settings';
@@ -216,6 +217,12 @@ function normalizeStoredSettings(stored) {
   // Sign-in and session policies (4.17), kept in user-facing units; the
   // resolvers in utils/policy-settings.js convert them.
   Object.assign(out, normalizePolicySettings(stored));
+  // Sign-in signals, webhooks and privacy options (4.17); the webhook secret
+  // stays encrypted until a delivery decrypts it.
+  Object.assign(out, normalizeDetectionSettings(stored));
+  if (typeof stored.genericWebhookSecret === 'string') {
+    out.genericWebhookSecret = stored.genericWebhookSecret;
+  }
 
   return out;
 }

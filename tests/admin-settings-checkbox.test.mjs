@@ -7,8 +7,10 @@ const alerts = readSettingsFile('AlertsTab.jsx');
 
 test('email type checkboxes update the controlled Strapi Design System v2 state', () => {
   const checkboxBlocks = settingsSource.match(/<Checkbox\b[\s\S]*?<\/Checkbox>/g) || [];
-  assert.equal(checkboxBlocks.length, 1, 'one Checkbox rendered per email type from a list');
-  const [checkbox] = checkboxBlocks;
+  // One Checkbox per email type from a list (AlertsTab) and one per webhook
+  // event from a list (WebhookEventsCard, 4.17).
+  assert.equal(checkboxBlocks.length, 2, 'one Checkbox per list');
+  const checkbox = checkboxBlocks.find((block) => block.includes('control.checked'));
   assert.match(checkbox, /checked=\{control\.checked\}/);
   assert.match(
     alerts,
@@ -27,8 +29,17 @@ test('email type checkboxes update the controlled Strapi Design System v2 state'
     'each checkbox is described by its helper text'
   );
   assert.match(checkbox, /disabled=\{disabled\}/);
-  assert.match(alerts, /const disabled = emailTypesDisabled \|\| control\.disabled;/);
+  assert.match(
+    alerts,
+    /const disabled = emailTypesDisabled \|\| control\.disabled \|\| travelOff;/
+  );
 
   const fields = [...alerts.matchAll(/field: '(\w+)'/g)].map((match) => match[1]);
-  assert.deepEqual(fields, ['alertOnSuspiciousLogin', 'alertOnNewLocation', 'alertOnVpnProxy']);
+  assert.deepEqual(fields, [
+    'alertOnSuspiciousLogin',
+    'alertOnNewLocation',
+    'alertOnVpnProxy',
+    'alertOnNewDevice',
+    'alertOnImpossibleTravel',
+  ]);
 });

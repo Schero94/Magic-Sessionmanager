@@ -1,6 +1,7 @@
 'use strict';
 
 const { evaluateLoginRisk } = require('./risk-data');
+const { resolveDetectionSettings } = require('./detection-settings');
 
 /**
  * Sends the email alerts and team notifications for one successful sign-in.
@@ -21,6 +22,7 @@ const { evaluateLoginRisk } = require('./risk-data');
  * @param {object} params.session New session record.
  * @param {object} params.geoData Lookup result of the sign-in.
  * @param {boolean} [params.isNewLocation] Country not seen in the user's recent sessions.
+ * @param {object|null} [params.webhooks] The plugin's `webhooks` service (signed webhook).
  * @returns {Promise<{webhookEvent: string|null, emails: string[]}>} What was attempted.
  * @sideeffect Sends emails through the Email plugin and posts to Discord or Slack.
  */
@@ -31,6 +33,7 @@ async function dispatchLoginAlerts({
   session,
   geoData,
   isNewLocation = false,
+  webhooks = null,
 }) {
   const attempted = { webhookEvent: null, emails: [] };
   if (!geoData) return attempted;
@@ -69,12 +72,30 @@ async function dispatchLoginAlerts({
     }
   }
 
-  if (settings.enableWebhooks) {
-    const webhookEvent = risk.isSuspicious
-      ? 'login.suspicious'
-      : isNewLocation
-        ? 'login.new_location'
-        : 'login.success';
+  const webhookEvent = risk.isSuspicious
+    ? 'login.suspicious'
+    : isNewLocation
+      ? 'login.new_location'
+      : 'login.success';
+  // 4.17: Discord, Slack and the signed webhook get only the selected
+  // events. Installations upgraded from 4.16 keep "every sign-in" selected
+  // (utils/upgrade-defaults.js); new ones leave out login.success.
+  const selected = resolveDetectionSettings(settings).webhookEvents.includes(webhookEvent);
+  if (selected && webhooks) {
+    webhooks.emit(
+      webhookEvent,
+      {
+        userId: user?.documentId || null,
+        ip: session?.ipAddress || null,
+        userAgent: session?.userAgent || null,
+        geo: geoData,
+        details: null,
+      },
+      { chat: false }
+    );
+  }
+
+  if (settings.enableWebhooks && selected) {
     attempted.webhookEvent = webhookEvent;
 
     const targets = [];

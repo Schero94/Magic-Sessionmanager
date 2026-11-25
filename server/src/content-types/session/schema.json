@@ -104,6 +104,12 @@
     },
     "osName": {
       "type": "string"
+    },
+    "deviceKey": {
+      "type": "string",
+      "maxLength": 64,
+      "configurable": false,
+      "private": true
     }
   }
 }

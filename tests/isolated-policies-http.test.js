@@ -305,7 +305,7 @@ test(
         assert.equal(current.body.settings.maxFailedLoginsPerAccount, 0);
         assert.equal(current.body.settings.maxSessionsPerUser, 0);
         const store = app.store({ type: 'plugin', name: 'magic-sessionmanager' });
-        assert.equal(await store.get({ key: 'defaultsProfile' }), 1);
+        assert.equal(await store.get({ key: 'defaultsProfile' }), 2);
       }
     );
 
