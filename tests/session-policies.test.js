@@ -246,9 +246,30 @@ test('after a lock ends, the failures that caused it do not count again', async 
   assert.equal(after.reservation.ipHits, 1);
 });
 
-test('trusted addresses are never counted or locked by IP; accounts still are', async () => {
+test('L1: a trusted address is never counted or locked, by IP or by account', async () => {
   const { lockout } = engine();
   const p = policy({ trusted: ['192.0.2.0/24'] });
+  // A stranger elsewhere locks the account ...
+  for (let i = 0; i < 4; i++) {
+    const decision = await lockout.reserve({
+      ip: `203.0.113.${i + 1}`,
+      identifier: 'user@example.com',
+      policy: p,
+      accountMax: 4,
+    });
+    assert.equal(decision.outcome, 'allow');
+    await lockout.settle(decision.reservation, 'failure', { policy: p, accountMax: 4 });
+  }
+  const stranger = await lockout.reserve({
+    ip: '203.0.113.9',
+    identifier: 'user@example.com',
+    policy: p,
+    accountMax: 4,
+  });
+  assert.equal(stranger.outcome, 'locked');
+  assert.equal(stranger.lockedKind, 'account');
+  // ... but the owner on the trusted office network still signs in, and
+  // failures from there count neither by IP nor by account.
   for (let i = 0; i < 10; i++) {
     const decision = await lockout.reserve({
       ip: '192.0.2.5',
@@ -256,15 +277,86 @@ test('trusted addresses are never counted or locked by IP; accounts still are', 
       policy: p,
       accountMax: 4,
     });
-    if (i < 4) {
-      assert.equal(decision.outcome, 'allow');
-      assert.equal(decision.reservation.ipKey, null);
-      await lockout.settle(decision.reservation, 'failure', { policy: p, accountMax: 4 });
-    } else {
-      assert.equal(decision.outcome, 'locked');
-      assert.equal(decision.lockedKind, 'account');
-    }
+    assert.equal(decision.outcome, 'allow', `attempt ${i + 1}`);
+    assert.equal(decision.reservation.ipKey, null);
+    assert.equal(decision.reservation.accountKey, null);
+    await lockout.settle(decision.reservation, 'failure', { policy: p, accountMax: 4 });
   }
+});
+
+test('L1: a recognised device is not refused or counted by the account lock', async () => {
+  const { lockout } = engine();
+  const p = policy({ ipMax: 0 });
+  for (let i = 0; i < 3; i++) {
+    const decision = await lockout.reserve({
+      ip: `203.0.113.${i + 20}`,
+      identifier: 'owner@example.com',
+      policy: p,
+      accountMax: 3,
+    });
+    await lockout.settle(decision.reservation, 'failure', { policy: p, accountMax: 3 });
+  }
+  const owner = await lockout.reserve({
+    ip: '198.51.100.40',
+    identifier: 'owner@example.com',
+    policy: p,
+    accountMax: 3,
+    accountExempt: true,
+  });
+  assert.equal(owner.outcome, 'allow');
+  assert.equal(owner.reservation.accountKey, null);
+  const stranger = await lockout.reserve({
+    ip: '198.51.100.41',
+    identifier: 'owner@example.com',
+    policy: p,
+    accountMax: 3,
+  });
+  assert.equal(stranger.outcome, 'locked');
+});
+
+test('M2: a successful sign-in never resets the IP counter', async () => {
+  const { lockout } = engine();
+  const p = policy({ ipMax: 5 });
+  let refused = 0;
+  for (let round = 0; round < 10 && refused === 0; round++) {
+    for (let i = 0; i < 4; i++) {
+      const guess = await lockout.reserve({
+        ip: '192.0.2.77',
+        identifier: `victim${i}@example.com`,
+        policy: p,
+        accountMax: 0,
+      });
+      if (guess.outcome !== 'allow') {
+        refused += 1;
+        break;
+      }
+      await lockout.settle(guess.reservation, 'failure', { policy: p, accountMax: 0 });
+    }
+    if (refused) break;
+    const own = await lockout.reserve({
+      ip: '192.0.2.77',
+      identifier: 'attacker@example.com',
+      policy: p,
+      accountMax: 0,
+    });
+    if (own.outcome !== 'allow') {
+      refused += 1;
+      break;
+    }
+    await lockout.settle(own.reservation, 'success', { policy: p, accountMax: 0 });
+  }
+  assert.equal(refused, 1, 'the address is locked after 5 failures despite own sign-ins');
+  // The success gave its own hit back: it was not counted as a failure.
+  const { lockout: fresh } = engine();
+  const ok = await fresh.reserve({ ip: '192.0.2.78', identifier: null, policy: p, accountMax: 0 });
+  await fresh.settle(ok.reservation, 'success', { policy: p, accountMax: 0 });
+  const next = await fresh.reserve({
+    ip: '192.0.2.78',
+    identifier: null,
+    policy: p,
+    accountMax: 0,
+  });
+  assert.equal(next.reservation.ipHits, 1);
 });
 
 test('account lockout follows the account across addresses; success clears the counters', async () => {

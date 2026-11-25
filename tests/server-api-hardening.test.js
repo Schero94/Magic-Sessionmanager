@@ -280,6 +280,8 @@ test('API-6: a partial email template update keeps the other templates', async (
   await withGlobalStrapi(strapi, async () => {
     const ctx = createCtx({
       body: { emailTemplates: { newLocation: { subject: 'New', html: '', text: '' } } },
+      // Email templates are protected since 4.22.1 (security review 2, hardening 6).
+      state: { userAbility: { can: () => true }, user: { id: 1 } },
     });
     await settingsController.updateSettings(ctx);
     assert.equal(ctx.status, 200);
@@ -397,6 +399,10 @@ test('F1/F5: geo settings need settings.update; plain settings keep working with
     { geoIpDatabasePath: 'GeoLite2-City.mmdb' },
     { enableWebhooks: true },
     { slackWebhookUrl: 'https://hooks.slack.com/services/synthetic' },
+    // Security review 2 (4.22.1): H2 and hardening 6.
+    { maxFailedLogins: 50 },
+    { trustedProxies: ['10.0.0.0/8'] },
+    { emailTemplates: { newLocation: { subject: 'Verify your account here' } } },
   ]) {
     const { strapi, state } = createSettingsStrapi({ ...settingsController.DEFAULT_SETTINGS });
     await withGlobalStrapi(strapi, async () => {
@@ -413,12 +419,39 @@ test('F1/F5: geo settings need settings.update; plain settings keep working with
   const { strapi, state } = createSettingsStrapi({ ...settingsController.DEFAULT_SETTINGS });
   await withGlobalStrapi(strapi, async () => {
     const ctx = createCtx({
-      body: { ...settingsController.DEFAULT_SETTINGS, inactivityTimeout: 45, maxFailedLogins: 9 },
+      body: { ...settingsController.DEFAULT_SETTINGS, inactivityTimeout: 45, maxFailedLogins: 5 },
       state: holding([]),
     });
     await settingsController.updateSettings(ctx);
     assert.equal(ctx.status, 200, 'the whole form with unchanged protected keys saves');
     assert.equal(state.stored.inactivityTimeout, 45);
+  });
+});
+
+test('H2: a stored legacy trustedProxies true reads as an empty list and saves without settings.update', async () => {
+  const { strapi, state } = createSettingsStrapi({
+    ...settingsController.DEFAULT_SETTINGS,
+    trustedProxies: true,
+  });
+  await withGlobalStrapi(strapi, async () => {
+    const get = createCtx({ state: holding([]) });
+    await settingsController.getSettings(get);
+    assert.deepEqual(get.body.settings.trustedProxies, []);
+    for (const trustedProxies of [[], true, false]) {
+      const ctx = createCtx({
+        body: { ...get.body.settings, trustedProxies, inactivityTimeout: 33 },
+        state: holding([]),
+      });
+      await settingsController.updateSettings(ctx);
+      assert.equal(ctx.status, 200, JSON.stringify(trustedProxies));
+      assert.deepEqual(state.stored.trustedProxies, []);
+    }
+    const invalid = createCtx({
+      body: { trustedProxies: ['not-a-proxy'] },
+      state: holding([SETTINGS_UPDATE]),
+    });
+    await settingsController.updateSettings(invalid);
+    assert.equal(invalid.status, 400);
   });
 });
 

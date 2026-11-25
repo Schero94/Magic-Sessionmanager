@@ -34,6 +34,8 @@ const SECURITY_EVENTS = Object.freeze({
   SETTINGS_UPDATED: 'settings.updated',
   LOG_RETENTION_PURGED: 'security-log.retention.purged',
   LOG_READ: 'security-log.read',
+  // 4.22.1: SESSION_ENCRYPTION_KEY shorter than 32 bytes, once per key.
+  CONFIG_WEAK_KEY: 'config.encryption-key.weak',
   // App users (Users & Permissions), 4.17.
   USER_SIGN_IN_FAILED: 'user.sign-in.failed',
   USER_SIGN_IN_REFUSED: 'user.sign-in.refused',
@@ -140,6 +142,7 @@ const ADMIN_LOG_EVENTS = Object.freeze([
   SECURITY_EVENTS.SETTINGS_UPDATED,
   SECURITY_EVENTS.LOG_READ,
   SECURITY_EVENTS.LOG_RETENTION_PURGED,
+  SECURITY_EVENTS.CONFIG_WEAK_KEY,
 ]);
 
 /** Filter groups of the sign-in history (API values). */

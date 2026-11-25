@@ -137,3 +137,9 @@ test('analytics from the server merge raw device and browser groups into the dis
     /Invalid session analytics/
   );
 });
+
+test('security review 2, hardening 8: U+061C and U+180E before a formula sign are escaped', () => {
+  for (const value of ['؜=1+1', '᠎=HYPERLINK("x")', ' ؜᠎@SUM(A1)']) {
+    assert.ok(escapeCsvValue(value).startsWith(`"'`), JSON.stringify(value));
+  }
+});

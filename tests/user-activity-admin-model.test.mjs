@@ -109,6 +109,10 @@ test('what happened, in plain words', () => {
     'A sign-in, password or email request was blocked'
   );
   assert.equal(
+    detail({ event: 'impersonation.refused', details: { refusal: 'call-mutation' } }),
+    'A GraphQL mutation was blocked'
+  );
+  assert.equal(
     userEventDetailText(
       t,
       {

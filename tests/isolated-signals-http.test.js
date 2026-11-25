@@ -358,7 +358,7 @@ test(
       'new-device email with a "This wasn\'t me" link; first sign-in and known device send nothing',
       async () => {
         const saved = await settings({
-          trustedProxies: true,
+          trustedProxies: ['127.0.0.1/32', '::1/128'],
           enableGeolocation: true,
           enableEmailAlerts: true,
           alertOnNewDevice: true,
@@ -374,8 +374,11 @@ test(
         const mail = sentMail[0];
         assert.equal(mail.to, 'ben@example.test');
         assert.match(mail.text, /Chrome on Windows/);
+        // L5 (security review 2): the token is in the fragment, never in the
+        // query, so it does not reach the server's or a proxy's access log.
+        assert.doesNotMatch(mail.text, /not-me\?token=/);
         const link =
-          /https:\/\/app\.example\.test\/api\/magic-sessionmanager\/not-me\?token=([A-Za-z0-9_.%-]+)/.exec(
+          /https:\/\/app\.example\.test\/api\/magic-sessionmanager\/not-me#token=([A-Za-z0-9_.%-]+)/.exec(
             mail.text
           );
         assert.ok(link, 'the email carries the link');
@@ -396,18 +399,27 @@ test(
     await t.test(
       '"This wasn\'t me": GET only confirms; POST ends that session once; tampering fails',
       async () => {
-        const page = await fetch(
-          `http://127.0.0.1:${port}/api/magic-sessionmanager/not-me?token=${encodeURIComponent(newDeviceToken)}`,
-          {
-            headers: { 'accept-language': 'de-DE,de;q=0.9' },
-          }
-        );
+        // The browser requests the page without the fragment.
+        const page = await fetch(`http://127.0.0.1:${port}/api/magic-sessionmanager/not-me`, {
+          headers: { 'accept-language': 'de-DE,de;q=0.9' },
+        });
         assert.equal(page.status, 200);
-        assert.match(page.headers.get('content-security-policy'), /default-src 'none'/);
+        const csp = page.headers.get('content-security-policy');
+        assert.match(csp, /default-src 'none'/);
+        assert.match(csp, /script-src 'sha256-[A-Za-z0-9+/=]+'/);
         assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
         const html = await page.text();
         assert.match(html, /Waren Sie das nicht\?/);
-        assert.doesNotMatch(html, /<script/i);
+        const script = /<script>([\s\S]*?)<\/script>/.exec(html);
+        assert.ok(script, 'the page copies the fragment token with one inline script');
+        const hash = crypto.createHash('sha256').update(script[1]).digest('base64');
+        assert.ok(csp.includes(`'sha256-${hash}'`), 'the CSP allows exactly that script');
+        // A link from an earlier email (?token=) still opens without a script.
+        const legacy = await fetch(
+          `http://127.0.0.1:${port}/api/magic-sessionmanager/not-me?token=${encodeURIComponent(newDeviceToken)}`
+        );
+        assert.equal(legacy.status, 200);
+        assert.doesNotMatch(await legacy.text(), /<script/i);
         const activeBefore = (await sessionsOf(ben, { isActive: true })).length;
         assert.equal(activeBefore, 4, 'opening the link ends nothing');
 
@@ -531,24 +543,42 @@ test(
         const paths = bad.body.error.details.errors.map((error) => error.path.join('.'));
         assert.ok(paths.includes('genericWebhookUrl') && paths.includes('genericWebhookSecret'));
         const secret = crypto.randomBytes(32).toString('base64url');
+        // IP literals that delivery refuses are refused when saved (security
+        // review 2, hardening 10).
+        for (const url of [
+          'https://127.0.0.1/hook',
+          'https://[::1]/hook',
+          'https://0x7f000001/hook',
+          'https://169.254.169.254/latest/meta-data',
+          'https://[::ffff:127.0.0.1]/hook',
+        ]) {
+          const literal = await settings({ genericWebhookUrl: url, genericWebhookSecret: secret });
+          assert.equal(literal.status, 400, url);
+        }
         const saved = await settings({
           genericWebhookEnabled: true,
-          genericWebhookUrl: 'https://127.0.0.1/hook',
+          genericWebhookUrl: 'https://hooks.example.test/hook',
           genericWebhookSecret: secret,
           webhookEvents: ['lockout', 'login.new_device', 'login.success'],
         });
         assert.equal(saved.status, 200);
         const text = JSON.stringify(saved.body);
         assert.ok(
-          !text.includes(secret) && !text.includes('127.0.0.1/hook'),
+          !text.includes(secret) && !text.includes('hooks.example.test/hook'),
           'PUT never returns them'
         );
+        // A new URL needs the secret entered again (security review 2, hardening 5).
+        const urlOnly = await settings({ genericWebhookUrl: 'https://other.example.test/hook' });
+        assert.equal(urlOnly.status, 400);
+        assert.deepEqual(urlOnly.body.error.details.errors[0].path, ['genericWebhookSecret']);
+        const sameUrl = await settings({ genericWebhookUrl: 'https://hooks.example.test/hook' });
+        assert.equal(sameUrl.status, 200, 'sending the stored URL back is not a change');
         const read = await request('GET', '/magic-sessionmanager/settings', {
           token: superAdmin.token,
         });
         const readText = JSON.stringify(read.body);
         assert.ok(
-          !readText.includes(secret) && !readText.includes('127.0.0.1/hook'),
+          !readText.includes(secret) && !readText.includes('hooks.example.test/hook'),
           'GET never returns them'
         );
         assert.equal(read.body.settings.hasGenericWebhook, true);
@@ -573,17 +603,19 @@ test(
           token: outsider.token,
         });
         assert.equal(denied.status, 403);
-        const local = await request('POST', '/magic-sessionmanager/webhook/test', {
-          token: superAdmin.token,
+        // Local and metadata IP literals cannot be saved any more (see the
+        // test above); a host name that resolves to one is refused at send
+        // time (tests/signals-webhooks.test.js covers the resolver seam).
+        const secret = crypto.randomBytes(32).toString('base64url');
+        const metadata = await settings({
+          genericWebhookUrl: 'https://169.254.169.254/latest/meta-data',
+          genericWebhookSecret: secret,
         });
-        assert.equal(local.status, 200);
-        assert.deepEqual(local.body.data, { ok: false, status: null, code: 'address_not_allowed' });
-        await settings({ genericWebhookUrl: 'https://169.254.169.254/latest/meta-data' });
-        const metadata = await request('POST', '/magic-sessionmanager/webhook/test', {
-          token: superAdmin.token,
+        assert.equal(metadata.status, 400);
+        await settings({
+          genericWebhookUrl: 'https://hooks.example.test/x',
+          genericWebhookSecret: secret,
         });
-        assert.equal(metadata.body.data.code, 'address_not_allowed');
-        await settings({ genericWebhookUrl: 'https://hooks.example.test/x' });
         const dns = await request('POST', '/magic-sessionmanager/webhook/test', {
           token: superAdmin.token,
         });
@@ -612,7 +644,10 @@ test(
         assert.ok(!('genericWebhookUrl' in current) && !('genericWebhookSecret' in current));
         for (const body of [
           { genericWebhookEnabled: !current.genericWebhookEnabled },
-          { genericWebhookUrl: 'https://hooks.example.test/other' },
+          {
+            genericWebhookUrl: 'https://hooks.example.test/other',
+            genericWebhookSecret: crypto.randomBytes(32).toString('base64url'),
+          },
           { genericWebhookSecret: crypto.randomBytes(32).toString('base64url') },
           { webhookEvents: ['user.not_me'] },
           { impossibleTravelEnabled: !current.impossibleTravelEnabled },

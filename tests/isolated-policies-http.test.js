@@ -349,7 +349,7 @@ test(
 
     await t.test('policy settings are saved', async () => {
       const result = await settings({
-        trustedProxies: true,
+        trustedProxies: ['127.0.0.1/32', '::1/128'],
         maxFailedLogins: 3,
         lockoutWindowMinutes: 10,
         lockoutDurationMinutes: 20,

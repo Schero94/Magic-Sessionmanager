@@ -21,6 +21,7 @@ const { getCoordinator } = require('./coordination');
 const { normalizePolicySettings } = require('./policy-settings');
 const { normalizeDetectionSettings } = require('./detection-settings');
 const { normalizeImpersonationSettings } = require('./impersonation-rules');
+const { normalizeTrustedProxies } = require('./trusted-proxies');
 
 const PLUGIN_ID = 'magic-sessionmanager';
 const SETTINGS_KEY = 'settings';
@@ -212,7 +213,11 @@ function normalizeStoredSettings(stored) {
     out.securityLogRetentionDays = toIntInRange(stored.securityLogRetentionDays, 90, 7, 730);
   }
   if (stored.trustedProxies !== undefined) {
-    out.trustedProxies = stored.trustedProxies;
+    // A list of proxy addresses or CIDR ranges (4.22.1). The legacy `true`
+    // and an empty list leave the plugin config (or Strapi's server.proxy
+    // settings) in charge.
+    const proxies = normalizeTrustedProxies(stored.trustedProxies);
+    if (proxies.length > 0) out.trustedProxies = proxies;
   }
 
   // Sign-in and session policies (4.17), kept in user-facing units; the

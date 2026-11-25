@@ -293,7 +293,7 @@ const ImpersonateUserModal = ({
                   error={showReasonError ? tError(reasonError) : undefined}
                   hint={t(
                     'impersonation.reason.hint',
-                    'Stored in the security log and, if you email the user, shown to them.'
+                    'Stored in the security log for admins. The user sees it only in the optional email; their data export says only that an administrator opened the account.'
                   )}
                 >
                   <Field.Label>{t('impersonation.reason.label', 'Reason')}</Field.Label>

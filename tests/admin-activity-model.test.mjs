@@ -236,3 +236,19 @@ test('app-user, impersonation and webhook events get their own label and a seman
   }
   assert.equal(labels.size, Object.keys(expected).length);
 });
+
+test('security review 2, hardening 9: the weak-key event has its own label and the System actor', async () => {
+  const { getEventPresentation } =
+    await import('../admin/src/pages/AdminPanel/adminActivityModel.mjs');
+  const { noAdminText } = await import('../admin/src/pages/AdminPanel/eventText.mjs');
+  const row = { event: 'config.encryption-key.weak' };
+  const presentation = getEventPresentation(row);
+  assert.equal(presentation.key, 'weak-key');
+  assert.equal(presentation.tone, 'danger');
+  assert.equal(presentation.label.defaultMessage, 'Weak encryption key');
+  assert.match(presentation.detail.defaultMessage, /next major version/);
+  assert.equal(
+    noAdminText((_id, fallback) => fallback, row),
+    'System'
+  );
+});

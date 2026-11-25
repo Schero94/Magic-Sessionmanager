@@ -174,6 +174,28 @@ async function previousSessions(strapi, userDocumentId, exceptSessionId) {
 }
 
 /**
+ * Whether a sign-in names a device this account has signed in with before:
+ * the request carries an app-supplied device id and one of the account's
+ * sessions has the same device key (browser, system, device type and that
+ * id). Without a device id nothing is recognised, because a user agent alone
+ * is easy to copy. Used by the account lockout (security review 2, L1).
+ *
+ * @param {any} strapi Strapi instance.
+ * @param {string|null} userDocumentId Account.
+ * @param {{userAgent: string|null, deviceId: string|null}} request Sign-in request facts.
+ * @returns {Promise<boolean>}
+ */
+async function isRecognizedDevice(strapi, userDocumentId, { userAgent, deviceId }) {
+  if (typeof userDocumentId !== 'string' || !userDocumentId) return false;
+  if (typeof deviceId !== 'string' || !deviceId) return false;
+  const deviceKey = deviceKeyOf(userAgent || '', deviceId);
+  const count = await strapi.documents(SESSION_UID).count({
+    filters: { user: { documentId: userDocumentId }, deviceKey },
+  });
+  return Number(count) > 0;
+}
+
+/**
  * Whether a sign-in comes from a device the user has not used in their last
  * 50 sessions.
  *
@@ -230,7 +252,11 @@ async function notMeUrl(strapi, sessionId, userId) {
   const token = await issueNotMeToken(getCoordinator(strapi), { sessionId, userId });
   if (!token) return null;
   const prefix = normalizeApiPrefix(strapi.config.get('api.rest.prefix', '/api'));
-  return `${base}${prefix}/magic-sessionmanager/not-me?token=${encodeURIComponent(token)}`;
+  // The token travels in the fragment, which browsers never send to the
+  // server, so it does not reach access logs or proxies (security review 2,
+  // L5). The confirmation page copies it into its form with a CSP-hashed
+  // script; `?token=` links sent before 4.22.1 keep working until they expire.
+  return `${base}${prefix}/magic-sessionmanager/not-me#token=${encodeURIComponent(token)}`;
 }
 
 /**
@@ -344,6 +370,7 @@ async function runSignInSignals({
 }
 
 module.exports = {
+  isRecognizedDevice,
   notMeUrl,
   runSignInSignals,
   deviceFamilies,

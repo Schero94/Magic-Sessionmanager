@@ -85,7 +85,7 @@ export const changedSettingsLines = (t, keys) =>
  * @returns {string} Text.
  */
 export const noAdminText = (t, row) =>
-  row?.event === 'security-log.retention.purged'
+  row?.event === 'security-log.retention.purged' || row?.event === 'config.encryption-key.weak'
     ? t('adminPanel.activity.system', 'System')
     : t('adminPanel.activity.unknownAccount', 'Unknown account');
 

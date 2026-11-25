@@ -22,6 +22,29 @@ const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
 let warnedMissingKey = false;
+let warnedShortKey = false;
+
+/**
+ * Shortest SESSION_ENCRYPTION_KEY accepted without a warning, in bytes
+ * (security review 2, hardening 9). The key is hashed with SHA-256 into the
+ * AES key, so a short key is only as strong as its own entropy. A shorter
+ * key logs a warning in every environment; it is not refused, because a
+ * patch release must not stop existing installations from starting. The
+ * next major version will refuse it.
+ */
+const MIN_KEY_BYTES = 32;
+
+/**
+ * Whether SESSION_ENCRYPTION_KEY is set but shorter than MIN_KEY_BYTES.
+ *
+ * @returns {boolean}
+ */
+function isEncryptionKeyShort() {
+  const envKey = process.env.SESSION_ENCRYPTION_KEY;
+  return typeof envKey === 'string' && envKey.length > 0
+    ? Buffer.byteLength(envKey, 'utf8') < MIN_KEY_BYTES
+    : false;
+}
 
 const isProduction = () => process.env.NODE_ENV === 'production';
 
@@ -29,12 +52,21 @@ const isProduction = () => process.env.NODE_ENV === 'production';
  * Returns the 32-byte AES-256 key for session-token encryption.
  *
  * @returns {Buffer} 32 bytes
- * @throws {Error} In production when SESSION_ENCRYPTION_KEY is missing
+ * @throws {Error} In production when SESSION_ENCRYPTION_KEY is missing (a key shorter than
+ *   32 bytes logs one warning in every environment)
  */
 function getEncryptionKey() {
   const envKey = process.env.SESSION_ENCRYPTION_KEY;
 
   if (envKey && envKey.length > 0) {
+    if (!warnedShortKey && isEncryptionKeyShort()) {
+      warnedShortKey = true;
+      console.warn(
+        `[magic-sessionmanager] SESSION_ENCRYPTION_KEY is shorter than ${MIN_KEY_BYTES} bytes. ` +
+          'It still works, but the next major version will refuse to start with it. ' +
+          'Use 32 random bytes (64 hex characters).'
+      );
+    }
     return crypto.createHash('sha256').update(envKey).digest();
   }
 
@@ -195,6 +227,8 @@ function derivePurposeKey(purpose) {
 }
 
 module.exports = {
+  MIN_KEY_BYTES,
+  isEncryptionKeyShort,
   derivePurposeKey,
   getEncryptionKeyCheck,
   encryptToken,

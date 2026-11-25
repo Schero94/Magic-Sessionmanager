@@ -14,8 +14,10 @@
  *   one at once, revoking its credential);
  * - refuses with 403 what an impersonation may not do: credential, email and
  *   account changes, signing in or out, ending or listing-and-ending
- *   sessions, the data export, "This wasn't me" links and GraphQL mutations
- *   of that kind (see `classifyRestrictedRequest`);
+ *   sessions, the data export and "This wasn't me" links (see
+ *   `classifyRestrictedRequest`); every GraphQL mutation is refused inside
+ *   Apollo (`utils/graphql-impersonation-guard.js`), because the request
+ *   body of the GraphQL endpoint is not parsed at this point;
  * - sets `X-Magic-Impersonation: true` on every response, also exposed to
  *   cross-origin JavaScript when CORS answered the request.
  *
@@ -143,7 +145,13 @@ module.exports = (_config, { strapi }) => {
       );
     }
 
-    ctx.state.magicImpersonation = { id: impersonation.id, actorId: impersonation.actorId };
+    // Read by the GraphQL guard (utils/graphql-impersonation-guard.js), which
+    // refuses every mutation once Apollo has resolved the operation.
+    ctx.state.magicImpersonation = {
+      id: impersonation.id,
+      actorId: impersonation.actorId,
+      targetId: impersonation.targetId || null,
+    };
     try {
       await next();
     } finally {

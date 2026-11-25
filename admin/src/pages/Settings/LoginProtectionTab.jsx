@@ -86,8 +86,9 @@ const LoginProtectionTab = ({ form }) => {
   const lookupOff = !settings.enableGeolocation;
   // The lookup failure mode is a protected setting (4.17).
   const locked = form.canChangeProtected === false;
-  // The new account lockout, window, duration, trusted addresses and the
-  // switches are protected settings; the IP threshold stays on `access`.
+  // The lockout thresholds (the IP threshold too since 4.22.1), window,
+  // duration, trusted addresses, trusted proxies and the switches are
+  // protected settings.
   const policyLocked = locked;
   const risk = getRiskAvailability(form.geoIp.status);
   const reject = riskDependentControl(settings.blockSuspiciousSessions, risk.state);
@@ -128,6 +129,7 @@ const LoginProtectionTab = ({ form }) => {
           >
             <NumberInput
               key={form.draftVersion}
+              disabled={policyLocked}
               value={settings.maxFailedLogins}
               onValueChange={(value) => handleChange('maxFailedLogins', value)}
               min={MAX_FAILED_LOGINS_RANGE.min}
@@ -260,15 +262,18 @@ const LoginProtectionTab = ({ form }) => {
           'All IP-based rules depend on reading the real client address.'
         )}
       >
-        <SettingsToggleRow
+        {policyLocked ? <ProtectedNotice /> : null}
+        <TrustedAddressesField
+          form={form}
+          disabled={policyLocked}
+          field="trustedProxies"
           id="trusted-proxies"
-          title={t('settings.config.clientIp.trustProxy.label', 'Trust proxy headers')}
+          placeholder="10.0.0.0/8"
+          label={t('settings.config.clientIp.trustProxy.label', 'Trusted proxies')}
           description={t(
             'settings.config.clientIp.trustProxy.hint',
-            'Turn on only behind a proxy you control. Affects the recorded IP address, the IP lockout and location lookups.'
+            "Leave empty to use Strapi's server.proxy settings (koa, ipHeader, maxIpsCount). Otherwise list your proxies, one IP address or CIDR range per line: only a request that comes from a listed proxy has its X-Forwarded-For read, and the client is the right-most address that is not listed. Affects the recorded IP address, the IP lockout and location lookups."
           )}
-          checked={settings.trustedProxies}
-          onChange={(checked) => handleChange('trustedProxies', checked)}
         />
       </SectionCard>
 

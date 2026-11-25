@@ -17,7 +17,8 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   sessionCreationGraceMs: 5000,
   cleanupUseDbDirect: false,
   strictSessionEnforcement: false,
-  trustedProxies: false,
+  // Proxy addresses or CIDR ranges (4.22.1); empty = Strapi's server.proxy settings.
+  trustedProxies: [],
   enableGeolocation: true,
   enableSecurityScoring: true,
   blockSuspiciousSessions: false,
@@ -98,6 +99,7 @@ export function normalizeSettings(loaded) {
     lockoutTrustedAddresses: Array.isArray(loaded.lockoutTrustedAddresses)
       ? loaded.lockoutTrustedAddresses
       : [],
+    trustedProxies: Array.isArray(loaded.trustedProxies) ? loaded.trustedProxies : [],
     roleRules: Array.isArray(loaded.roleRules) ? loaded.roleRules : [],
     webhookEvents: Array.isArray(loaded.webhookEvents)
       ? loaded.webhookEvents

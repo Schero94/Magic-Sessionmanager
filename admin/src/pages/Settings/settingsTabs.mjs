@@ -152,7 +152,7 @@ export const SETTINGS_FIELD_LABELS = Object.freeze({
   genericWebhookUrl: ['settings.signedWebhook.url.label', 'Webhook URL'],
   genericWebhookSecret: ['settings.signedWebhook.secret.label', 'Signing secret'],
   sessionIpAnonymize: ['settings.config.privacy.shortIp.label', 'Shorten IP addresses of sessions'],
-  trustedProxies: ['settings.config.clientIp.trustProxy.label', 'Trust proxy headers'],
+  trustedProxies: ['settings.config.clientIp.trustProxy.label', 'Trusted proxies'],
   blockSuspiciousSessions: [
     'settings.config.suspicious.reject.label',
     'Reject suspicious sign-ins',

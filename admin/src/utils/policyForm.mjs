@@ -38,6 +38,8 @@ export const ROLE_RULE_RANGES = Object.freeze({
 
 export const ROLE_RULE_FIELDS = Object.freeze(Object.keys(ROLE_RULE_RANGES));
 export const MAX_TRUSTED_ADDRESSES = 100;
+/** Most trusted proxies (server: utils/trusted-proxies.js). */
+export const MAX_TRUSTED_PROXIES = 50;
 
 const message = (messageId, defaultMessage, values) => ({ messageId, defaultMessage, values });
 
@@ -125,19 +127,24 @@ export function validatePolicyFields(settings) {
     const error = validateWholeNumber(source[key], range);
     if (error) errors[key] = error;
   }
-  const entries = Array.isArray(source.lockoutTrustedAddresses)
-    ? source.lockoutTrustedAddresses
-    : [];
-  if (entries.length > MAX_TRUSTED_ADDRESSES) {
-    errors.lockoutTrustedAddresses = message(
-      'settings.validation.trustedTooMany',
-      'Enter at most {max} addresses.',
-      { max: MAX_TRUSTED_ADDRESSES }
-    );
-  } else {
+  for (const [field, max] of [
+    ['lockoutTrustedAddresses', MAX_TRUSTED_ADDRESSES],
+    ['trustedProxies', MAX_TRUSTED_PROXIES],
+  ]) {
+    const entries = Array.isArray(source[field]) ? source[field] : [];
+    if (entries.length > max) {
+      errors[field] = message(
+        'settings.validation.trustedTooMany',
+        'Enter at most {max} addresses.',
+        {
+          max,
+        }
+      );
+      continue;
+    }
     const invalid = entries.find((entry) => !isTrustedAddressLine(entry));
     if (invalid !== undefined) {
-      errors.lockoutTrustedAddresses = message(
+      errors[field] = message(
         'settings.validation.trustedAddress',
         '"{value}" is not an IP address or CIDR range. Use for example 192.0.2.10 or 192.0.2.0/24.',
         { value: String(invalid).slice(0, 64) }

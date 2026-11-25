@@ -190,6 +190,11 @@ const IMPERSONATION_REFUSALS = Object.freeze({
     'userActivity.detail.impersonation.callSessions',
     'A request to end sessions was blocked'
   ),
+  // 4.22.1: every GraphQL mutation is refused while impersonating.
+  'call-mutation': message(
+    'userActivity.detail.impersonation.callMutation',
+    'A GraphQL mutation was blocked'
+  ),
 });
 
 const UNKNOWN_ACCOUNT = message(

@@ -5,9 +5,12 @@
 /**
  * End-user self-service routes (4.17), Content API:
  *
- * - `GET  /magic-sessionmanager/not-me?token=` (public): confirmation page of
+ * - `GET  /magic-sessionmanager/not-me#token=` (public): confirmation page of
  *   the "This wasn't me" email link. Never ends a session (mail scanners
- *   open links).
+ *   open links). Since 4.22.1 the token is in the URL fragment, which is
+ *   never sent to the server (no token in access logs); a CSP-hashed script
+ *   copies it into the form. Links with `?token=` from earlier emails still
+ *   work.
  * - `POST /magic-sessionmanager/not-me` (public): ends the session of the link
  *   (or every session of the user with `scope=all`). The signed, single-use,
  *   expiring token is the only authorisation; both routes are rate-limited
@@ -16,6 +19,7 @@
  *   sessions and security events as a JSON download (GDPR Art. 15).
  */
 
+const crypto = require('node:crypto');
 const { getCoordinator } = require('../utils/coordination');
 const { consumeNotMeToken, readNotMeToken } = require('../utils/not-me-link');
 const { recordUserEvent } = require('../utils/sign-in-policies');
@@ -23,6 +27,7 @@ const { resolveUserDocumentId } = require('../utils/resolve-user');
 const { SECURITY_EVENTS } = require('../utils/security-log-model');
 const { sendServerError } = require('../utils/http-errors');
 const { createLogger } = require('../utils/logger');
+const { toUserExportEvent } = require('../utils/user-export');
 
 const SESSION_UID = 'plugin::magic-sessionmanager.session';
 const EVENT_UID = 'plugin::magic-sessionmanager.security-event';
@@ -113,28 +118,38 @@ const escapeHtml = (value) =>
     .replace(/'/g, '&#39;');
 
 /**
- * Sends a minimal, self-contained HTML page (no scripts, no external files).
+ * Copies the token from the URL fragment (`#token=`) into the page's forms
+ * and removes it from the address bar. Allowed by its CSP hash only.
+ */
+const FRAGMENT_SCRIPT =
+  "(function(){var m=/[#&]token=([A-Za-z0-9_.%-]+)/.exec(location.hash);if(!m)return;var t=decodeURIComponent(m[1]);var f=document.querySelectorAll('input[name=\"token\"]');for(var i=0;i<f.length;i++)f[i].value=t;if(history.replaceState)history.replaceState(null,'',location.pathname);})();";
+const FRAGMENT_SCRIPT_HASH = `sha256-${crypto.createHash('sha256').update(FRAGMENT_SCRIPT).digest('base64')}`;
+
+/**
+ * Sends a minimal, self-contained HTML page (no external files; the only
+ * script is the hashed fragment copier when `withScript` is set).
  *
  * @param {any} ctx Koa context.
  * @param {number} status HTTP status.
  * @param {string} lang Page language.
  * @param {string} title Heading.
  * @param {string} body Inner HTML (already escaped).
+ * @param {{withScript?: boolean}} [options] Whether to add the fragment copier.
  * @returns {void}
  */
-function sendPage(ctx, status, lang, title, body) {
+function sendPage(ctx, status, lang, title, body, { withScript = false } = {}) {
   ctx.status = status;
   ctx.set('Content-Type', 'text/html; charset=utf-8');
   ctx.set(
     'Content-Security-Policy',
-    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+    `default-src 'none'; style-src 'unsafe-inline'; ${withScript ? `script-src '${FRAGMENT_SCRIPT_HASH}'; ` : ''}form-action 'self'; frame-ancestors 'none'; base-uri 'none'`
   );
   ctx.set('Referrer-Policy', 'no-referrer');
   ctx.set('Cache-Control', 'no-store');
   ctx.set('X-Robots-Tag', 'noindex');
   ctx.body = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color:#212134;background:#fff}button{font:inherit;padding:.6rem 1rem;margin:.25rem .5rem .25rem 0;border-radius:4px;border:1px solid #4945ff;background:#4945ff;color:#fff;cursor:pointer}button.secondary{background:#fff;color:#4945ff}@media (prefers-color-scheme:dark){body{background:#181826;color:#eaeaef}button.secondary{background:#181826}}</style></head>
-<body><main><h1>${escapeHtml(title)}</h1>${body}</main></body></html>`;
+<body><main><h1>${escapeHtml(title)}</h1>${body}</main>${withScript ? `<script>${FRAGMENT_SCRIPT}</script>` : ''}</body></html>`;
 }
 
 module.exports = ({ strapi }) => {
@@ -144,17 +159,20 @@ module.exports = ({ strapi }) => {
     /**
      * Confirmation page of the "This wasn't me" link. Uses nothing.
      *
-     * @route GET /api/magic-sessionmanager/not-me?token=
+     * @route GET /api/magic-sessionmanager/not-me (token in `#token=`; `?token=` before 4.22.1)
      * @auth none (public on purpose: the link is opened from an email; the
      *   signed token is checked, and nothing changes until the POST)
      * @param {any} ctx Koa context.
-     * @returns {Promise<void>} 200 page with two buttons, or 410 when the link is invalid.
+     * @returns {Promise<void>} 200 page with two buttons, or 410 when a `?token=` link is
+     *   invalid. Without `?token=` the page is served with the hashed script that copies the
+     *   fragment token into the forms; the POST checks it.
      */
     async notMePage(ctx) {
       const lang = pageLanguage(ctx);
       const text = PAGE_TEXT[lang];
-      const token = typeof ctx.query?.token === 'string' ? ctx.query.token : '';
-      if (!readNotMeToken(token)) {
+      const hasQueryToken = typeof ctx.query?.token === 'string' && ctx.query.token !== '';
+      const token = hasQueryToken ? ctx.query.token : '';
+      if (hasQueryToken && !readNotMeToken(token)) {
         return sendPage(ctx, 410, lang, text.title, `<p>${escapeHtml(text.invalid)}</p>`);
       }
       const form = (scope, label, className) =>
@@ -164,7 +182,8 @@ module.exports = ({ strapi }) => {
         200,
         lang,
         text.title,
-        `<p>${escapeHtml(text.body)}</p>${form('session', text.one, '')}${form('all', text.all, 'secondary')}`
+        `<p>${escapeHtml(text.body)}</p>${form('session', text.one, '')}${form('all', text.all, 'secondary')}`,
+        { withScript: !hasQueryToken }
       );
     },
 
@@ -329,7 +348,9 @@ module.exports = ({ strapi }) => {
             ? { documentId: user.documentId, username: user.username, email: user.email }
             : { documentId: userDocumentId },
           sessions,
-          securityEvents: (Array.isArray(events) ? events : []).map(({ id: _id, ...row }) => row),
+          // Impersonation events show a fixed text and the duration only
+          // (security review 2, L3): the admin's reason stays internal.
+          securityEvents: (Array.isArray(events) ? events : []).map(toUserExportEvent),
         };
       } catch (err) {
         log.error('[my-data] Export failed:', err?.name || 'Error');
