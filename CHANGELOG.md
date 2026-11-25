@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.23.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.22.1...v4.23.0) (2026-11-25)
+
+
+### Features
+
+* sign in as another admin in an isolated tab, read-only by default, with audit and version guard ([#47](https://github.com/Schero94/Magic-Sessionmanager/issues/47)) ([16915a5](https://github.com/Schero94/Magic-Sessionmanager/commit/16915a51aaa607a9e1ac30c356e5153ecc67fe51))
+
 
 Release type: minor (`feat`). Adds **Sign in as another admin**: a real admin session of another admin in a separate browser tab, read-only unless changes are allowed. No breaking change: the 4.21 permission preview stays, under the new name **View permissions**.
 
