@@ -392,6 +392,10 @@ test('admin panel with "View admin activity": recent list, dialog tabs and lists
     async whileMounted(handle) {
       assert.match(handle.container.textContent, /Recent security activity/);
       assert.match(handle.container.textContent, /Unknown account/);
+      // "How ending sessions works" is a collapsed disclosure like "How sessions work" (4.23.1).
+      const howTo = handle.container.querySelector('[data-admin-how-it-works] button');
+      assert.equal(howTo.getAttribute('aria-expanded'), 'false');
+      await click(howTo);
       assert.match(handle.container.textContent, /records every sign-in with time, browser and IP/);
       const recent = handle.container.querySelector('[data-recent-activity] table[role="grid"]');
       assert.ok(recent, 'recent activity is a DS table');
@@ -487,13 +491,16 @@ test('security activity page: full-width table, filters in the URL, settings cha
     path: '/plugins/magic-sessionmanager/admin-panel/activity?event=all&period=7',
     permissions: [...ALL, ACTIVITY_READ],
     async whileMounted(handle) {
-      assert.equal(handle.container.querySelector('h1')?.textContent, 'Security activity');
+      assert.equal(
+        handle.container.querySelector('h1')?.textContent,
+        'Security activity of admins'
+      );
       assert.ok(handle.container.querySelector('table[role="grid"]'), 'a DS table');
       assert.match(handle.container.textContent, /Settings changed/);
       // The Settings page's own labels, grouped by tab; at most 3 named in the table.
       assert.match(
         handle.container.textContent,
-        /Login protection: Lock an IP address after, Lock for · Admin activity: Record admin sign-ins and 1 more/
+        /Login protection: Lock an IP address after, Lock for · Data and retention: Record admin sign-ins and 1 more/
       );
       assert.doesNotMatch(handle.container.textContent, /maxFailedLogins/);
       assert.match(handle.container.textContent, /2 events/, 'the caption counts the server total');
@@ -538,12 +545,24 @@ test('settings page: StrictMode mount shows the loaded form, tabs switch cleanly
     async whileMounted(handle) {
       assert.doesNotMatch(handle.container.textContent, /could not be loaded/i);
       const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-      assert.equal(
-        tabs.at(-1),
-        'Admin activity',
-        'the Admin activity tab is shown with the action'
+      assert.deepEqual(
+        tabs,
+        [
+          'Sessions',
+          'Login protection',
+          'Alerts',
+          'Data and retention',
+          'Location data',
+          'Impersonation',
+        ],
+        'everyday tabs first; the security log settings are in Data and retention (4.23.1)'
       );
       for (const tab of [...document.querySelectorAll('[role="tab"]')].slice(1)) await click(tab);
+      assert.match(
+        handle.container.textContent,
+        /Security log: what is recorded/,
+        'shown with "View admin activity"'
+      );
     },
   });
   assert.equal(live(result.mountCalls, '/magic-sessionmanager/settings').length, 1);

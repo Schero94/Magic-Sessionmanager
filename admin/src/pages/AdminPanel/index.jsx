@@ -21,7 +21,7 @@ import {
   Typography,
   VisuallyHidden,
 } from '@strapi/design-system';
-import { ArrowClockwise, Check, Cross, User } from '@strapi/icons';
+import { ArrowClockwise, Check, Cog, Cross, User } from '@strapi/icons';
 import { EmptyDocuments } from '@strapi/icons/symbols';
 import styled from 'styled-components';
 import pluginId from '../../pluginId';
@@ -30,12 +30,16 @@ import { getTranslation } from '../../utils/getTranslation';
 import { isCancelledRequest, logSafeAdminError } from '../../utils/safeAdminLog.mjs';
 import { restoreDialogFocus } from '../../utils/restoreDialogFocus.mjs';
 import { useBreakpoint } from '../../utils/useBreakpoint';
-import { ConfirmAction, PageShell, StatCard, StatGrid } from '../../components/ui';
+import { ConfirmAction, Disclosure, PageShell, StatCard, StatGrid } from '../../components/ui';
 import Alert from '../../components/PersistentAlert';
 import ReadableText from '../../components/ReadableText';
 import SessionViewNav from '../../components/SessionViewNav';
 import SessionSearch from '../Dashboard/SessionSearch';
-import { encodeSearchQuery, getErrorStatus } from '../Dashboard/dashboardModel.mjs';
+import {
+  ADMIN_HOW_IT_WORKS_STORAGE_KEY,
+  encodeSearchQuery,
+  getErrorStatus,
+} from '../Dashboard/dashboardModel.mjs';
 import { AdminCardList, AdminTable } from './AdminList';
 import AdminSessionsModal from './AdminSessionsModal';
 import PreviewAdminModal from '../../components/impersonation/PreviewAdminModal';
@@ -58,6 +62,8 @@ import {
 
 /** Strapi's own user management (deactivate, roles, password). */
 const SETTINGS_USERS_PATH = '/settings/users';
+/** Session Manager settings that hold the security log (sign-in history) options. */
+const SETTINGS_PATH = `/settings/${pluginId}/general?tab=data-retention`;
 
 /** Same 32 px touch target wrapper as the dashboard pagination. */
 const PaginationTargets = styled.div`
@@ -91,7 +97,7 @@ const AdminPanelPage = () => {
   const { formatMessage } = useIntl();
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
-  const { isBelowMedium } = useBreakpoint();
+  const { isBelowMedium, isBelowSmall } = useBreakpoint();
   const [{ query }, setQuery] = useQueryParams();
   const t = (id, defaultMessage, values) =>
     formatMessage({ id: getTranslation(id), defaultMessage }, values);
@@ -330,18 +336,18 @@ const AdminPanelPage = () => {
           type: 'warning',
           message: t(
             'adminPanel.signOut.success.self',
-            'You signed yourself out of this browser. The login page opens next.'
+            'Your session in this browser ended. The login page opens next.'
           ),
         });
       } else {
         toggleNotification({
           type: 'success',
           message: session
-            ? t('adminPanel.signOut.success.one', '{name} was signed out of {device}.', {
+            ? t('adminPanel.signOut.success.one', 'Session of {name} on {device} ended.', {
                 name: admin.name,
                 device,
               })
-            : t('adminPanel.signOut.success.all', '{name} was signed out everywhere.', {
+            : t('adminPanel.signOut.success.all', 'All sessions of {name} ended.', {
                 name: admin.name,
               }),
         });
@@ -397,22 +403,22 @@ const AdminPanelPage = () => {
     const body = session
       ? t(
           'adminPanel.confirm.one.body',
-          '{name} is signed out of {device} on their next click in the admin panel. They can sign in again with their password.',
+          'The session of {name} on {device} ends on their next click in the admin panel. They can sign in again with their password.',
           { name: admin.name, device }
         )
       : t(
           'adminPanel.confirm.all.body',
-          'Every session of {name} ends on their next click in the admin panel. They can sign in again with their password. To stop them from signing in, deactivate the account in Settings > Users.',
+          'Every session of {name} ends on their next click in the admin panel. They can sign in again with their password. To stop them from signing in, deactivate the account in Settings › Users.',
           { name: admin.name }
         );
     confirm = {
       title: includesThisBrowser
-        ? t('adminPanel.confirm.self.title', 'Sign yourself out?')
+        ? t('adminPanel.confirm.self.title', 'End your own session?')
         : session
-          ? t('adminPanel.confirm.one.title', 'Sign {name} out of this browser?', {
+          ? t('adminPanel.confirm.one.title', 'End this session of {name}?', {
               name: admin.name,
             })
-          : t('adminPanel.confirm.all.title', 'Sign {name} out everywhere?', { name: admin.name }),
+          : t('adminPanel.confirm.all.title', 'End all sessions of {name}?', { name: admin.name }),
       body: (
         <Flex direction="column" alignItems="stretch" gap={3}>
           {/* A node body needs its own Dialog.Description (accessible description). */}
@@ -428,8 +434,8 @@ const AdminPanelPage = () => {
         </Flex>
       ),
       label: session
-        ? t('adminPanel.session.signOut', 'Sign out')
-        : t('adminPanel.actions.signOutEverywhereShort', 'Sign out everywhere'),
+        ? t('adminPanel.session.signOut', 'End session')
+        : t('adminPanel.actions.signOutEverywhereShort', 'End all sessions'),
     };
   }
 
@@ -472,9 +478,50 @@ const AdminPanelPage = () => {
         'Who is signed in to this Strapi admin panel. Your app’s users are under App users.'
       )}
       primaryAction={
-        <LinkButton tag={Link} to={SETTINGS_USERS_PATH} variant="secondary" startIcon={<User />}>
-          {t('adminPanel.manageUsers', 'Manage admins')}
-        </LinkButton>
+        // Same header pattern as the app-user view: tertiary links, as
+        // labelled icon links below the DS small breakpoint (4.23.1).
+        <Flex gap={2} wrap="wrap" justifyContent="flex-end">
+          {isBelowSmall ? (
+            <IconButton
+              tag={Link}
+              to={SETTINGS_PATH}
+              label={t('homepage.links.settings', 'Settings')}
+              variant="tertiary"
+            >
+              <Cog />
+            </IconButton>
+          ) : (
+            <LinkButton
+              tag={Link}
+              to={SETTINGS_PATH}
+              variant="tertiary"
+              size="S"
+              startIcon={<Cog />}
+            >
+              {t('homepage.links.settings', 'Settings')}
+            </LinkButton>
+          )}
+          {isBelowSmall ? (
+            <IconButton
+              tag={Link}
+              to={SETTINGS_USERS_PATH}
+              label={t('adminPanel.manageUsers', 'Manage admins')}
+              variant="tertiary"
+            >
+              <User />
+            </IconButton>
+          ) : (
+            <LinkButton
+              tag={Link}
+              to={SETTINGS_USERS_PATH}
+              variant="tertiary"
+              size="S"
+              startIcon={<User />}
+            >
+              {t('adminPanel.manageUsers', 'Manage admins')}
+            </LinkButton>
+          )}
+        </Flex>
       }
     >
       <Flex
@@ -516,6 +563,51 @@ const AdminPanelPage = () => {
               'Admin panel sessions are not available on this Strapi version. They need Strapi 5 with session management (tested with 5.62).'
             )}
           />
+        ) : null}
+
+        {showData ? (
+          <Disclosure
+            label={t('adminPanel.howItWorks.title', 'How ending sessions works')}
+            storageKey={ADMIN_HOW_IT_WORKS_STORAGE_KEY}
+            dataAttribute="admin-how-it-works"
+          >
+            <Flex direction="column" alignItems="stretch" gap={4}>
+              <ReadableText variant="omega" textColor="neutral800" tag="p">
+                {t(
+                  'adminPanel.howItWorks.body',
+                  'An ended session stops on the admin’s next click: Strapi checks the session on every admin request. They can sign in again with their password; to stop that, deactivate the account in Settings › Users. Admin API tokens are not affected.'
+                )}
+              </ReadableText>
+              <ReadableText variant="omega" textColor="neutral800" tag="p">
+                {recording?.ipAddresses
+                  ? t(
+                      'adminPanel.howItWorks.recorded',
+                      'Session Manager records every sign-in with time, browser and IP address in the sign-in history.'
+                    )
+                  : recording?.signIns
+                    ? t(
+                        'adminPanel.howItWorks.recordedNoIp',
+                        'Session Manager records every sign-in with time and browser in the sign-in history, without IP addresses.'
+                      )
+                    : t(
+                        'adminPanel.howItWorks.notRecorded',
+                        'Sign-in history is turned off, so no IP addresses of admins are recorded.'
+                      )}
+              </ReadableText>
+              {policy ? (
+                <Typography variant="pi" textColor="neutral600" tag="p">
+                  {t(
+                    'adminPanel.howItWorks.policy',
+                    'Without activity a session ends after {idle}, or after {rememberIdle} when “Remember me” was ticked.',
+                    {
+                      idle: durationText(policy.idleSessionLifespan),
+                      rememberIdle: durationText(policy.idleRefreshTokenLifespan),
+                    }
+                  )}
+                </Typography>
+              ) : null}
+            </Flex>
+          </Disclosure>
         ) : null}
 
         {showData ? (
@@ -561,48 +653,6 @@ const AdminPanelPage = () => {
               />
             </StatGrid>
           </Flex>
-        ) : null}
-
-        {showData ? (
-          <Alert
-            variant="neutral"
-            stacked
-            title={t('adminPanel.howItWorks.title', 'How signing out works')}
-          >
-            <ReadableText variant="omega" textColor="neutral800" tag="span">
-              {t(
-                'adminPanel.howItWorks.body',
-                'Signing out takes effect on the admin’s next click: Strapi checks the session on every admin request. They can sign in again with their password; to stop that, deactivate the account in Settings > Users. Admin API tokens are not affected.'
-              )}{' '}
-              {recording?.ipAddresses
-                ? t(
-                    'adminPanel.howItWorks.recorded',
-                    'Session Manager records every sign-in with time, browser and IP address in the sign-in history.'
-                  )
-                : recording?.signIns
-                  ? t(
-                      'adminPanel.howItWorks.recordedNoIp',
-                      'Session Manager records every sign-in with time and browser in the sign-in history, without IP addresses.'
-                    )
-                  : t(
-                      'adminPanel.howItWorks.notRecorded',
-                      'Sign-in history is turned off, so no IP addresses of admins are recorded.'
-                    )}
-            </ReadableText>
-            {policy ? (
-              <ReadableText variant="omega" textColor="neutral800" tag="span">
-                {' '}
-                {t(
-                  'adminPanel.howItWorks.policy',
-                  'Without activity a session ends after {idle}, or after {rememberIdle} when “Remember me” was ticked.',
-                  {
-                    idle: durationText(policy.idleSessionLifespan),
-                    rememberIdle: durationText(policy.idleRefreshTokenLifespan),
-                  }
-                )}
-              </ReadableText>
-            ) : null}
-          </Alert>
         ) : null}
 
         {showData ? (
@@ -722,7 +772,7 @@ const AdminPanelPage = () => {
         ) : null}
 
         {showData && impersonationEnabled && (canSignInAsAdmin || canPreviewAdmins) ? (
-          <ActiveImpersonationsCard />
+          <ActiveImpersonationsCard hideWhenEmpty />
         ) : null}
 
         {showData && canViewActivity ? (

@@ -4,19 +4,32 @@
  * send back unchanged. Pure data and helpers, so tests can import them.
  */
 
-/** Tab ids in display order; also the values of the `?tab=` query (IA C). */
+/**
+ * Tab ids in display order; also the values of the `?tab=` query (IA C).
+ * Everyday settings first, then data handling, then the technical (location
+ * data) and the sensitive (impersonation) ones (4.23.1). The security log
+ * settings moved into "Data and retention", next to the other retention
+ * values the retention preset already changed.
+ */
 export const SETTINGS_TAB_IDS = Object.freeze([
   'sessions',
   'login-protection',
-  'location-data',
   'alerts',
   'data-retention',
+  'location-data',
   'impersonation',
-  'admin-activity',
 ]);
 
-/** Tabs shown only to admins with "View admin activity" (server enforces the same). */
-export const PERMISSION_GATED_TABS = Object.freeze(['admin-activity']);
+/**
+ * Tab ids of earlier versions that still open the tab that holds their
+ * settings now, so saved links keep working (4.23.1: `admin-activity`).
+ */
+export const SETTINGS_TAB_ALIASES = Object.freeze({
+  'admin-activity': 'data-retention',
+});
+
+/** Tabs shown only to admins with "View admin activity" (none since 4.23.1; the sections are gated). */
+export const PERMISSION_GATED_TABS = Object.freeze([]);
 
 export const DEFAULT_SETTINGS_TAB = 'sessions';
 
@@ -28,7 +41,6 @@ export const SETTINGS_TAB_LABELS = Object.freeze({
   alerts: ['settings.config.tab.alerts', 'Alerts'],
   'data-retention': ['settings.config.tab.dataRetention', 'Data and retention'],
   impersonation: ['settings.config.tab.impersonation', 'Impersonation'],
-  'admin-activity': ['settings.config.tab.adminActivity', 'Admin activity'],
 });
 
 /** Settings keys shown on each tab (for error markers and the adjusted-values message). */
@@ -87,9 +99,9 @@ export const SETTINGS_TAB_FIELDS = Object.freeze({
     'genericWebhookUrl',
     'genericWebhookSecret',
   ],
-  'data-retention': ['retentionDays', 'sessionIpAnonymize'],
-  impersonation: ['impersonationEnabled'],
-  'admin-activity': [
+  'data-retention': [
+    'retentionDays',
+    'sessionIpAnonymize',
     'adminSignInHistory',
     'adminContentActivity',
     'securityLogStoreIp',
@@ -97,6 +109,7 @@ export const SETTINGS_TAB_FIELDS = Object.freeze({
     'securityLogGeoLookup',
     'securityLogRetentionDays',
   ],
+  impersonation: ['impersonationEnabled'],
 });
 
 /**
@@ -210,12 +223,15 @@ export const SELECT_PRESETS = Object.freeze({
 });
 
 /**
- * @param {unknown} value Raw `tab` query value.
+ * @param {unknown} value Raw `tab` query value (old ids are mapped through the aliases).
  * @param {readonly string[]} [tabs] Tabs the admin can see (default: all).
  * @returns {string} A known tab id, else the default tab.
  */
 export function resolveSettingsTab(value, tabs = SETTINGS_TAB_IDS) {
-  const candidate = Array.isArray(value) ? value[0] : value;
+  const raw = Array.isArray(value) ? value[0] : value;
+  const candidate = Object.prototype.hasOwnProperty.call(SETTINGS_TAB_ALIASES, raw)
+    ? SETTINGS_TAB_ALIASES[raw]
+    : raw;
   return tabs.includes(candidate) ? candidate : DEFAULT_SETTINGS_TAB;
 }
 

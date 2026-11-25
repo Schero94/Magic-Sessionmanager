@@ -57,6 +57,21 @@ import {
   userEventDetails,
 } from './EventDetails';
 import { getUserEntryPath } from '../UserActivity/userActivityModel.mjs';
+import pluginId from '../../pluginId';
+
+/** Settings tab with the "Locked now" list, where locks are lifted (4.23.1). */
+const LOCKED_NOW_PATH = `/settings/${pluginId}/general?tab=login-protection`;
+
+/**
+ * Whether an app-user event is about a lock: the lockout itself, or a
+ * sign-in refused because the account or IP address was locked.
+ *
+ * @param {{event?: string, meta?: object}} row Event row.
+ * @returns {boolean}
+ */
+const isLockEvent = (row) =>
+  row?.event === 'user.lockout' ||
+  (row?.event === 'user.sign-in.refused' && row?.meta?.reason === 'lockout');
 
 /**
  * @typedef {object} EventColumn
@@ -483,7 +498,7 @@ export const UserEventTable = ({ rows, label, showUser = true, busy = false, det
   const openUser = (row) => {
     const path = row.user?.email || row.user?.username ? getUserEntryPath(row.user) : null;
     return path && showUser ? (
-      <LinkButton tag={RouterLink} to={path} variant="tertiary" data-open-user="">
+      <LinkButton tag={RouterLink} to={path} variant="secondary" data-open-user="">
         {t('userActivity.details.openUser', 'Open user')}
       </LinkButton>
     ) : null;
@@ -536,11 +551,19 @@ export const UserEventTable = ({ rows, label, showUser = true, busy = false, det
       detailsAction={(row, close) => {
         const open = openUser(row);
         const extra = detailsAction ? detailsAction(row, close) : null;
-        if (!open && !extra) return null;
+        // A lock answers "why can this user not sign in?"; the next step,
+        // lifting it, is one click away instead of four (4.23.1).
+        const locks = isLockEvent(row) ? (
+          <LinkButton tag={RouterLink} to={LOCKED_NOW_PATH} variant="secondary" data-open-locks="">
+            {t('userActivity.details.openLocks', 'Go to Locked now')}
+          </LinkButton>
+        ) : null;
+        if (!open && !extra && !locks) return null;
         return (
           <Flex gap={2} wrap="wrap">
             {open}
             {extra}
+            {locks}
           </Flex>
         );
       }}

@@ -31,7 +31,7 @@ const RecentUserActivityList = () => {
   });
   return (
     <RecentEvents
-      title={t('userActivity.recent.title', 'Security activity')}
+      title={t('userActivity.recent.title', 'Recent security activity')}
       subtitle={t(
         'userActivity.recent.subtitle',
         'The latest failed and refused sign-ins, lockouts, new devices, impossible travel and impersonations of your app’s users. Select an event for its details.'

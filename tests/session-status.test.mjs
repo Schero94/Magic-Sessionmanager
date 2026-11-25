@@ -92,7 +92,7 @@ test('EndReason vocabulary follows IA A.4 with a definition per reason (I.1 item
   );
   assert.deepEqual(
     SESSION_END_REASONS.map((reason) => SESSION_END_REASON_PRESENTATION[reason].defaultMessage),
-    ['Logged out', 'Timed out', 'Expired', 'Ended manually', 'User blocked', 'Reason not recorded']
+    ['Signed out', 'Timed out', 'Expired', 'Ended manually', 'User blocked', 'Reason not recorded']
   );
   for (const reason of SESSION_END_REASONS) {
     const presentation = getEndReasonPresentation(reason);

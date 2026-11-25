@@ -3,7 +3,6 @@ import {
   Badge,
   Box,
   Button,
-  EmptyStateLayout,
   Flex,
   IconButton,
   Loader,
@@ -17,7 +16,6 @@ import {
   VisuallyHidden,
 } from '@strapi/design-system';
 import { ArrowClockwise, SignOut } from '@strapi/icons';
-import { EmptyPermissions } from '@strapi/icons/symbols';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import pluginId from '../../pluginId';
 import { ConfirmAction, RowActions, SectionCard } from '../ui';
@@ -45,9 +43,13 @@ const keepActionKeys = (event) => {
  * States: loading, empty, error with retry, list (table from 720 px card
  * width, else a list), refresh keeps the list mounted.
  *
- * @returns {import('react').ReactElement} Card.
+ * On the admin panel view the card stays out of the way until something
+ * runs (`hideWhenEmpty`, 4.23.1); Settings › Impersonation always shows it.
+ *
+ * @param {{hideWhenEmpty?: boolean}} [props] Display options.
+ * @returns {import('react').ReactElement|null} Card.
  */
-const ActiveImpersonationsCard = () => {
+const ActiveImpersonationsCard = ({ hideWhenEmpty = false } = {}) => {
   const { t } = useSettingsTranslate();
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
@@ -197,14 +199,16 @@ const ActiveImpersonationsCard = () => {
       </Alert>
     );
   } else if (rows.length === 0) {
+    if (hideWhenEmpty) return null;
+    // Plain text inside the section card: a second framed empty state in a
+    // card doubles the borders (4.23.1).
     content = (
-      <EmptyStateLayout
-        icon={<EmptyPermissions width="16rem" height="8rem" />}
-        content={t(
+      <Typography variant="omega" textColor="neutral600" tag="p" data-impersonations-empty="">
+        {t(
           'impersonation.list.empty',
-          'No impersonation is running. Start one from a user’s entry in the Content Manager.'
+          'No impersonation is running. Start one from a user’s entry in the Content Manager or from Session Manager › Admin panel.'
         )}
-      />
+      </Typography>
     );
   } else if (width === 0 || width >= TABLE_MIN_WIDTH) {
     content = (

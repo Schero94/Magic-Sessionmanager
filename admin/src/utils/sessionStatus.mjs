@@ -84,7 +84,7 @@ export const SESSION_STATUS_PRESENTATION = Object.freeze({
 export const SESSION_END_REASON_PRESENTATION = Object.freeze({
   logout: Object.freeze({
     messageId: 'common.endReason.logout',
-    defaultMessage: 'Logged out',
+    defaultMessage: 'Signed out',
     description: Object.freeze({
       messageId: 'common.endReason.logout.description',
       defaultMessage: 'The user signed out.',

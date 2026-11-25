@@ -156,13 +156,13 @@ export function getSignOutErrorMessage(error) {
   if (status === 403 && reason === 'super-admin-protected') {
     return {
       messageId: 'adminPanel.signOut.error.protected',
-      defaultMessage: 'Only a Super Admin can sign out a Super Admin.',
+      defaultMessage: 'Only a Super Admin can end the sessions of a Super Admin.',
     };
   }
   if (status === 403) {
     return {
       messageId: 'adminPanel.signOut.error.forbidden',
-      defaultMessage: 'You do not have permission to sign admins out.',
+      defaultMessage: 'You do not have permission to end admin sessions.',
     };
   }
   if (status === 404) {
@@ -179,7 +179,7 @@ export function getSignOutErrorMessage(error) {
   }
   return {
     messageId: 'adminPanel.signOut.error.generic',
-    defaultMessage: 'The admin could not be signed out. Try again.',
+    defaultMessage: 'The session could not be ended. Try again.',
   };
 }
 

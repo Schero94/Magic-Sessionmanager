@@ -285,7 +285,7 @@ export const AdminTable = ({
                       variant="danger-light"
                       label={t(
                         'adminPanel.actions.signOutEverywhere',
-                        'Sign out {name} everywhere',
+                        'End all sessions of {name}',
                         {
                           name: admin.name,
                         }
@@ -419,14 +419,14 @@ export const AdminCardList = ({
                   onClick={(event) => onSignOutEverywhere(admin, event.currentTarget)}
                   aria-label={t(
                     'adminPanel.actions.signOutEverywhere',
-                    'Sign out {name} everywhere',
+                    'End all sessions of {name}',
                     {
                       name: admin.name,
                     }
                   )}
                   flex="1 1 auto"
                 >
-                  {t('adminPanel.actions.signOutEverywhereShort', 'Sign out everywhere')}
+                  {t('adminPanel.actions.signOutEverywhereShort', 'End all sessions')}
                 </Button>
               ) : null}
             </Flex>

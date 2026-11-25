@@ -1,23 +1,23 @@
-import { Flex } from '@strapi/design-system';
 import { EqualGrid, SectionCard } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
 import SettingsToggleRow from '../../components/SettingsToggleRow';
 import { SELECT_PRESETS } from './settingsTabs.mjs';
-import { IntroText, PresetSelect, ProtectedNotice, RequiresNotice } from './SettingsBlocks';
+import { PresetSelect, RequiresNotice } from './SettingsBlocks';
 import { useOptionLabels } from './hooks/useOptionLabels';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
 
 /**
- * Tab "Admin activity" (4.15): what the security log records about admin
+ * Security log sections of "Data and retention" (4.15 as its own tab "Admin
+ * activity", moved in 4.23.1): what the security log records about admin
  * panel users, and how IP addresses and retention are handled for the whole
- * log. Only admins with "View admin activity" see this tab; the server
+ * log. Rendered only for admins with "View admin activity"; the server
  * rejects changes from anyone else. The works-council note sits directly
  * under the switch that turns activity recording on.
  *
  * @param {{ form: ReturnType<typeof import('./hooks/useSettingsForm').useSettingsForm> }} props Settings form.
- * @returns {import('react').ReactElement} Tab content.
+ * @returns {import('react').ReactElement} Two section cards.
  */
-const AdminActivityTab = ({ form }) => {
+const SecurityLogSettings = ({ form }) => {
   const { t } = useSettingsTranslate();
   const units = useOptionLabels();
   const { settings, handleChange } = form;
@@ -25,16 +25,14 @@ const AdminActivityTab = ({ form }) => {
   const locked = form.canChangeProtected === false;
 
   return (
-    <Flex direction="column" alignItems="stretch" gap={6}>
-      <IntroText>
-        {t(
+    <>
+      <SectionCard
+        title={t('settings.config.adminActivity.recording.title', 'Security log: what is recorded')}
+        subtitle={t(
           'settings.config.adminActivity.intro',
-          'The security log records sign-ins and work in this admin panel. Each admin’s history is under Session Manager > Admin panel; only admins with “View admin activity” can open it.'
+          'The security log records sign-ins and work in this admin panel. Each admin’s history is under Session Manager › Admin panel; only admins with “View admin activity” can open it.'
         )}
-      </IntroText>
-      {locked ? <ProtectedNotice /> : null}
-
-      <SectionCard title={t('settings.config.adminActivity.recording.title', 'What is recorded')}>
+      >
         <SettingsToggleRow
           id="admin-sign-in-history"
           title={t('settings.config.adminActivity.signIns.label', 'Record admin sign-ins')}
@@ -70,7 +68,10 @@ const AdminActivityTab = ({ form }) => {
       </SectionCard>
 
       <SectionCard
-        title={t('settings.config.adminActivity.privacy.title', 'IP addresses and retention')}
+        title={t(
+          'settings.config.adminActivity.privacy.title',
+          'Security log: IP addresses and retention'
+        )}
         subtitle={t(
           'settings.config.adminActivity.privacy.subtitle',
           'These options apply to every event in the security log.'
@@ -144,8 +145,8 @@ const AdminActivityTab = ({ form }) => {
           />
         </EqualGrid>
       </SectionCard>
-    </Flex>
+    </>
   );
 };
 
-export default AdminActivityTab;
+export default SecurityLogSettings;

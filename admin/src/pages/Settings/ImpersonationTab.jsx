@@ -1,4 +1,5 @@
-import { Flex } from '@strapi/design-system';
+import { Flex, LinkButton } from '@strapi/design-system';
+import { Link as RouterLink } from 'react-router-dom';
 import { useRBAC } from '@strapi/strapi/admin';
 import { SectionCard } from '../../components/ui';
 import ReadableText from '../../components/ReadableText';
@@ -7,6 +8,9 @@ import ActiveImpersonationsCard from '../../components/impersonation/ActiveImper
 import pluginPermissions from '../../permissions';
 import { IntroText, ProtectedNotice } from './SettingsBlocks';
 import { useSettingsTranslate } from './hooks/useSettingsTranslate';
+
+/** Strapi's own permission to open Settings › Roles. */
+const READ_ROLES = Object.freeze([{ action: 'admin::roles.read', subject: null }]);
 
 /**
  * Tab "Impersonation" (4.20): the switch that allows admins with "Impersonate
@@ -30,15 +34,26 @@ const ImpersonationTab = ({ form }) => {
     ...pluginPermissions.impersonateAdmins,
     ...pluginPermissions.signInAsAdmin,
   ]);
+  const {
+    allowedActions: { canRead: canReadRoles },
+  } = useRBAC(READ_ROLES);
 
   return (
     <Flex direction="column" alignItems="stretch" gap={6}>
-      <IntroText>
-        {t(
-          'settings.impersonation.intro',
-          'Support staff can act as an app user for up to an hour to reproduce a problem, with a reason that is recorded. Who may do this is set per role under Settings > Roles > Session Manager.'
-        )}
-      </IntroText>
+      <Flex direction="column" alignItems="flex-start" gap={2}>
+        <IntroText>
+          {t(
+            'settings.impersonation.intro',
+            'Support staff can act as an app user for up to an hour to reproduce a problem, with a reason that is recorded. Who may do this is set per role under Settings › Roles › Plugins › Magic sessionmanager.'
+          )}
+        </IntroText>
+        {/* The permission lives in Strapi's role editor; one click there (4.23.1). */}
+        {canReadRoles ? (
+          <LinkButton tag={RouterLink} to="/settings/roles" variant="tertiary" size="S">
+            {t('settings.impersonation.openRoles', 'Open roles')}
+          </LinkButton>
+        ) : null}
+      </Flex>
       {locked ? <ProtectedNotice /> : null}
 
       <SectionCard title={t('settings.impersonation.title', 'Impersonation of app users')}>

@@ -22,7 +22,7 @@ import { useSecondsLeft } from './ImpersonateUserModal';
 import AdminPreviewDetails from './AdminPreviewDetails';
 
 /**
- * The "You are viewing as …" banner stays at the top of the scrolling dialog
+ * The "Permissions of … · read-only" banner stays at the top of the scrolling dialog
  * body, so the read-only state, the timer and End are always in view.
  */
 const StickyBanner = styled(Box)`
@@ -56,10 +56,10 @@ const REFUSALS = Object.freeze({
 /**
  * "View as admin" (4.20): a read-only permission preview of another admin.
  * Step one asks for the reason and the duration (at most 30 minutes); step
- * two shows, under a persistent "You are viewing as … · read-only · ends in
+ * two shows, under a persistent "Permissions of … · read-only · ends in
  * mm:ss · End" banner, a summary, the roles (linked), a Content Manager
  * matrix like Strapi's role editor and the plugin and settings permissions,
- * computed by the server from their roles (4.23: `AdminPreviewDetails`). No
+ * computed by the server from their roles (4.23.1: `AdminPreviewDetails`). No
  * session is created and nothing can be changed. The preview hides itself
  * when it ends, and closing the dialog ends it. The parent mounts it per
  * opening.
@@ -242,7 +242,7 @@ const PreviewAdminModal = ({ admin, onClose, onCloseAutoFocus, onChanged }) => {
                       ? t('impersonation.preview.banner.ended', 'The preview ended.')
                       : t(
                           'impersonation.preview.banner',
-                          'You are viewing as {name} · read-only · ends in {time}',
+                          'Permissions of {name} · read-only · ends in {time}',
                           { name: name || `#${admin.id}`, time: formatClock(secondsLeft) }
                         )}
                   </Typography>

@@ -29,6 +29,9 @@ export const AUTO_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 /** Per-viewer storage key for the "How sessions work" disclosure. */
 export const HOW_IT_WORKS_STORAGE_KEY = 'magic-sessionmanager.dashboard.howSessionsWork';
 
+/** Same for "How ending sessions works" on the admin panel view (4.23.1). */
+export const ADMIN_HOW_IT_WORKS_STORAGE_KEY = 'magic-sessionmanager.adminPanel.howItWorks';
+
 /** Content Manager edit view of a Users & Permissions user (decision I.2-6). */
 const USER_EDIT_PATH = '/content-manager/collection-types/plugin::users-permissions.user/';
 
@@ -211,11 +214,12 @@ export function getExportDeviceInfo(session, unavailableValue = '') {
  * disclosure then starts collapsed.
  *
  * @param {Pick<Storage, 'getItem'>|null|undefined} storage Usually window.localStorage.
+ * @param {string} [key] Storage key; defaults to the dashboard disclosure.
  * @returns {boolean} Whether the disclosure was left open.
  */
-export function readDisclosureOpen(storage) {
+export function readDisclosureOpen(storage, key = HOW_IT_WORKS_STORAGE_KEY) {
   try {
-    return storage?.getItem(HOW_IT_WORKS_STORAGE_KEY) === 'open';
+    return storage?.getItem(key) === 'open';
   } catch {
     return false;
   }
@@ -226,11 +230,12 @@ export function readDisclosureOpen(storage) {
  *
  * @param {Pick<Storage, 'setItem'>|null|undefined} storage Usually window.localStorage.
  * @param {boolean} open New state.
+ * @param {string} [key] Storage key; defaults to the dashboard disclosure.
  * @returns {void}
  */
-export function writeDisclosureOpen(storage, open) {
+export function writeDisclosureOpen(storage, open, key = HOW_IT_WORKS_STORAGE_KEY) {
   try {
-    storage?.setItem(HOW_IT_WORKS_STORAGE_KEY, open ? 'open' : 'closed');
+    storage?.setItem(key, open ? 'open' : 'closed');
   } catch {
     // A per-viewer convenience only; the page works without it.
   }

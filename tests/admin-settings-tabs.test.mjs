@@ -17,11 +17,10 @@ const adminIndex = readFileSync(new URL('../admin/src/index.js', import.meta.url
 const TAB_FILES = {
   sessions: 'SessionsTab.jsx',
   'login-protection': 'LoginProtectionTab.jsx',
-  'location-data': 'LocationDataTab.jsx',
   alerts: 'AlertsTab.jsx',
   'data-retention': 'DataRetentionTab.jsx',
+  'location-data': 'LocationDataTab.jsx',
   impersonation: 'ImpersonationTab.jsx',
-  'admin-activity': 'AdminActivityTab.jsx',
 };
 
 /** Positions of quoted message ids in a source, for order checks. */
@@ -68,6 +67,7 @@ test('settings are split into a page, one module per tab and the useSettingsForm
     ...Object.values(TAB_FILES),
     'hooks/useSettingsForm.js',
     'settingsTabs.mjs',
+    'SecurityLogSettings.jsx',
   ]) {
     assert.ok(readSettingsFile(file).length > 0, file);
   }
@@ -80,6 +80,7 @@ test('settings are split into a page, one module per tab and the useSettingsForm
     'SecurityTab.jsx',
     'GeofencingTab.jsx',
     'NotificationsTab.jsx',
+    'AdminActivityTab.jsx',
   ]) {
     assert.throws(
       () => readSettingsFile(retired),
@@ -89,38 +90,35 @@ test('settings are split into a page, one module per tab and the useSettingsForm
   }
 });
 
-test('six DS tabs in IA order with sentence-case labels, plus Admin activity (IA I.1-16, F)', () => {
+test('six DS tabs, everyday first and advanced or sensitive last (IA I.1-16, F; 4.23.1)', () => {
   assert.deepEqual(
     [...SETTINGS_TAB_IDS],
-    [
-      'sessions',
-      'login-protection',
-      'location-data',
-      'alerts',
-      'data-retention',
-      'impersonation',
-      'admin-activity',
-    ]
+    ['sessions', 'login-protection', 'alerts', 'data-retention', 'location-data', 'impersonation']
   );
   assert.deepEqual(
     SETTINGS_TAB_IDS.map((tab) => SETTINGS_TAB_LABELS[tab][1]),
     [
       'Sessions',
       'Login protection',
-      'Location data',
       'Alerts',
       'Data and retention',
+      'Location data',
       'Impersonation',
-      'Admin activity',
     ]
   );
-  // Admin activity is only shown to admins with "View admin activity".
-  assert.deepEqual(getVisibleSettingsTabs(false), SETTINGS_TAB_IDS.slice(0, 6));
+  // The security log settings live in Data and retention since 4.23.1; the old
+  // tab id keeps working as a link, for every admin.
+  assert.deepEqual(getVisibleSettingsTabs(false), [...SETTINGS_TAB_IDS]);
   assert.deepEqual(getVisibleSettingsTabs(true), [...SETTINGS_TAB_IDS]);
-  assert.equal(resolveSettingsTab('admin-activity', getVisibleSettingsTabs(false)), 'sessions');
   assert.equal(
-    resolveSettingsTab('admin-activity', getVisibleSettingsTabs(true)),
-    'admin-activity'
+    resolveSettingsTab('admin-activity', getVisibleSettingsTabs(false)),
+    'data-retention'
+  );
+  assert.equal(resolveSettingsTab(['admin-activity']), 'data-retention');
+  assert.match(
+    readSettingsFile('DataRetentionTab.jsx'),
+    /\{canReadLog \? <SecurityLogSettings form=\{form\} \/> : null\}/,
+    'the security log sections need "View admin activity"'
   );
   assert.match(page, /useRBAC\(pluginPermissions\.adminActivityRead\)/);
   assert.match(

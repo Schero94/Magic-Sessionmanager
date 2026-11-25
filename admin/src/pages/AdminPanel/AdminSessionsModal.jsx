@@ -121,12 +121,16 @@ const SessionCard = ({ session, admin, canSignOut, onSignOut }) => {
               variant="danger-light"
               startIcon={<SignOut />}
               onClick={(event) => onSignOut(session, event.currentTarget)}
-              aria-label={t('adminPanel.session.signOutLabel', 'Sign {name} out of {device}', {
-                name: admin.name,
-                device,
-              })}
+              aria-label={t(
+                'adminPanel.session.signOutLabel',
+                'End the session of {name} on {device}',
+                {
+                  name: admin.name,
+                  device,
+                }
+              )}
             >
-              {t('adminPanel.session.signOut', 'Sign out')}
+              {t('adminPanel.session.signOut', 'End session')}
             </Button>
           ) : null}
         </Flex>
@@ -208,7 +212,7 @@ const AdminSessionsModal = ({
       <Alert variant="neutral" title={t('adminPanel.dialog.inactive.title', 'No usable session')}>
         {t(
           'adminPanel.dialog.inactive.body',
-          'Strapi rejects every request of a deactivated or invited account, so there is nothing to sign out.'
+          'Strapi rejects every request of a deactivated or invited account, so there is no session to end.'
         )}
       </Alert>
     );
@@ -217,7 +221,7 @@ const AdminSessionsModal = ({
       <Alert variant="neutral" title={t('adminPanel.dialog.protected.title', 'Super Admin')}>
         {t(
           'adminPanel.dialog.protected.body',
-          'Only a Super Admin can sign out a Super Admin. This keeps at least one Super Admin able to work at all times.'
+          'Only a Super Admin can end the sessions of a Super Admin. This keeps at least one Super Admin able to work at all times.'
         )}
       </Alert>
     );
@@ -357,7 +361,7 @@ const AdminSessionsModal = ({
                   startIcon={<SignOut />}
                   onClick={(event) => onSignOutEverywhere(event.currentTarget)}
                 >
-                  {t('adminPanel.actions.signOutEverywhereShort', 'Sign out everywhere')}
+                  {t('adminPanel.actions.signOutEverywhereShort', 'End all sessions')}
                 </Button>
               ) : null}
             </Flex>

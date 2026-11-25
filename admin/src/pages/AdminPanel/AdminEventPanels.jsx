@@ -34,7 +34,7 @@ import {
 } from './adminActivityModel.mjs';
 
 /** Settings tab with the recording switches. */
-export const ADMIN_ACTIVITY_SETTINGS_PATH = `/settings/${pluginId}/general?tab=admin-activity`;
+export const ADMIN_ACTIVITY_SETTINGS_PATH = `/settings/${pluginId}/general?tab=data-retention`;
 
 /** Full-page sign-in activity of all admins ("Show all" of the card). */
 export const ADMIN_ACTIVITY_PAGE_PATH = `/plugins/${pluginId}/admin-panel/activity`;

@@ -11,7 +11,7 @@ import {
   Typography,
   VisuallyHidden,
 } from '@strapi/design-system';
-import { ArrowClockwise, Calendar, ChartBubble, Clock, User } from '@strapi/icons';
+import { ArrowClockwise, Calendar, Check, Clock, User } from '@strapi/icons';
 import { EmptyDocuments } from '@strapi/icons/symbols';
 import pluginId from '../pluginId';
 import {
@@ -324,17 +324,18 @@ const AnalyticsPage = () => {
       {hasSessions ? (
         <>
           <StatGrid label={t('analytics.stats.label', 'Session overview')} alignValues>
+            {/* Same order, icons and tones as the dashboard cards (4.23.1). */}
             <StatCard
-              icon={ChartBubble}
-              tone="primary"
-              label={t('analytics.stats.total', 'All sessions')}
-              value={formatNumber(analytics.totalSessions)}
-            />
-            <StatCard
-              icon={User}
+              icon={Check}
               tone="success"
               label={t('analytics.stats.active', 'Active sessions')}
               value={formatNumber(analytics.activeSessions)}
+            />
+            <StatCard
+              icon={User}
+              tone="primary"
+              label={t('analytics.stats.total', 'All sessions')}
+              value={formatNumber(analytics.totalSessions)}
             />
             <StatCard
               icon={Clock}

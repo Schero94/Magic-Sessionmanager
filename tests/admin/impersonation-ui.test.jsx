@@ -415,10 +415,7 @@ test('View as: reason first, then a read-only preview with banner, countdown and
     const body = JSON.parse(network.calls.find((call) => call.method === 'POST').body);
     assert.deepEqual(body, { reason: 'Check what the editor sees', durationMinutes: 15 });
     const banner = document.querySelector('[data-preview-banner]');
-    assert.match(
-      banner.textContent,
-      /You are viewing as Ben Muster · read-only · ends in 1[45]:\d\d/
-    );
+    assert.match(banner.textContent, /Permissions of Ben Muster · read-only · ends in 1[45]:\d\d/);
     const preview = document.querySelector('[data-preview-body]');
     // Summary at the top: 1 of 2 content types, edit 1, publish 0, no settings.
     assert.match(
