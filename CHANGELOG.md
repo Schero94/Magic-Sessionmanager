@@ -1,3 +1,11 @@
+## [Unreleased]
+
+Release type: minor (`feat`). Additive: one RBAC action (`impersonate.admins`, "View as admin") and two admin routes; no stored data changes.
+
+### Features
+
+* **View as admin (read-only permission preview).** A new row action **View as** in Session Manager › Admin panel (permission **View as admin**, `impersonate.admins`) shows, after a reason and a duration of 15 or 30 minutes, which content types and actions another admin can use, their roles and their other permissions, under a banner "You are viewing as … · read-only · ends in mm:ss · End". It creates no session and no token. Anti-escalation on the server: nobody views themselves, nobody views a Super Admin (Super Admins included), and a non-Super-Admin only views an admin whose effective permissions are a subset of their own, compared with Strapi's permission ceiling rules (a test checks parity with Strapi 5.63's `isPermissionWithinCeiling`). Strapi 5.63 offers no documented way to sign a browser in as another admin, so no admin session is created; README › View as admin explains why.
+
 # [4.20.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.19.1...v4.20.0) (2026-11-25)
 
 
@@ -6,7 +14,7 @@
 * impersonate app users with a one-time hand-off, restrictions and audit ([#41](https://github.com/Schero94/Magic-Sessionmanager/issues/41)) ([940e6f3](https://github.com/Schero94/Magic-Sessionmanager/commit/940e6f316be961bd69c42734fbd97171245cdbc4))
 
 
-Release type: minor (`feat`: impersonation of app users and a read-only "View as admin" preview). Additive: two RBAC actions, six admin routes, one public Content API route, a new internal content type and a settings key that is off by default. No existing route, response or permission changes.
+Release type: minor (`feat`: impersonation of app users). Additive: a new RBAC action, four admin routes, one public Content API route, a new internal content type and a settings key that is off by default. No existing route, response or permission changes.
 
 ### Features
 
@@ -17,7 +25,6 @@ Release type: minor (`feat`: impersonation of app users and a read-only "View as
 * **Ending.** Impersonations end at their time (request check plus a sweep every 30 seconds), with **End impersonation** in the dialog, in the Sessions panel, or in the new list **Settings › Session Manager › Impersonation › Active impersonations**, and all at once when the switch is turned off.
 * **Switch and security log.** The new **Impersonation** settings tab has **Allow impersonation**, off by default and a protected setting (`settings.update`). `impersonation.started`, `.ended`, `.expired` and `.refused` go to the security log with the real admin as actor, the user as target, the reason and the duration; no code or token. The events stay when the admin's account is deleted.
 * **Limits.** Ten starts per admin per ten minutes; ten code exchanges per minute per IP address. Admin API tokens cannot impersonate.
-* **View as admin (read-only permission preview).** A new row action **View as** in Session Manager › Admin panel (permission **View as admin**, `impersonate.admins`) shows, after a reason and a duration of 15 or 30 minutes, which content types and actions another admin can use, their roles and their other permissions, under a banner "You are viewing as … · read-only · ends in mm:ss · End". It creates no session and no token. Anti-escalation on the server: nobody views themselves, nobody views a Super Admin (Super Admins included), and a non-Super-Admin only views an admin whose effective permissions are a subset of their own, compared with Strapi's permission ceiling rules (a test checks parity with Strapi 5.63's `isPermissionWithinCeiling`). Strapi 5.63 offers no documented way to sign a browser in as another admin, so no admin session is created; README › View as admin explains why.
 
 ### Migration
 
