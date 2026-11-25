@@ -21,11 +21,14 @@
  * role without the action can still save the whole form.
  *
  * Webhook URLs are never returned (F6): a response carries `hasDiscordWebhook`
- * / `hasSlackWebhook` and a hint without any secret part (`https://discord.com/…`).
+ * / `hasSlackWebhook` / `hasGenericWebhook` and a hint without any secret part
+ * (`https://discord.com/…`). The signed webhook secret is never returned
+ * either, not even as a hint: only `hasGenericWebhookSecret`.
  */
 
 const { SECURITY_LOG_KEYS } = require('./security-log-settings');
 const { POLICY_KEYS } = require('./policy-settings');
+const { PROTECTED_DETECTION_KEYS } = require('./detection-settings');
 
 const SETTINGS_UPDATE_ACTION = 'plugin::magic-sessionmanager.settings.update';
 const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
@@ -53,12 +56,20 @@ const PROTECTED_SETTINGS_KEYS = Object.freeze([
   // Sign-in and session policies (lockout, trusted addresses, session
   // limit, password-change sign-out, recording switch, per-role rules).
   ...POLICY_KEYS,
+  // Signed webhook, event selection, impossible travel and shortened IPs.
+  ...PROTECTED_DETECTION_KEYS,
 ]);
 
 /** Secret webhook URL keys and the flag/hint keys returned instead. */
 const WEBHOOK_SECRETS = Object.freeze([
   { key: 'discordWebhookUrl', has: 'hasDiscordWebhook', hint: 'discordWebhookHint' },
   { key: 'slackWebhookUrl', has: 'hasSlackWebhook', hint: 'slackWebhookHint' },
+  { key: 'genericWebhookUrl', has: 'hasGenericWebhook', hint: 'genericWebhookHint' },
+]);
+
+/** Write-only secrets without a hint, and the flag returned instead. */
+const WRITE_ONLY_SECRETS = Object.freeze([
+  { key: 'genericWebhookSecret', has: 'hasGenericWebhookSecret' },
 ]);
 
 /**
@@ -145,7 +156,8 @@ function webhookHint(url) {
 
 /**
  * Settings as an API response: webhook URLs replaced by whether one is
- * stored and a hint. Never returns a URL or any part of its path.
+ * stored and a hint, the webhook secret by whether one is stored. Never
+ * returns a URL, any part of its path, or the secret.
  *
  * @param {Record<string, any>} settings Merged settings.
  * @returns {Record<string, any>} Response settings.
@@ -158,6 +170,11 @@ function toPublicSettings(settings) {
     out[has] = typeof value === 'string' && value.trim().length > 0;
     out[hint] = webhookHint(value);
   }
+  for (const { key, has } of WRITE_ONLY_SECRETS) {
+    const value = out[key];
+    delete out[key];
+    out[has] = typeof value === 'string' && value.length > 0;
+  }
   return out;
 }
 
@@ -168,6 +185,7 @@ module.exports = {
   SETTINGS_UPDATE_ACTION,
   WEBHOOK_SECRETS,
   WEBHOOK_SETTINGS_KEYS,
+  WRITE_ONLY_SECRETS,
   callerCan,
   changedKeys,
   missingSettingsPermission,

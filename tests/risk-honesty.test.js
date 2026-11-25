@@ -65,6 +65,8 @@ const ALL_ALERTS_ON = Object.freeze({
   enableWebhooks: true,
   enableSecurityScoring: true,
   discordWebhookUrl: 'https://discord.com/api/webhooks/1/synthetic',
+  // The selection of an installation upgraded from 4.16: every sign-in.
+  webhookEvents: ['login.success', 'login.suspicious', 'login.new_location'],
 });
 
 test('ipapi.co answers carry no risk data, even if a threat object appears', async () => {
@@ -176,4 +178,22 @@ test('webhook messages name no risk without a source', () => {
     geoData,
   });
   assert.doesNotMatch(JSON.stringify(slack), /VPN|score/);
+});
+
+test('4.17 default event selection: a clean sign-in posts nothing to Discord or Slack', async () => {
+  const posts = [];
+  const notificationService = {
+    sendWebhook: async (input) => posts.push(input),
+    formatDiscordWebhook: () => ({}),
+    formatSlackWebhook: () => ({}),
+  };
+  const attempted = await dispatchLoginAlerts({
+    settings: { ...ALL_ALERTS_ON, webhookEvents: undefined },
+    notificationService,
+    user: { email: 'jane.doe@example.test' },
+    session: { ipAddress: '203.0.113.5' },
+    geoData: { _status: 'ok', country: 'Germany', country_code: 'DE' },
+  });
+  assert.equal(attempted.webhookEvent, null);
+  assert.equal(posts.length, 0);
 });

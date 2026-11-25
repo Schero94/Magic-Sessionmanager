@@ -519,9 +519,39 @@ test('permission setup removes duplicate rows and creates only missing actions',
   const ok = await bootstrap.__private.ensureContentApiPermissions(strapi, silentLog);
   assert.equal(ok, true);
   assert.deepEqual(deleted, ['p2'], 'the lowest id is kept');
-  assert.equal(created.length, 6);
+  // Seven base actions minus the existing logout, plus the 4.17 export.
+  assert.equal(created.length, 7);
+  assert.ok(created.includes('plugin::magic-sessionmanager.self-service.exportOwnData'));
   assert.ok(!created.includes('plugin::magic-sessionmanager.session.logout'));
-  assert.equal(storeValues.contentApiPermissionsVersion, 2);
+  assert.equal(storeValues.contentApiPermissionsVersion, 3);
+});
+
+test('an installation at permission version 2 gets only the new export action', async () => {
+  const created = [];
+  const storeValues = { contentApiPermissionsVersion: 2 };
+  const strapi = {
+    log: silentLog,
+    store: () => ({
+      get: async ({ key }) => storeValues[key] ?? null,
+      set: async ({ key, value }) => {
+        storeValues[key] = value;
+      },
+    }),
+    documents(uid) {
+      if (uid === 'plugin::users-permissions.role') {
+        return { findMany: async () => [{ id: 1 }] };
+      }
+      // The administrator removed every earlier action from the role.
+      return {
+        findMany: async () => [],
+        create: async ({ data }) => created.push(data.action),
+        delete: async () => {},
+      };
+    },
+  };
+  assert.equal(await bootstrap.__private.ensureContentApiPermissions(strapi, silentLog), true);
+  assert.deepEqual(created, ['plugin::magic-sessionmanager.self-service.exportOwnData']);
+  assert.equal(storeValues.contentApiPermissionsVersion, 3);
 });
 
 // ---------------------------------------------------------------- conditional updates

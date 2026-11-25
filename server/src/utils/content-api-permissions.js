@@ -2,7 +2,7 @@
 
 const { withPluginStoreKey } = require('./plugin-store');
 
-const CONTENT_API_PERMISSIONS_VERSION = 2;
+const CONTENT_API_PERMISSIONS_VERSION = 3;
 const CONTENT_API_PERMISSIONS_VERSION_KEY = 'contentApiPermissionsVersion';
 const AUTHENTICATED_ROLE_UID = 'plugin::users-permissions.role';
 

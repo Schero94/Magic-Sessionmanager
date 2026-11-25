@@ -6,6 +6,8 @@ const geoip = require('./geoip');
 const adminSessions = require('./admin-sessions');
 const adminActivity = require('./admin-activity');
 const lockouts = require('./lockouts');
+const selfService = require('./self-service');
+const webhooks = require('./webhooks');
 
 module.exports = {
   session,
@@ -14,4 +16,6 @@ module.exports = {
   'admin-sessions': adminSessions,
   'admin-activity': adminActivity,
   lockouts,
+  'self-service': selfService,
+  webhooks,
 };

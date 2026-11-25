@@ -8,6 +8,8 @@ import Alert from '../../components/PersistentAlert';
 import { fieldHasError } from './settingsTabs.mjs';
 import EmailTemplatesCard from './EmailTemplatesCard';
 import WebhookUrlField from './WebhookUrlField';
+import SignedWebhookCard from './SignedWebhookCard';
+import WebhookEventsCard from './WebhookEventsCard';
 import { SettingsTabLink } from './SettingsNavigation';
 import {
   AdvancedSection,
@@ -80,7 +82,13 @@ const AlertTypeCell = ({ checked, disabled, children }) => (
 const AlertsTab = ({ form }) => {
   const { t, tError } = useSettingsTranslate();
   const { settings, handleChange, errors } = form;
-  const hintIds = { suspicious: useId(), newCountry: useId(), vpnProxy: useId() };
+  const hintIds = {
+    suspicious: useId(),
+    newCountry: useId(),
+    vpnProxy: useId(),
+    newDevice: useId(),
+    travel: useId(),
+  };
   const lookupOff = !settings.enableGeolocation;
   const emailTypesDisabled = lookupOff || !settings.enableEmailAlerts;
   const webhookFieldsDisabled = lookupOff || !settings.enableWebhooks;
@@ -117,6 +125,25 @@ const AlertsTab = ({ form }) => {
       hint: t(
         'settings.config.email.vpnProxy.hint',
         'Sign-in from a VPN, or from a public or residential proxy.'
+      ),
+    },
+    {
+      field: 'alertOnNewDevice',
+      hintId: hintIds.newDevice,
+      label: t('settings.config.email.newDevice.label', 'Sign-in from a new device'),
+      hint: t(
+        'settings.config.email.newDevice.hint',
+        'Browser and system not seen in the user\'s last 50 sessions. With a "This wasn\'t me" link that signs that device out.'
+      ),
+    },
+    {
+      field: 'alertOnImpossibleTravel',
+      hintId: hintIds.travel,
+      needsTravel: true,
+      label: t('settings.config.email.travel.label', 'Impossible travel'),
+      hint: t(
+        'settings.config.email.travel.hint',
+        'Farther from the previous sign-in than anyone could travel. With a "This wasn\'t me" link.'
       ),
     },
   ];
@@ -168,11 +195,12 @@ const AlertsTab = ({ form }) => {
           ) : null}
           <EmailTypeGrid>
             <div>
-              {emailTypes.map(({ field, needsRiskData, hintId, label, hint }) => {
+              {emailTypes.map(({ field, needsRiskData, needsTravel, hintId, label, hint }) => {
                 const control = needsRiskData
                   ? riskDependentControl(settings[field], risk.state)
                   : { checked: settings[field], disabled: false, savedOnButInactive: false };
-                const disabled = emailTypesDisabled || control.disabled;
+                const travelOff = needsTravel && settings.impossibleTravelEnabled !== true;
+                const disabled = emailTypesDisabled || control.disabled || travelOff;
                 return (
                   <AlertTypeCell key={field} checked={control.checked} disabled={disabled}>
                     <Checkbox
@@ -188,6 +216,11 @@ const AlertsTab = ({ form }) => {
                     </ReadableText>
                     {!lookupOff && control.disabled ? (
                       <RiskSourceNotice savedOn={control.savedOnButInactive} />
+                    ) : null}
+                    {travelOff ? (
+                      <RequiresNotice tab="login-protection">
+                        {t('settings.config.requires.travel', 'Requires Detect impossible travel')}
+                      </RequiresNotice>
                     ) : null}
                   </AlertTypeCell>
                 );
@@ -215,7 +248,7 @@ const AlertsTab = ({ form }) => {
         title={t('settings.config.webhooks.title', 'Team notifications (webhooks)')}
         subtitle={t(
           'settings.config.webhooks.intro',
-          "Posts every sign-in to Discord or Slack as 'suspicious', 'new country' or 'success'."
+          'Posts the selected events to Discord or Slack.'
         )}
       >
         <SettingsToggleRow
@@ -223,7 +256,7 @@ const AlertsTab = ({ form }) => {
           title={t('settings.config.webhooks.enable.label', 'Send team notifications')}
           description={t(
             'settings.config.webhooks.enable.hint',
-            'Event per sign-in: {suspicious}, otherwise {newLocation}, otherwise {success}.',
+            'A sign-in is sent as {suspicious}, otherwise {newLocation}, otherwise {success}, when that event is selected below.',
             WEBHOOK_EVENTS
           )}
           checked={settings.enableWebhooks}
@@ -288,6 +321,10 @@ const AlertsTab = ({ form }) => {
           />
         </EqualGrid>
       </SectionCard>
+
+      <WebhookEventsCard form={form} />
+
+      <SignedWebhookCard form={form} />
     </Flex>
   );
 };

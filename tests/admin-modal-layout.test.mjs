@@ -22,7 +22,11 @@ test('relaxed-mode warning is the unmodified DS Alert (SET-17)', () => {
 
 test('relaxed-mode warning close button dismisses the alert and strict-setting changes restore it', () => {
   const settings = readAdminFile('pages/Settings.jsx');
-  const alertStart = settings.indexOf('<DesignSystemAlert');
+  // The relaxed-mode warning, not another DesignSystemAlert of the Settings sources.
+  const alertStart = settings.indexOf(
+    '<DesignSystemAlert',
+    settings.indexOf('{!settings.strictSessionEnforcement && !relaxedWarningDismissed')
+  );
   const alertEnd = settings.indexOf('</DesignSystemAlert>', alertStart);
   const alertUsage = settings.slice(
     settings.lastIndexOf('{!settings.strictSessionEnforcement', alertStart),

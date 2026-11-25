@@ -278,6 +278,8 @@ const SIGN_IN_SETTINGS = Object.freeze({
   alertOnNewLocation: true,
   enableWebhooks: true,
   discordWebhookUrl: 'https://discord.com/api/webhooks/1/synthetic',
+  // The selection of an installation upgraded from 4.16: every sign-in.
+  webhookEvents: ['login.success', 'login.suspicious', 'login.new_location'],
 });
 
 /**

@@ -179,7 +179,23 @@ function getEncryptionKeyCheck() {
     .slice(0, 16);
 }
 
+/**
+ * A separate 32-byte key per purpose, derived from SESSION_ENCRYPTION_KEY
+ * with HKDF-SHA256, so signing keys (for example of the "This wasn't me"
+ * link or a device hash) never equal the token encryption key.
+ *
+ * @param {string} purpose Short purpose label, e.g. 'not-me-link'.
+ * @returns {Buffer} 32 bytes.
+ * @throws {Error} In production when SESSION_ENCRYPTION_KEY is missing.
+ */
+function derivePurposeKey(purpose) {
+  return Buffer.from(
+    crypto.hkdfSync('sha256', getEncryptionKey(), 'magic-sessionmanager', `msm:${purpose}`, 32)
+  );
+}
+
 module.exports = {
+  derivePurposeKey,
   getEncryptionKeyCheck,
   encryptToken,
   decryptToken,

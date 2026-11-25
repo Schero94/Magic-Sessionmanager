@@ -22,7 +22,8 @@
  * (`adminSessionsPolicy()`); `hasPermissions` needs ALL listed actions. The
  * admin sign-in history and Content Manager activity (`/admin-activity/...`)
  * require `admin-sessions.read` and `admin-activity.read`. Lifting a sign-in
- * lock (`/lockouts/unlock`) requires `lockouts.unlock`.
+ * lock (`/lockouts/unlock`) requires `lockouts.unlock`. Sending a signed
+ * webhook test (`/webhook/test`) requires `settings.update`.
  *
  * The permissions are registered in `server/src/register.js`.
  * By Strapi convention:
@@ -40,6 +41,7 @@ const ADMIN_SESSIONS_READ_ACTION = 'plugin::magic-sessionmanager.admin-sessions.
 const ADMIN_SESSIONS_REVOKE_ACTION = 'plugin::magic-sessionmanager.admin-sessions.revoke';
 const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
 const LOCKOUTS_UNLOCK_ACTION = 'plugin::magic-sessionmanager.lockouts.unlock';
+const SETTINGS_UPDATE_ACTION = 'plugin::magic-sessionmanager.settings.update';
 
 /**
  * Returns the policy chain that every admin route in this plugin must use.
@@ -360,6 +362,24 @@ const baseRoutes = [
       policies: adminPolicy(),
       middlewares: adminReadRateLimit(),
       description: 'List Users & Permissions roles for per-role rules (admin)',
+    },
+  },
+
+  // ============================ SIGNED WEBHOOK ============================
+  {
+    method: 'POST',
+    path: '/webhook/test',
+    handler: 'webhooks.sendTest',
+    config: {
+      // Sends to the stored URL: same permission as changing it.
+      policies: adminSessionsPolicy([SETTINGS_UPDATE_ACTION]),
+      middlewares: [
+        {
+          name: 'plugin::magic-sessionmanager.rate-limit',
+          config: { profile: 'write', max: 5, window: 60_000 },
+        },
+      ],
+      description: 'Send a signed test event to the stored webhook URL (admin)',
     },
   },
 

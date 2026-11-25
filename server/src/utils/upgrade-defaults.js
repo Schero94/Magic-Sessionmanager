@@ -18,6 +18,7 @@
 
 const { withPluginStoreKey } = require('./plugin-store');
 const { notifySettingsChanged } = require('./settings-loader');
+const { LEGACY_WEBHOOK_EVENTS } = require('./detection-settings');
 
 const PROFILE_KEY = 'defaultsProfile';
 
@@ -32,6 +33,13 @@ const UPGRADE_STEPS = Object.freeze([
     release: '4.17.0',
     // Before 4.17 a password change kept the user's other sessions.
     legacy: Object.freeze({ endOtherSessionsOnPasswordChange: false }),
+  }),
+  Object.freeze({
+    version: 2,
+    release: 'sign-in signals and signed webhook',
+    // Before, Discord and Slack received every sign-in (success, new
+    // country, suspicious). New installations leave out every sign-in.
+    legacy: Object.freeze({ webhookEvents: LEGACY_WEBHOOK_EVENTS }),
   }),
 ]);
 
@@ -70,7 +78,7 @@ async function applyUpgradeDefaults(strapi, log, steps = UPGRADE_STEPS) {
         if (step.version <= profile) continue;
         for (const [key, value] of Object.entries(step.legacy)) {
           if (settings[key] !== undefined) continue;
-          settings[key] = value;
+          settings[key] = Array.isArray(value) ? [...value] : value;
           applied.push(key);
         }
       }

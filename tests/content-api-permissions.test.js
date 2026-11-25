@@ -19,6 +19,8 @@ const REQUIRED_ACTIONS = [
   'plugin::magic-sessionmanager.session.getUserSessions',
   'plugin::magic-sessionmanager.session.getCurrentSession',
   'plugin::magic-sessionmanager.session.terminateOwnSession',
+  // Version 3 (4.17): own-data export.
+  'plugin::magic-sessionmanager.self-service.exportOwnData',
 ];
 
 function createHarness({ authenticatedRole = null, failRoleReads = 0 } = {}) {
@@ -148,7 +150,7 @@ test('Content API permission retry waits for the authenticated role and complete
   });
 
   assert.equal(nextCalls, 1);
-  assert.equal(harness.permissionVersion, 2);
+  assert.equal(harness.permissionVersion, CONTENT_API_PERMISSIONS_VERSION);
   assert.deepEqual(
     harness.permissionWrites,
     REQUIRED_ACTIONS.map((action) => ({ action, role: 17 }))
@@ -223,7 +225,7 @@ test('deferred permission retry ignores unrelated routes and never grants the Pu
     harness.permissions.some(({ role }) => role === harness.publicRole.id),
     false
   );
-  assert.equal(harness.permissionVersion, 2);
+  assert.equal(harness.permissionVersion, CONTENT_API_PERMISSIONS_VERSION);
 });
 
 test('a failed deferred setup can retry after its cooldown without weakening route auth', async () => {
@@ -257,7 +259,7 @@ test('a failed deferred setup can retry after its cooldown without weakening rou
   assert.equal(nextCalls, 2);
   assert.equal(harness.roleQueries.length, 2);
   assert.equal(harness.permissionWrites.length, REQUIRED_ACTIONS.length);
-  assert.equal(harness.permissionVersion, 2);
+  assert.equal(harness.permissionVersion, CONTENT_API_PERMISSIONS_VERSION);
 });
 
 test('concurrent first Magic requests share one permission setup attempt', async () => {

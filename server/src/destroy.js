@@ -48,5 +48,11 @@ module.exports = async ({ strapi }) => {
     strapi.sessionManagerAdminActivityUninstall = null;
   }
 
+  try {
+    strapi.plugin('magic-sessionmanager')?.service('webhooks')?.stop?.();
+  } catch (err) {
+    log.warn('Failed to stop webhook deliveries:', err?.name || 'Error');
+  }
+
   log.info('[SUCCESS] Plugin cleanup completed');
 };

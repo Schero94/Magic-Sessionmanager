@@ -20,6 +20,11 @@ const {
   toPublicSettings,
 } = require('../utils/settings-access');
 const { POLICY_DEFAULTS, validatePolicySettings } = require('../utils/policy-settings');
+const { DETECTION_DEFAULTS, validateDetectionSettings } = require('../utils/detection-settings');
+const { encryptToken } = require('../utils/encryption');
+
+/** Webhook secret: 32-256 printable ASCII characters, no spaces. */
+const WEBHOOK_SECRET_PATTERN = /^[\x21-\x7e]{32,256}$/;
 const path = require('node:path');
 
 /**
@@ -206,6 +211,8 @@ const DEFAULT_EMAIL_TEMPLATES = {
   vpnProxy: { subject: '', html: '', text: '' },
   // 4.17: sent to a user whose account was locked after failed sign-ins.
   accountLocked: { subject: '', html: '', text: '' },
+  newDevice: { subject: '', html: '', text: '' },
+  impossibleTravel: { subject: '', html: '', text: '' },
 };
 
 const DEFAULT_SETTINGS = {
@@ -243,6 +250,9 @@ const DEFAULT_SETTINGS = {
   ...POLICY_DEFAULTS,
   lockoutTrustedAddresses: [],
   roleRules: [],
+  ...DETECTION_DEFAULTS,
+  webhookEvents: [...DETECTION_DEFAULTS.webhookEvents],
+  genericWebhookSecret: '',
 };
 
 /**
@@ -512,6 +522,24 @@ function validateSettingsUpdate(body, current) {
   errors.push(...policies.errors);
   Object.assign(next, policies.values);
 
+  const detection = validateDetectionSettings(body);
+  errors.push(...detection.errors);
+  Object.assign(next, detection.values);
+
+  if (has('genericWebhookSecret')) {
+    const secret = body.genericWebhookSecret;
+    if (secret === '') {
+      next.genericWebhookSecret = '';
+    } else if (typeof secret !== 'string' || !WEBHOOK_SECRET_PATTERN.test(secret)) {
+      errors.push({
+        path: ['genericWebhookSecret'],
+        message: 'genericWebhookSecret must be 32 to 256 printable characters without spaces',
+      });
+    } else {
+      next.genericWebhookSecret = encryptToken(secret);
+    }
+  }
+
   if (errors.length > 0) return { errors };
 
   const settings = {};
@@ -559,7 +587,7 @@ function sendSettingsConflict(ctx, currentRevision) {
 const FORBIDDEN_MESSAGES = Object.freeze({
   'admin-activity-permission': 'Changing the security log settings needs "View admin activity".',
   'settings-update-permission':
-    'Changing location lookup, webhook or security log settings needs "Change protected settings".',
+    'Changing location lookup, webhook, security log, sign-in policy or detection settings needs "Change protected settings".',
 });
 
 /**
@@ -793,5 +821,6 @@ module.exports = {
   },
   DEFAULT_SETTINGS,
   mergeSettingsWithDefaults,
+  toPublicSettings,
   validateSettingsUpdate,
 };

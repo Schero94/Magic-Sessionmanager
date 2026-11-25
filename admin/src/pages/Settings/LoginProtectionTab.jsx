@@ -7,6 +7,7 @@ import { MAX_FAILED_LOGINS_RANGE } from '../../utils/settingsForm.mjs';
 import { POLICY_RANGES } from '../../utils/policyForm.mjs';
 import LockedNowCard from './LockedNowCard';
 import TrustedAddressesField from './TrustedAddressesField';
+import ImpossibleTravelCard from './ImpossibleTravelCard';
 import { getRiskAvailability, riskDependentControl } from '../../utils/riskData.mjs';
 import Alert from '../../components/PersistentAlert';
 import { fieldHasError } from './settingsTabs.mjs';
@@ -349,6 +350,8 @@ const LoginProtectionTab = ({ form }) => {
           ) : null}
         </AdvancedSection>
       </SectionCard>
+
+      <ImpossibleTravelCard form={form} />
 
       <SectionCard
         title={t('settings.config.countries.title', 'Country rules')}

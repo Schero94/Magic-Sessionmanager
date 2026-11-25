@@ -90,6 +90,15 @@ module.exports = ({ strapi }) => {
         const lifted = await lockout().unlock(id);
         if (!lifted) return ctx.notFound('This lock has already ended');
         try {
+          const liftEvent = {
+            event: SECURITY_EVENTS.USER_LOCKOUT_LIFTED,
+            actorType: 'admin',
+            actorId: ctx.state?.user?.id ?? null,
+            targetType: lifted.kind === 'account' ? 'user' : 'ip',
+            targetId: lifted.kind === 'account' ? lifted.user : null,
+            meta: { kind: lifted.kind },
+          };
+          strapi.plugin('magic-sessionmanager').service('webhooks')?.emitSecurityEvent?.(liftEvent);
           strapi
             .plugin('magic-sessionmanager')
             .service('security-log')

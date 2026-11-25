@@ -130,6 +130,8 @@ const TEMPLATE_TAB_LABELS = {
   newLocation: ['settings.email.templates.tab.newLocation', 'New country'],
   vpnProxy: ['settings.email.templates.tab.vpnProxy', 'VPN or proxy'],
   accountLocked: ['settings.email.templates.tab.accountLocked', 'Account locked'],
+  newDevice: ['settings.email.templates.tab.newDevice', 'New device'],
+  impossibleTravel: ['settings.email.templates.tab.impossibleTravel', 'Impossible travel'],
 };
 
 /**

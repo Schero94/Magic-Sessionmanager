@@ -99,13 +99,19 @@ function displayIp(settings, ip) {
 }
 
 /**
- * Queues an app-user security event. Never throws.
+ * Queues an app-user security event and the matching webhook event (when
+ * selected). Never throws.
  *
  * @param {any} strapi Strapi instance.
  * @param {import('../services/security-log').SecurityEventInput} input Event.
  * @returns {boolean} Whether it was queued.
  */
 function recordUserEvent(strapi, input) {
+  try {
+    strapi.plugin('magic-sessionmanager').service('webhooks')?.emitSecurityEvent?.(input);
+  } catch {
+    // Webhooks never block the sign-in.
+  }
   try {
     return strapi.plugin('magic-sessionmanager').service('security-log').record(input) === true;
   } catch {

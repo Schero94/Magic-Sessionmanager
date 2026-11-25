@@ -41,6 +41,10 @@ const SECURITY_EVENTS = Object.freeze({
   USER_LOCKOUT_LIFTED: 'user.lockout.lifted',
   USER_SESSION_LIMIT: 'user.session.limit',
   USER_PASSWORD_CHANGE_ENDED: 'user.password-change.ended-others',
+  USER_NEW_DEVICE: 'user.sign-in.new-device',
+  USER_IMPOSSIBLE_TRAVEL: 'user.sign-in.impossible-travel',
+  USER_NOT_ME: 'user.not-me',
+  USER_DATA_EXPORTED: 'user.data.exported',
 });
 
 /**

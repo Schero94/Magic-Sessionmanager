@@ -4,6 +4,8 @@ export const TEMPLATE_KEYS = Object.freeze([
   'newLocation',
   'vpnProxy',
   'accountLocked',
+  'newDevice',
+  'impossibleTravel',
 ]);
 
 /**
@@ -73,6 +75,22 @@ export const TEMPLATE_VARIABLE_DEFINITIONS = Object.freeze({
     messageId: 'settings.email.templates.variable.lockUntil',
     defaultMessage: 'Time the lock ends (UTC)',
   },
+  '{{device.browser}}': {
+    messageId: 'settings.email.templates.variable.deviceBrowser',
+    defaultMessage: 'Browser of the sign-in',
+  },
+  '{{device.os}}': {
+    messageId: 'settings.email.templates.variable.deviceOs',
+    defaultMessage: 'Operating system of the sign-in',
+  },
+  '{{travel.distanceKm}}': {
+    messageId: 'settings.email.templates.variable.travelDistance',
+    defaultMessage: 'Distance from the previous sign-in in km',
+  },
+  '{{link.notMe}}': {
+    messageId: 'settings.email.templates.variable.notMe',
+    defaultMessage: '“This wasn’t me” link (works once, 72 hours)',
+  },
 });
 
 /** Variables available per alert type. */
@@ -113,6 +131,28 @@ export const TEMPLATE_VARIABLES = Object.freeze({
     '{{reason.isProxy}}',
   ],
   accountLocked: ['{{user.email}}', '{{user.username}}', '{{lock.minutes}}', '{{lock.until}}'],
+  newDevice: [
+    '{{user.email}}',
+    '{{user.username}}',
+    '{{session.loginTime}}',
+    '{{session.ipAddress}}',
+    '{{geo.city}}',
+    '{{geo.country}}',
+    '{{device.browser}}',
+    '{{device.os}}',
+    '{{link.notMe}}',
+  ],
+  impossibleTravel: [
+    '{{user.email}}',
+    '{{user.username}}',
+    '{{session.loginTime}}',
+    '{{geo.city}}',
+    '{{geo.country}}',
+    '{{device.browser}}',
+    '{{device.os}}',
+    '{{travel.distanceKm}}',
+    '{{link.notMe}}',
+  ],
 });
 
 /** Synthetic values for the template preview. Never real user data. */
@@ -131,6 +171,10 @@ export const TEMPLATE_PREVIEW_VALUES = Object.freeze({
   '{{reason.securityScore}}': '35',
   '{{lock.minutes}}': '15',
   '{{lock.until}}': 'Fri, 06 Nov 2026 09:56:00 GMT',
+  '{{device.browser}}': 'Firefox',
+  '{{device.os}}': 'macOS',
+  '{{travel.distanceKm}}': '16032',
+  '{{link.notMe}}': 'https://app.example.com/api/magic-sessionmanager/not-me?token=preview',
 });
 
 /** Return an updated template collection without changing the saved baseline. */
@@ -486,6 +530,75 @@ Hello {{user.username}},
 There were several failed sign-in attempts for your account. To protect it, sign-in is locked for {{lock.minutes}} minutes, until {{lock.until}}.
 
 If these attempts were not yours, change your password after the lock ends.`,
+  },
+  newDevice: {
+    subject: 'New sign-in to your account',
+    html: `<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>New sign-in to your account</h2>
+    <p>Hello {{user.username}},</p>
+    <p>Your account was just used on a device we have not seen before.</p>
+    <ul>
+      <li>Time: {{session.loginTime}}</li>
+      <li>Device: {{device.browser}} on {{device.os}}</li>
+      <li>Location: {{geo.city}}, {{geo.country}}</li>
+      <li>IP address: {{session.ipAddress}}</li>
+    </ul>
+    <p>If this was you, you can ignore this email.</p>
+    <p>If this was not you, <a href="{{link.notMe}}">sign this device out</a> and change your password.</p>
+    <p style="color: #666; font-size: 12px;">The link works once and expires after 72 hours.</p>
+  </div>
+</body>
+</html>`,
+    text: `New sign-in to your account
+
+Hello {{user.username}},
+
+Your account was just used on a device we have not seen before.
+
+Time: {{session.loginTime}}
+Device: {{device.browser}} on {{device.os}}
+Location: {{geo.city}}, {{geo.country}}
+IP address: {{session.ipAddress}}
+
+If this was not you, sign this device out and change your password:
+{{link.notMe}}
+
+The link works once and expires after 72 hours.`,
+  },
+  impossibleTravel: {
+    subject: 'Unusual sign-in to your account',
+    html: `<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>Unusual sign-in to your account</h2>
+    <p>Hello {{user.username}},</p>
+    <p>Your account was used about {{travel.distanceKm}} km away from your previous sign-in, sooner than anyone could travel that far.</p>
+    <ul>
+      <li>Time: {{session.loginTime}}</li>
+      <li>Location: {{geo.city}}, {{geo.country}}</li>
+      <li>Device: {{device.browser}} on {{device.os}}</li>
+    </ul>
+    <p>A VPN or a mobile network can cause this. If this was not you, <a href="{{link.notMe}}">sign this device out</a> and change your password.</p>
+    <p style="color: #666; font-size: 12px;">The link works once and expires after 72 hours.</p>
+  </div>
+</body>
+</html>`,
+    text: `Unusual sign-in to your account
+
+Hello {{user.username}},
+
+Your account was used about {{travel.distanceKm}} km away from your previous sign-in, sooner than anyone could travel that far.
+
+Time: {{session.loginTime}}
+Location: {{geo.city}}, {{geo.country}}
+Device: {{device.browser}} on {{device.os}}
+
+A VPN or a mobile network can cause this. If this was not you, sign this device out and change your password:
+{{link.notMe}}
+
+The link works once and expires after 72 hours.`,
   },
 });
 

@@ -452,7 +452,10 @@ test('dependent fields stay visible, are disabled and say what they require (IA 
   );
   assert.match(alerts, /id="enable-email-alerts"[\s\S]*?disabled=\{lookupOff\}/);
   assert.match(alerts, /id="enable-webhooks"[\s\S]*?disabled=\{lookupOff \|\| locked\}/);
-  assert.match(alerts, /const disabled = emailTypesDisabled \|\| control\.disabled;/);
+  assert.match(
+    alerts,
+    /const disabled = emailTypesDisabled \|\| control\.disabled \|\| travelOff;/
+  );
   assert.match(alerts, /settings\.config\.requires\.emailAlerts', 'Requires Send security emails'/);
   assert.match(alerts, /settings\.config\.requires\.webhooks', 'Requires Send team notifications'/);
 

@@ -172,7 +172,7 @@ test('settings dirty state compares against the persisted baseline without stale
   assert.match(source, /const \[savedSettings, setSavedSettings\] = useState\(settings\)/);
   assert.match(source, /const hasChanges = !areSettingsEqual\(settings, savedSettings\)/);
   assert.match(source, /return \{ \.\.\.previousSettings, \[key\]: value \};/);
-  // An undefined value removes the key (a kept webhook URL is not sent, 4.17).
+  // An undefined value removes the key (a kept webhook URL or secret is not sent, 4.17).
   assert.match(source, /if \(value === undefined\) \{[\s\S]*?delete next\[key\];/);
   // After a save the baseline is what the server stored, not the submitted draft (SET-01 browser).
   assert.match(source, /setSavedSettings\(stored\)/);

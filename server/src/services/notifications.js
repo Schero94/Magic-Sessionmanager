@@ -54,6 +54,48 @@ const POLICY_TEMPLATES = Object.freeze({
 </html>`,
     text: `Your account was temporarily locked\n\nHello {{user.username}},\n\nThere were several failed sign-in attempts for your account. To protect it, sign-in is locked for {{lock.minutes}} minutes, until {{lock.until}}.\n\nIf these attempts were not yours, change your password after the lock ends.`,
   }),
+  newDevice: Object.freeze({
+    subject: 'New sign-in to your account',
+    html: `<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>New sign-in to your account</h2>
+    <p>Hello {{user.username}},</p>
+    <p>Your account was just used on a device we have not seen before.</p>
+    <ul>
+      <li>Time: {{session.loginTime}}</li>
+      <li>Device: {{device.browser}} on {{device.os}}</li>
+      <li>Location: {{geo.city}}, {{geo.country}}</li>
+      <li>IP address: {{session.ipAddress}}</li>
+    </ul>
+    <p>If this was you, you can ignore this email.</p>
+    <p>If this was not you, <a href="{{link.notMe}}">sign this device out</a> and change your password.</p>
+    <p style="color: #666; font-size: 12px;">The link works once and expires after 72 hours.</p>
+  </div>
+</body>
+</html>`,
+    text: `New sign-in to your account\n\nHello {{user.username}},\n\nYour account was just used on a device we have not seen before.\n\nTime: {{session.loginTime}}\nDevice: {{device.browser}} on {{device.os}}\nLocation: {{geo.city}}, {{geo.country}}\nIP address: {{session.ipAddress}}\n\nIf this was not you, sign this device out and change your password:\n{{link.notMe}}\n\nThe link works once and expires after 72 hours.`,
+  }),
+  impossibleTravel: Object.freeze({
+    subject: 'Unusual sign-in to your account',
+    html: `<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>Unusual sign-in to your account</h2>
+    <p>Hello {{user.username}},</p>
+    <p>Your account was used about {{travel.distanceKm}} km away from your previous sign-in, sooner than anyone could travel that far.</p>
+    <ul>
+      <li>Time: {{session.loginTime}}</li>
+      <li>Location: {{geo.city}}, {{geo.country}}</li>
+      <li>Device: {{device.browser}} on {{device.os}}</li>
+    </ul>
+    <p>A VPN or a mobile network can cause this. If this was not you, <a href="{{link.notMe}}">sign this device out</a> and change your password.</p>
+    <p style="color: #666; font-size: 12px;">The link works once and expires after 72 hours.</p>
+  </div>
+</body>
+</html>`,
+    text: `Unusual sign-in to your account\n\nHello {{user.username}},\n\nYour account was used about {{travel.distanceKm}} km away from your previous sign-in, sooner than anyone could travel that far.\n\nTime: {{session.loginTime}}\nLocation: {{geo.city}}, {{geo.country}}\nDevice: {{device.browser}} on {{device.os}}\n\nA VPN or a mobile network can cause this. If this was not you, sign this device out and change your password:\n{{link.notMe}}\n\nThe link works once and expires after 72 hours.`,
+  }),
 });
 
 const ALLOWED_WEBHOOK_HOSTS = ['discord.com', 'discordapp.com', 'hooks.slack.com'];
@@ -171,6 +213,41 @@ module.exports = ({ strapi }) => ({
   },
 
   /**
+   * Emails a user about a sign-in from a new device or an impossible
+   * travel, with the "This wasn't me" link.
+   *
+   * @param {'newDevice'|'impossibleTravel'} key Template.
+   * @param {{user: object, session: object, geoData?: object|null, device: object,
+   *   travel?: object|null, link: string|null}} data Values.
+   * @returns {Promise<boolean>} Whether the mail was handed to the email plugin.
+   * @sideeffect Sends one email.
+   */
+  async sendSignInSignalEmail(key, data) {
+    try {
+      if (!data?.user?.email) return false;
+      const template = await this.getTemplate(key);
+      const values = { ...data, geoData: data.geoData || {}, link: { notMe: data.link } };
+      await strapi
+        .plugin('email')
+        .service('email')
+        .send({
+          to: data.user.email,
+          subject: this.replaceVariables(template.subject, values),
+          html: this.replaceVariables(template.html, values),
+          text: this.replaceVariables(template.text, values),
+        });
+      strapi.log.info(`[magic-sessionmanager/notifications] ${key} email sent`);
+      return true;
+    } catch (err) {
+      strapi.log.error(
+        `[magic-sessionmanager/notifications] ${key} email failed:`,
+        err?.name || 'Error'
+      );
+      return false;
+    }
+  },
+
+  /**
    * Emails a user that their account was locked after failed sign-ins.
    * Sent through Strapi's email plugin, so a provider plugin such as Magic
    * Mail delivers it when installed.
@@ -260,6 +337,22 @@ module.exports = ({ strapi }) => ({
       /\{\{lock\.until\}\}/g,
       esc(Number.isFinite(data.lock?.until) ? new Date(data.lock.until).toUTCString() : 'N/A')
     );
+    result = result.replace(/\{\{device\.browser\}\}/g, esc(data.device?.browser || 'Unknown'));
+    result = result.replace(/\{\{device\.os\}\}/g, esc(data.device?.os || 'Unknown'));
+    result = result.replace(
+      /\{\{travel\.distanceKm\}\}/g,
+      esc(Number.isFinite(data.travel?.distanceKm) ? String(data.travel.distanceKm) : 'N/A')
+    );
+    result = result.replace(
+      /\{\{travel\.speedKmh\}\}/g,
+      esc(Number.isFinite(data.travel?.speedKmh) ? String(data.travel.speedKmh) : 'N/A')
+    );
+    // Only an https/http link built by the server is inserted.
+    const link =
+      typeof data.link?.notMe === 'string' && /^https?:\/\//.test(data.link.notMe)
+        ? data.link.notMe
+        : '';
+    result = result.replace(/\{\{link\.notMe\}\}/g, esc(link));
     const score = data.reason?.securityScore;
     result = result.replace(
       /\{\{reason\.securityScore\}\}/g,
