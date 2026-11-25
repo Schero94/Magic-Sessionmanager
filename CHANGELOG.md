@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.18.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.17.0...v4.18.0) (2026-11-25)
+
+
+### Features
+
+* new-device email with "This wasn't me", impossible travel, signed webhook and GDPR self-service ([#37](https://github.com/Schero94/Magic-Sessionmanager/issues/37)) ([92af596](https://github.com/Schero94/Magic-Sessionmanager/commit/92af5962b647827851a4225d0b135c1fff95dffe))
+
 
 Release type: minor (`feat`). Additive: one new admin route, three new Content API routes, one new Content API permission, one new private session column and new settings keys; see Migration.
 
