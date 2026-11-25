@@ -1,5 +1,10 @@
 /** Alert types that have an editable e-mail template, in display order. */
-export const TEMPLATE_KEYS = Object.freeze(['suspiciousLogin', 'newLocation', 'vpnProxy']);
+export const TEMPLATE_KEYS = Object.freeze([
+  'suspiciousLogin',
+  'newLocation',
+  'vpnProxy',
+  'accountLocked',
+]);
 
 /**
  * Server-side limits (server/src/controllers/settings.js sanitizeEmailTemplates).
@@ -60,6 +65,14 @@ export const TEMPLATE_VARIABLE_DEFINITIONS = Object.freeze({
     messageId: 'settings.email.templates.variable.securityScore',
     defaultMessage: 'Security score (0 to 100)',
   },
+  '{{lock.minutes}}': {
+    messageId: 'settings.email.templates.variable.lockMinutes',
+    defaultMessage: 'Lock duration in minutes',
+  },
+  '{{lock.until}}': {
+    messageId: 'settings.email.templates.variable.lockUntil',
+    defaultMessage: 'Time the lock ends (UTC)',
+  },
 });
 
 /** Variables available per alert type. */
@@ -99,6 +112,7 @@ export const TEMPLATE_VARIABLES = Object.freeze({
     '{{reason.isVpn}}',
     '{{reason.isProxy}}',
   ],
+  accountLocked: ['{{user.email}}', '{{user.username}}', '{{lock.minutes}}', '{{lock.until}}'],
 });
 
 /** Synthetic values for the template preview. Never real user data. */
@@ -115,6 +129,8 @@ export const TEMPLATE_PREVIEW_VALUES = Object.freeze({
   '{{reason.isProxy}}': 'false',
   '{{reason.isThreat}}': 'false',
   '{{reason.securityScore}}': '35',
+  '{{lock.minutes}}': '15',
+  '{{lock.until}}': 'Fri, 06 Nov 2026 09:56:00 GMT',
 });
 
 /** Return an updated template collection without changing the saved baseline. */
@@ -448,6 +464,28 @@ Login Details:
 - IP Address: {{session.ipAddress}}
 - Location: {{geo.city}}, {{geo.country}}
 - VPN: {{reason.isVpn}}, Proxy: {{reason.isProxy}}`,
+  },
+  // Same default as server/src/services/notifications.js (4.17).
+  accountLocked: {
+    subject: 'Your account was locked after failed sign-ins',
+    html: `<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>Your account was temporarily locked</h2>
+    <p>Hello {{user.username}},</p>
+    <p>There were several failed sign-in attempts for your account. To protect it, sign-in is locked for {{lock.minutes}} minutes, until {{lock.until}}.</p>
+    <p>If these attempts were not yours, change your password after the lock ends.</p>
+    <p style="color: #666; font-size: 12px;">This is an automated security notification.</p>
+  </div>
+</body>
+</html>`,
+    text: `Your account was temporarily locked
+
+Hello {{user.username}},
+
+There were several failed sign-in attempts for your account. To protect it, sign-in is locked for {{lock.minutes}} minutes, until {{lock.until}}.
+
+If these attempts were not yours, change your password after the lock ends.`,
   },
 });
 

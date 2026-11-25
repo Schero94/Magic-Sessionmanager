@@ -158,6 +158,7 @@ test('every t() call whose message has placeholders passes values (I18N-1, SET-0
 // names, protocols, examples and established loanwords or cognates.
 const SAME_AS_ENGLISH = {
   shared: new Set([
+    '403 SESSION_LIMIT_REACHED',
     'Session Manager',
     'Geofencing',
     'Document Service',
@@ -186,6 +187,9 @@ const SAME_AS_ENGLISH = {
     'Bot',
   ]),
   fr: new Set([
+    'minutes',
+    'Type',
+    'sessions',
     'Activation',
     'Mode',
     'Active',
@@ -269,7 +273,7 @@ test('German uses Sitzung, Im Leerlauf, Beendet, Abgemeldet and sperren consiste
       problems.push(`${id}: use "k. A." or "Nicht verfügbar": ${message}`);
     if (
       /\b[A-ZÄÖÜ]{4,}\b/.test(
-        message.replace(/\b(?:HTML|JSON|MMDB|GeoIP|SESSION_ENCRYPTION_KEY|CSV)\b/g, '')
+        message.replace(/\b(?:HTML|JSON|MMDB|GeoIP|SESSION_ENCRYPTION_KEY|CSV|CIDR)\b/g, '')
       )
     ) {
       problems.push(`${id}: no all-caps words, the design system handles casing: ${message}`);

@@ -21,7 +21,8 @@
  * `admin-sessions.read`, and the sign-out routes `admin-sessions.revoke`
  * (`adminSessionsPolicy()`); `hasPermissions` needs ALL listed actions. The
  * admin sign-in history and Content Manager activity (`/admin-activity/...`)
- * require `admin-sessions.read` and `admin-activity.read`.
+ * require `admin-sessions.read` and `admin-activity.read`. Lifting a sign-in
+ * lock (`/lockouts/unlock`) requires `lockouts.unlock`.
  *
  * The permissions are registered in `server/src/register.js`.
  * By Strapi convention:
@@ -38,6 +39,7 @@ const PLUGIN_ACCESS_ACTION = 'plugin::magic-sessionmanager.access';
 const ADMIN_SESSIONS_READ_ACTION = 'plugin::magic-sessionmanager.admin-sessions.read';
 const ADMIN_SESSIONS_REVOKE_ACTION = 'plugin::magic-sessionmanager.admin-sessions.revoke';
 const ADMIN_ACTIVITY_READ_ACTION = 'plugin::magic-sessionmanager.admin-activity.read';
+const LOCKOUTS_UNLOCK_ACTION = 'plugin::magic-sessionmanager.lockouts.unlock';
 
 /**
  * Returns the policy chain that every admin route in this plugin must use.
@@ -326,6 +328,38 @@ const baseRoutes = [
       policies: adminSessionsPolicy([ADMIN_SESSIONS_READ_ACTION, ADMIN_ACTIVITY_READ_ACTION]),
       middlewares: adminReadRateLimit(),
       description: 'Get one export batch of Content Manager activity of admins (admin)',
+    },
+  },
+
+  // ===================== SIGN-IN LOCKS AND ROLE RULES =====================
+  {
+    method: 'GET',
+    path: '/lockouts',
+    handler: 'lockouts.list',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+      description: 'List the active sign-in locks (admin)',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/lockouts/unlock',
+    handler: 'lockouts.unlock',
+    config: {
+      policies: adminSessionsPolicy([LOCKOUTS_UNLOCK_ACTION]),
+      middlewares: adminSignOutRateLimit(),
+      description: 'Lift one sign-in lock (admin)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/roles',
+    handler: 'lockouts.roles',
+    config: {
+      policies: adminPolicy(),
+      middlewares: adminReadRateLimit(),
+      description: 'List Users & Permissions roles for per-role rules (admin)',
     },
   },
 

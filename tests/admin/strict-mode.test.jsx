@@ -446,6 +446,8 @@ test('settings page: StrictMode mount shows the loaded form, tabs switch cleanly
   network.on('GET', '/magic-sessionmanager/geoip/status', {
     status: { exists: false, hasCredentials: false },
   });
+  network.on('GET', '/magic-sessionmanager/lockouts', { data: [], meta: { total: 0 } });
+  network.on('GET', '/magic-sessionmanager/roles', { data: [] });
   const result = await checkStrictEntry(<Settings />, {
     path: '/settings/magic-sessionmanager/general',
     permissions: [...ALL, ACTIVITY_READ],

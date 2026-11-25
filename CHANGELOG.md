@@ -1,3 +1,38 @@
+## [Unreleased]
+
+Release type: minor (`feat`). Additive: three new admin routes, one new permission and new settings keys; no existing route, response or setting changes meaning. One default differs between new and existing installations (see Migration).
+
+### Added
+
+* **Account lockout** next to the IP lockout (Configuration › Login protection › Failed sign-ins): **Lock an account after** N failed sign-ins for one account from any address (0 = off, the default). Counted by a SHA-256 hash of the lower-cased identifier; the typed identifier is never stored. An unknown account is locked and answered exactly like an existing one.
+* **Configurable window and lock duration** (`lockoutWindowMinutes` 1-1440, `lockoutDurationMinutes` 1-10080; both default 15, as before). `Retry-After` follows the lock. When a lock ends, the failures that caused it no longer count.
+* **Trusted addresses** (`lockoutTrustedAddresses`, up to 100 IPs or CIDR ranges, IPv4 and IPv6): never locked by IP; their accounts can still be locked.
+* **Locked now** card with **Unlock**: lists locked IP addresses (as the security log stores IPs: full, shortened or hidden) and locked accounts with their user. Seeing it needs plugin access; **Unlock** needs the new permission **Unlock locked sign-ins** (`plugin::magic-sessionmanager.lockouts.unlock`, Super Admin only at first). Every unlock is recorded with the admin who did it. Admin routes `GET /lockouts`, `POST /lockouts/unlock` (`{ id }`, write rate limit) and `GET /roles`.
+* **Lockout email** (`lockoutNotifyUser`, off by default): the account owner gets the new **Account locked** template (editable under Alerts › Email templates) through Strapi's email plugin, so Magic Mail delivers it when installed.
+* **Security log events for app users** (switch **Record failed and refused sign-ins**, `recordUserSignInEvents`, on by default): `user.sign-in.failed`, `user.sign-in.refused` (`meta.reason`: lockout, too-many-attempts, session-limit, country, risk, location-unavailable), `user.lockout`, plus `user.lockout.lifted` (actor = admin), `user.session.limit` and `user.password-change.ended-others`. A client that keeps hitting a lock is logged once per minute; sign-ins naming an account that does not exist are aggregated to one event per anonymised address per 5 minutes (`meta.unknownAccount`), and no typed identifier or title is stored. Deleting a user deletes their events.
+* The new policy settings are **protected settings**: changing them needs **Change protected settings** (`settings.update`, from 4.16.1) as well as plugin access; roles without it see them read-only and can still save the rest of the form.
+* **Concurrent session limit** (Sessions › Concurrent sessions, `maxSessionsPerUser`, 0 = off by default): **End the oldest session** (default) or **Refuse the new sign-in**. A refused sign-in answers `403` with `error.details.code: "SESSION_LIMIT_REACHED"` and `details.limit`; no token or refresh cookie leaves the server and the new session is ended. Idle and over-age sessions do not count. Applied in one cluster-wide critical section per user.
+* **End other sessions after a password change** (`endOtherSessionsOnPasswordChange`) for `POST /auth/change-password` in both JWT modes; the session that made the change stays. A failure fails closed (503) like the password reset.
+* **Different rules for some roles** (Sessions › Roles, collapsed): per Users & Permissions role an own session limit, inactivity timeout and account lockout threshold (`roleRules`, up to 50). The token check and the idle check apply the role's timeout; the overview still classifies "idle" by the general timeout.
+
+### Changed
+
+* The IP lockout settings are labelled "Lock an IP address after" and the Login protection intro no longer says refused sign-ins are not recorded.
+* With a role rule for the inactivity timeout, the idle check uses the Document Service path even when "Direct SQL" is selected (it needs each session's role).
+
+### Migration
+
+* **Existing installations keep their behaviour.** On the first start of this version, an installation that ran an earlier version gets `endOtherSessionsOnPasswordChange: false` stored once, so a password change keeps the other sessions as before. New installations end them by default. Turn it on under Sessions › Password change.
+* Every other new setting is off or keeps the earlier value: IP lockout 5 failures / 15 minutes / 15 minutes, no account lockout, no session limit, no role rules. Failed and refused app-user sign-ins are now written to the security log; turn off **Record failed and refused sign-ins** to keep the previous behaviour.
+* A custom `coordination.counterStore` receives a third `block(key, untilMs, { windowStart })` argument; a store that ignores it keeps working, but a client may get "Too many login attempts at once" until the counting window ends after a lock.
+* `X-Session-Terminated-Reason` keeps its five values: sessions ended by the session limit report `manual`, by a password change `logout`.
+
+### Tests
+
+* `tests/isolated-policies-http.test.js` boots Strapi from this checkout and covers IP and account lockout across addresses, trusted addresses, Retry-After, the lock email (fake email plugin), Locked now with RBAC (401/403/200), Unlock with the actor in the log, the recording switch, session limit (end oldest, refuse with 403 and no tokens), per-role limit and idle timeout, ending other sessions after a password change and the switch, and event deletion with the user. CI runs it on SQLite and PostgreSQL in legacy and refresh mode, and on the Strapi 5.50 floor.
+* The multi-process check (8 processes, SQLite and PostgreSQL) now drives the real lockout engine: exact per-IP and per-account limits across processes, one shared lock list and a cluster-wide unlock.
+* Unit tests for the policy settings, the lockout engine, upgrade defaults, the session limit and the lock email; StrictMode tests for the Locked now card (states, RBAC, keyboard, unlock round trip) and the role rules editor.
+
 ## [4.16.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.16.0...v4.16.1) (2026-11-25)
 
 

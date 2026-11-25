@@ -5,6 +5,7 @@ const settings = require('./settings');
 const geoip = require('./geoip');
 const adminSessions = require('./admin-sessions');
 const adminActivity = require('./admin-activity');
+const lockouts = require('./lockouts');
 
 module.exports = {
   session,
@@ -12,4 +13,5 @@ module.exports = {
   geoip,
   'admin-sessions': adminSessions,
   'admin-activity': adminActivity,
+  lockouts,
 };

@@ -79,9 +79,19 @@ module.exports = async ({ strapi }) => {
     // secrets) and the security log. The other settings stay on `access`.
     {
       section: 'plugins',
-      displayName: 'Change protected settings (location lookup, webhooks, security log)',
+      displayName:
+        'Change protected settings (location lookup, webhooks, security log, sign-in policies)',
       uid: 'settings.update',
       subCategory: 'Settings',
+      pluginName: 'magic-sessionmanager',
+    },
+    // Lifting a sign-in lock of an app user or IP address (4.17). Seeing the
+    // locks only needs plugin access.
+    {
+      section: 'plugins',
+      displayName: 'Unlock locked sign-ins',
+      uid: 'lockouts.unlock',
+      subCategory: 'General',
       pluginName: 'magic-sessionmanager',
     },
   ]);
@@ -149,6 +159,24 @@ module.exports = async ({ strapi }) => {
           }
         } catch (err) {
           log.warn('[lifecycle] afterUpdate hook failed:', err?.name || 'Error');
+        }
+      },
+
+      /**
+       * Deleting an app user deletes what the security log holds about them.
+       *
+       * @param {object} event
+       */
+      async afterDelete(event) {
+        try {
+          const documentId = event?.result?.documentId;
+          if (!documentId) return;
+          await strapi
+            .plugin('magic-sessionmanager')
+            .service('security-log')
+            .deleteUserData(documentId);
+        } catch (err) {
+          log.warn('[lifecycle] Security events of a deleted user stay:', err?.name || 'Error');
         }
       },
     });

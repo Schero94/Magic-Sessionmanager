@@ -6,7 +6,8 @@
  * against one shared database and verifies the plugin's cross-process
  * guarantees: exact shared counters, a single lease winner, lock-protected
  * read-modify-write without lost updates, no duplicate check-then-create
- * rows, exact revision bumps, and a cluster-wide failed-login lockout.
+ * rows, exact revision bumps, a cluster-wide failed-login lockout per IP and
+ * per account, one shared "Locked now" list and a cluster-wide unlock.
  *
  * Targets:
  *   - SQLite (temporary file) when `better-sqlite3` can be loaded.
@@ -38,7 +39,20 @@ const LOCK_ITERATIONS = 10;
 const REVISION_BUMPS = 5;
 const MAX_FAILED = 5;
 const LOCKOUT_ATTEMPTS_PER_WORKER = 10;
-const PHASES = ['tables', 'counter', 'lease', 'lock', 'store', 'control', 'revision', 'lockout'];
+const PHASES = [
+  'tables',
+  'counter',
+  'lease',
+  'lock',
+  'store',
+  'control',
+  'revision',
+  'lockout',
+  'lockout-ip',
+  'locks',
+  'unlock',
+  'unlocked',
+];
 const required = new Set(
   String(process.env.MSM_CONCURRENCY_REQUIRE || '')
     .split(',')
@@ -127,9 +141,12 @@ async function runWorkers(target) {
     maxFailed: MAX_FAILED,
     lockoutAttemptsPerWorker: LOCKOUT_ATTEMPTS_PER_WORKER,
   };
-  const workers = Array.from({ length: WORKERS }, () =>
+  const workers = Array.from({ length: WORKERS }, (_, workerIndex) =>
     fork(workerPath, [], {
-      env: { ...process.env, MSM_CONCURRENCY_CONFIG: JSON.stringify(workerConfig) },
+      env: {
+        ...process.env,
+        MSM_CONCURRENCY_CONFIG: JSON.stringify({ ...workerConfig, workerIndex }),
+      },
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
     })
   );
@@ -198,6 +215,7 @@ async function runTarget(target) {
   const state = await readState(target);
   const winners = results.filter((result) => result.leaseWon === true).length;
   const lockoutAttempts = results.reduce((sum, result) => sum + (result.lockoutAttempts || 0), 0);
+  const accountAttempts = results.reduce((sum, result) => sum + (result.accountAttempts || 0), 0);
 
   const checks = [
     check('no worker errors', errors.length === 0, errors.map((e) => e.error).join('; ')),
@@ -239,9 +257,24 @@ async function runTarget(target) {
       `${state.revision}/${WORKERS * REVISION_BUMPS}`
     ),
     check(
-      'failed-login lockout is cluster-wide',
+      'failed-login lockout per IP is cluster-wide',
       lockoutAttempts === MAX_FAILED,
       `${lockoutAttempts} attempts, per-process limit would allow ${MAX_FAILED * WORKERS}`
+    ),
+    check(
+      'failed-login lockout per account is cluster-wide across addresses',
+      accountAttempts === MAX_FAILED,
+      `${accountAttempts} attempts from ${WORKERS} addresses`
+    ),
+    check(
+      'every process lists the same IP and account lock',
+      results.every((r) => JSON.stringify(r.listedLocks) === JSON.stringify(['account', 'ip'])),
+      results.map((r) => (r.listedLocks || []).join('+')).join(' ')
+    ),
+    check(
+      'an unlock on one process lifts the lock for every process',
+      results.every((r) => r.locksAfterUnlock === 0 && r.afterUnlock === 'allow'),
+      results.map((r) => `${r.locksAfterUnlock}/${r.afterUnlock}`).join(' ')
     ),
   ];
   console.log(

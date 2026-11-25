@@ -255,7 +255,7 @@ test('every tab starts with its IA intro sentence', () => {
     ],
     'login-protection': [
       'settings.config.loginProtection.intro',
-      'These rules check new sign-ins before they succeed. Existing sessions are not affected, and refused sign-ins are not recorded.',
+      'These rules check new sign-ins before they succeed. Existing sessions are not affected. Failed and refused sign-ins are recorded in the security log while recording is on.',
     ],
     'location-data': [
       'settings.config.locationData.intro',
@@ -488,11 +488,14 @@ test('read-only cards explain rejected sessions and refused sign-ins (IA I.1-21)
   }
   const login = readSettingsFile('LoginProtectionTab.jsx');
   const refused = login.slice(login.indexOf("'settings.config.refused.title'"));
-  for (const id of ['lockout', 'rule', 'unavailable']) {
+  for (const id of ['lockout', 'limit', 'rule', 'unavailable']) {
     assert.match(refused, new RegExp(`settings\\.config\\.refused\\.${id}\\.response`), id);
     assert.match(refused, new RegExp(`settings\\.config\\.refused\\.${id}\\.cause`), id);
   }
-  assert.match(refused, /'Session Manager keeps no log of refused sign-ins\.'/);
+  assert.match(
+    unwrapSource(refused),
+    /'Refused sign-ins are written to the security log while "Record failed and refused sign-ins" is on\.'/
+  );
   assert.doesNotMatch(refused, /onChange=|handleChange/, 'read-only');
 });
 

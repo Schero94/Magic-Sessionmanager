@@ -123,7 +123,7 @@ jobs:
         run: npm run test:admin
 
   multi-process:
-    name: Multi-process coordination (SQLite + PostgreSQL)
+    name: Multi-process coordination and lockout (SQLite + PostgreSQL)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -230,6 +230,24 @@ jobs:
           MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_http
         run: node --test tests/isolated-admin-activity-http.test.js
 
+      - name: Sign-in and session policies on SQLite (legacy and refresh mode)
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+        run: |
+          node --test tests/isolated-policies-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-policies-http.test.js
+
+      - name: Sign-in and session policies on PostgreSQL (legacy and refresh mode)
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ github.workspace }}/node_modules
+          SESSION_HTTP_DB: postgres
+          MSM_TEST_PG_URL: postgres://strapi:strapi@localhost:5432/magic_sessionmanager_http
+        run: |
+          node --test tests/isolated-policies-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-policies-http.test.js
+
       - name: Existing HTTP access suite (legacy and refresh mode)
         env:
           SESSION_HTTP_REQUIRED: '1'
@@ -284,3 +302,5 @@ jobs:
           node --test tests/isolated-admin-sessions-http.test.js
           node --test tests/isolated-native-capture-http.test.js
           node --test tests/isolated-admin-activity-http.test.js
+          node --test tests/isolated-policies-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-policies-http.test.js

@@ -261,7 +261,7 @@ test(
       'every registered admin route denies anonymous, editor and content-user principals',
       async () => {
         const routes = require('../server/src/routes/admin').routes;
-        assert.equal(routes.length, 29);
+        assert.equal(routes.length, 32);
         for (const route of routes) {
           const pathname = route.path
             .replace(':sessionId', otherSession.documentId)
@@ -1344,7 +1344,11 @@ test(
           'POST /user/:userId/toggle-block': { blocked: true },
           'PUT /geoip/credentials': { accountId: 'synthetic-account', licenseKey: 'synthetic-key' },
           'PUT /settings': { enableGeolocation: false, geoIpProvider: 'disabled' },
+          'POST /lockouts/unlock': { id: `lf:${'0'.repeat(48)}` },
         };
+        // The handler answers 404 for a lock that does not exist; lifting a
+        // real lock is covered by tests/isolated-policies-http.test.js.
+        const expectedStatus = { 'POST /lockouts/unlock': 404 };
         const routes = require('../server/src/routes/admin').routes;
         // Missing credentials prove the protected updater is reached without any download.
         const updater = await request('POST', '/magic-sessionmanager/geoip/update', adminToken);
@@ -1365,7 +1369,11 @@ test(
             adminToken,
             bodies[key]
           );
-          assert.equal(result.status, 200, `${key}: authorized admin received ${result.status}`);
+          assert.equal(
+            result.status,
+            expectedStatus[key] || 200,
+            `${key}: authorized admin received ${result.status}`
+          );
         }
         const timeoutTarget = await createSession(
           testUser,

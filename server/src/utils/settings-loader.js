@@ -18,6 +18,7 @@
  */
 
 const { getCoordinator } = require('./coordination');
+const { normalizePolicySettings } = require('./policy-settings');
 
 const PLUGIN_ID = 'magic-sessionmanager';
 const SETTINGS_KEY = 'settings';
@@ -211,6 +212,10 @@ function normalizeStoredSettings(stored) {
   if (stored.trustedProxies !== undefined) {
     out.trustedProxies = stored.trustedProxies;
   }
+
+  // Sign-in and session policies (4.17), kept in user-facing units; the
+  // resolvers in utils/policy-settings.js convert them.
+  Object.assign(out, normalizePolicySettings(stored));
 
   return out;
 }
