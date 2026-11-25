@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { useFetchClient } from '@strapi/strapi/admin';
+import { getTranslation } from '../../utils/getTranslation';
 import { isCancelledRequest, logSafeAdminError } from '../../utils/safeAdminLog.mjs';
 import { MAX_EVENT_EXPORT_ROWS, toExportParams } from './adminActivityModel.mjs';
+import { withEventAdminNames } from './adminPanelModel.mjs';
 
 /**
  * Loads a paged security-event list (sign-in history or activity) with
@@ -19,6 +22,23 @@ import { MAX_EVENT_EXPORT_ROWS, toExportParams } from './adminActivityModel.mjs'
  */
 export function useEventList({ path, params, logKey }) {
   const { get } = useFetchClient();
+  const { formatMessage } = useIntl();
+  /** Hidden admin names (no `admin::users.read`, 4.17) read "Admin #id". */
+  const fillNames = useCallback(
+    (list) =>
+      list.map((row) =>
+        withEventAdminNames(row, (id) =>
+          formatMessage(
+            {
+              id: getTranslation('adminPanel.identity.placeholder'),
+              defaultMessage: 'Admin #{id}',
+            },
+            { id }
+          )
+        )
+      ),
+    [formatMessage]
+  );
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState(null);
   const [page, setPage] = useState(1);
@@ -38,7 +58,7 @@ export function useEventList({ path, params, logKey }) {
         const response = await get(path, { params: { ...JSON.parse(key), page: nextPage } });
         if (requestId !== requestRef.current) return;
         const body = response?.data || {};
-        const data = Array.isArray(body.data) ? body.data : [];
+        const data = fillNames(Array.isArray(body.data) ? body.data : []);
         setRows((current) => (nextPage === 1 ? data : [...current, ...data]));
         setMeta(body.meta || null);
         setPage(nextPage);
@@ -54,7 +74,7 @@ export function useEventList({ path, params, logKey }) {
         }
       }
     },
-    [get, path, key, logKey]
+    [get, path, key, logKey, fillNames]
   );
 
   useEffect(() => {
@@ -83,14 +103,14 @@ export function useEventList({ path, params, logKey }) {
       });
       const body = response?.data || {};
       if (!Array.isArray(body.data)) throw new Error('Invalid export response');
-      all.push(...body.data);
+      all.push(...fillNames(body.data));
       cursor = typeof body.meta?.nextCursor === 'string' ? body.meta.nextCursor : null;
     } while (cursor && all.length < MAX_EVENT_EXPORT_ROWS);
     return {
       rows: all.slice(0, MAX_EVENT_EXPORT_ROWS),
       capped: all.length > MAX_EVENT_EXPORT_ROWS || Boolean(cursor),
     };
-  }, [get, path, key]);
+  }, [get, path, key, fillNames]);
 
   return {
     rows,

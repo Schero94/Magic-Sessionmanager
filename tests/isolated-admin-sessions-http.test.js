@@ -435,7 +435,11 @@ test(
         }
         assert.equal(await me(bert1.token), 200);
         assert.equal(await me(ada1.token), 200);
-        const listed = await request('GET', api('/admins?search=bert'), { token: vic1.token });
+        // Vic's role has no admin::users.read (4.17, F4): the search matches the id only.
+        const listed = await request('GET', api(`/admins?search=${bert.id}`), {
+          token: vic1.token,
+        });
+        assert.equal(listed.body.data[0].email, '', 'no email without admin::users.read');
         assert.equal(listed.body.data[0].canSignOut, false);
         assert.equal(listed.body.data[0].protectedReason, 'super-admin-protected');
       }

@@ -127,6 +127,15 @@ export const SignInEventRow = ({ row, showAdmin = false, onOpenAdmin }) => {
   }
   if (row.actor)
     facts.push(t('adminPanel.activity.byAdmin', 'by {name}', { name: row.actor.name }));
+  if (Number.isInteger(row.attempts) && row.attempts > 1) {
+    facts.push(
+      t(
+        'adminPanel.activity.attempts',
+        '{count, plural, one {# attempt} other {# attempts}} within 5 minutes',
+        { count: row.attempts }
+      )
+    );
+  }
 
   return (
     <EventItem id={row.id} kind={event.key}>

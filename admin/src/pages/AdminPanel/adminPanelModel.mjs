@@ -182,3 +182,46 @@ export function getSignOutErrorMessage(error) {
     defaultMessage: 'The admin could not be signed out. Try again.',
   };
 }
+
+/**
+ * Fills what the server hid about an admin (4.17, security review F4).
+ * Without `admin::users.read` the API returns an empty name and email for
+ * every admin except the caller; the view then shows "Admin #id" and says
+ * that the email is hidden. Role names are hidden as well unless the caller
+ * may read roles (`meta.identity.roles`).
+ *
+ * @param {object} admin Admin row from the API.
+ * @param {(id: number) => string} placeholderName Translated "Admin #{id}".
+ * @param {{roles?: boolean}|null|undefined} identity `meta.identity` of the response.
+ * @returns {object} Row with `name`, `identityHidden` and `rolesHidden`.
+ */
+export function withIdentityPlaceholders(admin, placeholderName, identity) {
+  if (!admin || typeof admin !== 'object') return admin;
+  const hidden = !admin.self && !admin.name;
+  return {
+    ...admin,
+    name: admin.name || placeholderName(admin.id),
+    identityHidden: hidden,
+    rolesHidden: hidden && identity?.roles === false,
+  };
+}
+
+/**
+ * Fills hidden admin names of a security-event row (`admin`, `actor`).
+ *
+ * @param {object} row Event row from the API.
+ * @param {(id: number) => string} placeholderName Translated "Admin #{id}".
+ * @returns {object} Row with names.
+ */
+export function withEventAdminNames(row, placeholderName) {
+  if (!row || typeof row !== 'object') return row;
+  const fill = (admin) =>
+    admin && typeof admin === 'object' && !admin.name
+      ? { ...admin, name: placeholderName(admin.id), identityHidden: true }
+      : admin;
+  return {
+    ...row,
+    ...(row.admin !== undefined ? { admin: fill(row.admin) } : {}),
+    ...(row.actor !== undefined ? { actor: fill(row.actor) } : {}),
+  };
+}

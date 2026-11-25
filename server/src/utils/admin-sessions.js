@@ -32,6 +32,7 @@
  * management); Query Engine https://docs.strapi.io/cms/api/query-engine.
  */
 
+const crypto = require('node:crypto');
 const { z } = require('@strapi/utils');
 const { hashDeviceId } = require('./admin-request-info');
 const { resolveSecurityLogSettings } = require('./security-log-settings');
@@ -50,6 +51,58 @@ const MAX_SEARCH_LENGTH = 100;
 const MAX_ACTIVE_ROWS = 10_000;
 /** Admin list filters. */
 const ADMIN_FILTERS = Object.freeze(['all', 'signed-in', 'not-signed-in']);
+/** Delay of the second delete after a sign-out (a refresh that raced the first one). */
+const REPEAT_SIGN_OUT_DELAY_MS = 1000;
+
+/**
+ * What the caller may see about other admins (4.17, security review F4).
+ * Email, name and roles of admins are Strapi's own user data; they are
+ * returned only to callers who may read them in Settings > Users
+ * (`admin::users.read`). Without it the name and email are empty and the UI
+ * shows "Admin #id"; role names are returned when the caller holds
+ * `admin::roles.read`.
+ *
+ * @typedef {{identity: boolean, roles: boolean}} AdminVisibility
+ */
+
+/** Full visibility (internal callers and tests). */
+const FULL_VISIBILITY = Object.freeze({ identity: true, roles: true });
+
+/**
+ * Visibility of the caller, from the ability `admin::hasPermissions` uses.
+ *
+ * @param {any} ability `ctx.state.userAbility`.
+ * @returns {AdminVisibility} Visibility.
+ */
+function visibilityOf(ability) {
+  const can = (action) => {
+    try {
+      return ability?.can?.(action) === true;
+    } catch {
+      return false;
+    }
+  };
+  const identity = can('admin::users.read');
+  return { identity, roles: identity || can('admin::roles.read') };
+}
+
+/**
+ * Opaque handle of an admin session for the API (4.17): a SHA-256 of
+ * Strapi's `sessionId`, cut to 32 hex characters. The `sessionId` is a claim
+ * of the admin's access token; the list no longer returns it. The handle is
+ * stable across processes and cannot be turned back into the id.
+ *
+ * @param {unknown} sessionId Strapi session id.
+ * @returns {string} 32 hex characters ('' for a missing id).
+ */
+function sessionHandle(sessionId) {
+  if (typeof sessionId !== 'string' || !sessionId) return '';
+  return crypto
+    .createHash('sha256')
+    .update(`magic-sessionmanager:admin-session:${sessionId}`)
+    .digest('hex')
+    .slice(0, 32);
+}
 
 /** Strapi defaults, used when the host does not override them. */
 const DEFAULT_POLICY = Object.freeze({
@@ -77,7 +130,9 @@ const adminParamsSchema = z.strictObject({
 
 const sessionParamsSchema = z.strictObject({
   adminId: z.string().regex(/^[1-9][0-9]{0,11}$/, 'adminId must be a positive integer'),
-  sessionId: z.string().regex(/^[a-f0-9]{32}$/, 'sessionId must be a Strapi session id'),
+  // The `id` of a session from the list (an opaque handle since 4.17); a raw
+  // Strapi session id is still accepted.
+  sessionId: z.string().regex(/^[a-f0-9]{32}$/, 'sessionId must be a session id from the list'),
 });
 
 /**
@@ -202,7 +257,8 @@ async function readLiveRows(strapi, { userId, withMetadata = false, now = new Da
  * @param {string|null} currentDeviceId Device of the caller's own request.
  * @returns {Array<{id: string, device: string|null, signedInAt: string|null,
  *   lastActiveAt: string|null, endsAt: string|null, rememberMe: boolean, current: boolean}>}
- *   Sessions, most recently active first. `id` is the sessionId of the newest row.
+ *   Sessions, most recently active first. `id` is the opaque handle of the newest row's
+ *   sessionId (see sessionHandle).
  */
 function groupSessionsByDevice(rows, currentDeviceId) {
   /** @type {Map<string, any>} */
@@ -218,7 +274,7 @@ function groupSessionsByDevice(rows, currentDeviceId) {
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {
-        id: String(row.sessionId),
+        id: sessionHandle(String(row.sessionId)),
         device:
           typeof metadata.deviceName === 'string' && metadata.deviceName.trim()
             ? metadata.deviceName.trim().slice(0, 120)
@@ -340,27 +396,35 @@ async function findCurrentDeviceId(strapi, { userId, sessionId }) {
 }
 
 /**
- * Shapes one admin for the list. Allowlisted fields only.
+ * Shapes one admin for the list. Allowlisted fields only; name and email
+ * are empty and roles an empty list when the caller may not see them.
  *
  * @param {Record<string, any>} user Admin user with roles.
  * @param {{count: number, lastActiveAt: string|null}|undefined} live Live session summary.
  * @param {{id: any, roles?: any[]}} actor Caller.
+ * @param {AdminVisibility} [visibility] What the caller may see.
  * @returns {Record<string, any>} Admin row DTO.
  */
-function toAdminRow(user, live, actor) {
+function toAdminRow(user, live, actor, visibility = FULL_VISIBILITY) {
   const account = accountState(user);
   const blockReason = signOutBlockReason(actor, user);
   const sessionCount = account === 'active' ? live?.count || 0 : 0;
+  const self = String(actor?.id) === String(user.id);
+  // Everyone may see their own row.
+  const identity = visibility.identity || self;
   return {
     id: Number(user.id),
-    name: displayName(user),
-    email: typeof user.email === 'string' ? user.email : '',
-    roles: (Array.isArray(user.roles) ? user.roles : []).map((role) => ({
-      name: String(role?.name || ''),
-      superAdmin: role?.code === SUPER_ADMIN_CODE,
-    })),
+    name: identity ? displayName(user) : '',
+    email: identity && typeof user.email === 'string' ? user.email : '',
+    roles:
+      identity || visibility.roles
+        ? (Array.isArray(user.roles) ? user.roles : []).map((role) => ({
+            name: String(role?.name || ''),
+            superAdmin: role?.code === SUPER_ADMIN_CODE,
+          }))
+        : [],
     account,
-    self: String(actor?.id) === String(user.id),
+    self,
     sessionCount,
     lastActiveAt: account === 'active' ? live?.lastActiveAt || null : null,
     canSignOut: blockReason === null && sessionCount > 0,
@@ -422,10 +486,18 @@ async function readSignInRecording(strapi) {
  * @param {any} strapi Running Strapi instance.
  * @param {{page: number, pageSize: number, search: string, filter: string}} query Parsed query.
  * @param {{id: any, roles?: any[]}} actor Caller.
+ * @param {AdminVisibility} [visibility] What the caller may see (see visibilityOf).
  * @returns {Promise<{data: object[], meta: object}>} Response body; `meta.recording` says
- *   whether sign-ins and IP addresses are recorded (security log settings).
+ *   whether sign-ins and IP addresses are recorded (security log settings), `meta.identity`
+ *   what the caller may see. Without identity visibility the search matches the admin id
+ *   only, and the list is ordered by id.
  */
-async function listAdmins(strapi, query, actor) {
+async function listAdmins(strapi, query, actor, visibility = FULL_VISIBILITY) {
+  const identityMeta = {
+    names: visibility.identity,
+    emails: visibility.identity,
+    roles: visibility.roles,
+  };
   const policy = readSessionPolicy(strapi);
   if (!getAdminSessionManager(strapi)) {
     return {
@@ -437,6 +509,7 @@ async function listAdmins(strapi, query, actor) {
         policy,
         truncated: false,
         recording: await readSignInRecording(strapi),
+        identity: identityMeta,
       },
     };
   }
@@ -465,7 +538,7 @@ async function listAdmins(strapi, query, actor) {
 
   /** @type {any[]} */
   const conditions = [];
-  if (query.search) {
+  if (query.search && visibility.identity) {
     const text = query.search;
     conditions.push({
       $or: [
@@ -475,6 +548,9 @@ async function listAdmins(strapi, query, actor) {
         { email: { $containsi: text } },
       ],
     });
+  } else if (query.search) {
+    // Names and emails must not be probed by search: only the id matches.
+    conditions.push({ id: /^[1-9][0-9]{0,11}$/.test(query.search) ? Number(query.search) : 0 });
   }
   if (query.filter === 'signed-in')
     conditions.push({ id: { $in: signedInIds.length ? signedInIds : [0] } });
@@ -491,7 +567,9 @@ async function listAdmins(strapi, query, actor) {
       where,
       select: ['id', 'firstname', 'lastname', 'username', 'email', 'isActive', 'blocked'],
       populate: { roles: { select: ['id', 'name', 'code'] } },
-      orderBy: [{ firstname: 'asc' }, { lastname: 'asc' }, { email: 'asc' }, { id: 'asc' }],
+      orderBy: visibility.identity
+        ? [{ firstname: 'asc' }, { lastname: 'asc' }, { email: 'asc' }, { id: 'asc' }]
+        : [{ id: 'asc' }],
       offset: (query.page - 1) * query.pageSize,
       limit: query.pageSize,
     }),
@@ -519,7 +597,8 @@ async function listAdmins(strapi, query, actor) {
       toAdminRow(
         { ...user, hasRegistrationToken: invited.has(Number(user.id)) },
         summary.get(String(user.id)),
-        actor
+        actor,
+        visibility
       )
     ),
     meta: {
@@ -539,6 +618,7 @@ async function listAdmins(strapi, query, actor) {
       policy,
       truncated,
       recording: await readSignInRecording(strapi),
+      identity: identityMeta,
     },
   };
 }
@@ -549,13 +629,14 @@ async function listAdmins(strapi, query, actor) {
  * @param {any} strapi Running Strapi instance.
  * @param {string} adminId Validated admin id.
  * @param {{id: any, roles?: any[], sessionId?: string|null}} actor Caller.
+ * @param {AdminVisibility} [visibility] What the caller may see.
  * @returns {Promise<{data: object[], meta: object}|null>} Response body, or null when the admin does not exist.
  */
-async function listAdminSessions(strapi, adminId, actor) {
+async function listAdminSessions(strapi, adminId, actor, visibility = FULL_VISIBILITY) {
   const target = await findAdmin(strapi, adminId);
   if (!target) return null;
   const supported = Boolean(getAdminSessionManager(strapi));
-  const adminRow = toAdminRow(target, undefined, actor);
+  const adminRow = toAdminRow(target, undefined, actor, visibility);
   if (!supported || adminRow.account !== 'active') {
     return {
       data: [],
@@ -584,6 +665,34 @@ async function listAdminSessions(strapi, adminId, actor) {
 }
 
 /**
+ * Runs the same `invalidateRefreshToken` call once more after a delay, off
+ * the request. Failures are logged without details.
+ *
+ * @param {any} strapi Running Strapi instance.
+ * @param {any} manager Admin session manager.
+ * @param {string[]} args Arguments of the first call.
+ * @param {number} delayMs Delay.
+ * @returns {void}
+ * @sideeffect Deletes `admin::session` rows a racing refresh created.
+ */
+function repeatSignOut(strapi, manager, args, delayMs) {
+  const timer = setTimeout(
+    () => {
+      Promise.resolve()
+        .then(() => manager.invalidateRefreshToken(...args))
+        .catch((err) =>
+          strapi.log?.warn?.(
+            '[magic-sessionmanager] Repeated admin sign-out failed:',
+            err?.name || 'Error'
+          )
+        );
+    },
+    Math.max(0, delayMs)
+  );
+  if (typeof timer.unref === 'function') timer.unref();
+}
+
+/**
  * Error raised when a sign-out is not allowed or not possible. The
  * controller maps `status` to the response.
  */
@@ -607,9 +716,16 @@ class AdminSignOutError extends Error {
  * strategy (no row, `isSessionActive` false) and the panel cannot renew its
  * token, so it shows the login page.
  *
+ * Strapi rotates a refresh row by reading the parent and then creating the
+ * child; a refresh that read the parent just before the delete could create
+ * a new row right after it. The same delete therefore runs once more about a
+ * second later (4.17, hardening of an unconfirmed race).
+ *
  * @param {any} strapi Running Strapi instance.
  * @param {{actor: {id: any, roles?: any[], sessionId?: string|null}, adminId: string, sessionId?: string}} input
- *   Caller, validated target admin id and, for one browser, a validated session id.
+ *   Caller, validated target admin id and, for one browser, a session handle from the list
+ *   (or a raw Strapi session id).
+ * @param {{repeatDelayMs?: number}} [options] Delay of the second delete (tests).
  * @returns {Promise<{ended: number, signedOutSelf: boolean, scope: 'one'|'all'}>} Number of
  *   browsers signed out and whether the caller's own browser was among them.
  * @throws {AdminSignOutError} 404 unknown admin or session, 403 guard, 503 no session manager.
@@ -617,7 +733,11 @@ class AdminSignOutError extends Error {
  *   writes one audit log line with admin ids and counts (no email, session id or token) and
  *   queues an `admin.session.revoked` security event (actor and target).
  */
-async function signOutAdmin(strapi, { actor, adminId, sessionId }) {
+async function signOutAdmin(
+  strapi,
+  { actor, adminId, sessionId },
+  { repeatDelayMs = REPEAT_SIGN_OUT_DELAY_MS } = {}
+) {
   const manager = getAdminSessionManager(strapi);
   if (!manager) {
     throw new AdminSignOutError(
@@ -650,21 +770,25 @@ async function signOutAdmin(strapi, { actor, adminId, sessionId }) {
   let endedDeviceId = null;
   if (sessionId) {
     // The session must be a live row of THIS admin; anything else is 404, so
-    // ids of other admins cannot be probed.
-    const row = await strapi.db.query(SESSION_UID).findOne({
-      select: ['userId', 'deviceId', 'origin'],
-      where: { sessionId, ...liveSessionWhere(new Date()) },
-    });
-    if (!row || String(row.userId) !== userId || row.origin !== ADMIN_ORIGIN) {
+    // ids of other admins cannot be probed. The list returns opaque handles;
+    // a raw Strapi session id still matches.
+    const row = rows.find(
+      (candidate) =>
+        typeof candidate.sessionId === 'string' &&
+        (sessionHandle(candidate.sessionId) === sessionId || candidate.sessionId === sessionId)
+    );
+    if (!row || String(row.userId) !== userId) {
       throw new AdminSignOutError(404, 'Session not found');
     }
     if (blockReason === 'account-inactive') throw new AdminSignOutError(404, 'Session not found');
     await manager.invalidateRefreshToken(userId, String(row.deviceId));
+    repeatSignOut(strapi, manager, [userId, String(row.deviceId)], repeatDelayMs);
     endedDeviceId = String(row.deviceId);
     ended = 1;
     signedOutSelf = Boolean(currentDeviceId) && String(row.deviceId) === currentDeviceId;
   } else {
     await manager.invalidateRefreshToken(userId);
+    repeatSignOut(strapi, manager, [userId], repeatDelayMs);
     ended = blockReason === 'account-inactive' ? 0 : devices.length;
     signedOutSelf = self && Boolean(currentDeviceId);
   }
@@ -710,6 +834,7 @@ module.exports = {
   ADMIN_ORIGIN,
   AdminSignOutError,
   DEFAULT_POLICY,
+  FULL_VISIBILITY,
   MAX_PAGE_SIZE,
   SUPER_ADMIN_CODE,
   accountState,
@@ -723,8 +848,10 @@ module.exports = {
   listQuerySchema,
   parseInput,
   readSessionPolicy,
+  sessionHandle,
   sessionParamsSchema,
   signOutAdmin,
   signOutBlockReason,
   summariseByAdmin,
+  visibilityOf,
 };

@@ -84,9 +84,15 @@ export const AdminIdentity = ({ admin }) => {
           </Badge>
         ) : null}
       </Flex>
-      <Typography variant="pi" textColor="neutral600" ellipsis title={admin.email}>
-        {admin.email}
-      </Typography>
+      {admin.identityHidden ? (
+        <Typography variant="pi" textColor="neutral600">
+          {t('adminPanel.identity.emailHidden', 'Email hidden (needs “Read” on Users)')}
+        </Typography>
+      ) : (
+        <Typography variant="pi" textColor="neutral600" ellipsis title={admin.email}>
+          {admin.email}
+        </Typography>
+      )}
     </Flex>
   );
 };
@@ -100,7 +106,11 @@ export const AdminIdentity = ({ admin }) => {
 export const AdminRoles = ({ admin }) => {
   const t = useT();
   const names = (admin.roles || []).map((role) => role.name).filter(Boolean);
-  const text = names.length ? names.join(', ') : t('adminPanel.roles.none', 'No role');
+  const text = admin.rolesHidden
+    ? t('adminPanel.roles.hidden', 'Hidden (needs “Read” on Roles)')
+    : names.length
+      ? names.join(', ')
+      : t('adminPanel.roles.none', 'No role');
   return (
     <Typography variant="omega" textColor="neutral800" ellipsis title={text}>
       {text}
