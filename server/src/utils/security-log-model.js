@@ -30,7 +30,44 @@ const SECURITY_EVENTS = Object.freeze({
   ADMIN_CONTENT_DISCARD: 'admin.content.discard',
   ADMIN_CONTENT_DELETE: 'admin.content.delete',
   ADMIN_CONTENT_CLONE: 'admin.content.clone',
+  // 4.17: always recorded (no switch), never values.
+  SETTINGS_UPDATED: 'settings.updated',
+  LOG_RETENTION_PURGED: 'security-log.retention.purged',
+  LOG_READ: 'security-log.read',
 });
+
+/**
+ * Events whose admin actor is cleared (not deleted with the row) when that
+ * admin's account is deleted: the target, or the record of the change,
+ * keeps the event.
+ */
+const KEEP_WITHOUT_ACTOR_EVENTS = Object.freeze([
+  SECURITY_EVENTS.ADMIN_SESSION_REVOKED,
+  SECURITY_EVENTS.SETTINGS_UPDATED,
+  SECURITY_EVENTS.LOG_READ,
+]);
+
+/**
+ * Drop order when the in-memory queue is full (lowest first): failed
+ * sign-ins and lockouts (the flood an unauthenticated client can cause),
+ * then Content Manager views, then other Content Manager activity and read
+ * audits. Sign-ins, sign-outs, sign-outs by another admin and settings
+ * changes are dropped last.
+ *
+ * @param {string} event Event name.
+ * @returns {{rank: 0|1|2|3, family: 'failed'|'content-view'|'activity'|'account'}} Rank and the
+ *   family named in the drop log line.
+ */
+function dropRankOf(event) {
+  if (event === SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED || event === SECURITY_EVENTS.ADMIN_LOCKOUT) {
+    return { rank: 0, family: 'failed' };
+  }
+  if (event === SECURITY_EVENTS.ADMIN_CONTENT_VIEW) return { rank: 1, family: 'content-view' };
+  if (event.startsWith('admin.content.') || event === SECURITY_EVENTS.LOG_READ) {
+    return { rank: 2, family: 'activity' };
+  }
+  return { rank: 3, family: 'account' };
+}
 
 /** Shape every stored event name must have (registry and future events). */
 const EVENT_NAME_PATTERN = /^[a-z][a-z0-9-]{0,30}(\.[a-z][a-z0-9-]{0,30}){1,3}$/;
@@ -184,8 +221,12 @@ function shaped(value, pattern) {
  *
  * @param {{status: number, route: any, params?: any, query?: any, requestBody?: any,
  *   responseBody?: any}} request Request facts after the handler ran.
+ * Only the content type uid, document id, locale and (bulk) count are kept:
+ * the entry itself (`responseBody.data`) is never passed on, so nothing of
+ * its content waits in the queue (4.17).
+ *
  * @returns {null|{action: string, kind: 'collection'|'single', contentType: string,
- *   documentId: string|null, locale: string|null, count: number|null, data: any}} Entry.
+ *   documentId: string|null, locale: string|null, count: number|null}} Entry.
  */
 function describeContentManagerRequest({
   status,
@@ -224,13 +265,14 @@ function describeContentManagerRequest({
     documentId,
     locale,
     count,
-    data: mapping.bulk ? null : single,
   };
 }
 
 /**
  * Cuts a display title out of an entry: the Content Manager main field when
  * it holds text or a number, else nothing (the UI then shows the document id).
+ * Since 4.17 it runs when a list is read, on entries the reader may read in
+ * the Content Manager; titles are no longer stored.
  *
  * @param {any} data Entry as the Content Manager returned it.
  * @param {string|null|undefined} mainField Main field from the CM configuration.
@@ -383,6 +425,7 @@ module.exports = {
   CONTENT_ACTIONS,
   CONTENT_MANAGER_HANDLERS,
   EVENT_NAME_PATTERN,
+  KEEP_WITHOUT_ACTOR_EVENTS,
   MAX_META_BYTES,
   SECURITY_EVENTS,
   SIGN_IN_FILTERS,
@@ -390,6 +433,7 @@ module.exports = {
   contentEvent,
   deriveSessionStates,
   describeContentManagerRequest,
+  dropRankOf,
   handlerName,
   pickEntryTitle,
   recordingSwitchOf,

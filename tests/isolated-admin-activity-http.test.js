@@ -11,6 +11,8 @@
 // ADMIN_ACTIVITY_PROXY=1 boots the host behind a trusted proxy
 // (`server.proxy: { koa: true, maxIpsCount: 1 }`): the stored address is then
 // the last X-Forwarded-For hop. Without it, X-Forwarded-For is ignored.
+// SESSION_HTTP_DB=postgres with MSM_TEST_PG_URL runs on PostgreSQL (a
+// throwaway schema is created and dropped).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -22,11 +24,14 @@ const net = require('node:net');
 const { resolveHostDependencies, assertHostAvailable } = require('./helpers/host-dependencies');
 
 const sourceRoot = path.resolve(__dirname, '..');
+const dbKind = process.env.SESSION_HTTP_DB === 'postgres' ? 'postgres' : 'sqlite';
 const host = resolveHostDependencies([
   '@strapi/strapi',
   '@strapi/plugin-users-permissions',
-  'better-sqlite3',
+  dbKind === 'postgres' ? 'pg' : 'better-sqlite3',
 ]);
+const pgUrl = process.env.MSM_TEST_PG_URL || '';
+const pgMissing = dbKind === 'postgres' && !pgUrl;
 const behindProxy = process.env.ADMIN_ACTIVITY_PROXY === '1';
 
 const EVENT_UID = 'plugin::magic-sessionmanager.security-event';
@@ -35,10 +40,16 @@ const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 test(
-  `isolated Strapi admin sign-in history and activity over HTTP (${behindProxy ? 'trusted proxy' : 'no proxy'})`,
-  { timeout: 300000, skip: host.skip },
+  `isolated Strapi admin sign-in history and activity over HTTP (${dbKind}, ${behindProxy ? 'trusted proxy' : 'no proxy'})`,
+  {
+    timeout: 300000,
+    skip:
+      host.skip ||
+      (pgMissing && process.env.SESSION_HTTP_REQUIRED !== '1' ? 'MSM_TEST_PG_URL not set' : false),
+  },
   async (t) => {
     assertHostAvailable(host);
+    if (pgMissing) throw new Error('SESSION_HTTP_DB=postgres needs MSM_TEST_PG_URL');
     const hostModules = host.modules;
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sessionmanager-activity-'));
     const plugin = path.join(root, 'plugin');
@@ -83,10 +94,23 @@ test(
         attributes: { title: { type: 'string' }, body: { type: 'text' } },
       })
     );
-    write(
-      'config/database.js',
-      `module.exports = { connection: { client: 'sqlite', connection: { filename: ${JSON.stringify(path.join(root, 'test.sqlite'))} }, useNullAsDefault: true } };\n`
-    );
+    const schema = `msm_activity_${crypto.randomBytes(4).toString('hex')}`;
+    let pgAdmin = null;
+    if (dbKind === 'postgres') {
+      const { Client } = require(path.join(hostModules, 'pg'));
+      pgAdmin = new Client({ connectionString: pgUrl });
+      await pgAdmin.connect();
+      await pgAdmin.query(`CREATE SCHEMA "${schema}"`);
+      write(
+        'config/database.js',
+        `module.exports = { connection: { client: 'postgres', connection: { connectionString: ${JSON.stringify(pgUrl)}, schema: ${JSON.stringify(schema)} }, pool: { min: 0, max: 5 } } };\n`
+      );
+    } else {
+      write(
+        'config/database.js',
+        `module.exports = { connection: { client: 'sqlite', connection: { filename: ${JSON.stringify(path.join(root, 'test.sqlite'))} }, useNullAsDefault: true } };\n`
+      );
+    }
     const proxy = behindProxy ? `proxy: { koa: true, maxIpsCount: 1 }, ` : '';
     write(
       'config/server.js',
@@ -104,6 +128,7 @@ test(
     );
 
     const allowedPorts = new Set();
+    if (dbKind === 'postgres') allowedPorts.add(Number(new URL(pgUrl).port || 5432));
     const originalConnect = net.Socket.prototype.connect;
     net.Socket.prototype.connect = function (...args) {
       const options = Array.isArray(args[0])
@@ -137,6 +162,10 @@ test(
       } finally {
         net.Socket.prototype.connect = originalConnect;
         process.chdir(originalCwd);
+        if (pgAdmin) {
+          await pgAdmin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`).catch(() => {});
+          await pgAdmin.end().catch(() => {});
+        }
         fs.rmSync(root, { recursive: true, force: true });
       }
     });
@@ -278,6 +307,7 @@ test(
       assert.equal(settings.securityLogStoreIp, true);
       assert.equal(settings.securityLogAnonymizeIp, false);
       assert.equal(settings.securityLogRetentionDays, 90);
+      assert.equal(settings.securityLogGeoLookup, false, 'F1: no location lookup by default');
     });
 
     let ada;
@@ -296,6 +326,9 @@ test(
       // maxIpsCount 1: Koa reads only the hop the trusted proxy added.
       assert.equal(row.ip, expectedIp('198.51.100.7'));
       assert.equal(meta(row).ipAnonymized, undefined);
+      // F7: behind the proxy the TCP peer (the proxy) is kept, anonymised.
+      assert.equal(meta(row).socketIp, behindProxy ? '127.0.0.0' : undefined);
+      assert.equal(row.geo, null, 'F1: no lookup by default');
       assert.equal(row.userAgent, UA);
       assert.match(meta(row).deviceHash, /^[a-f0-9]{64}$/);
       assert.notEqual(meta(row).deviceHash, ada.deviceId);
@@ -331,6 +364,8 @@ test(
             [null, 'invalid_credentials'],
           ]
         );
+        assert.equal(meta(failed[1]).count, 1, 'F2: an unknown account is a counted row');
+        assert.equal(meta(failed[1]).aggregated, true);
         const raw = JSON.stringify(await signInRows());
         for (const forbidden of ['nobody.unknown', 'erin.editor@', 'Wrong-password-1']) {
           assert.ok(!raw.includes(forbidden), `stored ${forbidden}`);
@@ -395,6 +430,7 @@ test(
           'actor',
           'admin',
           'at',
+          'attempts',
           'browser',
           'deviceType',
           'event',
@@ -555,13 +591,9 @@ test(
         assert.equal(meta(row).kind, 'collection');
         assert.ok(JSON.stringify(row.meta).length <= 2048);
       }
-      assert.equal(meta(rows[0]).title, 'Synthetic launch note');
-      assert.equal(meta(rows[2]).title, 'Synthetic launch note (edited)');
-      assert.equal(
-        meta(rows[5]).title,
-        'Synthetic launch note (edited)',
-        'a delete keeps the name the entry had'
-      );
+      // F3: no title is stored; it is resolved when the list is read.
+      for (const row of rows) assert.equal(meta(row).title, undefined);
+      assert.ok(!JSON.stringify(rows).includes('Synthetic launch note'));
 
       const list = await request('GET', api(`/content?adminId=${owner.id}&action=publish`), {
         token: ada.token,
@@ -599,6 +631,326 @@ test(
       });
       assert.ok(signIns.body.data.length >= 4);
     });
+
+    // ---------------------------------------------------- 4.17 security review
+
+    const grant = async (roleId, action, subject = null, properties = {}) =>
+      app.db
+        .query('admin::permission')
+        .create({ data: { action, subject, properties, conditions: [], role: roleId } });
+    // One sign-in each: Strapi's login rate limit (8 per email and address) stays on.
+    const review = {
+      otto: await login('otto.auditor@example.test'),
+      rita: await login('rita.reader@example.test'),
+    };
+
+    await t.test(
+      'F3: titles are resolved when read, with the reader’s Content Manager rights',
+      async () => {
+        await setSettings({ adminContentActivity: true });
+        await clearLog();
+        const cm = `/content-manager/collection-types/${ARTICLE}`;
+        const title = `SYNTHETIC-CONFIDENTIAL-${crypto.randomBytes(3).toString('hex')}`;
+        const created = await request('POST', cm, { token: ada.token, body: { title } });
+        assert.equal(created.status, 201);
+        const documentId = created.body.data.documentId;
+        await flush();
+        assert.ok(!JSON.stringify(await activityRows()).includes(title), 'nothing stored');
+
+        const otto1 = review.otto;
+        assert.equal(
+          (await request('GET', `${cm}/${documentId}`, { token: otto1.token })).status,
+          403
+        );
+        const asAuditor = await request('GET', api(`/content?contentType=${ARTICLE}`), {
+          token: otto1.token,
+        });
+        assert.equal(asAuditor.status, 200);
+        assert.equal(asAuditor.body.data[0].entry.documentId, documentId);
+        assert.equal(
+          asAuditor.body.data[0].entry.title,
+          null,
+          'no Content Manager access, no title'
+        );
+        const exported = await request('GET', api(`/content/export?contentType=${ARTICLE}`), {
+          token: otto1.token,
+        });
+        assert.ok(!JSON.stringify(exported.body).includes(title), 'the export follows the rule');
+
+        const asOwner = await request('GET', api(`/content?contentType=${ARTICLE}`), {
+          token: ada.token,
+        });
+        assert.equal(asOwner.body.data[0].entry.title, title, 'readable entry: title shown');
+
+        // Field level: read on the type, but not on the main field.
+        await grant(auditorRole.id, 'plugin::content-manager.explorer.read', ARTICLE, {
+          fields: ['body'],
+        });
+        const fieldLevel = await request('GET', api(`/content?contentType=${ARTICLE}`), {
+          token: otto1.token,
+        });
+        assert.equal(fieldLevel.body.data[0].entry.title, null, 'main field not readable');
+
+        assert.equal(
+          (await request('DELETE', `${cm}/${documentId}`, { token: ada.token })).status,
+          200
+        );
+        await flush();
+        const afterDelete = await request('GET', api(`/content?contentType=${ARTICLE}`), {
+          token: ada.token,
+        });
+        assert.ok(!JSON.stringify(afterDelete.body).includes(title), 'deleted: the title is gone');
+
+        // Rows stored by 4.15/4.16 lose their title in the one-time migration.
+        await app.db.query(EVENT_UID).create({
+          data: {
+            event: 'admin.content.view',
+            actorType: 'admin',
+            actorId: String(owner.id),
+            targetType: ARTICLE,
+            targetId: 'legacyrow1',
+            meta: { kind: 'collection', title: 'Legacy synthetic title' },
+          },
+        });
+        await store.set({ key: 'migrations', value: {} });
+        const { migrateSecurityLog } = require(
+          path.join(sourceRoot, 'server/src/utils/security-log-hardening')
+        );
+        const migrated = await migrateSecurityLog(app, { info() {}, warn() {} });
+        assert.ok(migrated.titlesRemoved >= 1);
+        assert.ok(!JSON.stringify(await activityRows()).includes('Legacy synthetic title'));
+      }
+    );
+
+    await t.test(
+      'F2: a flood of unknown accounts stores one counted row; a sign-in still lands',
+      async () => {
+        await clearLog();
+        const statuses = [];
+        const attempt = (i) =>
+          request('POST', '/admin/login', {
+            body: { email: `ghost-${i}@example.test`, password: 'Wrong-password-1' },
+            forwardedFor: '198.51.100.44',
+          }).then((result) => statuses.push(result.status));
+        for (let i = 0; i < 150; i += 25) {
+          await Promise.all(Array.from({ length: 25 }, (_, k) => attempt(i + k)));
+          if (i === 75) await login('erin.editor@example.test');
+        }
+        assert.ok(statuses.every((status) => status === 400));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await flush();
+        const rows = await signInRows();
+        const unknown = rows.filter((row) => row.event === 'admin.sign-in.failed' && !row.targetId);
+        assert.ok(
+          unknown.length >= 1 && unknown.length <= 2,
+          `${unknown.length} rows (one per 5 min)`
+        );
+        assert.equal(
+          unknown.reduce((sum, row) => sum + meta(row).count, 0),
+          150,
+          'every attempt is counted'
+        );
+        assert.ok(
+          rows.some((row) => row.event === 'admin.sign-in' && row.targetId === String(erin.id))
+        );
+        assert.ok(!JSON.stringify(rows).includes('ghost-'), 'typed emails are never stored');
+      }
+    );
+
+    await t.test(
+      'F4: names, emails and roles need admin::users.read / admin::roles.read',
+      async () => {
+        const rita1 = review.rita;
+        const list = await request(
+          'GET',
+          '/magic-sessionmanager/admin-sessions/admins?pageSize=100',
+          {
+            token: rita1.token,
+          }
+        );
+        assert.equal(list.status, 200);
+        assert.deepEqual(list.body.meta.identity, { names: false, emails: false, roles: false });
+        const others = list.body.data.filter((row) => !row.self);
+        assert.ok(others.length >= 3);
+        for (const row of others) {
+          assert.deepEqual([row.name, row.email, row.roles], ['', '', []]);
+        }
+        assert.ok(!JSON.stringify(list.body).includes('ada.owner@'));
+        const search = await request(
+          'GET',
+          '/magic-sessionmanager/admin-sessions/admins?search=Ada',
+          {
+            token: rita1.token,
+          }
+        );
+        assert.equal(search.body.data.length, 0, 'no name or email oracle through search');
+        const byId = await request(
+          'GET',
+          `/magic-sessionmanager/admin-sessions/admins?search=${owner.id}`,
+          { token: rita1.token }
+        );
+        assert.deepEqual(
+          byId.body.data.map((row) => row.id),
+          [owner.id]
+        );
+        const one = await request(
+          'GET',
+          `/magic-sessionmanager/admin-sessions/admins/${owner.id}/sessions`,
+          { token: rita1.token }
+        );
+        assert.equal(one.body.meta.admin.email, '');
+
+        // Item 5: session ids are opaque handles, not Strapi's sessionId.
+        const raw = (
+          await app.db.query('admin::session').findMany({ where: { userId: String(owner.id) } })
+        ).map((row) => row.sessionId);
+        assert.ok(one.body.data.length >= 1);
+        for (const session of one.body.data) {
+          assert.match(session.id, /^[a-f0-9]{32}$/);
+          assert.ok(!raw.includes(session.id));
+        }
+
+        await grant(readerRole.id, 'admin::roles.read');
+        const roles = await request(
+          'GET',
+          '/magic-sessionmanager/admin-sessions/admins?pageSize=100',
+          {
+            token: rita1.token,
+          }
+        );
+        const ownerRow = roles.body.data.find((row) => row.id === owner.id);
+        assert.equal(ownerRow.email, '');
+        assert.equal(ownerRow.roles[0].superAdmin, true);
+        await grant(readerRole.id, 'admin::users.read');
+        const full = await request(
+          'GET',
+          '/magic-sessionmanager/admin-sessions/admins?pageSize=100',
+          {
+            token: rita1.token,
+          }
+        );
+        assert.equal(
+          full.body.data.find((row) => row.id === owner.id).email,
+          'ada.owner@example.test'
+        );
+
+        // The same rule for names in the history.
+        const otto1 = review.otto;
+        const history = await request('GET', api(`/sign-ins?adminId=${erin.id}`), {
+          token: otto1.token,
+        });
+        assert.equal(history.body.meta.identity.names, false);
+        assert.ok(history.body.data.every((row) => !row.admin || row.admin.name === ''));
+      }
+    );
+
+    await t.test(
+      'F5/F6: protected settings, the settings event, retention minimum, no webhook URL',
+      async () => {
+        await clearLog();
+        const hook = 'https://discord.com/api/webhooks/123456789012345678/SYNTHETICsecretTOKEN_abc';
+        const saved = await request('PUT', '/magic-sessionmanager/settings', {
+          token: ada.token,
+          body: { discordWebhookUrl: hook, enableGeolocation: false },
+        });
+        assert.equal(saved.status, 200, 'the Super Admin holds settings.update');
+        assert.ok(!JSON.stringify(saved.body).includes('SYNTHETICsecret'));
+        assert.equal(saved.body.settings.hasDiscordWebhook, true);
+
+        const rita1 = review.rita;
+        const read = await request('GET', '/magic-sessionmanager/settings', { token: rita1.token });
+        assert.ok(!JSON.stringify(read.body).includes('SYNTHETICsecret'));
+        assert.equal(read.body.settings.discordWebhookHint, 'https://discord.com/…');
+        const resent = await request('PUT', '/magic-sessionmanager/settings', {
+          token: rita1.token,
+          body: { ...read.body.settings, inactivityTimeout: 25 },
+        });
+        assert.equal(resent.status, 200, 'the GET response sent back keeps working');
+        assert.equal((await store.get({ key: 'settings' })).discordWebhookUrl, hook);
+        for (const body of [
+          { enableGeolocation: true },
+          { geoIpProvider: 'ipapi' },
+          { discordWebhookUrl: '' },
+        ]) {
+          const denied = await request('PUT', '/magic-sessionmanager/settings', {
+            token: rita1.token,
+            body,
+          });
+          assert.equal(denied.status, 403, JSON.stringify(body));
+          assert.equal(denied.body.error.details.reason, 'settings-update-permission');
+        }
+        const otto1 = review.otto;
+        const blind = await request('PUT', '/magic-sessionmanager/settings', {
+          token: otto1.token,
+          body: { adminSignInHistory: false },
+        });
+        assert.equal(blind.status, 403, 'a reader cannot blind the log');
+        assert.equal(blind.body.error.details.reason, 'settings-update-permission');
+        const short = await request('PUT', '/magic-sessionmanager/settings', {
+          token: ada.token,
+          body: { securityLogRetentionDays: 3 },
+        });
+        assert.equal(short.status, 400, 'retention below 7 days is rejected');
+        const cleared = await request('PUT', '/magic-sessionmanager/settings', {
+          token: ada.token,
+          body: { discordWebhookUrl: '', enableGeolocation: true },
+        });
+        assert.equal(cleared.body.settings.hasDiscordWebhook, false);
+
+        await flush();
+        const changes = (await allRows()).filter((row) => row.event === 'settings.updated');
+        assert.equal(changes.length, 3);
+        assert.deepEqual(
+          changes.map((row) => [row.actorType, row.actorId, meta(row).keys]),
+          [
+            ['admin', String(owner.id), 'enableGeolocation,discordWebhookUrl'],
+            ['admin', String(rita.id), 'inactivityTimeout'],
+            ['admin', String(owner.id), 'enableGeolocation,discordWebhookUrl'],
+          ]
+        );
+        assert.ok(!JSON.stringify(changes).includes('SYNTHETICsecret'), 'never the values');
+
+        // 4.16 allowed 1 day: the start-up migration raises it to 7.
+        await setSettings({ securityLogRetentionDays: 2 });
+        const { raiseLegacyRetention } = require(
+          path.join(sourceRoot, 'server/src/utils/security-log-hardening')
+        );
+        assert.equal(await raiseLegacyRetention(app, { info() {} }), 2);
+        assert.equal((await store.get({ key: 'settings' })).securityLogRetentionDays, 7);
+        await setSettings({ securityLogRetentionDays: 90, inactivityTimeout: 15 });
+      }
+    );
+
+    await t.test(
+      'F8: the plugin types are not reachable through the Content Manager API',
+      async () => {
+        const cm = (uid) => `/content-manager/collection-types/${uid}`;
+        assert.equal((await request('GET', cm(EVENT_UID), { token: ada.token })).status, 404);
+        assert.equal(
+          (await request('GET', cm(encodeURIComponent(EVENT_UID)), { token: ada.token })).status,
+          404
+        );
+        assert.equal(
+          (
+            await request('POST', cm(EVENT_UID), {
+              token: ada.token,
+              body: { event: 'admin.sign-in', actorType: 'admin', ip: '198.51.100.77' },
+            })
+          ).status,
+          404,
+          'no forged events'
+        );
+        assert.equal(
+          (await request('GET', cm('plugin::magic-sessionmanager.session'), { token: ada.token }))
+            .status,
+          404
+        );
+        await grant(readerRole.id, 'plugin::content-manager.explorer.read', EVENT_UID);
+        const rita1 = review.rita;
+        assert.equal((await request('GET', cm(EVENT_UID), { token: rita1.token })).status, 404);
+        assert.equal((await request('GET', cm(ARTICLE), { token: ada.token })).status, 200);
+      }
+    );
 
     await t.test('anonymise last octet, IP storage off, history off', async () => {
       await setSettings({ securityLogAnonymizeIp: true });
@@ -666,6 +1018,14 @@ test(
         const removed = await service().cleanup();
         assert.equal(removed.expired, 4);
         assert.equal(await app.db.query(EVENT_UID).count({}), 2);
+        // F5: the purge itself is recorded (always on), with the count.
+        await flush();
+        const purged = (await allRows()).filter(
+          (row) => row.event === 'security-log.retention.purged'
+        );
+        assert.equal(purged.length, 1);
+        assert.equal(purged[0].actorType, 'system');
+        assert.equal(meta(purged[0]).count, 4);
 
         // Otto acted and was acted on; Otto also signed Rita out (actor reference).
         await login('otto.auditor@example.test');

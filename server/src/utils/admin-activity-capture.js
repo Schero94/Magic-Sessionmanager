@@ -43,9 +43,10 @@ const {
   handlerName,
   safeReason,
 } = require('./security-log-model');
-const { getRequestIp, getRequestUserAgent } = require('./admin-request-info');
+const { getRequestIp, getRequestUserAgent, getSocketIp } = require('./admin-request-info');
 const { resolveSecurityLogSettings } = require('./security-log-settings');
 const { getPluginSettings, peekCachedSettings } = require('./settings-loader');
+const { migrateSecurityLog } = require('./security-log-hardening');
 
 const SERVICE = 'security-log';
 const AUTH_HANDLERS = Object.freeze({
@@ -91,18 +92,50 @@ function bodyDeviceId(ctx) {
 }
 
 /**
- * Request facts of the current request, if there is one.
+ * Request facts of a request: client IP, TCP peer, user agent, device id.
  *
- * @param {any} strapi Strapi instance.
- * @returns {{ip: string|null, userAgent: string|null, deviceId: string|null}} Facts.
+ * @param {any} ctx Koa context, or null.
+ * @returns {{ip: string|null, socketIp: string|null, userAgent: string|null,
+ *   deviceId: string|null}} Facts.
  */
-function currentRequestFacts(strapi) {
-  const ctx = currentContext(strapi);
+function requestFacts(ctx) {
   return {
     ip: ctx ? getRequestIp(ctx) : null,
+    socketIp: ctx ? getSocketIp(ctx) : null,
     userAgent: ctx ? getRequestUserAgent(ctx) : null,
     deviceId: ctx ? bodyDeviceId(ctx) : null,
   };
+}
+
+/**
+ * Request facts of the current request, if there is one.
+ *
+ * @param {any} strapi Strapi instance.
+ * @returns {ReturnType<typeof requestFacts>} Facts.
+ */
+function currentRequestFacts(strapi) {
+  return requestFacts(currentContext(strapi));
+}
+
+/**
+ * Whether Strapi names the admin in `admin.auth.error` when the typed email
+ * belongs to one (5.58 and later). Then an event without a user is an
+ * unknown account, and the typed email is not needed at all.
+ *
+ * @param {any} strapi Strapi instance.
+ * @returns {boolean}
+ */
+function authErrorNamesKnownAdmins(strapi) {
+  let version;
+  try {
+    version = strapi?.config?.get?.('info.strapi');
+  } catch {
+    version = undefined;
+  }
+  if (typeof version !== 'string') return true;
+  const match = version.match(/^5\.(\d+)\./);
+  if (!match) return true;
+  return Number(match[1]) >= 58;
 }
 
 /**
@@ -213,11 +246,7 @@ function observeAuthentication(strapi, getService, ctx, route, thrown) {
       ? 429
       : Number(error.status) || 500
     : Number(ctx.status);
-  const facts = {
-    ip: getRequestIp(ctx),
-    userAgent: getRequestUserAgent(ctx),
-    deviceId: bodyDeviceId(ctx),
-  };
+  const facts = requestFacts(ctx);
   if (name === AUTH_HANDLERS.login) {
     if (status !== 429) return;
     getService()?.record({
@@ -298,8 +327,10 @@ function installAdminActivityCapture(strapi, { log, runExclusive }) {
     const switches = peekSwitches(strapi);
     if (switches && !switches.signIns) return;
     // Strapi 5.58+ sets `user` only when the typed email belongs to an
-    // existing admin. Older versions (5.50) send no user: then the typed
-    // email is resolved to an existing admin in the background, never stored.
+    // existing admin; without it the account is unknown, and attempts are
+    // counted per address and 5 minutes (4.17). Older versions (5.50) send
+    // no user: then the typed email is resolved to an existing admin in the
+    // background, never stored.
     const id = payload?.user?.id ?? null;
     getService()?.record({
       event: SECURITY_EVENTS.ADMIN_SIGN_IN_FAILED,
@@ -307,7 +338,7 @@ function installAdminActivityCapture(strapi, { log, runExclusive }) {
       actorId: id,
       targetType: 'admin',
       targetId: id,
-      ...(id === null
+      ...(id === null && !authErrorNamesKnownAdmins(strapi)
         ? { attemptedEmail: attemptedEmailOf(currentContext(strapi)), actorFromEmail: true }
         : {}),
       meta: {
@@ -362,6 +393,8 @@ function installAdminActivityCapture(strapi, { log, runExclusive }) {
   const retention = async () => {
     const job = async () => {
       const service = strapi.plugin('magic-sessionmanager').service(SERVICE);
+      // Finishes a migration a large log did not complete at start-up.
+      await migrateSecurityLog(strapi, log);
       const removed = await service.cleanup();
       if (removed.expired || removed.orphans) {
         log.info(
@@ -400,6 +433,7 @@ function installAdminActivityCapture(strapi, { log, runExclusive }) {
 }
 
 module.exports = {
+  authErrorNamesKnownAdmins,
   createCaptureMiddleware,
   installAdminActivityCapture,
   observeAuthentication,
