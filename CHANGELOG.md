@@ -1,3 +1,10 @@
+## [4.23.1](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.23.0...v4.23.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **admin:** clear View permissions matrix, one wording, sorted settings and shorter click paths ([#48](https://github.com/Schero94/Magic-Sessionmanager/issues/48)) ([9aa10ef](https://github.com/Schero94/Magic-Sessionmanager/commit/9aa10ef989d597f91d6a4d234c0c537799c78856))
+
 # [4.23.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.22.1...v4.23.0) (2026-11-25)
 
 
