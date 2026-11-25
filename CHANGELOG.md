@@ -1,4 +1,10 @@
-## [Unreleased]
+# [4.20.0](https://github.com/Schero94/Magic-Sessionmanager/compare/v4.19.1...v4.20.0) (2026-11-25)
+
+
+### Features
+
+* impersonate app users with a one-time hand-off, restrictions and audit ([#41](https://github.com/Schero94/Magic-Sessionmanager/issues/41)) ([940e6f3](https://github.com/Schero94/Magic-Sessionmanager/commit/940e6f316be961bd69c42734fbd97171245cdbc4))
+
 
 Release type: minor (`feat`: impersonation of app users). Additive: a new RBAC action, four admin routes, one public Content API route, a new internal content type and a settings key that is off by default. No existing route, response or permission changes.
 
