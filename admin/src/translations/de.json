@@ -990,6 +990,8 @@
   "adminPanel.activity.read.signInsExport": "Anmeldeverlauf exportiert",
   "adminPanel.activity.read.signIns": "Anmeldeverlauf abgerufen",
   "adminPanel.activity.event.purged": "Alte Ereignisse gelöscht",
+  "adminPanel.activity.event.weakKey": "Schwacher Verschlüsselungsschlüssel",
+  "adminPanel.activity.event.weakKey.detail": "SESSION_ENCRYPTION_KEY ist kürzer als 32 Bytes. Die nächste Hauptversion startet damit nicht mehr.",
   "adminPanel.activity.event.userFailed": "Anmeldung fehlgeschlagen",
   "adminPanel.activity.event.userRefused": "Anmeldung abgelehnt",
   "adminPanel.activity.event.userLockout": "Gesperrt",

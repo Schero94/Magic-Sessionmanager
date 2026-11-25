@@ -251,6 +251,18 @@ export function getEventPresentation(row) {
         label: message('adminPanel.activity.event.purged', 'Old events deleted'),
         detail: null,
       };
+    // 4.22.1: recorded once per key at start-up.
+    case 'config.encryption-key.weak':
+      return {
+        key: 'weak-key',
+        tone: 'danger',
+        icon: 'settings',
+        label: message('adminPanel.activity.event.weakKey', 'Weak encryption key'),
+        detail: message(
+          'adminPanel.activity.event.weakKey.detail',
+          'SESSION_ENCRYPTION_KEY is shorter than 32 bytes. The next major version will refuse to start with it.'
+        ),
+      };
     // App-user events (4.17 / 4.18), listed by the app-user Security activity (4.22) only.
     // The admin lists never return them; the labels are plain because that view is about app
     // users already.

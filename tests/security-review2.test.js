@@ -264,7 +264,7 @@ test('hardening 7: IPv6 clients are counted per /64', () => {
   assert.notEqual(ipKey('2001:db8:1:2::1'), ipKey('2001:db8:1:3::1'));
 });
 
-test('hardening 9: a short SESSION_ENCRYPTION_KEY fails in production and warns elsewhere', () => {
+test('hardening 9: a short SESSION_ENCRYPTION_KEY warns in every environment and never stops a start', () => {
   const saved = { key: process.env.SESSION_ENCRYPTION_KEY, env: process.env.NODE_ENV };
   const encryptionPath = require.resolve('../server/src/utils/encryption');
   const load = () => {
@@ -275,17 +275,25 @@ test('hardening 9: a short SESSION_ENCRYPTION_KEY fails in production and warns 
   const warnings = [];
   console.warn = (message) => warnings.push(String(message));
   try {
-    process.env.SESSION_ENCRYPTION_KEY = 'short-key';
+    for (const env of ['production', 'staging', 'development']) {
+      process.env.SESSION_ENCRYPTION_KEY = 'short-key';
+      process.env.NODE_ENV = env;
+      const encryption = load();
+      assert.equal(encryption.isEncryptionKeyShort(), true);
+      assert.ok(encryption.encryptToken('x'), `${env}: a short key still works`);
+      encryption.encryptToken('y');
+    }
+    assert.equal(
+      warnings.filter((line) => line.includes('shorter than 32 bytes')).length,
+      3,
+      'one warning per process and environment'
+    );
+    process.env.SESSION_ENCRYPTION_KEY = 'a'.repeat(64);
+    assert.equal(load().isEncryptionKeyShort(), false);
+    // Unchanged: production still refuses to start without any key.
+    delete process.env.SESSION_ENCRYPTION_KEY;
     process.env.NODE_ENV = 'production';
     assert.throws(() => load().encryptToken('x'), /Failed to encrypt token/);
-    process.env.NODE_ENV = 'staging';
-    const staging = load();
-    assert.ok(staging.encryptToken('x'));
-    staging.encryptToken('y');
-    assert.equal(warnings.filter((line) => line.includes('shorter than 32 bytes')).length, 1);
-    process.env.NODE_ENV = 'production';
-    process.env.SESSION_ENCRYPTION_KEY = 'a'.repeat(64);
-    assert.ok(load().encryptToken('x'));
   } finally {
     console.warn = warn;
     if (saved.key === undefined) delete process.env.SESSION_ENCRYPTION_KEY;
@@ -293,5 +301,59 @@ test('hardening 9: a short SESSION_ENCRYPTION_KEY fails in production and warns 
     if (saved.env === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = saved.env;
     delete require.cache[encryptionPath];
+  }
+});
+
+test('hardening 9: start-up logs a loud error each time and records one security-log event per key', async () => {
+  const bootstrap = require('../server/src/bootstrap');
+  const { getCoordinator } = require('../server/src/utils/coordination');
+  const saved = process.env.SESSION_ENCRYPTION_KEY;
+  const errors = [];
+  const events = [];
+  const strapi = {
+    log: { info() {}, warn() {}, error() {}, debug() {} },
+    config: { get: () => ({}) },
+    plugin: () => ({
+      service: () => ({
+        record: (event) => {
+          events.push(event);
+          return true;
+        },
+      }),
+    }),
+  };
+  const log = { error: (line) => errors.push(line), debug() {} };
+  // A shared cache, as the database coordinator provides it.
+  const cache = new Map();
+  const coordinator = getCoordinator(strapi);
+  coordinator.cacheGet = async (key) => (cache.has(key) ? cache.get(key) : null);
+  coordinator.cacheSet = async (key, value) => {
+    cache.set(key, value);
+  };
+  try {
+    process.env.SESSION_ENCRYPTION_KEY = 'a'.repeat(64);
+    assert.equal(await bootstrap.__private.warnShortEncryptionKey(strapi, log), false);
+    assert.equal(errors.length, 0);
+    process.env.SESSION_ENCRYPTION_KEY = 'short-key-one';
+    for (let start = 0; start < 3; start++) {
+      assert.equal(await bootstrap.__private.warnShortEncryptionKey(strapi, log), true);
+    }
+    assert.equal(errors.length, 3, 'every start warns');
+    assert.match(errors[0], /shorter than 32 bytes/);
+    assert.match(errors[0], /next major version will refuse/);
+    assert.equal(errors[0].includes('short-key-one'), false, 'the key is never logged');
+    assert.equal(events.length, 1, 'one event for this key');
+    assert.deepEqual(events[0], {
+      event: 'config.encryption-key.weak',
+      actorType: 'system',
+      targetType: 'config',
+      meta: { minBytes: 32 },
+    });
+    process.env.SESSION_ENCRYPTION_KEY = 'short-key-two';
+    await bootstrap.__private.warnShortEncryptionKey(strapi, log);
+    assert.equal(events.length, 2, 'another short key is recorded again');
+  } finally {
+    if (saved === undefined) delete process.env.SESSION_ENCRYPTION_KEY;
+    else process.env.SESSION_ENCRYPTION_KEY = saved;
   }
 });

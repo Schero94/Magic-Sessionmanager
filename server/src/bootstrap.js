@@ -15,7 +15,13 @@
  */
 
 const getClientIp = require('./utils/getClientIp');
-const { encryptToken, getEncryptionKeyCheck, hashToken } = require('./utils/encryption');
+const {
+  MIN_KEY_BYTES,
+  encryptToken,
+  getEncryptionKeyCheck,
+  hashToken,
+  isEncryptionKeyShort,
+} = require('./utils/encryption');
 const { createLogger } = require('./utils/logger');
 const { resolveUserDocumentId } = require('./utils/resolve-user');
 const { getPluginSettings, getSessionCreationGraceMs } = require('./utils/settings-loader');
@@ -164,6 +170,7 @@ module.exports = async ({ strapi }) => {
     const coordinator = await initCoordination(strapi, log);
 
     await checkEncryptionKeyConsistency(strapi, log);
+    await warnShortEncryptionKey(strapi, log);
 
     // `trustedProxies: true` read client-set headers up to 4.22 (security
     // review 2, H2); it is migrated to Strapi's server.proxy settings.
@@ -449,6 +456,48 @@ async function checkEncryptionKeyConsistency(strapi, log) {
   } catch (err) {
     log.debug('[CONFIG] Encryption key consistency check skipped:', err?.name || 'Error');
   }
+}
+
+/**
+ * Warns loudly at every start when SESSION_ENCRYPTION_KEY is shorter than
+ * 32 bytes (security review 2, hardening 9), in every environment, and
+ * records `config.encryption-key.weak` in the security log once per key
+ * (shared cache, keyed by the key's HMAC check value, never the key). A
+ * short key is not refused: a patch or minor release must not stop an
+ * existing installation from starting; the next major version will.
+ *
+ * @param {object} strapi Strapi instance.
+ * @param {{error: Function, debug: Function}} log Plugin logger.
+ * @returns {Promise<boolean>} Whether the key is short.
+ * @sideeffect Logs an error line; may write one security-log event and a cache entry.
+ */
+async function warnShortEncryptionKey(strapi, log) {
+  if (!isEncryptionKeyShort()) return false;
+  log.error(
+    `[SECURITY] SESSION_ENCRYPTION_KEY is shorter than ${MIN_KEY_BYTES} bytes, so stored tokens and secrets are only as safe as that short key. ` +
+      'It still works in this version; the next major version will refuse to start with it. ' +
+      "Generate a new key with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\" " +
+      '(changing it signs users out and needs the webhook secret entered again).'
+  );
+  try {
+    const coordinator = getCoordinator(strapi);
+    const check = getEncryptionKeyCheck();
+    const marker = 'instance:weak-encryption-key-recorded';
+    if ((await coordinator.cacheGet(marker)) === check) return true;
+    const recorded = strapi
+      .plugin('magic-sessionmanager')
+      .service('security-log')
+      .record({
+        event: SECURITY_EVENTS.CONFIG_WEAK_KEY,
+        actorType: 'system',
+        targetType: 'config',
+        meta: { minBytes: MIN_KEY_BYTES },
+      });
+    if (recorded !== false) await coordinator.cacheSet(marker, check, Infinity);
+  } catch (err) {
+    log.debug('[SECURITY] Weak key event not recorded:', err?.name || 'Error');
+  }
+  return true;
 }
 
 /**
@@ -2819,6 +2868,7 @@ async function registerSessionAwareAuthStrategy(strapi) {
 }
 
 module.exports.__private = {
+  warnShortEncryptionKey,
   createAuthControllerHandlers,
   registerSessionAwareAuthStrategy,
   mountFailedLoginLockout,

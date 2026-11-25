@@ -990,6 +990,8 @@
   "adminPanel.activity.read.signInsExport": "Historial de inicios de sesión exportado",
   "adminPanel.activity.read.signIns": "Historial de inicios de sesión consultado",
   "adminPanel.activity.event.purged": "Eventos antiguos eliminados",
+  "adminPanel.activity.event.weakKey": "Clave de cifrado débil",
+  "adminPanel.activity.event.weakKey.detail": "SESSION_ENCRYPTION_KEY tiene menos de 32 bytes. La próxima versión principal no arrancará con ella.",
   "adminPanel.activity.event.userFailed": "Inicio de sesión fallido",
   "adminPanel.activity.event.userRefused": "Inicio de sesión rechazado",
   "adminPanel.activity.event.userLockout": "Bloqueado",

@@ -990,6 +990,8 @@
   "adminPanel.activity.read.signInsExport": "Historique de connexion exporté",
   "adminPanel.activity.read.signIns": "Historique de connexion consulté",
   "adminPanel.activity.event.purged": "Anciens événements supprimés",
+  "adminPanel.activity.event.weakKey": "Clé de chiffrement faible",
+  "adminPanel.activity.event.weakKey.detail": "SESSION_ENCRYPTION_KEY fait moins de 32 octets. La prochaine version majeure refusera de démarrer avec elle.",
   "adminPanel.activity.event.userFailed": "Échec de connexion",
   "adminPanel.activity.event.userRefused": "Connexion refusée",
   "adminPanel.activity.event.userLockout": "Bloqué",

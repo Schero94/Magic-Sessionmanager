@@ -990,6 +990,8 @@
   "adminPanel.activity.read.signInsExport": "Histórico de acessos exportado",
   "adminPanel.activity.read.signIns": "Histórico de acessos consultado",
   "adminPanel.activity.event.purged": "Eventos antigos excluídos",
+  "adminPanel.activity.event.weakKey": "Chave de criptografia fraca",
+  "adminPanel.activity.event.weakKey.detail": "SESSION_ENCRYPTION_KEY tem menos de 32 bytes. A próxima versão principal não vai iniciar com ela.",
   "adminPanel.activity.event.userFailed": "Falha no acesso",
   "adminPanel.activity.event.userRefused": "Acesso recusado",
   "adminPanel.activity.event.userLockout": "Bloqueado",

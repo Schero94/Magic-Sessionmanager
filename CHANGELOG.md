@@ -1,6 +1,6 @@
 ## [Unreleased]
 
-Release type: patch (`fix`). Fixes every finding of the second security review of 4.21.0 (two High, two Medium, five Low, eight hardening items). The settings API stays compatible: `trustedProxies: true` is still accepted. Read the migration notes: three settings now need **Change protected settings**, `trustedProxies: true` no longer reads proxy headers, and production refuses a `SESSION_ENCRYPTION_KEY` shorter than 32 bytes.
+Release type: patch (`fix`). Fixes every finding of the second security review of 4.21.0 (two High, two Medium, five Low, eight hardening items). The settings API stays compatible: `trustedProxies: true` is still accepted. Read the migration notes: three settings now need **Change protected settings**, `trustedProxies: true` no longer reads proxy headers, and a `SESSION_ENCRYPTION_KEY` shorter than 32 bytes now logs an error at every start (it still starts; the next major version will refuse it).
 
 ### Security
 
@@ -21,7 +21,7 @@ Release type: patch (`fix`). Fixes every finding of the second security review o
 * **Hardening 6:** the alert email templates (`emailTemplates`) need **Change protected settings**. They go to app users from your address, so they could be used for phishing.
 * **Hardening 7:** rate limits and the IP lockout count an IPv6 client per /64.
 * **Hardening 8:** CSV exports also escape a formula after U+061C (Arabic letter mark) and U+180E (Mongolian vowel separator).
-* **Hardening 9:** `SESSION_ENCRYPTION_KEY` must be at least 32 bytes. Production refuses to start with a shorter key, as it does without one; elsewhere a shorter key logs one warning.
+* **Hardening 9:** a `SESSION_ENCRYPTION_KEY` shorter than 32 bytes logs an error at every start, in every environment, and is recorded once per key in the security log as `config.encryption-key.weak` (shown as **Weak encryption key** under Settings and log access, actor System). The key itself is never logged. It is not refused, because a patch release must not stop an installation from starting. **The next major version will refuse to start with a key shorter than 32 bytes.** Unchanged: production refuses to start without a key.
 * **Hardening 10:** a signed-webhook URL whose host is a non-public IP literal (`127.0.0.1`, `0x7f000001`, `[::1]`, `169.254.169.254`, …) is refused when it is saved, not only when it is sent.
 
 ### Changed
@@ -34,7 +34,7 @@ Release type: patch (`fix`). Fixes every finding of the second security review o
 * **Behind a reverse proxy:** set `server.proxy: { koa: true, maxIpsCount: <number of proxies> }` in `config/server.js` (Strapi 5.52+), or list your proxies in **Login protection › Client IP address › Trusted proxies** (`trustedProxies: ['10.0.0.0/8']`). Without either, every request shows the proxy's address. On Strapi 5.50 and 5.51 Koa has no `maxIpsCount`; use the `trustedProxies` list there.
 * **`trustedProxies: true`** (switch on, or `true` in `config/plugins.js`) no longer reads proxy headers. A stored `true` is changed to an empty list at start-up, a configured `true` is read as empty, and both log a warning. If you relied on `CF-Connecting-IP` or `X-Real-IP`, configure Koa (`proxy.ipHeader`, `maxIpsCount`) or list the proxy addresses.
 * **Roles with plugin access only** can no longer change `maxFailedLogins`, `trustedProxies` or the email templates (403, `settings-update-permission`). Sending the stored values back still saves the rest of the form. Grant **Change protected settings** to roles that should change them.
-* **`SESSION_ENCRYPTION_KEY` shorter than 32 bytes:** production does not start. Before you deploy, generate a new key (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) and plan the change like a key rotation: stored encrypted tokens and webhook secrets become unreadable, so users sign in again and the webhook secret must be entered again.
+* **`SESSION_ENCRYPTION_KEY` shorter than 32 bytes:** nothing breaks in this release, but every start logs an error, and the next major version will refuse to start. Plan the change before you upgrade to that major: generate a new key (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) and treat it as a key rotation. Stored encrypted tokens and webhook secrets become unreadable, so users sign in again and the webhook secret must be entered again.
 * **Lockout:** refusals by other rules no longer count as failed sign-ins, and an own successful sign-in no longer clears the address. An address that signs in correctly most of the time but also fails often can now reach the IP threshold sooner. Add office or backend addresses to the trusted addresses.
 * **Account lock:** trusted addresses are no longer refused or counted by the account counter.
 * **Signed webhook:** changing the URL over the API needs `genericWebhookSecret` in the same request. A stored URL with a non-public IP literal is read as empty (it could never be delivered).
