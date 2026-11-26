@@ -1,0 +1,22 @@
+{
+  "$comment": "Strapi version guards for .github/scripts/compat-canary.mjs. When the canary passes on a newer Strapi minor, it raises maxMinor and shifts the version numbers in the listed files, then proposes the change as a pull request (never merged automatically).",
+  "guards": [
+    {
+      "name": "Sign in as another admin",
+      "file": "server/src/utils/admin-sign-in-rules.js",
+      "pattern": "maxMinor: (\\d+)",
+      "shift": [
+        "admin/src/components/impersonation/SignInAsAdminModal.jsx",
+        "admin/src/translations/de.json",
+        "admin/src/translations/en.json",
+        "admin/src/translations/es.json",
+        "admin/src/translations/fr.json",
+        "admin/src/translations/pt.json",
+        "tests/admin-sign-in-rules.test.js",
+        "tests/admin/impersonation-ui.test.jsx",
+        "tests/isolated-admin-sign-in-http.test.js",
+        "README.md"
+      ]
+    }
+  ]
+}

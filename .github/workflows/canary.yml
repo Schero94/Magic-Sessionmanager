@@ -1,0 +1,211 @@
+# Compatibility canary. Every Monday (and on manual runs) this workflow tests the plugin against
+# the newest Strapi 5.x release and the current Node.js release lines: the newest release, the
+# newest LTS and every LTS line inside engines.node. It runs the same scripts as test.yml
+# (tests, admin tests, type checks, build, verify) and boots the Strapi under test for the
+# real HTTP suites, with the version guard of "Sign in as" raised to it (.github/compat-canary.json).
+# When everything passes on a new Strapi minor, the report job proposes the guard change.
+# The report job opens, updates or closes one `compat` issue and records the tested versions
+# (.github/scripts/compat-canary.mjs). Pull requests that change the canary run it as a dry run:
+# the plan is printed, nothing is written.
+name: Compatibility canary
+
+on:
+  schedule:
+    # Mondays 04:17 UTC, off the full hour (scheduled runs can be delayed at busy times).
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      strapi:
+        description: Strapi version instead of the newest 5.x (for example 5.65.0)
+        required: false
+        default: ''
+      node:
+        description: Node.js versions or majors instead of the detected ones (comma-separated)
+        required: false
+        default: ''
+      dry-run:
+        description: Print the issue and pull request plan instead of writing them
+        type: boolean
+        default: false
+      simulate-last-pass:
+        description: 'Dry runs only: pretend the last passing run tested this Strapi version'
+        required: false
+        default: ''
+  pull_request:
+    paths:
+      - .github/workflows/canary.yml
+      - .github/scripts/compat-canary.mjs
+      - .github/compat-canary.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      strapi: ${{ steps.detect.outputs.strapi }}
+      packages: ${{ steps.detect.outputs.packages }}
+      nodes: ${{ steps.detect.outputs.nodes }}
+      current: ${{ steps.detect.outputs.current }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js lts/*
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Newest Strapi 5.x and Node.js versions
+        id: detect
+        env:
+          CANARY_FORCE_STRAPI: ${{ inputs.strapi }}
+          CANARY_FORCE_NODE: ${{ inputs.node }}
+        run: node .github/scripts/compat-canary.mjs detect
+
+  verify:
+    name: Verify on Node ${{ matrix.node }}
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(needs.detect.outputs.nodes) }}
+    env:
+      STRAPI_VERSION: ${{ needs.detect.outputs.strapi }}
+      STRAPI_PACKAGES: ${{ needs.detect.outputs.packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+      - name: Install Strapi ${{ needs.detect.outputs.strapi }} (not saved)
+        run: |
+          read -ra packages <<< "$STRAPI_PACKAGES"
+          npm install --no-save --legacy-peer-deps --ignore-scripts --no-audit --no-fund "${packages[@]}"
+          node .github/scripts/compat-canary.mjs assert "$STRAPI_VERSION"
+      - name: Raise version guards to the Strapi under test
+        run: node .github/scripts/compat-canary.mjs guards "$STRAPI_VERSION"
+      - name: Tests
+        run: npm test
+      - name: Admin StrictMode tests
+        run: npm run test:admin
+      - name: Type checks
+        run: |
+          npm run test:ts:front
+          npm run test:ts:back
+      - name: Build
+        run: npm run build
+      - name: Verify plugin integrity and server runtime bundle
+        run: |
+          npm run verify
+          npm run verify:runtime
+
+  boot:
+    name: Real Strapi HTTP suites on Node ${{ matrix.node }}
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(needs.detect.outputs.nodes) }}
+    env:
+      STRAPI_VERSION: ${{ needs.detect.outputs.strapi }}
+      STRAPI_PACKAGES: ${{ needs.detect.outputs.packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+      - name: Raise version guards to the Strapi under test
+        run: node .github/scripts/compat-canary.mjs guards "$STRAPI_VERSION"
+      - name: Install a Strapi ${{ needs.detect.outputs.strapi }} host (as the strapi-floor job)
+        run: |
+          mkdir -p "$RUNNER_TEMP/strapi-canary"
+          cd "$RUNNER_TEMP/strapi-canary"
+          echo '{"name":"strapi-canary-host","version":"0.0.0","private":true}' > package.json
+          npm install --no-audit --no-fund --legacy-peer-deps "@strapi/strapi@$STRAPI_VERSION" \
+            "@strapi/plugin-users-permissions@$STRAPI_VERSION" "@strapi/plugin-graphql@$STRAPI_VERSION" \
+            better-sqlite3@13 jsonwebtoken
+          cd "$GITHUB_WORKSPACE"
+          node .github/scripts/compat-canary.mjs assert "$STRAPI_VERSION" "$RUNNER_TEMP/strapi-canary"
+      - name: HTTP suites on the Strapi under test (including Sign in as)
+        env:
+          SESSION_HTTP_REQUIRED: '1'
+          SESSION_HTTP_STRAPI_NODE_MODULES: ${{ runner.temp }}/strapi-canary/node_modules
+        run: |
+          node --test tests/isolated-http-access.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-http-access.test.js
+          SESSION_HTTP_FALLBACK=1 node --test tests/isolated-http-access.test.js
+          node --test tests/isolated-admin-sessions-http.test.js
+          node --test tests/isolated-native-capture-http.test.js
+          node --test tests/isolated-admin-activity-http.test.js
+          node --test tests/isolated-policies-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-policies-http.test.js
+          node --test tests/isolated-signals-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-signals-http.test.js
+          node --test tests/isolated-impersonation-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-impersonation-http.test.js
+          node --test tests/isolated-user-activity-http.test.js
+          node --test tests/isolated-security-review2-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-security-review2-http.test.js
+          node --test tests/isolated-admin-sign-in-http.test.js
+          node --test tests/isolated-impersonation-redteam-http.test.js
+          SESSION_HTTP_MODE=refresh node --test tests/isolated-impersonation-redteam-http.test.js
+
+  report:
+    name: Report
+    needs: [detect, verify, boot]
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node.js lts/*
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Open, update or close the compat issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CANARY_CURRENT: ${{ needs.detect.outputs.current }}
+          CANARY_DRY_RUN: ${{ github.event_name == 'pull_request' || inputs.dry-run }}
+          CANARY_SIMULATE_LAST_PASS: ${{ inputs.simulate-last-pass }}
+          # A green run on a new Strapi minor proposes raising the version guards (never merged).
+          CANARY_PROPOSE: guards
+        run: node .github/scripts/compat-canary.mjs report
