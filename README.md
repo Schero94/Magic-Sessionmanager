@@ -273,6 +273,12 @@ Two links: **Configuration** and **Analytics**.
 
 ---
 
+### Compatibility canary
+
+A scheduled workflow, `.github/workflows/canary.yml`, runs every Monday at 04:17 UTC and on demand (Actions → Compatibility canary → Run workflow). It installs the newest Strapi 5.x release over the lockfile and tests the plugin on the newest Node.js release, the newest LTS and every LTS line inside `engines.node`: the regression tests, the admin tests, both type checks, the build and both verify scripts as in `test.yml`, and the real Strapi HTTP suites of the `strapi-floor` job (sessions, policies, signals, impersonation, **Sign in as**) on a host with the Strapi under test.
+
+A failure opens or updates one issue labelled `compat` ("Compatibility: Strapi X.Y.Z / Node A.B.C") with the failing jobs, the failing step and a log excerpt; the next green run closes it. The last passing and the last run are recorded in the closed issue "Compatibility canary state". A manual run can force a Strapi version (`strapi`) or Node.js versions (`node`), and `dry-run` prints the plan instead of writing issues. Pull requests that change the canary run it as a dry run. The logic lives in `.github/scripts/compat-canary.mjs` (byte-identical in every plugin of the workbench, unit-tested in `compat-canary.test.mjs`). On a newer Strapi minor than the **Sign in as** version guard allows (`TESTED_STRAPI.maxMinor` in `server/src/utils/admin-sign-in-rules.js`), the canary raises the guard for its test run (`.github/compat-canary.json` lists the guard and the messages, tests and README lines that name the range). When every job passes, it pushes the branch `compat-canary/strapi-<version>` with that change and opens a `fix(compat):` pull request with the run as evidence; while Actions may not open pull requests in this repository (Settings → Actions → "Allow GitHub Actions to create and approve pull requests"), it opens a `compat` issue with the compare link instead. It never merges; a person reviews the change and the Strapi release notes. When the suites fail, the failure issue is opened instead.
+
 ## Install
 
 ```bash
